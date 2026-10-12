@@ -70,7 +70,7 @@ class ErrorbarPlot(ArtistBase):
 class Histogram(ArtistBase):
     kind: Literal["histogram"] = "histogram"
     values: ColumnRef
-    bins: int | list[float] = Field(default=20)
+    bins: Annotated[int, Field(ge=1)] | list[float] = 20
     """A bin count, or explicit bin edges."""
     density: bool = False
     histtype: Literal["bar", "step", "stepfilled"] = "bar"
@@ -138,7 +138,7 @@ class FitResult(StrictModel):
 class FitCurve(ArtistBase):
     kind: Literal["fit"] = "fit"
     target: str = Field(min_length=1)
-    """Artist.id of the data artist this fit was run against."""
+    """Artist.id of the line, scatter or errorbar plot this fit was run against."""
     model: FitModel
     initial_values: dict[str, float] = Field(default_factory=dict)
     result: FitResult | None = None

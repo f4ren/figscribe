@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from figscribe.model import (
+    Annotation,
+    ArrayRef,
     Axes,
     AxisSpec,
+    ColorMesh,
     ColumnRef,
     Figure,
     GridLayout,
     Histogram,
+    ImagePlot,
     LinePlot,
     Project,
     ResidualPlot,
@@ -138,3 +142,36 @@ def test_several_issues_are_all_reported() -> None:
         ]
     )
     assert len(validate_references(bad)) == 3
+
+
+def test_fit_target_must_be_a_data_artist(project: Project) -> None:
+    axes = project.figures[0].axes[0]
+    note = Annotation(text="peak", position=(0.0, 1.0))
+    axes.artists.append(note)
+    axes.artists[1].target = note.id
+
+    issues = validate_references(project)
+    assert [i.location for i in issues] == ["figures[0].axes[0].artists[1].target"]
+    assert "not a data artist" in issues[0].message
+
+
+def test_data_refs_are_found_on_every_artist_type(project: Project) -> None:
+    # Guards against a new artist type whose references the check forgets.
+    missing = ColumnRef(source="nope", column=0)
+    project.figures[0].axes[0].artists = [
+        Histogram(values=missing),
+        ImagePlot(data=ArrayRef(source="nope")),
+        ColorMesh(c=ArrayRef(source="nope"), x=missing, y=missing),
+    ]
+
+    prefix = "figures[0].axes[0].artists"
+    locations = [
+        i.location for i in validate_references(project) if i.location.startswith(prefix)
+    ]
+    assert locations == [
+        f"{prefix}[0].values",
+        f"{prefix}[1].data",
+        f"{prefix}[2].c",
+        f"{prefix}[2].x",
+        f"{prefix}[2].y",
+    ]

@@ -14,17 +14,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from figscribe.model.artists import (
-    Annotation,
-    ColorMesh,
+    ArtistBase,
     ErrorbarPlot,
     FitCurve,
     Histogram,
-    ImagePlot,
     LinePlot,
     ResidualPlot,
     ScatterPlot,
 )
+from figscribe.model.axes import Axes
+from figscribe.model.data import ArrayRef, ColumnRef
+from figscribe.model.figure import Figure
 from figscribe.model.project import Project
+
+FITTABLE = (LinePlot, ScatterPlot, ErrorbarPlot)
+"""Artist types a FitCurve can target: the ones with x and y columns."""
 
 
 @dataclass(frozen=True)
@@ -63,7 +67,7 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
             apath = f"{fpath}.axes[{ai}]"
             _check_axis_ticks(axes, apath, issues)
 
-            artist_ids = {a.id for a in axes.artists}
+            artists_by_id = {a.id: a for a in axes.artists}
 
             for ti, artist in enumerate(axes.artists):
                 tpath = f"{apath}.artists[{ti}]"
@@ -87,14 +91,25 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                             )
                         )
 
-                if isinstance(artist, FitCurve) and artist.target not in artist_ids:
-                    issues.append(
-                        ReferenceIssue(
-                            f"{tpath}.target",
-                            artist.id,
-                            f"fits artist {artist.target!r}, which is not in this axes",
+                if isinstance(artist, FitCurve):
+                    target = artists_by_id.get(artist.target)
+                    if target is None:
+                        issues.append(
+                            ReferenceIssue(
+                                f"{tpath}.target",
+                                artist.id,
+                                f"fits artist {artist.target!r}, which is not in this axes",
+                            )
                         )
-                    )
+                    elif not isinstance(target, FITTABLE):
+                        issues.append(
+                            ReferenceIssue(
+                                f"{tpath}.target",
+                                artist.id,
+                                f"fits artist {artist.target!r}, which is not a data "
+                                f"artist but a {target.kind!r}",
+                            )
+                        )
 
                 if isinstance(artist, ResidualPlot) and artist.target not in fit_ids:
                     issues.append(
@@ -127,28 +142,17 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
     return issues
 
 
-def _data_refs(artist: object) -> list[tuple[str, str]]:
-    """Return (field name, source id) for every data reference on `artist`."""
+def _data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
+    """Return (field name, source id) for every data reference on `artist`.
+
+    Walks the declared fields instead of listing them per artist type, so that a
+    newly added artist cannot slip past this check.
+    """
     refs: list[tuple[str, str]] = []
-    if isinstance(artist, (LinePlot, ScatterPlot, ErrorbarPlot)):
-        refs += [("x", artist.x.source), ("y", artist.y.source)]
-        if isinstance(artist, ErrorbarPlot):
-            for name in ("xerr", "yerr"):
-                ref = getattr(artist, name)
-                if ref is not None:
-                    refs.append((name, ref.source))
-    elif isinstance(artist, Histogram):
-        refs.append(("values", artist.values.source))
-    elif isinstance(artist, ImagePlot):
-        refs.append(("data", artist.data.source))
-    elif isinstance(artist, ColorMesh):
-        refs.append(("c", artist.c.source))
-        for name in ("x", "y"):
-            ref = getattr(artist, name)
-            if ref is not None:
-                refs.append((name, ref.source))
-    elif isinstance(artist, (FitCurve, ResidualPlot, Annotation)):
-        pass  # these refer to other artists, not to data
+    for name in type(artist).model_fields:
+        value = getattr(artist, name)
+        if isinstance(value, (ColumnRef, ArrayRef)):
+            refs.append((name, value.source))
     return refs
 
 
@@ -185,8 +189,8 @@ def _see(
         seen[oid] = location
 
 
-def _check_grid(figure: object, path: str, issues: list[ReferenceIssue]) -> None:
-    layout = figure.layout  # type: ignore[attr-defined]
+def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None:
+    layout = figure.layout
 
     for name, ratios, expected in (
         ("width_ratios", layout.width_ratios, layout.cols),
@@ -196,12 +200,12 @@ def _check_grid(figure: object, path: str, issues: list[ReferenceIssue]) -> None
             issues.append(
                 ReferenceIssue(
                     f"{path}.layout.{name}",
-                    figure.id,  # type: ignore[attr-defined]
+                    figure.id,
                     f"has {len(ratios)} values, but the grid has {expected}",
                 )
             )
 
-    for ai, axes in enumerate(figure.axes):  # type: ignore[attr-defined]
+    for ai, axes in enumerate(figure.axes):
         if axes.row + axes.rowspan > layout.rows:
             issues.append(
                 ReferenceIssue(
@@ -222,7 +226,7 @@ def _check_grid(figure: object, path: str, issues: list[ReferenceIssue]) -> None
             )
 
 
-def _check_axis_ticks(axes: object, path: str, issues: list[ReferenceIssue]) -> None:
+def _check_axis_ticks(axes: Axes, path: str, issues: list[ReferenceIssue]) -> None:
     for name in ("x", "y", "y_right"):
         spec = getattr(axes, name)
         if spec is None:
@@ -233,7 +237,7 @@ def _check_axis_ticks(axes: object, path: str, issues: list[ReferenceIssue]) -> 
             issues.append(
                 ReferenceIssue(
                     f"{path}.{name}.tick_labels",
-                    axes.id,  # type: ignore[attr-defined]
+                    axes.id,
                     "tick labels given without tick positions",
                 )
             )
@@ -241,7 +245,7 @@ def _check_axis_ticks(axes: object, path: str, issues: list[ReferenceIssue]) -> 
             issues.append(
                 ReferenceIssue(
                     f"{path}.{name}.tick_labels",
-                    axes.id,  # type: ignore[attr-defined]
+                    axes.id,
                     f"has {len(spec.tick_labels)} labels for "
                     f"{len(spec.ticks)} ticks",
                 )

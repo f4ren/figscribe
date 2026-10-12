@@ -14,6 +14,11 @@ class StrictModel(BaseModel):
     so a string where a number belongs is an error, not something to coerce.
     Unknown keys are refused so that a file written by a newer figscribe fails
     loudly instead of silently dropping fields.
+
+    Non-finite floats are written as the JSON extensions Infinity and NaN, which
+    the loader reads back. The default would write null, and the file would then
+    refuse to load: curve_fit reports inf uncertainties for an inestimable
+    covariance, so this is not a corner case.
     """
 
     model_config = ConfigDict(
@@ -21,6 +26,7 @@ class StrictModel(BaseModel):
         extra="forbid",
         validate_assignment=True,
         validate_default=True,
+        ser_json_inf_nan="constants",
     )
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 from pydantic import ValidationError
 
@@ -12,6 +14,7 @@ from figscribe.model import (
     ErrorbarPlot,
     Figure,
     FitCurve,
+    Histogram,
     LinePlot,
     Project,
     ResidualPlot,
@@ -122,3 +125,30 @@ def test_older_schema_version_needs_a_migration(project: Project) -> None:
 def test_malformed_project_files_are_refused(text: str) -> None:
     with pytest.raises(SchemaVersionError):
         loads(text)
+
+
+@pytest.mark.parametrize("value", [math.inf, -math.inf])
+def test_non_finite_floats_roundtrip(value: float, project: Project) -> None:
+    # curve_fit reports inf uncertainties when the covariance cannot be
+    # estimated; such a project must still load after saving.
+    fit = project.figures[0].axes[0].artists[1]
+    assert isinstance(fit, FitCurve) and fit.result is not None
+    fit.result = fit.result.model_copy(update={"uncertainties": {"a": value}})
+
+    assert loads(dumps(project)) == project
+
+
+def test_nan_survives_a_roundtrip(project: Project) -> None:
+    fit = project.figures[0].axes[0].artists[1]
+    assert isinstance(fit, FitCurve) and fit.result is not None
+    fit.result = fit.result.model_copy(update={"reduced_chi_square": math.nan})
+
+    loaded = loads(dumps(project)).figures[0].axes[0].artists[1]
+    assert isinstance(loaded, FitCurve) and loaded.result is not None
+    assert math.isnan(loaded.result.reduced_chi_square)
+
+
+def test_bin_count_must_be_positive(project: Project) -> None:
+    ref = project.figures[0].axes[0].artists[0].x
+    with pytest.raises(ValidationError):
+        Histogram(values=ref, bins=0)

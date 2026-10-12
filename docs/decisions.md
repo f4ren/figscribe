@@ -91,6 +91,19 @@ is a `ResidualPlot` artist referring to a `FitCurve` by id instead, placed in an
 explicit `Axes`. Turning residuals on is then a command that adds both, and
 undo removes them again.
 
+**Commands replace lists, they do not mutate them.** `validate_assignment` only
+fires on assignment: `axes.artists.append(x)` bypasses validation entirely, and a
+bad value surfaces only when the file is next loaded. Commands therefore assign a
+new list (`axes.artists = [*axes.artists, x]`), which also gives undo the old
+list to restore.
+
+**Non-finite floats are written as `Infinity` and `NaN`.** Pydantic's default
+writes them as `null`, which the strict loader then rejects, so a saved project
+could not be reopened. They are realistic, not exotic: `curve_fit` reports `inf`
+uncertainties when the covariance cannot be estimated. The cost is that project
+files are not strict RFC 8259 JSON when they contain such values; Python's
+`json` module and pydantic both read them.
+
 ### Alternatives considered
 
 **Stdlib dataclasses.** Zero dependencies, no coercion, and the file format
