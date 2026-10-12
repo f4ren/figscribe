@@ -9,7 +9,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from matplotlib.collections import PathCollection
-from matplotlib.lines import Line2D
 
 from figscribe.model import (
     Annotation,
@@ -93,7 +92,9 @@ def test_scatter_plot(data, columns, ref) -> None:
     scatter = ScatterPlot(x=ref("t"), y=ref("U"), size=9.0, marker="^")
     ax = render(Figure(axes=[Axes(artists=[scatter])]), data).axes[0]
     (drawn,) = [c for c in ax.collections if isinstance(c, PathCollection)]
-    assert np.array_equal(drawn.get_offsets(), np.column_stack([columns["t"], columns["U"]]))
+    assert np.array_equal(
+        drawn.get_offsets(), np.column_stack([columns["t"], columns["U"]])
+    )
     assert list(drawn.get_sizes()) == [9.0]
     assert drawn.get_gid() == scatter.id
 
@@ -122,7 +123,9 @@ def test_unlabelled_artists_stay_out_of_the_legend(data, ref) -> None:
 
 def test_dragged_legend_position_overrides_location(data, ref) -> None:
     axes = Axes(
-        legend=Legend(visible=True, location="upper left", position=(0.7, 0.2), frame=False),
+        legend=Legend(
+            visible=True, location="upper left", position=(0.7, 0.2), frame=False
+        ),
         artists=[LinePlot(x=ref("t"), y=ref("U"), label="a")],
     )
     legend = render(Figure(axes=[axes]), data).axes[0].get_legend()
@@ -162,10 +165,16 @@ def test_shared_tick_labels_only_on_the_outer_edge(data) -> None:
     axs = render(figure, data).axes
 
     assert [ax.xaxis.get_tick_params()["labelbottom"] for ax in axs] == [
-        False, False, True, True,
+        False,
+        False,
+        True,
+        True,
     ]
     assert [ax.yaxis.get_tick_params()["labelleft"] for ax in axs] == [
-        True, False, True, False,
+        True,
+        False,
+        True,
+        False,
     ]
 
 

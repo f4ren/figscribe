@@ -31,12 +31,19 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "ruff>=0.15",
 ]
 
 [project.urls]
 Homepage = "https://github.com/f4ren/figscribe"
 Source = "https://github.com/f4ren/figscribe"
 Issues = "https://github.com/f4ren/figscribe/issues"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

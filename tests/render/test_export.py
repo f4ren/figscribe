@@ -49,7 +49,9 @@ def test_pdf_has_the_size_in_points(figure, data, tmp_path: Path) -> None:
 def test_svg_has_the_size_in_points(figure, data, tmp_path: Path) -> None:
     path = tmp_path / "f.svg"
     export(figure, data, path)
-    match = re.search(r'<svg[^>]*width="([\d.]+)pt" height="([\d.]+)pt"', path.read_text())
+    match = re.search(
+        r'<svg[^>]*width="([\d.]+)pt" height="([\d.]+)pt"', path.read_text()
+    )
     assert match is not None
     assert float(match[1]) == pytest.approx(85.0 / MM_PER_INCH * 72, abs=1e-5)
 

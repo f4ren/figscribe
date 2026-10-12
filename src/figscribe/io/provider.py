@@ -41,7 +41,9 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
 
 def _load(source: DataSource, base_dir: str | Path) -> np.ndarray:
     if not isinstance(source, CsvSource):
-        raise NotImplementedError(f"reading {source.format!r} sources is not implemented yet")
+        raise NotImplementedError(
+            f"reading {source.format!r} sources is not implemented yet"
+        )
 
     path = resolve_path(source.path, base_dir)
     try:

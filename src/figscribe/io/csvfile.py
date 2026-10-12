@@ -57,7 +57,9 @@ def read_csv(source: CsvSource, text: str, name: str) -> np.ndarray:
 
     `name` only appears in error messages.
     """
-    first_data_line = (0 if source.header_row is None else source.header_row + 1) + source.skip_rows
+    first_data_line = (
+        0 if source.header_row is None else source.header_row + 1
+    ) + source.skip_rows
     converters = None
     if source.decimal != ".":
         decimal = source.decimal

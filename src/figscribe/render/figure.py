@@ -58,7 +58,10 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
         drawn: list[tuple[Axes, MplAxes]] = []
         for axes in figure.axes:
             ax = fig.add_subplot(
-                grid[axes.row : axes.row + axes.rowspan, axes.col : axes.col + axes.colspan],
+                grid[
+                    axes.row : axes.row + axes.rowspan,
+                    axes.col : axes.col + axes.colspan,
+                ],
                 sharex=_share_partner(axes, drawn, layout.share_x, "col"),
                 sharey=_share_partner(axes, drawn, layout.share_y, "row"),
             )
@@ -195,7 +198,9 @@ def _draw_artist(artist: Artist, ax: MplAxes, data: DataProvider) -> None:
         for part in container.get_children():
             part.set_gid(artist.id)
     else:
-        raise NotImplementedError(f"rendering {artist.kind!r} artists is not implemented yet")
+        raise NotImplementedError(
+            f"rendering {artist.kind!r} artists is not implemented yet"
+        )
 
 
 def _draw_legend(legend: Legend, ax: MplAxes) -> None:

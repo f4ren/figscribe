@@ -35,7 +35,6 @@ from figscribe.model.data import (
     NumpySource,
 )
 from figscribe.model.figure import Figure, GridLayout
-from figscribe.model.validate import ReferenceIssue, validate_references
 from figscribe.model.project import (
     SCHEMA_VERSION,
     Project,
@@ -43,6 +42,7 @@ from figscribe.model.project import (
     dumps,
     loads,
 )
+from figscribe.model.validate import ReferenceIssue, validate_references
 
 __all__ = [
     "SCHEMA_VERSION",
