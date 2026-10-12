@@ -133,6 +133,13 @@ def test_column_index_out_of_range(tmp_path: Path) -> None:
         _load(tmp_path, source, 5)
 
 
+def test_header_wider_than_the_data_is_reported(tmp_path: Path) -> None:
+    write(tmp_path / "s.csv", "t,U,dU\n0,1\n")
+    source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
+    with pytest.raises(DataError, match="'dU' is out of range.*2 columns"):
+        _load(tmp_path, source, "dU")
+
+
 def test_non_numeric_value_names_the_file(tmp_path: Path) -> None:
     write(tmp_path / "s.csv", "t,U\n0,abc\n")
     source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
