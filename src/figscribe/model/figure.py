@@ -30,6 +30,11 @@ class Figure(Identified):
     """85 mm is a typical single journal column, 175 mm a double one."""
     height_mm: float = Field(60.0, gt=0.0)
     dpi: float = Field(300.0, gt=0.0)
+    unit_format: Literal["parentheses", "slash", "brackets"] = "parentheses"
+    """How axis labels carry their unit: "U (V)", "U / V" (ISO 80000) or "U [V]".
+
+    Per figure because journals disagree; a style template sets it.
+    """
     stylesheet: str | None = None
     """Name of a bundled style or a path to an .mplstyle file."""
     layout: GridLayout = Field(default_factory=GridLayout)

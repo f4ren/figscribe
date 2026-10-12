@@ -119,3 +119,47 @@ serialization is separated from structure, with discriminated unions supported.
 Rejected because it costs two dependencies instead of one, has a smaller
 community, and provides no JSON Schema generator — and the separation it buys is
 not worth more to us than tooling support.
+
+---
+
+## 0002 — Renderer conventions
+
+**Date:** 2026-10-12
+**Status:** accepted
+
+### Context
+
+The renderer serves both the GUI preview and the export, and the code generator
+must later reproduce its output exactly. A few choices are not dictated by the
+model and have to be the same in both places.
+
+### Decision
+
+- **Data arrives through a `DataProvider`**, a callable from `ColumnRef` to a
+  NumPy array. The renderer does not open files; `io/` will supply the provider.
+  This keeps the renderer testable with in-memory arrays.
+- **No pyplot.** The renderer builds a `matplotlib.figure.Figure` directly, so
+  it holds no global state and needs no GUI backend.
+- **Every Matplotlib artist carries its model id as `gid`**, so the GUI can map a
+  click back to the model. For an errorbar, every part carries it.
+- **Axis labels join the unit per `Figure.unit_format`**, default `"U (V)"`; the
+  alternatives are `"U / V"` (ISO 80000) and `"U [V]"`. Per figure because
+  journals disagree, and a style template will set it. The unit stays plain
+  text so it renders upright next to an italic symbol; a compound unit after a
+  slash is parenthesised (`v / (m/s)`). `axis_label()` is shared with the code
+  generator, which writes the resulting string into the script.
+- **Sharing follows `plt.subplots`**: `"col"` joins axes that start in the same
+  column, `"row"` those starting in the same row, and shared tick labels appear
+  only on the bottom row and the left column.
+- **Exports are byte-stable**: no timestamps in PDF/SVG/PNG metadata, a fixed
+  SVG hash salt. Never `bbox_inches="tight"`, which would change the size.
+
+### Consequences
+
+- PDF and SVG have the exact size in mm. PNG is truncated to whole pixels by
+  Matplotlib: 85 mm at 300 dpi is 1003 px, not 1003.94. Accepted; the error is
+  under one pixel.
+- `unit_format` was added to the model with a default, so it needed no schema
+  version bump: no project file of version 1 predates it in the wild.
+- New runtime dependencies: `matplotlib>=3.8` and `numpy>=1.26`, both named in
+  the brief's stack. Pillow, used by the export tests, comes with Matplotlib.

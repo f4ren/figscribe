@@ -23,6 +23,8 @@ classifiers = [
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
+    "matplotlib>=3.8",
+    "numpy>=1.26",
     "pydantic>=2.9",
 ]
 
