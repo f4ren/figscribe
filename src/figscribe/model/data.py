@@ -20,11 +20,17 @@ class CsvSource(Identified):
     format: Literal["csv"] = "csv"
     path: str = Field(min_length=1)
     sha256: Sha256
-    delimiter: str = ","
-    decimal: str = "."
+    delimiter: str | None = ","
+    """None splits on any run of whitespace, as in many .dat files."""
+    decimal: str = Field(".", min_length=1, max_length=1)
     header_row: int | None = Field(0, ge=0)
+    """Line number (from 0) of the column names; lines above it are skipped.
+    None means no header, and columns are addressed by index."""
     skip_rows: int = Field(0, ge=0)
+    """Lines skipped between the header and the data, e.g. a line of units.
+    Without a header, lines skipped at the top of the file."""
     comment: str | None = "#"
+    """Lines starting with this are skipped; counted lines above include them."""
     columns: list[str] = Field(default_factory=list)
     """Column names discovered on import, cached for the GUI."""
 

@@ -1,0 +1,3 @@
+# Data files are hashed into project files; line ending conversion on
+# checkout would change the hash.
+examples/** -text

@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.0.2",
+  "created": "2026-10-12T00:00:00Z",
+  "sources": [
+    {
+      "id": "8d6e45ca8cc2",
+      "format": "csv",
+      "path": "scan.csv",
+      "sha256": "380a81c153b9c2f47f51c67b4478a251b9e98fd1ba0e533b010e9fb5eab92394",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "columns": [
+        "t",
+        "U",
+        "dU"
+      ]
+    }
+  ],
+  "figures": [
+    {
+      "id": "903307cbb881",
+      "name": "Scan",
+      "width_mm": 85.0,
+      "height_mm": 60.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "b8ebdc35ceda",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "x": {
+            "label": "$t$",
+            "unit": "s",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "minor_ticks": true,
+            "symlog_linthresh": null
+          },
+          "y": {
+            "label": "$U$",
+            "unit": "V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "minor_ticks": true,
+            "symlog_linthresh": null
+          },
+          "y_right": null,
+          "legend": {
+            "visible": true,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": 8.0
+          },
+          "grid": false,
+          "artists": [
+            {
+              "id": "e2faae2e15c6",
+              "label": "measurement",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "8d6e45ca8cc2",
+                "column": "t"
+              },
+              "y": {
+                "source": "8d6e45ca8cc2",
+                "column": "U"
+              },
+              "xerr": null,
+              "yerr": {
+                "source": "8d6e45ca8cc2",
+                "column": "dU"
+              },
+              "color": null,
+              "linestyle": "none",
+              "marker": "o",
+              "markersize": 4.0,
+              "capsize": 2.0,
+              "elinewidth": 1.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
