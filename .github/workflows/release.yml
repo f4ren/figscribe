@@ -13,7 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write
+      contents: read    # actions/checkout; required because this repo is private
+      id-token: write  # OIDC token for Trusted Publishing
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
