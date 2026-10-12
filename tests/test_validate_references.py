@@ -52,6 +52,14 @@ def test_residual_target_must_be_a_fit(project: Project) -> None:
     assert "not a fit" in issues[0].message
 
 
+def test_decimal_separator_equal_to_delimiter_is_reported(project: Project) -> None:
+    project.sources[0].decimal = ","
+
+    issues = validate_references(project)
+    assert [i.location for i in issues] == ["sources[0].decimal"]
+    assert issues[0].object_id == project.sources[0].id
+
+
 def test_right_axis_without_y_right_is_reported(project: Project) -> None:
     project.figures[0].axes[0].artists[0].axis = "right"
 

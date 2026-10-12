@@ -140,6 +140,17 @@ def test_header_wider_than_the_data_is_reported(tmp_path: Path) -> None:
         _load(tmp_path, source, "dU")
 
 
+def test_decimal_comma_with_comma_delimiter_is_refused(tmp_path: Path) -> None:
+    write(tmp_path / "s.csv", "t,U\n0,1,5\n")
+    with pytest.raises(DataError, match="also the delimiter"):
+        csv_source(tmp_path / "s.csv", base_dir=tmp_path, decimal=",")
+
+    source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
+    source.decimal = ","
+    with pytest.raises(DataError, match="also the delimiter"):
+        _load(tmp_path, source, "U")
+
+
 def test_non_numeric_value_names_the_file(tmp_path: Path) -> None:
     write(tmp_path / "s.csv", "t,U\n0,abc\n")
     source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
