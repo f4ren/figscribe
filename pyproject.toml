@@ -24,9 +24,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/OWNER/figscribe"
-Source = "https://github.com/OWNER/figscribe"
-Issues = "https://github.com/OWNER/figscribe/issues"
+Homepage = "https://github.com/f4ren/figscribe"
+Source = "https://github.com/f4ren/figscribe"
+Issues = "https://github.com/f4ren/figscribe/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/figscribe"]
