@@ -35,4 +35,4 @@ Python >= 3.11, PySide6, Matplotlib, NumPy, SciPy, h5py.
 
 ## Lizenz
 
-TODO: noch nicht festgelegt.
+MIT, siehe [LICENSE](LICENSE).

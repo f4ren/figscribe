@@ -20,7 +20,8 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
-# TODO: Lizenz festlegen (siehe README)
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = []
 
 [project.urls]
