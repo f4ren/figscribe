@@ -1,7 +1,7 @@
-"""figscribe - wissenschaftliche Plots per GUI, als eigenständiger Python-Code.
+"""figscribe - scientific plots via a GUI, exported as standalone Python code.
 
-Dies ist ein Platzhalter-Release zur Reservierung des Paketnamens.
-Die Implementierung ist noch nicht begonnen; siehe das Projekt-Repository.
+This is a placeholder release that reserves the package name. Implementation has
+not started yet; see the project repository for the plan.
 """
 
 __version__ = "0.0.1"

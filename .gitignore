@@ -9,21 +9,21 @@ build/
 dist/
 .eggs/
 
-# Virtuelle Umgebungen
+# Virtual environments
 .venv/
 venv/
 
-# Tests / Tooling
+# Tests and tooling
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
 
-# Test-Artefakte (Bildvergleiche)
+# Test artifacts (image comparisons)
 tests/**/output/
 *.actual.png
 
-# Editoren
+# Editors
 .idea/
 .vscode/
