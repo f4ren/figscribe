@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Virtuelle Umgebungen
+.venv/
+venv/
+
+# Tests / Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Test-Artefakte (Bildvergleiche)
+tests/**/output/
+*.actual.png
+
+# Editoren
+.idea/
+.vscode/
