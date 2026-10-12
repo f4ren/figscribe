@@ -149,8 +149,9 @@ model and have to be the same in both places.
   slash is parenthesised (`v / (m/s)`). `axis_label()` is shared with the code
   generator, which writes the resulting string into the script.
 - **Sharing follows `plt.subplots`**: `"col"` joins axes that start in the same
-  column, `"row"` those starting in the same row, and shared tick labels appear
-  only on the bottom row and the left column.
+  column, `"row"` those starting in the same row. An axes hides its shared tick
+  labels only when a partner below (x) or to its left (y) overlaps it and shows
+  them instead; unlike `plt.subplots`, a grid with gaps keeps its labels.
 - **Exports are byte-stable**: no timestamps in PDF/SVG/PNG metadata, a fixed
   SVG hash salt. Never `bbox_inches="tight"`, which would change the size.
 
