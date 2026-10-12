@@ -1,0 +1,55 @@
+"""Axes and their parts."""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import Field
+
+from figscribe.model.artists import Artist
+from figscribe.model.base import Identified, StrictModel
+
+
+class AxisSpec(StrictModel):
+    """One axis of an Axes: x, y, or the optional right-hand y."""
+
+    label: str | None = None
+    """LaTeX allowed, e.g. r"$\\lambda$"."""
+    unit: str | None = None
+    """Rendered alongside the label; kept separate so styles can decide the form."""
+    scale: Literal["linear", "log", "symlog"] = "linear"
+    limits: tuple[float, float] | None = None
+    """None means autoscale. Adopting the current zoom writes a fixed pair here."""
+    ticks: list[float] | None = None
+    tick_labels: list[str] | None = None
+    minor_ticks: bool = True
+    symlog_linthresh: float | None = Field(None, gt=0.0)
+    """Only for scale "symlog"."""
+
+
+class Legend(StrictModel):
+    visible: bool = False
+    location: str = "best"
+    """A Matplotlib location string, used while `position` is None."""
+    position: tuple[float, float] | None = None
+    """Axes coordinates, set by dragging the legend; overrides `location`."""
+    frame: bool = True
+    ncols: int = Field(1, ge=1)
+    fontsize: float | None = Field(None, gt=0.0)
+
+
+class Axes(Identified):
+    row: int = Field(0, ge=0)
+    col: int = Field(0, ge=0)
+    rowspan: int = Field(1, ge=1)
+    colspan: int = Field(1, ge=1)
+
+    title: str | None = None
+    x: AxisSpec = Field(default_factory=AxisSpec)
+    y: AxisSpec = Field(default_factory=AxisSpec)
+    y_right: AxisSpec | None = None
+    """Second y-axis; artists opt into it via their `axis` field."""
+
+    legend: Legend = Field(default_factory=Legend)
+    grid: bool = False
+    artists: list[Artist] = Field(default_factory=list)

@@ -22,12 +22,23 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = []
+dependencies = [
+    "pydantic>=2.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
 
 [project.urls]
 Homepage = "https://github.com/f4ren/figscribe"
 Source = "https://github.com/f4ren/figscribe"
 Issues = "https://github.com/f4ren/figscribe/issues"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.hatch.version]
 path = "src/figscribe/__init__.py"
