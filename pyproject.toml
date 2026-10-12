@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "figscribe"
-version = "0.0.1"
+dynamic = ["version"]
 description = "A lean desktop GUI for scientific Matplotlib plots that exports clean, standalone Python code instead of a proprietary project file."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Christian Krause" }]
+authors = [{ name = "f4ren", email = "faren@researchpoint.net" }]
 keywords = ["matplotlib", "plotting", "gui", "science", "code-generation"]
 classifiers = [
     "Development Status :: 1 - Planning",
@@ -28,6 +28,9 @@ dependencies = []
 Homepage = "https://github.com/f4ren/figscribe"
 Source = "https://github.com/f4ren/figscribe"
 Issues = "https://github.com/f4ren/figscribe/issues"
+
+[tool.hatch.version]
+path = "src/figscribe/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/figscribe"]

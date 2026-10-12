@@ -1,0 +1,25 @@
+name: Release
+
+# Publishes to PyPI via Trusted Publishing (OIDC): no stored API token.
+# The publisher is configured on PyPI for this repository, this workflow
+# file name and the "pypi" environment.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Build sdist and wheel
+        run: pipx run build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
