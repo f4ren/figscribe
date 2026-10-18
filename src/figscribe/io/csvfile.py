@@ -37,6 +37,8 @@ def csv_source(
     when the file lies below it, so that a project folder can be moved as a
     whole.
     """
+    if decimal == delimiter:
+        raise DataError(f"decimal separator {decimal!r} is also the delimiter")
     path = Path(path)
     text = path.read_bytes().decode(ENCODING)
     columns = [] if header_row is None else _header(text, delimiter, header_row, path)
@@ -57,6 +59,12 @@ def read_csv(source: CsvSource, text: str, name: str) -> np.ndarray:
 
     `name` only appears in error messages.
     """
+    # loadtxt would split "1,5" into two fields and read wrong numbers silently.
+    if source.decimal == source.delimiter:
+        raise DataError(
+            f"cannot read {name}: decimal separator {source.decimal!r} "
+            "is also the delimiter"
+        )
     first_data_line = (
         0 if source.header_row is None else source.header_row + 1
     ) + source.skip_rows

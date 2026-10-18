@@ -7,6 +7,10 @@ These checks live here, outside the model classes, to keep the model dumb.
 reference can still be opened and repaired; callers run them after loading and
 before rendering. They return a list of issues rather than raising, so the GUI
 can show all of them at once.
+
+A conflict within one source, such as a decimal separator that is also the
+delimiter, is reported here too rather than refused by pydantic, for the same
+reason: the file stays loadable.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from figscribe.model.artists import (
     ScatterPlot,
 )
 from figscribe.model.axes import Axes
-from figscribe.model.data import ArrayRef, ColumnRef
+from figscribe.model.data import ArrayRef, ColumnRef, CsvSource
 from figscribe.model.figure import Figure
 from figscribe.model.project import Project
 
@@ -52,6 +56,16 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
     source_ids = {s.id for s in project.sources}
 
     _check_unique_ids(project, issues)
+
+    for si, source in enumerate(project.sources):
+        if isinstance(source, CsvSource) and source.decimal == source.delimiter:
+            issues.append(
+                ReferenceIssue(
+                    f"sources[{si}].decimal",
+                    source.id,
+                    f"decimal separator {source.decimal!r} is also the delimiter",
+                )
+            )
 
     for fi, figure in enumerate(project.figures):
         fpath = f"figures[{fi}]"

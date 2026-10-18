@@ -82,6 +82,8 @@ whether an `Axes` fits in its grid. `validate_references(project)` returns a
 list of issues instead of raising, so the GUI can show all of them at once and
 a project file with a dangling reference can still be opened and repaired.
 Deliberately not pydantic validators: that would break "the model stays dumb".
+A conflict between two fields of one source, such as a CSV decimal separator
+that equals the delimiter, is reported there as well, so the file still loads.
 
 **A residual panel is an artist, not a flag.** The brief sketched
 `FitCurve.show_residuals`, but a panel is an `Axes` in the grid. A flag would
