@@ -9,8 +9,10 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 
 ## Status
 
-**Very early — planning stage.** Nothing usable has been implemented yet; the
-PyPI entry is a placeholder release that reserves the name.
+**Early development, not usable yet.** The plot model with its JSON project
+file, the renderer for line, scatter and errorbar plots with export to
+PDF/SVG/PNG, and CSV import exist and are tested. The code generator and the
+GUI do not exist yet.
 
 The full project plan lives in [`plan/`](plan/).
 
