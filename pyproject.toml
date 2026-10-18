@@ -42,6 +42,8 @@ Issues = "https://github.com/f4ren/figscribe/issues"
 
 [tool.ruff]
 line-length = 88
+# Code blocks in the docs are aligned by hand for reading, not formatted.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
