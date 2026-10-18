@@ -360,3 +360,30 @@ class would have to be kept in step with every field added to the model.
   change can still report its last input; it is ignored instead of being
   applied to the newly selected object. Undo and redo refresh the values in
   place, so editing does not lose focus.
+
+---
+
+## 0007 — Importing data in the GUI
+
+**Date:** 2026-10-18
+**Status:** accepted
+
+### Decision
+
+- **The import dialog proposes how to read a file** and previews the result
+  live: the delimiter is the candidate found in the most lines (tab, then
+  semicolon, then comma on a tie), a decimal comma is assumed next to a
+  semicolon or tab when digits are split by commas, the header is the first
+  line after the comment block, and lines between it and the first line of
+  numbers (typically units) are skipped. `csv.Sniffer` was tried and dropped:
+  it gives up as soon as the header and the data differ in width. A header
+  wider than the data, or options that do not parse, disable OK.
+- **Files of an unsaved project are stored with their absolute path.** A
+  relative path needs the project's directory, which does not exist before
+  the first save. Once saved, newly imported files below the project's
+  directory are stored relative to it.
+- **Adding the first plot to a figure without axes adds the axes too**, in the
+  same undo step. Later plots go into the selected axes, the axes of the
+  selected plot, or the figure's first axes.
+- **Columns without names are offered by number**; the file is read once to
+  count them.

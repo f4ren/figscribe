@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
+    QDialog,
     QDockWidget,
     QFileDialog,
     QMainWindow,
@@ -15,10 +16,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from figscribe.commands import CommandError, remove_artist, remove_axes
+from figscribe.commands import CommandError, InsertItem, remove_artist, remove_axes
 from figscribe.commands.core import walk
 from figscribe.gui.document import Document
+from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.outline import Outline
+from figscribe.gui.plotdialog import PlotDialog, add_plot
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
@@ -26,6 +29,7 @@ from figscribe.model import ArtistBase, Axes
 from figscribe.render import export
 
 PROJECT_FILTER = "figscribe projects (*.figscribe)"
+DATA_FILTER = "Delimited text (*.csv *.tsv *.txt *.dat);;All files (*)"
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
 
 
@@ -35,6 +39,8 @@ class MainWindow(QMainWindow):
         self.document = document or Document()
         self.ask: Callable[[str, str], bool] = self._ask_user
         """Asks a yes/no question; replaced in tests."""
+        self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
+        """Runs a dialog, True if accepted; replaced in tests."""
 
         self.preview = Preview(self.document)
         self.setCentralWidget(self.preview)
@@ -99,6 +105,46 @@ class MainWindow(QMainWindow):
         if self.document.history.is_clean:
             return True
         return self.ask("Unsaved changes", "Discard the unsaved changes?")
+
+    # --- insert actions -----------------------------------------------------
+
+    def import_csv(self, path: str | Path | None = None) -> None:
+        """Add a delimited text file as a data source, asking how to read it."""
+        if path is None:
+            path, _ = QFileDialog.getOpenFileName(self, "Import data", "", DATA_FILTER)
+            if not path:
+                return
+        try:
+            dialog = ImportDialog(path, self.document.project_dir, self)
+        except OSError as exc:
+            self.show_error(f"Cannot read {path}", exc)
+            return
+        if self.run_dialog(dialog) and dialog.source() is not None:
+            source = dialog.source()
+            self._push(InsertItem(None, "sources", source))
+            self.document.select(source.id)
+
+    def add_plot(self) -> None:
+        """Add a plot of the data's columns to the selected axes."""
+        columns = self.document.column_choices()
+        figure = self.document.figure
+        if not columns or figure is None:
+            self.show_error("Nothing to plot", ValueError("Import a data file first."))
+            return
+        dialog = PlotDialog(columns, self)
+        if not self.run_dialog(dialog):
+            return
+        artist = dialog.artist()
+        self._push(add_plot(figure, self._target_axes(figure), artist))
+        self.document.select(artist.id)
+
+    def _target_axes(self, figure) -> str | None:
+        """The selected axes, the axes of the selected plot, or the first one."""
+        selected = self.document.selected
+        for axes in figure.axes:
+            if axes.id == selected or any(a.id == selected for a in axes.artists):
+                return axes.id
+        return figure.axes[0].id if figure.axes else None
 
     # --- edit actions -------------------------------------------------------
 
@@ -172,6 +218,9 @@ class MainWindow(QMainWindow):
         if path:
             self.export_to(path)
 
+    def _run_dialog(self, dialog: QDialog) -> bool:
+        return dialog.exec() == QDialog.DialogCode.Accepted
+
     def _ask_user(self, title: str, question: str) -> bool:
         answer = QMessageBox.question(self, title, question)
         return answer == QMessageBox.StandardButton.Yes
@@ -207,6 +256,10 @@ class MainWindow(QMainWindow):
         self.delete_action = self._action(
             edit, "&Delete", self.delete_selected, QKeySequence.StandardKey.Delete
         )
+
+        insert = self.menuBar().addMenu("&Insert")
+        self._action(insert, "&Import Data…", lambda: self.import_csv(), "Ctrl+I")
+        self._action(insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P")
 
     def _action(self, menu, text: str, slot, shortcut=None) -> QAction:
         action = QAction(text, self)
