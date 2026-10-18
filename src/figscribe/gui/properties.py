@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 
 from figscribe.commands import CommandError, SetField, find
 from figscribe.gui.document import Document
-from figscribe.model import ArrayRef, ColumnRef, Project
+from figscribe.model import ArrayRef, ColumnRef
 
 SKIPPED = {
     "id",
@@ -352,7 +352,7 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     if spec.kind == "choice":
         return ChoiceEditor(spec, path, panel, [(str(o), o) for o in spec.options])
     if spec.kind == "column":
-        return ChoiceEditor(spec, path, panel, _columns(panel.document.project))
+        return ChoiceEditor(spec, path, panel, panel.document.column_choices())
     if spec.kind == "color":
         return ColorEditor(spec, path, panel)
     parse, format_ = _TEXT[spec.kind]
@@ -399,15 +399,6 @@ _TEXT: dict[str, tuple[Callable[[str], Any], Callable[[Any], str]]] = {
 
 
 # --- helpers -----------------------------------------------------------------
-
-
-def _columns(project: Project) -> list[tuple[str, ColumnRef]]:
-    choices = []
-    for source in project.sources:
-        for column in source.columns:
-            ref = ColumnRef(source=source.id, column=column)
-            choices.append((f"{source.path}: {column}", ref))
-    return choices
 
 
 def _get(obj: BaseModel, path: Path) -> Any:

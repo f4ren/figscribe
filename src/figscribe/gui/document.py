@@ -14,8 +14,8 @@ from PySide6.QtCore import QObject, Signal
 
 from figscribe import __version__
 from figscribe.commands import Command, CommandError, History, find
-from figscribe.io import load_data
-from figscribe.model import Figure, Project, dumps, loads
+from figscribe.io import DataError, load_data
+from figscribe.model import ColumnRef, Figure, Project, dumps, loads
 from figscribe.render import DataProvider
 
 
@@ -54,6 +54,11 @@ class Document(QObject):
         return self.path.parent if self.path is not None else Path(os.getcwd())
 
     @property
+    def project_dir(self) -> Path | None:
+        """The project file's directory; None until the project is saved."""
+        return self.path.parent if self.path is not None else None
+
+    @property
     def title(self) -> str:
         name = self.path.name if self.path is not None else "Untitled"
         return f"{name}{'' if self.history.is_clean else '*'} — figscribe"
@@ -82,6 +87,32 @@ class Document(QObject):
             self._data = load_data(self.project, self.base_dir)
             self._data_sources = [s.model_copy(deep=True) for s in self.project.sources]
         return self._data
+
+    def column_choices(self) -> list[tuple[str, ColumnRef]]:
+        """Every column of every source, labelled for a choice box.
+
+        Columns are named where the file has a header, numbered otherwise;
+        for a source without names the file is read to count its columns.
+        """
+        choices = []
+        for source in self.project.sources:
+            columns: list[str | int] = list(source.columns)
+            if not columns:
+                columns = list(range(self._width(source)))
+            for column in columns:
+                ref = ColumnRef(source=source.id, column=column)
+                choices.append((f"{Path(source.path).name}: {column}", ref))
+        return choices
+
+    def _width(self, source) -> int:
+        """Number of columns of a source; 0 if it cannot be read."""
+        width = 0
+        while True:
+            try:
+                self.data(ColumnRef(source=source.id, column=width))
+            except DataError:
+                return width
+            width += 1
 
     # --- selection ----------------------------------------------------------
 
