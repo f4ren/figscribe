@@ -169,3 +169,56 @@ model and have to be the same in both places.
   version bump: no project file of version 1 predates it in the wild.
 - New runtime dependencies: `matplotlib>=3.8` and `numpy>=1.26`, both named in
   the brief's stack. Pillow, used by the export tests, comes with Matplotlib.
+
+---
+
+## 0003 — Commands and undo/redo
+
+**Date:** 2026-10-16
+**Status:** accepted
+
+### Context
+
+The GUI changes the model only through commands, and every change must be
+exactly reversible (test 4). Three things make that harder than a list of
+closures: undo restores removed objects, so a command recorded earlier may meet
+a different Python object with the same id; pydantic validates only on
+assignment; and some user actions consist of several changes that must undo as
+one.
+
+### Decision
+
+- **Commands address objects by id and a field path**, never by reference. The
+  project itself is `None`. `SetField(axes_id, ("x", "label"), "t")`.
+- **Four primitives** do all the work: `SetField`, `InsertItem`, `RemoveItem`,
+  `MoveItem`. The lists of identified objects (`sources`, `figures`, `axes`,
+  `artists`) change only through the last three, which keep ids unique;
+  `SetField` refuses them, and `id` itself cannot be set.
+- **Assign, never mutate**, as already decided for the model: every primitive
+  assigns a new value or a new list, so `validate_assignment` checks it and a
+  refused value leaves the model untouched. Values and items are deep-copied on
+  the way in, so the model never shares an object with its caller.
+- **`Macro` is all or nothing**: if a step fails, the steps already applied are
+  reverted before the error propagates. A failed command is not recorded.
+- **One exception type**, `CommandError`, also for pydantic's validation
+  errors, so the GUI has one thing to catch and show.
+- **User-level actions are functions building a `Macro`**, e.g.
+  `remove_artist()`. Removing a data artist removes its fits and their
+  residuals in the same undo step. An axes left empty stays, and removing an
+  axes leaves the grid as it is: changing the layout as a side effect would be
+  hard to predict.
+- **`History` is plain Python, not `QUndoStack`**, so it is testable without Qt
+  and usable by a later non-GUI front end. It tracks the saved state for an
+  "unsaved changes" marker.
+- **No merging of consecutive commands.** A drag moves the Matplotlib artist
+  only temporarily and pushes one `SetField` on release.
+
+### Alternatives considered
+
+**Snapshots** (store `dumps(project)` before every change, undo restores it).
+Trivially correct, but memory grows with the project times the history depth,
+undo texts need a separate mechanism, and restoring replaces every object, so a
+GUI selection held by reference would go stale on every undo.
+
+**`QUndoStack`.** Would give menu integration for free, but ties the model layer
+to Qt and makes command tests need a QApplication.
