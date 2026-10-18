@@ -201,6 +201,26 @@ def test_an_inestimable_covariance_gives_infinite_uncertainties() -> None:
     assert all(math.isinf(u) for u in result.uncertainties.values())
 
 
+def test_a_numerically_singular_covariance_counts_as_inestimable() -> None:
+    # Almost the sum again: the covariance comes back finite but meaningless
+    # (about 1e27), as macOS returns it for the exact sum above.
+    model = ExpressionFit(expression="(a + b * 1.000000001) * x", parameters=["a", "b"])
+    x = np.arange(1.0, 6.0)
+    result = run_fit(model, {"a": 1.0, "b": 1.0}, x, 3 * x, np.full(5, 0.1))
+    assert all(math.isinf(u) for u in result.uncertainties.values())
+
+
+def test_strongly_correlated_parameters_keep_finite_uncertainties() -> None:
+    # Far from the origin, slope and intercept correlate almost perfectly,
+    # but the covariance is still well determined.
+    model = PredefinedFit(name="linear")
+    x = np.linspace(1000.0, 1001.0, 20)
+    y, yerr = _noisy(model, {"a": 2.0, "b": 1.0}, x, noise=0.05)
+    result = run_fit(model, initial_guess(model, x, y), x, y, yerr)
+    assert all(math.isfinite(u) and u > 0 for u in result.uncertainties.values())
+    assert abs(result.parameters["a"] - 2.0) < 5 * result.uncertainties["a"]
+
+
 def test_results_are_plain_floats_and_roundtrip() -> None:
     model = PredefinedFit(name="linear")
     x = np.arange(6.0)

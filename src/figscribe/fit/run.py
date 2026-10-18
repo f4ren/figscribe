@@ -102,8 +102,7 @@ def run_fit(
                 converged=False,
             )
 
-    variances = np.diag(pcov)
-    errors = np.where(np.isfinite(variances) & (variances >= 0), variances, np.inf)
+    variances = np.full(len(names), np.inf) if _singular(pcov) else np.diag(pcov)
     chi2 = None
     if yerr is not None:
         residuals = (y - f(x, *popt)) / yerr
@@ -111,11 +110,31 @@ def run_fit(
     return FitResult(
         parameters={n: float(v) for n, v in zip(names, popt, strict=True)},
         uncertainties={
-            n: float(np.sqrt(e)) for n, e in zip(names, errors, strict=True)
+            n: float(np.sqrt(v)) for n, v in zip(names, variances, strict=True)
         },
         reduced_chi_square=chi2,
         converged=bool(np.all(np.isfinite(popt))),
     )
+
+
+MAX_CONDITION = 1 / (100 * np.finfo(float).eps)
+"""Above this condition number of the correlation matrix, the covariance carries
+less than about two significant digits, and the uncertainties mean nothing."""
+
+
+def _singular(pcov: np.ndarray) -> bool:
+    """Whether the covariance cannot be estimated.
+
+    curve_fit reports that as inf, but only when the linear algebra library
+    notices: Apple's Accelerate, used by SciPy on macOS, instead returns huge
+    finite values for the same degenerate fit. So check it here, independent
+    of the platform, on the scale-free correlation matrix.
+    """
+    variances = np.diag(pcov)
+    if not np.all(np.isfinite(pcov)) or np.any(variances <= 0):
+        return True
+    correlation = pcov / np.sqrt(np.outer(variances, variances))
+    return bool(np.linalg.cond(correlation) > MAX_CONDITION)
 
 
 def _compiled(model: FitModel) -> tuple[Model, list[str]]:
