@@ -55,7 +55,11 @@ def _figures(ref) -> dict[str, Figure]:
                     artists=[
                         LinePlot(x=ref("t"), y=ref("U"), label="signal"),
                         LinePlot(
-                            x=ref("t"), y=ref("dU"), linestyle="--", marker="o", label="noise"
+                            x=ref("t"),
+                            y=ref("dU"),
+                            linestyle="--",
+                            marker="o",
+                            label="noise",
                         ),
                     ],
                 )
@@ -67,7 +71,9 @@ def _figures(ref) -> dict[str, Figure]:
                 Axes(
                     x=labelled["x"],
                     y=AxisSpec(label="$U$", unit="V", scale="log"),
-                    artists=[ScatterPlot(x=ref("t"), y=ref("U"), color="C2", size=12.0)],
+                    artists=[
+                        ScatterPlot(x=ref("t"), y=ref("U"), color="C2", size=12.0)
+                    ],
                 )
             ],
         ),
@@ -86,7 +92,10 @@ def _figures(ref) -> dict[str, Figure]:
             height_mm=80.0,
             layout=GridLayout(rows=2, share_x="all", height_ratios=[3.0, 1.0]),
             axes=[
-                Axes(y=AxisSpec(label="$U$", unit="V"), artists=[LinePlot(x=ref("t"), y=ref("U"))]),
+                Axes(
+                    y=AxisSpec(label="$U$", unit="V"),
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                ),
                 Axes(
                     row=1,
                     x=AxisSpec(label="$t$", unit="s"),
@@ -113,6 +122,8 @@ def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:
         expected.write_bytes(actual.read_bytes())
         pytest.skip(f"baseline {expected.name} updated")
 
-    assert expected.exists(), f"no baseline {expected.name}; run with FIGSCRIBE_UPDATE_BASELINES=1"
+    assert expected.exists(), (
+        f"no baseline {expected.name}; run with FIGSCRIBE_UPDATE_BASELINES=1"
+    )
     failure = compare_images(str(expected), str(actual), tol=TOLERANCE)
     assert failure is None, failure

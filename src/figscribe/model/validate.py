@@ -12,6 +12,7 @@ can show all of them at once.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 
 from figscribe.model.artists import (
     ArtistBase,
@@ -77,7 +78,8 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                         ReferenceIssue(
                             tpath,
                             artist.id,
-                            'draws against the right y-axis, but the axes has no y_right',
+                            "draws against the right y-axis, "
+                            "but the axes has no y_right",
                         )
                     )
 
@@ -98,7 +100,8 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                             ReferenceIssue(
                                 f"{tpath}.target",
                                 artist.id,
-                                f"fits artist {artist.target!r}, which is not in this axes",
+                                f"fits artist {artist.target!r}, "
+                                "which is not in this axes",
                             )
                         )
                     elif not isinstance(target, FITTABLE):
@@ -116,7 +119,8 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                         ReferenceIssue(
                             f"{tpath}.target",
                             artist.id,
-                            f"references {artist.target!r}, which is not a fit in this figure",
+                            f"references {artist.target!r}, "
+                            "which is not a fit in this figure",
                         )
                     )
 
@@ -130,7 +134,7 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                                 "explicit bin edges need at least two values",
                             )
                         )
-                    elif any(b <= a for a, b in zip(edges, edges[1:])):
+                    elif any(b <= a for a, b in pairwise(edges)):
                         issues.append(
                             ReferenceIssue(
                                 f"{tpath}.bins",
@@ -181,9 +185,7 @@ def _see(
 ) -> None:
     if oid in seen:
         issues.append(
-            ReferenceIssue(
-                location, oid, f"duplicate id, already used by {seen[oid]}"
-            )
+            ReferenceIssue(location, oid, f"duplicate id, already used by {seen[oid]}")
         )
     else:
         seen[oid] = location
@@ -246,7 +248,6 @@ def _check_axis_ticks(axes: Axes, path: str, issues: list[ReferenceIssue]) -> No
                 ReferenceIssue(
                     f"{path}.{name}.tick_labels",
                     axes.id,
-                    f"has {len(spec.tick_labels)} labels for "
-                    f"{len(spec.ticks)} ticks",
+                    f"has {len(spec.tick_labels)} labels for {len(spec.ticks)} ticks",
                 )
             )

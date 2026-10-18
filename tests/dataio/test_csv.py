@@ -62,21 +62,27 @@ def test_metadata_lines_above_the_header_and_a_units_line_below(tmp_path: Path) 
         tmp_path / "s.csv",
         "instrument: X\ndate: 2026-10-12\nt,U\ns,V\n0,1\n1,2\n",
     )
-    source = csv_source(tmp_path / "s.csv", base_dir=tmp_path, header_row=2, skip_rows=1)
+    source = csv_source(
+        tmp_path / "s.csv", base_dir=tmp_path, header_row=2, skip_rows=1
+    )
     assert source.columns == ["t", "U"]
     assert list(_load(tmp_path, source, "U")) == [1.0, 2.0]
 
 
 def test_no_header_means_index_columns(tmp_path: Path) -> None:
     write(tmp_path / "s.csv", "junk\n0,1\n1,2\n")
-    source = csv_source(tmp_path / "s.csv", base_dir=tmp_path, header_row=None, skip_rows=1)
+    source = csv_source(
+        tmp_path / "s.csv", base_dir=tmp_path, header_row=None, skip_rows=1
+    )
     assert source.columns == []
     assert list(_load(tmp_path, source, 1)) == [1.0, 2.0]
 
 
 def test_whitespace_delimiter_and_decimal_comma(tmp_path: Path) -> None:
     write(tmp_path / "s.dat", "t   U\n0   1,5\n1\t2,5\n")
-    source = csv_source(tmp_path / "s.dat", base_dir=tmp_path, delimiter=None, decimal=",")
+    source = csv_source(
+        tmp_path / "s.dat", base_dir=tmp_path, delimiter=None, decimal=","
+    )
     assert source.columns == ["t", "U"]
     assert list(_load(tmp_path, source, "U")) == [1.5, 2.5]
 
@@ -94,7 +100,7 @@ def test_comment_lines_in_the_data_are_skipped(tmp_path: Path) -> None:
 
 
 def test_byte_order_mark_from_excel_is_ignored(tmp_path: Path) -> None:
-    (tmp_path / "s.csv").write_bytes("﻿t,U\n0,1\n".encode("utf-8"))
+    (tmp_path / "s.csv").write_bytes("﻿t,U\n0,1\n".encode())
     source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
     assert source.columns == ["t", "U"]
 

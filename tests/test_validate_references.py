@@ -106,9 +106,7 @@ def test_tick_labels_without_positions_are_reported(project: Project) -> None:
 def test_bin_edges_must_increase(project: Project) -> None:
     source = project.sources[0]
     project.figures[0].axes[0].artists = [
-        Histogram(
-            values=ColumnRef(source=source.id, column="U"), bins=[0.0, 2.0, 1.0]
-        )
+        Histogram(values=ColumnRef(source=source.id, column="U"), bins=[0.0, 2.0, 1.0])
     ]
 
     issues = validate_references(project)
@@ -166,7 +164,9 @@ def test_data_refs_are_found_on_every_artist_type(project: Project) -> None:
 
     prefix = "figures[0].axes[0].artists"
     locations = [
-        i.location for i in validate_references(project) if i.location.startswith(prefix)
+        i.location
+        for i in validate_references(project)
+        if i.location.startswith(prefix)
     ]
     assert locations == [
         f"{prefix}[0].values",

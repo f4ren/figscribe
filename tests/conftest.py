@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -55,7 +55,7 @@ def project(source: CsvSource) -> Project:
 
     return Project(
         figscribe_version="0.0.2",
-        created=datetime(2026, 10, 12, tzinfo=timezone.utc),
+        created=datetime(2026, 10, 12, tzinfo=UTC),
         sources=[source],
         figures=[
             Figure(
