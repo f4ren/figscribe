@@ -21,6 +21,7 @@ from figscribe.gui.document import Document
 from figscribe.gui.outline import Outline
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
+from figscribe.gui.properties import PropertyPanel
 from figscribe.model import ArtistBase, Axes
 from figscribe.render import export
 
@@ -39,10 +40,17 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.preview)
         self.outline = Outline(self.document)
         self.problems = Problems(self.document)
-        self._dock("Project", self.outline, Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.properties = PropertyPanel(self.document)
+        project = self._dock(
+            "Project", self.outline, Qt.DockWidgetArea.LeftDockWidgetArea
+        )
+        properties = self._dock(
+            "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
+        )
         problems = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
+        self.resizeDocks([project, properties], [230, 320], Qt.Orientation.Horizontal)
         self.resizeDocks([problems], [90], Qt.Orientation.Vertical)
 
         self._build_menus()
@@ -116,7 +124,7 @@ class MainWindow(QMainWindow):
 
     def set_document(self, document: Document) -> None:
         self.document = document
-        for view in (self.preview, self.outline, self.problems):
+        for view in (self.preview, self.outline, self.problems, self.properties):
             view.set_document(document)
         self._connect(document)
 

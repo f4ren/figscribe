@@ -73,7 +73,7 @@ def _figure_item(parent: QTreeWidget, figure: Figure) -> None:
 
 
 def _axes_item(parent: QTreeWidgetItem, axes: Axes) -> None:
-    where = f"row {axes.row + 1}, column {axes.col + 1}"
+    where = f"row {axes.row}, col {axes.col}"
     name = f"Axes: {axes.title}" if axes.title else "Axes"
     item = _item(parent, f"{name} ({where})", axes.id)
     for artist in axes.artists:

@@ -324,3 +324,39 @@ the export.
 pixels at every zoom level still changes its size in inches slightly, and the
 canvas also rescales for the screen's pixel ratio on its own. Fighting the
 canvas costs more code than drawing an image.
+
+---
+
+## 0006 — The property panel is generated from the model
+
+**Date:** 2026-10-18
+**Status:** accepted
+
+### Context
+
+The brief asks for a property panel "generated generically from the model
+fields, with specialized editors where it makes sense". Hand-written forms per
+class would have to be kept in step with every field added to the model.
+
+### Decision
+
+- **Editors come from the field annotations** at run time: `bool` is a check
+  box, a `Literal` a choice, `int` and `float` a line of text parsed on
+  `editingFinished`, `X | None` the same editor where empty text means None,
+  pairs and lists of numbers comma-separated text, a nested model a group box,
+  a `ColumnRef` a choice of the sources' columns, and the fields `color` and
+  `edgecolor` text plus a color picker. Text, not spin boxes, for numbers:
+  scientific values such as `1e-9` and exact decimals edit without rounding.
+- **Each edit is one `SetField`.** Constraints live on the model only; a
+  refused value shows pydantic's message above the form and the editor shows
+  the model's value again. An unchanged value pushes nothing.
+- **Some fields are deliberately left out**: ids, kinds, item lists (edited in
+  the outline), `y_right` (not rendered yet), and fit models, start values,
+  results and histogram bins, which get dedicated editors with their features.
+  `path`, `sha256` and a fit's `target` are shown read-only. A test checks
+  that every other field of the model has an editor, so a new field cannot be
+  forgotten silently.
+- **Editors are bound to their object.** An editor torn down by a selection
+  change can still report its last input; it is ignored instead of being
+  applied to the newly selected object. Undo and redo refresh the values in
+  place, so editing does not lose focus.
