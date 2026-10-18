@@ -75,25 +75,27 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
 
 def _hide_inner_tick_labels(axs: list[MplAxes]) -> None:
     """Hide tick labels that a sharing partner already shows: x labels when a
-    partner lies below in an overlapping column, y labels when one lies to the
-    left in an overlapping row.
+    partner lies below with exactly the same columns, y labels when one lies to
+    the left with exactly the same rows.
 
     Not plt.subplots' rule of "only the bottom row and left column": in a grid
     with gaps or spans, that strips labels from an axes with no partner below,
-    and its column ends up with no x tick labels at all.
+    and its column ends up with no x tick labels at all. Same extent, not mere
+    overlap: a partner of another width spreads the shared limits over another
+    length, so its ticks do not line up and cannot stand in for these.
     """
     for ax in axs:
         spec = ax.get_subplotspec()
         for partner in ax.get_shared_x_axes().get_siblings(ax):
             other = partner.get_subplotspec()
             below = other.rowspan.start >= spec.rowspan.stop
-            if below and not set(other.colspan).isdisjoint(spec.colspan):
+            if below and other.colspan == spec.colspan:
                 ax.xaxis.set_tick_params(which="both", labelbottom=False)
                 break
         for partner in ax.get_shared_y_axes().get_siblings(ax):
             other = partner.get_subplotspec()
             left = other.colspan.stop <= spec.colspan.start
-            if left and not set(other.rowspan).isdisjoint(spec.rowspan):
+            if left and other.rowspan == spec.rowspan:
                 ax.yaxis.set_tick_params(which="both", labelleft=False)
                 break
 

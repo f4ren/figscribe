@@ -150,8 +150,11 @@ model and have to be the same in both places.
   generator, which writes the resulting string into the script.
 - **Sharing follows `plt.subplots`**: `"col"` joins axes that start in the same
   column, `"row"` those starting in the same row. An axes hides its shared tick
-  labels only when a partner below (x) or to its left (y) overlaps it and shows
-  them instead; unlike `plt.subplots`, a grid with gaps keeps its labels.
+  labels only when a partner below (x) or to its left (y) has exactly the same
+  columns (x) or rows (y) and shows them instead; unlike `plt.subplots`, a grid
+  with gaps or spans keeps its labels. The code generator writes the resulting
+  `tick_params(labelbottom=False)` per axes instead of relying on
+  `plt.subplots(sharex=...)`.
 - **Exports are byte-stable**: no timestamps in PDF/SVG/PNG metadata, a fixed
   SVG hash salt. Never `bbox_inches="tight"`, which would change the size.
 
