@@ -57,13 +57,16 @@ def _load(source: DataSource, base_dir: str | Path) -> np.ndarray:
 
 
 def _column_index(source: DataSource, column: str | int, width: int) -> int:
-    if isinstance(column, int):
-        if not 0 <= column < width:
-            raise DataError(
-                f"column {column} is out of range: {source.path} has {width} columns"
-            )
-        return column
-    if column not in source.columns:
-        known = ", ".join(repr(c) for c in source.columns)
-        raise DataError(f"no column {column!r} in {source.path}; known are {known}")
-    return source.columns.index(column)
+    if isinstance(column, str):
+        if column not in source.columns:
+            known = ", ".join(repr(c) for c in source.columns)
+            raise DataError(f"no column {column!r} in {source.path}; known are {known}")
+        name, column = repr(column), source.columns.index(column)
+    else:
+        name = str(column)
+    # A header can name more fields than the data rows have.
+    if not 0 <= column < width:
+        raise DataError(
+            f"column {name} is out of range: {source.path} has {width} columns"
+        )
+    return column
