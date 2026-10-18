@@ -11,8 +11,10 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 
 **Early development, not usable yet.** The plot model with its JSON project
 file, the renderer for line, scatter and errorbar plots with export to
-PDF/SVG/PNG, and CSV import exist and are tested. The code generator and the
-GUI do not exist yet.
+PDF/SVG/PNG, CSV import, undoable commands and curve fitting exist and are
+tested. A first GUI (`figscribe`) opens, previews, saves and exports projects;
+editing properties and importing data in it come next. The code generator does
+not exist yet.
 
 The full project plan lives in [`plan/`](plan/).
 

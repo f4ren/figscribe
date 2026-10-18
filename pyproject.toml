@@ -26,14 +26,19 @@ dependencies = [
     "matplotlib>=3.8",
     "numpy>=1.26",
     "pydantic>=2.9",
+    "PySide6>=6.6",
     "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "pytest-qt>=4.4",
     "ruff>=0.15",
 ]
+
+[project.scripts]
+figscribe = "figscribe.gui.app:main"
 
 [project.urls]
 Homepage = "https://github.com/f4ren/figscribe"
