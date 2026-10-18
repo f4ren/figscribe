@@ -222,3 +222,61 @@ GUI selection held by reference would go stale on every undo.
 
 **`QUndoStack`.** Would give menu integration for free, but ties the model layer
 to Qt and makes command tests need a QApplication.
+
+---
+
+## 0004 — Fit models as expressions
+
+**Date:** 2026-10-18
+**Status:** accepted
+
+### Context
+
+Fits come in two kinds: predefined models (linear, polynomial, Gaussian,
+Lorentzian, exponential) and a user's own expression. Both have to be evaluated
+for the fit and the drawn curve, shown in the GUI, and written into the
+generated script as readable code without figscribe helpers. A user expression
+is untrusted text that ends up being executed.
+
+### Decision
+
+- **Every model is an expression** in one small language, the predefined ones
+  included: `gaussian` is `a * exp(-(x - mu)**2 / (2 * sigma**2)) + c`. One
+  evaluator serves both kinds, and `numpy_source()` turns any model into the
+  NumPy expression the code generator writes into a plain `def`.
+- **The language is an allow-list over `ast`**, never `eval`: the operators
+  `+ - * / **`, numbers, `x`, the declared parameters, `pi`, and the NumPy
+  functions `exp log log10 sqrt sin cos tan arcsin arccos arctan sinh cosh tanh
+  abs`, each with exactly one argument. Anything else is refused with its
+  position in the text. Numbers are floats, so `9**9**9` overflows to `inf`
+  instead of computing a huge integer. Every declared parameter must appear:
+  an absent one has no defined uncertainty.
+- **Peaks and the exponential carry a constant background `c`**, as real
+  measurements almost always do. The Gaussian's width is `sigma`, the
+  Lorentzian's `gamma` is its half width at half maximum, and the exponential
+  `a * exp(-x / tau) + c` decays for `tau > 0` and grows for `tau < 0`.
+- **Start values are stored with the result.** `refit()` guesses them from the
+  data for predefined models (1.0 for expressions), lets stored values for the
+  model's parameters win, and writes the values actually used into
+  `FitCurve.initial_values`. The generated script can then call `curve_fit`
+  with the same input and reach the same result, without a guessing routine.
+- **Statistics follow `curve_fit`.** With y errors, they weight the points as
+  absolute 1-sigma (`absolute_sigma=True`) and the reduced chi-square is
+  reported; without, the uncertainties are scaled by the residual scatter and
+  there is no chi-square. x errors are ignored: `curve_fit` cannot use them
+  (orthogonal distance regression would be a later addition). Non-finite points
+  are dropped.
+- **Failure is data, misuse is an error.** A fit that does not converge is
+  stored with `converged=False` and the start values, and an inestimable
+  covariance gives `inf` uncertainties, so the GUI can show both. Too few
+  points, non-positive errors, a model not finite at the start values or
+  start values that do not match the model raise `FitError`.
+- New runtime dependency: `scipy>=1.11`, named in the brief's stack.
+
+### Alternatives considered
+
+**Python functions for the predefined models.** Natural to write, but the code
+generator would need a second, textual copy of each, and the two could drift.
+
+**A math parser library** (e.g. `sympy.sympify`). Far more than needed, and
+`sympify` itself uses `eval`, which is the risk this decision avoids.

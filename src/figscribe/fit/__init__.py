@@ -1,0 +1,34 @@
+"""Fits: predefined models and user expressions, run with curve_fit.
+
+Every model is an expression in a small, safe language (see `expression`); the
+predefined ones are named expressions with a start-value guess. `run_fit` only
+computes a FitResult; `refit` wraps it in a command for the undo history.
+"""
+
+from figscribe.fit.expression import (
+    ExpressionError,
+    FitError,
+    compile_expression,
+)
+from figscribe.fit.ops import refit
+from figscribe.fit.run import (
+    evaluate,
+    initial_guess,
+    numpy_source,
+    parameter_names,
+    run_fit,
+    source_of,
+)
+
+__all__ = [
+    "ExpressionError",
+    "FitError",
+    "compile_expression",
+    "evaluate",
+    "initial_guess",
+    "numpy_source",
+    "parameter_names",
+    "refit",
+    "run_fit",
+    "source_of",
+]
