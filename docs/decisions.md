@@ -280,3 +280,47 @@ generator would need a second, textual copy of each, and the two could drift.
 
 **A math parser library** (e.g. `sympy.sympify`). Far more than needed, and
 `sympify` itself uses `eval`, which is the risk this decision avoids.
+
+---
+
+## 0005 — GUI structure and the preview
+
+**Date:** 2026-10-18
+**Status:** accepted
+
+### Context
+
+The brief requires that the GUI changes the model only through commands and
+that the preview is exactly what gets exported. Matplotlib's Qt canvas
+(`FigureCanvasQTAgg`) resizes the figure to its widget on every resize, which
+changes the figure size and with it the layout: the preview would no longer be
+the export.
+
+### Decision
+
+- **A `Document` is the GUI's only path to the model.** It holds the project,
+  its file, the `History`, the data provider and the selection. Views push
+  commands to it and redraw on its `changed` signal; none of them mutates the
+  model. The data provider is rebuilt when the project's sources change.
+- **The preview is an image rendered by Agg, not a Qt canvas.** The figure
+  keeps its size in millimetres; only the resolution is chosen so that it fits
+  the widget, and Agg draws it inside the figure's style context exactly as
+  `export` writes a PNG. A test checks that at the export's resolution the
+  preview image equals the exported PNG pixel for pixel.
+- **Clicks are hit-tested by Matplotlib** (`Artist.contains`) on the rendered
+  figure and mapped to the model through the `gid` the renderer sets. Artists
+  win over their axes; nothing in the renderer had to change.
+- **Errors while drawing are shown in the preview**, never raised: a missing or
+  changed data file must not take the window down.
+- **PySide6 is a regular dependency**, not an extra: figscribe is a desktop
+  application, and `pip install figscribe` gives the `figscribe` command.
+- **GUI tests run offscreen** with pytest-qt. Keyboard shortcuts are checked by
+  their bindings, not by key presses: the offscreen platform does not reliably
+  activate windows, and shortcuts only fire in an active one.
+
+### Alternatives considered
+
+**`FigureCanvasQTAgg` with a fixed widget size.** Rounding the figure to whole
+pixels at every zoom level still changes its size in inches slightly, and the
+canvas also rescales for the screen's pixel ratio on its own. Fighting the
+canvas costs more code than drawing an image.
