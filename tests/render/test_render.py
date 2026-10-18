@@ -178,6 +178,58 @@ def test_shared_tick_labels_only_on_the_outer_edge(data) -> None:
     ]
 
 
+def test_tick_labels_stay_without_a_partner_below_or_left(data) -> None:
+    # The bottom-right cell is empty: the top-right axes has nothing below it
+    # in its column, and the bottom-left axes nothing to its left in its row.
+    figure = Figure(
+        layout=GridLayout(rows=2, cols=2, share_x="col", share_y="all"),
+        axes=[Axes(row=0, col=0), Axes(row=0, col=1), Axes(row=1, col=0)],
+    )
+    top_left, top_right, bottom_left = render(figure, data).axes
+
+    assert not top_left.xaxis.get_tick_params()["labelbottom"]
+    assert top_right.xaxis.get_tick_params()["labelbottom"]
+    assert not top_right.yaxis.get_tick_params()["labelleft"]
+    assert bottom_left.yaxis.get_tick_params()["labelleft"]
+
+
+def test_tick_labels_stay_above_a_partner_of_another_width(data) -> None:
+    # Shared limits over a different width: the ticks below do not line up.
+    figure = Figure(
+        layout=GridLayout(rows=2, cols=2, share_x="all"),
+        axes=[
+            Axes(row=0, col=0),
+            Axes(row=0, col=1),
+            Axes(row=1, col=0, colspan=2),
+        ],
+    )
+    axs = render(figure, data).axes
+    assert [ax.xaxis.get_tick_params()["labelbottom"] for ax in axs] == [
+        True,
+        True,
+        True,
+    ]
+
+
+def test_tick_labels_stay_beside_a_partner_of_another_height(data) -> None:
+    figure = Figure(
+        layout=GridLayout(rows=2, cols=2, share_y="all"),
+        axes=[Axes(row=0, col=0, rowspan=2), Axes(row=0, col=1)],
+    )
+    axs = render(figure, data).axes
+    assert [ax.yaxis.get_tick_params()["labelleft"] for ax in axs] == [True, True]
+
+
+def test_tick_labels_hide_above_a_partner_of_the_same_span(data) -> None:
+    figure = Figure(
+        layout=GridLayout(rows=2, cols=2, share_x="col"),
+        axes=[Axes(row=0, col=0, colspan=2), Axes(row=1, col=0, colspan=2)],
+    )
+    top, bottom = render(figure, data).axes
+    assert not top.xaxis.get_tick_params()["labelbottom"]
+    assert bottom.xaxis.get_tick_params()["labelbottom"]
+
+
 def test_unshared_axes_keep_their_tick_labels(data) -> None:
     figure = Figure(layout=GridLayout(rows=2), axes=[Axes(row=0), Axes(row=1)])
     top = render(figure, data).axes[0]

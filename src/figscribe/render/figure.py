@@ -69,19 +69,35 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
             _draw_axes(axes, ax, data, figure.unit_format)
             drawn.append((axes, ax))
 
-        _hide_inner_tick_labels([ax for _, ax in drawn], layout.share_x, layout.share_y)
+        _hide_inner_tick_labels([ax for _, ax in drawn])
     return fig
 
 
-def _hide_inner_tick_labels(axs: list[MplAxes], share_x: str, share_y: str) -> None:
-    """Like plt.subplots(sharex=...): shared tick labels appear only on the
-    outer edge of the grid, at the bottom row and the left column."""
+def _hide_inner_tick_labels(axs: list[MplAxes]) -> None:
+    """Hide tick labels that a sharing partner already shows: x labels when a
+    partner lies below with exactly the same columns, y labels when one lies to
+    the left with exactly the same rows.
+
+    Not plt.subplots' rule of "only the bottom row and left column": in a grid
+    with gaps or spans, that strips labels from an axes with no partner below,
+    and its column ends up with no x tick labels at all. Same extent, not mere
+    overlap: a partner of another width spreads the shared limits over another
+    length, so its ticks do not line up and cannot stand in for these.
+    """
     for ax in axs:
         spec = ax.get_subplotspec()
-        if share_x != "none" and not spec.is_last_row():
-            ax.xaxis.set_tick_params(which="both", labelbottom=False)
-        if share_y != "none" and not spec.is_first_col():
-            ax.yaxis.set_tick_params(which="both", labelleft=False)
+        for partner in ax.get_shared_x_axes().get_siblings(ax):
+            other = partner.get_subplotspec()
+            below = other.rowspan.start >= spec.rowspan.stop
+            if below and other.colspan == spec.colspan:
+                ax.xaxis.set_tick_params(which="both", labelbottom=False)
+                break
+        for partner in ax.get_shared_y_axes().get_siblings(ax):
+            other = partner.get_subplotspec()
+            left = other.colspan.stop <= spec.colspan.start
+            if left and other.rowspan == spec.rowspan:
+                ax.yaxis.set_tick_params(which="both", labelleft=False)
+                break
 
 
 def style_context(figure: Figure):
