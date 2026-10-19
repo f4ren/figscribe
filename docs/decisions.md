@@ -543,3 +543,27 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   "Choose columns myself…" remain.
 - Units are read only to name the axes; the model keeps them on the axes, not
   on the data source.
+
+## 0013 — Fits in the figure and the fit dialog
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **The renderer draws fits and residuals.** A fit is its model evaluated at
+  400 points across the range of its data's x, drawn only once it has a
+  result; residuals are data minus fit at every data point, with the data's
+  y errors, around a dashed zero line. Both find the plots they refer to
+  anywhere in the figure; a missing one is an error, not a silent gap.
+- **The fit dialog fits at once** on every change of model or start value,
+  without touching the project, and shows the result the way the property
+  panel does. Own formulas take their parameters from the names in them
+  (`free_names`): everything but x, the functions and pi.
+- **`add_fit` adds the fit and, if asked, its residuals in one step.** The
+  residuals use an empty panel right below the data if there is one;
+  otherwise a row is added, the figure grows by 20 mm and shares x by
+  column. The x label moves to the residual panel, which now shows the x
+  tick labels.
+- **"Fit again with the current data"** in the property panel reruns a fit
+  with its stored start values, e.g. after the data file changed.

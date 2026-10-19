@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QScrollArea,
     QToolButton,
     QVBoxLayout,
@@ -38,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.commands import CommandError, SetField, find
+from figscribe.fit import FitError, refit
 from figscribe.gui import theme
 from figscribe.gui.document import Document
 from figscribe.gui.names import (
@@ -49,6 +51,7 @@ from figscribe.gui.names import (
     with_error,
 )
 from figscribe.gui.widgets import Section, label
+from figscribe.io.errors import DataError
 from figscribe.model import ArrayRef, Axes, ColumnRef, Figure, FitCurve
 
 SKIPPED = {
@@ -430,7 +433,19 @@ class PropertyPanel(QScrollArea):
                 grid.addWidget(warning, row + 1, 0, 1, 2)
         grid.setColumnStretch(1, 1)
         outer.addWidget(card)
+        again = QPushButton("Fit again with the current data")
+        again.setObjectName("link")
+        again.clicked.connect(lambda: self.fit_again(fit.id))
+        self.fit_again_button = again
+        outer.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return holder
+
+    def fit_again(self, fit_id: str) -> None:
+        """Run the fit again, e.g. after its data or start values changed."""
+        try:
+            self.document.push(refit(self.document.project, fit_id, self.document.data))
+        except (FitError, CommandError, DataError) as exc:
+            self.report(str(exc))
 
     def _selected_object(self) -> BaseModel | None:
         oid = self.document.selected

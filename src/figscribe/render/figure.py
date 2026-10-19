@@ -6,7 +6,7 @@ so rendering touches no global figure state and needs no GUI backend.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import nullcontext
 
 import matplotlib.style
@@ -21,10 +21,13 @@ from figscribe.model import (
     ColumnRef,
     ErrorbarPlot,
     Figure,
+    FitCurve,
     Legend,
     LinePlot,
+    ResidualPlot,
     ScatterPlot,
 )
+from figscribe.model.validate import FITTABLE
 from figscribe.render.labels import axis_label
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
@@ -55,6 +58,7 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
             wspace=layout.wspace,
         )
 
+        artists = {a.id: a for axes in figure.axes for a in axes.artists}
         drawn: list[tuple[Axes, MplAxes]] = []
         for axes in figure.axes:
             ax = fig.add_subplot(
@@ -66,7 +70,7 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
                 sharey=_share_partner(axes, drawn, layout.share_y, "row"),
             )
             ax.set_gid(axes.id)
-            _draw_axes(axes, ax, data, figure.unit_format)
+            _draw_axes(axes, ax, data, figure.unit_format, artists)
             drawn.append((axes, ax))
 
         _hide_inner_tick_labels([ax for _, ax in drawn])
@@ -120,7 +124,13 @@ def _share_partner(
     return None
 
 
-def _draw_axes(axes: Axes, ax: MplAxes, data: DataProvider, unit_format: str) -> None:
+def _draw_axes(
+    axes: Axes,
+    ax: MplAxes,
+    data: DataProvider,
+    unit_format: str,
+    artists: Mapping[str, Artist],
+) -> None:
     if axes.y_right is not None:
         raise NotImplementedError("a right-hand y-axis (y_right) is planned for M5")
 
@@ -132,7 +142,7 @@ def _draw_axes(axes: Axes, ax: MplAxes, data: DataProvider, unit_format: str) ->
         ax.grid(True)
 
     for artist in axes.artists:
-        _draw_artist(artist, ax, data)
+        _draw_artist(artist, ax, data, artists)
 
     if axes.legend.visible:
         _draw_legend(axes.legend, ax)
@@ -162,7 +172,11 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         axis.minorticks_off()
 
 
-def _draw_artist(artist: Artist, ax: MplAxes, data: DataProvider) -> None:
+def _draw_artist(
+    artist: Artist, ax: MplAxes, data: DataProvider, artists: Mapping[str, Artist]
+) -> None:
+    """Draw one artist; `artists` finds the plots that fits and residuals
+    refer to, wherever in the figure they are."""
     if artist.axis == "right":
         raise NotImplementedError("drawing against y_right is planned for M5")
 
@@ -213,10 +227,91 @@ def _draw_artist(artist: Artist, ax: MplAxes, data: DataProvider) -> None:
         # or a bar maps back to the artist as well.
         for part in container.get_children():
             part.set_gid(artist.id)
+    elif isinstance(artist, FitCurve):
+        _draw_fit(artist, ax, data, artists, common)
+    elif isinstance(artist, ResidualPlot):
+        _draw_residuals(artist, ax, data, artists, common)
     else:
         raise NotImplementedError(
             f"rendering {artist.kind!r} artists is not implemented yet"
         )
+
+
+CURVE_POINTS = 400
+"""Points along a fitted curve: smooth at any print size."""
+
+
+def _draw_fit(
+    fit: FitCurve,
+    ax: MplAxes,
+    data: DataProvider,
+    artists: Mapping[str, Artist],
+    common: dict,
+) -> None:
+    """The fitted model across the range of its data; nothing before a fit."""
+    from figscribe.fit import evaluate
+
+    target = _referenced(artists, fit.target, FITTABLE, "fit")
+    if fit.result is None:
+        return
+    x = np.asarray(data(target.x), dtype=float)
+    x = x[np.isfinite(x)]
+    if x.size == 0:
+        return
+    xs = np.linspace(x.min(), x.max(), CURVE_POINTS)
+    ys = evaluate(fit.model, fit.result.parameters, xs)
+    ax.plot(
+        xs,
+        ys,
+        color=fit.color,
+        linestyle=fit.linestyle,
+        linewidth=fit.linewidth,
+        **common,
+    )
+
+
+def _draw_residuals(
+    residuals: ResidualPlot,
+    ax: MplAxes,
+    data: DataProvider,
+    artists: Mapping[str, Artist],
+    common: dict,
+) -> None:
+    """Data minus fit at every data point, with the data's y errors, around a
+    dashed zero line."""
+    from figscribe.fit import evaluate
+
+    fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
+    target = _referenced(artists, fit.target, FITTABLE, "fit")
+    ax.axhline(0.0, color="0.6", linewidth=0.8, linestyle="--", zorder=1)
+    if fit.result is None:
+        return
+    x = np.asarray(data(target.x), dtype=float)
+    y = np.asarray(data(target.y), dtype=float)
+    yerr = (
+        data(target.yerr)
+        if isinstance(target, ErrorbarPlot) and target.yerr is not None
+        else None
+    )
+    container = ax.errorbar(
+        x,
+        y - evaluate(fit.model, fit.result.parameters, x),
+        yerr=yerr,
+        color=residuals.color,
+        marker=residuals.marker,
+        markersize=residuals.markersize,
+        linestyle=residuals.linestyle,
+        **common,
+    )
+    for part in container.get_children():
+        part.set_gid(residuals.id)
+
+
+def _referenced(artists: Mapping[str, Artist], oid: str, kinds: tuple, what: str):
+    found = artists.get(oid)
+    if not isinstance(found, kinds):
+        raise ValueError(f"the {what} refers to {oid!r}, which is not in the figure")
+    return found
 
 
 def _draw_legend(legend: Legend, ax: MplAxes) -> None:

@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import functools
 import keyword
+import re
 from collections.abc import Callable, Sequence
 
 import numpy as np
@@ -117,6 +118,22 @@ def numpy_source(source: str) -> str:
             return node
 
     return ast.unparse(Prefix().visit(tree))
+
+
+def free_names(source: str) -> list[str]:
+    """The names in `source` that are neither x, a function nor a constant:
+    the parameters a user means, in the order they first appear."""
+    names: list[str] = []
+    for node in ast.walk(_parse(source)):
+        if isinstance(node, ast.Name) and node.id not in names:
+            if node.id != VARIABLE and node.id not in FUNCTIONS | CONSTANTS:
+                names.append(node.id)
+    return sorted(names, key=lambda n: _first_position(source, n))
+
+
+def _first_position(source: str, name: str) -> int:
+    match = re.search(rf"\b{re.escape(name)}\b", source)
+    return match.start() if match else len(source)
 
 
 def _parse(source: str) -> ast.Expression:
