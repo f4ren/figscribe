@@ -522,3 +522,24 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   can be changed and saved; the wheel carries it inside the package.
 - **Recent projects** are those opened or saved in the window, kept in the
   user's settings, at most six; files that are gone are not shown.
+
+## 0012 — Adding data proposes a first plot
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **The import dialog says what it detected** as a row of chips (separator,
+  decimal mark, line of names, line of units, comments); a click on one opens
+  the settings. Lines are counted from 1 on screen, from 0 in the model.
+- **Guesses live in `figscribe.suggest`**, without Qt: a column named "dU",
+  "U_err", "sigma_U" or "ΔU" next to "U" is U's error; a non-numeric line
+  right below the header is a line of units; the first column that is nobody's
+  error is x, the next one y.
+- **"Add and plot" is the default**: the data, the chosen plot (error bars
+  first when y has an error column) and, for an empty panel, axis labels and
+  units from the columns, all as one undo step. "Only add the data" and
+  "Choose columns myself…" remain.
+- Units are read only to name the axes; the model keeps them on the axes, not
+  on the data source.
