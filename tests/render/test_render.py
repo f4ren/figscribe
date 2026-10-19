@@ -254,3 +254,18 @@ def test_artists_outside_m1_are_refused(data) -> None:
 def test_right_y_axis_is_refused_for_now(data) -> None:
     with pytest.raises(NotImplementedError, match="y_right"):
         render(Figure(axes=[Axes(y_right=AxisSpec())]), data)
+
+
+def test_an_inset_is_drawn_inside_its_panel(data) -> None:
+    from figscribe.model import Inset
+
+    host = Axes()
+    inset = Axes(inset=Inset(parent=host.id, bounds=(0.5, 0.5, 0.4, 0.3)))
+    fig = render(Figure(axes=[inset, host]), data)  # the inset may come first
+    (ax,) = fig.axes
+    (child,) = ax.child_axes
+    assert ax.get_gid() == host.id and child.get_gid() == inset.id
+    fig.canvas.draw()
+    outer, inner = ax.get_position(), child.get_position()
+    assert inner.x0 == pytest.approx(outer.x0 + 0.5 * outer.width)
+    assert inner.height == pytest.approx(0.3 * outer.height)

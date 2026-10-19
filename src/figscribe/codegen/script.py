@@ -38,7 +38,12 @@ from figscribe.model import (
 )
 from figscribe.render.figure import CURVE_POINTS, MM_PER_INCH, DataProvider
 from figscribe.render.labels import axis_label
-from figscribe.render.layout import hidden_tick_labels, share_partner
+from figscribe.render.layout import (
+    creation_order,
+    hidden_tick_labels,
+    inset_parent,
+    share_partner,
+)
 
 WIDTH = 88
 RESERVED = {
@@ -393,8 +398,14 @@ class _Writer:
                 str(layout.cols),
                 **grid_kwargs,
             )
-        for i, axes in enumerate(figure.axes):
+        for i in creation_order(figure):
+            axes = figure.axes[i]
             name = self.axes_names[i]
+            if axes.inset is not None:
+                host = self.axes_names[inset_parent(figure, i)]
+                bounds = _value(list(axes.inset.bounds))
+                self.emit(f"{name} = {host}.inset_axes({bounds})")
+                continue
             kwargs = {}
             for axis, key in (("x", "sharex"), ("y", "sharey")):
                 partner = share_partner(figure, i, axis)
@@ -409,8 +420,8 @@ class _Writer:
                 ]
             )
             self.call(f"{name} = fig.add_subplot", *where, **kwargs)
-        for i, axes in enumerate(figure.axes):
-            self._panel(i, axes)
+        for i in creation_order(figure):
+            self._panel(i, figure.axes[i])
         hidden = hidden_tick_labels(figure)
         if any(x or y for x, y in hidden):
             self.emit(
@@ -433,6 +444,9 @@ class _Writer:
         title = (
             f"Panel {_letter(index).upper()}" if len(self.figure.axes) > 1 else "Plot"
         )
+        if axes.inset is not None:
+            host = _letter(inset_parent(self.figure, index)).upper()
+            title += f", inset in Panel {host}"
         self.emit("", f"# {title}" + (f": {axes.title}" if axes.title else ""))
         if axes.title is not None:
             self.emit(f"{ax}.set_title({_str(axes.title)})")

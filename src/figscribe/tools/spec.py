@@ -124,7 +124,8 @@ TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         "insert",
-        "Add a figure, an axes (a panel in the figure's grid) or an artist "
+        "Add a figure, an axes (a panel in the figure's grid, or an inset with "
+        '"inset": {"parent": axes id, "bounds": [x0, y0, w, h]}) or an artist '
         '(plot, annotation, residuals) given as JSON. Returns its id. For "kind" '
         "values and fields see get_schema. One undo step.",
         {
@@ -143,6 +144,25 @@ TOOLS: list[ToolSpec] = [
             "type": "object",
             "properties": {"object_id": {"type": "string"}},
             "required": ["object_id"],
+            "additionalProperties": False,
+        },
+        changes_project=True,
+    ),
+    ToolSpec(
+        "add_panel",
+        "Add an empty panel next to the panel axes_id (right, left, above, "
+        "below), growing the grid and moving the other panels as needed, or "
+        "an inset inside it. Returns the new panel's id. One undo step.",
+        {
+            "type": "object",
+            "properties": {
+                "axes_id": {"type": "string"},
+                "side": {
+                    "type": "string",
+                    "enum": ["right", "left", "above", "below", "inset"],
+                },
+            },
+            "required": ["axes_id", "side"],
             "additionalProperties": False,
         },
         changes_project=True,

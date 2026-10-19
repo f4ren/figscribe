@@ -193,14 +193,14 @@ class Preview(QWidget):
         x, y = self._to_display(point)
         event = MouseEvent("button_press_event", self._figure.canvas, x, y)
         hits: list[tuple[float, str]] = []
-        for ax in self._figure.axes:
+        for ax in _all_axes(self._figure):
             for artist in _children(ax):
                 gid = artist.get_gid()
                 if gid and artist.get_visible() and artist.contains(event)[0]:
                     hits.append((artist.get_zorder(), gid))
             if hits:
                 return max(hits)[1]
-        for ax in self._figure.axes:
+        for ax in _all_axes(self._figure):
             if ax.get_gid() and ax.contains(event)[0]:
                 return ax.get_gid()
         return None
@@ -212,7 +212,7 @@ class Preview(QWidget):
             return None
         boxes = [
             a.get_window_extent()
-            for ax in self._figure.axes
+            for ax in _all_axes(self._figure)
             for a in (ax, *_children(ax))
             if a.get_gid() == oid and a.get_visible()
         ]
@@ -248,6 +248,12 @@ class Preview(QWidget):
         return QPointF(
             self._origin.x() + x / ratio, self._origin.y() + (height - y) / ratio
         )
+
+
+def _all_axes(fig: MplFigure) -> list:
+    """Every axes, insets first: they lie on top of the panel they sit in."""
+    insets = [child for ax in fig.axes for child in ax.child_axes]
+    return [*insets, *fig.axes]
 
 
 def _children(ax) -> list[MplArtist]:

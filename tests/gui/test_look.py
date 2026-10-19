@@ -203,7 +203,13 @@ def test_fields_are_grouped_in_sections(panel: PropertyPanel, document) -> None:
     assert panel._title.text() == "measurement"
 
     document.select(document.figure.axes[0].id)
-    assert list(panel.sections)[:4] == ["Panel", "X axis", "Y axis", "Legend"]
+    assert list(panel.sections)[:5] == [
+        "Panel",
+        "Position",
+        "X axis",
+        "Y axis",
+        "Legend",
+    ]
 
 
 def test_an_opened_section_stays_open(panel: PropertyPanel, document) -> None:

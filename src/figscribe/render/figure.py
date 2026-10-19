@@ -29,7 +29,12 @@ from figscribe.model import (
 )
 from figscribe.model.validate import FITTABLE
 from figscribe.render.labels import axis_label
-from figscribe.render.layout import hidden_tick_labels, share_partner
+from figscribe.render.layout import (
+    creation_order,
+    hidden_tick_labels,
+    inset_parent,
+    share_partner,
+)
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
 """Resolves a column reference to its values; loading files is not our job."""
@@ -60,22 +65,28 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
         )
 
         artists = {a.id: a for axes in figure.axes for a in axes.artists}
-        axs: list[MplAxes] = []
-        for i, axes in enumerate(figure.axes):
-            partners = [share_partner(figure, i, axis) for axis in ("x", "y")]
-            ax = fig.add_subplot(
-                grid[
-                    axes.row : axes.row + axes.rowspan,
-                    axes.col : axes.col + axes.colspan,
-                ],
-                sharex=axs[partners[0]] if partners[0] is not None else None,
-                sharey=axs[partners[1]] if partners[1] is not None else None,
-            )
+        axs: dict[int, MplAxes] = {}
+        for i in creation_order(figure):
+            axes = figure.axes[i]
+            if axes.inset is not None:
+                host = axs[inset_parent(figure, i)]
+                ax = host.inset_axes(list(axes.inset.bounds))
+            else:
+                partners = [share_partner(figure, i, axis) for axis in ("x", "y")]
+                ax = fig.add_subplot(
+                    grid[
+                        axes.row : axes.row + axes.rowspan,
+                        axes.col : axes.col + axes.colspan,
+                    ],
+                    sharex=axs[partners[0]] if partners[0] is not None else None,
+                    sharey=axs[partners[1]] if partners[1] is not None else None,
+                )
             ax.set_gid(axes.id)
             _draw_axes(axes, ax, data, figure.unit_format, artists)
-            axs.append(ax)
+            axs[i] = ax
 
-        for ax, (hide_x, hide_y) in zip(axs, hidden_tick_labels(figure), strict=True):
+        for i, (hide_x, hide_y) in enumerate(hidden_tick_labels(figure)):
+            ax = axs[i]
             if hide_x:
                 ax.xaxis.set_tick_params(which="both", labelbottom=False)
             if hide_y:
