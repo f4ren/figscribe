@@ -271,3 +271,25 @@ def test_specs_cover_the_model(cls, fields) -> None:
         if name in SKIPPED or name in READ_ONLY:
             continue
         assert spec_for(name, field.annotation) is not None, f"{cls.__name__}.{name}"
+
+
+def test_font_tick_and_grid_settings_have_names(panel: PropertyPanel, document) -> None:
+    document.select(_figure(document).id)
+    assert ("font_size",) in panel.editors
+    assert panel.editors[("font_size",)].line.placeholderText() == "default"
+    _type(panel, ("font_size",), "8")
+    assert _figure(document).font_size == 8.0
+
+    document.select(_axes(document).id)
+    _type(panel, ("x", "major_step"), "2.5")
+    assert _axes(document).x.major_step == 2.5
+    _type(panel, ("x", "minor_divisions"), "1")
+    assert "minor_divisions" in panel.error  # at least two parts
+    combo = panel.editors[("grid_axis",)].widget
+    assert [combo.itemText(i) for i in range(combo.count())] == [
+        "both axes",
+        "x only",
+        "y only",
+    ]
+    combo.activated.emit(2)
+    assert _axes(document).grid_axis == "y"

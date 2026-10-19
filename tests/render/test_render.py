@@ -269,3 +269,32 @@ def test_an_inset_is_drawn_inside_its_panel(data) -> None:
     outer, inner = ax.get_position(), child.get_position()
     assert inner.x0 == pytest.approx(outer.x0 + 0.5 * outer.width)
     assert inner.height == pytest.approx(0.3 * outer.height)
+
+
+def test_font_sizes_tick_steps_and_grid(data) -> None:
+    from matplotlib.ticker import AutoMinorLocator, MultipleLocator
+
+    axes = Axes(
+        title="T",
+        title_size=14,
+        grid=True,
+        grid_axis="x",
+        x=AxisSpec(label="t", label_size=11, major_step=2.0, minor_divisions=4),
+        y=AxisSpec(label="U", tick_size=6),
+    )
+    fig = render(Figure(font_size=7, axes=[axes]), data)
+    ax = fig.axes[0]
+    assert ax.title.get_fontsize() == 14
+    assert ax.xaxis.label.get_fontsize() == 11
+    assert ax.yaxis.label.get_fontsize() == 7  # follows the figure's font size
+    assert isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+    assert isinstance(ax.xaxis.get_minor_locator(), AutoMinorLocator)
+    assert ax.yaxis.get_ticklabels()[0].get_fontsize() == 6
+    assert ax.xaxis.get_gridlines()[0].get_visible()
+    assert not ax.yaxis.get_gridlines()[0].get_visible()
+
+
+def test_an_untitled_size_keeps_matplotlibs_defaults(data) -> None:
+    fig = render(Figure(axes=[Axes(title="T", x=AxisSpec(label="t"))]), data)
+    ax = fig.axes[0]
+    assert ax.title.get_fontsize() > ax.xaxis.label.get_fontsize()  # "large"
