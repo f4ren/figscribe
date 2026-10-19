@@ -9,8 +9,9 @@ from figscribe.fit.expression import (
     ExpressionError,
     FitError,
     compile_expression,
+    free_names,
 )
-from figscribe.fit.ops import refit
+from figscribe.fit.ops import add_fit, refit
 from figscribe.fit.run import (
     evaluate,
     initial_guess,
@@ -22,9 +23,11 @@ from figscribe.fit.run import (
 
 __all__ = [
     "ExpressionError",
+    "add_fit",
     "FitError",
     "compile_expression",
     "evaluate",
+    "free_names",
     "initial_guess",
     "numpy_source",
     "parameter_names",

@@ -7,7 +7,12 @@ import time
 import numpy as np
 import pytest
 
-from figscribe.fit import ExpressionError, compile_expression, numpy_source
+from figscribe.fit import (
+    ExpressionError,
+    compile_expression,
+    free_names,
+    numpy_source,
+)
 
 
 def test_evaluates_like_numpy() -> None:
@@ -104,3 +109,16 @@ def test_numpy_source_runs_as_plain_numpy() -> None:
         "a * exp(-x / tau) + c * sqrt(abs(x)) + pi", ["a", "tau", "c"]
     )
     np.testing.assert_allclose(eval(source, namespace), reference(x, 2.0, 0.7, 0.3))
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("a * exp(-x / tau) + c", ["a", "tau", "c"]),
+        ("A * sin(omega * x + phi) + pi", ["A", "omega", "phi"]),
+        ("b + a * x", ["b", "a"]),
+        ("exp(x)", []),
+    ],
+)
+def test_free_names_are_the_parameters(source, expected) -> None:
+    assert free_names(source) == expected

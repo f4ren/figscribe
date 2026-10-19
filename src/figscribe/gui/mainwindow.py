@@ -40,8 +40,10 @@ from figscribe.commands import (
     remove_axes,
 )
 from figscribe.commands.core import walk
+from figscribe.fit import FitError, add_fit
 from figscribe.gui import theme
 from figscribe.gui.document import Document
+from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.outline import Outline
 from figscribe.gui.plotdialog import PlotDialog, add_plot
@@ -49,7 +51,8 @@ from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
 from figscribe.gui.start import DOCS_URL, StartPage, bundled_example
-from figscribe.model import ArtistBase, Axes, AxisSpec
+from figscribe.model import ArtistBase, Axes, AxisSpec, FitCurve
+from figscribe.model.validate import FITTABLE
 from figscribe.render import export
 from figscribe.templates import template
 
@@ -391,6 +394,49 @@ class MainWindow(QMainWindow):
                 return axes.id
         return figure.axes[0].id if figure.axes else None
 
+    def add_fit(self) -> None:
+        """Fit a model to the selected plot (or the only one) and add it."""
+        target = self._fit_target()
+        if target is None:
+            self.show_error(
+                "Nothing to fit", ValueError("Select the plot to fit, then try again.")
+            )
+            return
+        figure = self.document.figure
+        axes = next(a for a in figure.axes if target in a.artists)
+        below = any(
+            o.row == axes.row + axes.rowspan and o.col == axes.col and not o.artists
+            for o in figure.axes
+        )
+        try:
+            dialog = FitDialog(target, self.document.data, below, self)
+        except Exception as exc:  # the data cannot be read
+            self.show_error("Cannot fit", exc)
+            return
+        if not self.run_dialog(dialog) or dialog.fit() is None:
+            return
+        fit = dialog.fit()
+        try:
+            command = add_fit(self.document.project, fit, dialog.residuals.isChecked())
+        except FitError as exc:
+            self.show_error("Cannot fit", exc)
+            return
+        self._push(command)
+        self.document.select(fit.id)
+
+    def _fit_target(self):
+        figure = self.document.figure
+        if figure is None:
+            return None
+        plots = [a for axes in figure.axes for a in axes.artists]
+        selected = next((a for a in plots if a.id == self.document.selected), None)
+        if isinstance(selected, FitCurve):
+            selected = next((a for a in plots if a.id == selected.target), None)
+        if isinstance(selected, FITTABLE):
+            return selected
+        fittable = [a for a in plots if isinstance(a, FITTABLE)]
+        return fittable[0] if len(fittable) == 1 else None
+
     def _add_plot_to(self, oid: str) -> None:
         self.document.select(oid)
         self.add_plot()
@@ -563,6 +609,9 @@ class MainWindow(QMainWindow):
         self.plot_action = self._action(
             insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P"
         )
+        self.fit_action = self._action(
+            insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
+        )
 
         assistant = self.menuBar().addMenu("&Assistant")
         self.mcp_action = self._toggle(
@@ -608,6 +657,9 @@ class MainWindow(QMainWindow):
             action.setIcon(theme.icon("plus"))
             action.setIconText(text)
             bar.addAction(action)
+        self.fit_action.setIcon(theme.icon("fit"))
+        self.fit_action.setIconText("Fit")
+        bar.addAction(self.fit_action)
         bar.addSeparator()
         for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):
             action.setIcon(theme.icon(name))
