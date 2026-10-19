@@ -170,6 +170,11 @@ QPushButton#tile, QPushButton#recentRow {{
     padding: 0; text-align: left;
 }}
 QPushButton#tile:hover, QPushButton#recentRow:hover {{ border-color: {ACCENT}; }}
+QWidget#chatPanel {{ background: {SURFACE}; border-top: 1px solid {BORDER}; }}
+QTextBrowser#transcript {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 8px;
+    padding: 6px 8px;
+}}
 QWidget#codePanel {{ background: {SURFACE}; border-top: 1px solid {BORDER}; }}
 QPlainTextEdit#code {{
     background: #FBFBF9; border: 0; border-top: 1px solid {BORDER};
@@ -321,6 +326,8 @@ _ICONS = {
     "histogram": '<path d="M2 14 V9 H5 V5 H8 V7 H11 V10 H14 V14 Z" fill="{c}"/>',
     "image": '<rect x="2" y="2" width="12" height="12" fill="{c}" opacity="0.35"/>'
     '<rect x="2" y="2" width="6" height="6" fill="{c}"/>',
+    "chat": '<path d="M2.5 3.5 H13.5 V10.5 H7 L4 13 V10.5 H2.5 Z" fill="none" '
+    'stroke="{c}" stroke-width="1.4" stroke-linejoin="round"/>',
     "code": '<path d="M6 4 L2 8 L6 12 M10 4 L14 8 L10 12" stroke="{c}" '
     'stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
 }

@@ -684,3 +684,32 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   a short pause and costs nothing while closed. A project the generator
   cannot handle yet shows the reason as a comment instead of code.
 - Whether the drawer is open is remembered, like the assistant switches.
+
+## 0019 — The built-in assistant
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **The same tools as for MCP clients** (`figscribe.tools`), run through the
+  open Document's Toolbox: every change is a command, shown at once and
+  undoable. `figscribe.assistant.chat` holds the conversation and the tool
+  loop without Qt; the GUI runs model requests in a worker thread and the
+  tools on its own thread, one request round at a time.
+- **Claude through the official Anthropic SDK** (optional extra
+  `figscribe[chat]`), model `claude-opus-5-5` with effort `medium`, streamed,
+  tool inputs streamed eagerly and validated by the Toolbox; the stable system
+  prompt and tool list are cached. A safety decline is answered by a fallback
+  model (`fallbacks: "default"`), so the user gets an answer instead of
+  nothing. Thinking blocks and every other block of a response go back
+  unchanged on the next request.
+- **Credentials are the SDK's**: `ANTHROPIC_API_KEY` or an `ant auth login`
+  profile. When neither works, the chat asks for a key and keeps it for the
+  session only; it is never written to the settings.
+- **Bounded**: at most 25 tool rounds per request; a refusal, a cut-off answer
+  or an API error ends the request with a message, never an exception in the
+  window. The model sees column names, not data, unless the user lets tools
+  return the preview image.
+- Tests drive the loop with a scripted model, and the real SDK path against a
+  local server, so they need neither network nor key.

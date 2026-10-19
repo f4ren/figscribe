@@ -45,6 +45,7 @@ from figscribe.commands import (
 from figscribe.commands.core import walk
 from figscribe.fit import FitError, add_fit
 from figscribe.gui import theme
+from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.document import Document
 from figscribe.gui.fitdialog import FitDialog
@@ -108,12 +109,20 @@ class MainWindow(QMainWindow):
         self.preview = Preview(self.document)
         self.start = StartPage()
         self._connect_start(self.start)
+        self.chat = ChatPanel(self.document)
+        self.chat.hide()
+        self.chat.busy_changed.connect(
+            lambda busy: self.statusBar().showMessage(
+                "Assistant at work…" if busy else ""
+            )
+        )
         self.code = CodePanel(self.document)
         self.code.save_requested.connect(self._script_dialog)
         self.code.hide()
         self.workspace = QSplitter(Qt.Orientation.Vertical)
         self.workspace.setChildrenCollapsible(False)
         self.workspace.addWidget(self.preview)
+        self.workspace.addWidget(self.chat)
         self.workspace.addWidget(self.code)
         self.workspace.setStretchFactor(0, 3)
         self.workspace.setStretchFactor(1, 2)
@@ -510,6 +519,12 @@ class MainWindow(QMainWindow):
             self._push(command)
         self.document.select(new.id)
 
+    def show_chat(self, on: bool) -> None:
+        """Show or hide the built-in assistant under the preview."""
+        self.chat.setVisible(on)
+        if on:
+            self.chat.input.setFocus()
+
     def show_code(self, on: bool) -> None:
         """Show or hide the Python code drawer under the preview."""
         self.code.setVisible(on)
@@ -571,7 +586,14 @@ class MainWindow(QMainWindow):
     def set_document(self, document: Document) -> None:
         document.allow_preview = self.document.allow_preview
         self.document = document
-        views = (self.preview, self.outline, self.problems, self.properties, self.code)
+        views = (
+            self.preview,
+            self.outline,
+            self.problems,
+            self.properties,
+            self.code,
+            self.chat,
+        )
         for view in views:
             view.set_document(document)
         self._connect(document)
@@ -586,6 +608,7 @@ class MainWindow(QMainWindow):
             return
         if self.tool_server.listening:
             self.tool_server.stop()
+        self.chat.wait()  # let a running request finish before its thread goes
         event.accept()
 
     def _connect(self, document: Document) -> None:
@@ -711,6 +734,10 @@ class MainWindow(QMainWindow):
         self.addAction(self.code_action)
 
         assistant = self.menuBar().addMenu("&Assistant")
+        self.chat_action = self._toggle(assistant, "&Chat", self.show_chat)
+        self.chat_action.setShortcut(QKeySequence("Ctrl+Shift+A"))
+        self.addAction(self.chat_action)
+        assistant.addSeparator()
         self.mcp_action = self._toggle(
             assistant, "Allow &MCP Access", self.set_mcp_enabled
         )
@@ -772,6 +799,9 @@ class MainWindow(QMainWindow):
             button = bar.widgetForAction(action)
             button.setObjectName("quiet")
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.chat_action.setIcon(theme.icon("chat"))
+        self.chat_action.setIconText("Assistant")
+        bar.addAction(self.chat_action)
         self.code_action.setIcon(theme.icon("code"))
         self.code_action.setIconText("Python code")
         bar.addAction(self.code_action)
