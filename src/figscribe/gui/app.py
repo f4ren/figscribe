@@ -5,14 +5,19 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 from figscribe.gui.mainwindow import MainWindow
 
 
-def create_window(argv: Sequence[str]) -> MainWindow:
-    """The main window for the command line `argv` (program name excluded)."""
-    window = MainWindow()
+def create_window(argv: Sequence[str], remember: bool = False) -> MainWindow:
+    """The main window for the command line `argv` (program name excluded).
+
+    With `remember`, the window keeps its switches in the user's settings.
+    """
+    settings = QSettings("figscribe", "figscribe") if remember else None
+    window = MainWindow(settings=settings)
     if argv:
         window.open_path(argv[0])
     return window
@@ -21,7 +26,7 @@ def create_window(argv: Sequence[str]) -> MainWindow:
 def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("figscribe")
-    window = create_window(sys.argv[1:])
+    window = create_window(sys.argv[1:], remember=True)
     window.show()
     return app.exec()
 

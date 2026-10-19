@@ -18,6 +18,23 @@ code generator does not exist yet.
 
 The full project plan lives in [`plan/`](plan/).
 
+## Assistants (MCP)
+
+figscribe can be driven by an assistant in any MCP client (Claude Desktop,
+Claude Code, IDEs, front ends for local models): "two panels, residuals below,
+shared x axis" becomes changes to the open project, live in the window and
+undoable there. The assistant works through the same commands as the GUI and
+sees the project's structure and column names, never the data, unless you let
+it see the figure.
+
+```
+pip install "figscribe[mcp]"
+claude mcp add figscribe -- figscribe mcp      # e.g. for Claude Code
+```
+
+Then enable *Assistant > Allow MCP access* in figscribe; *Assistant > How to
+connect* shows the configuration for other clients.
+
 ## Design principle
 
 The declarative plot model is the single source of truth:
