@@ -241,11 +241,26 @@ class _Writer:
             self.emit("import hashlib")
         self.emit("from pathlib import Path", "")
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
+        locators = self._locators()
+        if locators:
+            self.emit(f"from matplotlib.ticker import {', '.join(locators)}")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
         self.emit("", "HERE = Path(__file__).resolve().parent")
         if self.figure.stylesheet is not None:
             self.emit(f"plt.style.use({_str(self.figure.stylesheet)})")
+        if self.figure.font_size is not None:
+            self.emit(f'plt.rcParams["font.size"] = {_num(self.figure.font_size)}')
+
+    def _locators(self) -> list[str]:
+        """The tick locators the script needs to import."""
+        specs = [s for a in self.figure.axes for s in (a.x, a.y)]
+        needed = []
+        if any(s.minor_ticks and s.minor_divisions for s in specs):
+            needed.append("AutoMinorLocator")
+        if any(s.ticks is None and s.major_step for s in specs):
+            needed.append("MultipleLocator")
+        return needed
 
     def _data(self, script_dir: Path) -> None:
         used = [s for s in self.project.sources if self._used(s.id)]
@@ -449,11 +464,17 @@ class _Writer:
             title += f", inset in Panel {host}"
         self.emit("", f"# {title}" + (f": {axes.title}" if axes.title else ""))
         if axes.title is not None:
-            self.emit(f"{ax}.set_title({_str(axes.title)})")
+            size = {"fontsize": _num(axes.title_size)} if axes.title_size else {}
+            self.call(f"{ax}.set_title", _str(axes.title), **size)
         self._axis(ax, "x", axes.x)
         self._axis(ax, "y", axes.y)
         if axes.grid:
-            self.emit(f"{ax}.grid(True)")
+            kwargs = {}
+            if axes.grid_which != "major":
+                kwargs["which"] = _str(axes.grid_which)
+            if axes.grid_axis != "both":
+                kwargs["axis"] = _str(axes.grid_axis)
+            self.call(f"{ax}.grid", "True", **kwargs)
         for artist in axes.artists:
             self._artist(ax, artist)
         if axes.legend.visible:
@@ -462,7 +483,8 @@ class _Writer:
     def _axis(self, ax: str, name: str, spec: AxisSpec) -> None:
         label = axis_label(spec, self.figure.unit_format)
         if label is not None:
-            self.emit(f"{ax}.set_{name}label({_str(label)})")
+            size = {"fontsize": _num(spec.label_size)} if spec.label_size else {}
+            self.call(f"{ax}.set_{name}label", _str(label), **size)
         if spec.scale == "symlog" and spec.symlog_linthresh is not None:
             self.emit(
                 f'{ax}.set_{name}scale("symlog", '
@@ -478,10 +500,23 @@ class _Writer:
             if spec.tick_labels is not None:
                 kwargs["labels"] = _value(spec.tick_labels)
             self.call(f"{ax}.set_{name}ticks", _value(spec.ticks), **kwargs)
-        if spec.minor_ticks:
+        elif spec.major_step is not None:
+            step = _num(spec.major_step)
+            self.emit(f"{ax}.{name}axis.set_major_locator(MultipleLocator({step}))")
+        if spec.minor_ticks and spec.minor_divisions is not None:
+            parts = spec.minor_divisions
+            self.emit(f"{ax}.{name}axis.set_minor_locator(AutoMinorLocator({parts}))")
+        elif spec.minor_ticks:
             self.emit(f"{ax}.{name}axis.minorticks_on()")
         elif self.figure.stylesheet is not None:
             self.emit(f"{ax}.{name}axis.minorticks_off()")
+        if spec.tick_size is not None:
+            self.call(
+                f"{ax}.tick_params",
+                axis=_str(name),
+                which='"both"',
+                labelsize=_num(spec.tick_size),
+            )
 
     def _artist(self, ax: str, artist) -> None:
         common = _common(

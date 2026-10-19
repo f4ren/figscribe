@@ -13,6 +13,7 @@ import matplotlib.style
 import numpy as np
 from matplotlib.axes import Axes as MplAxes
 from matplotlib.figure import Figure as MplFigure
+from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 
 from figscribe.model import (
     Artist,
@@ -95,10 +96,13 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
 
 
 def style_context(figure: Figure):
-    """Apply the figure's stylesheet while the figure is built."""
-    if figure.stylesheet is None:
-        return nullcontext()
-    return matplotlib.style.context(figure.stylesheet)
+    """Apply the figure's style sheet and font size while it is built."""
+    styles: list = []
+    if figure.stylesheet is not None:
+        styles.append(figure.stylesheet)
+    if figure.font_size is not None:
+        styles.append({"font.size": figure.font_size})
+    return matplotlib.style.context(styles) if styles else nullcontext()
 
 
 def _draw_axes(
@@ -112,11 +116,12 @@ def _draw_axes(
         raise NotImplementedError("a right-hand y-axis (y_right) is planned for M5")
 
     if axes.title is not None:
-        ax.set_title(axes.title)
+        size = {"fontsize": axes.title_size} if axes.title_size else {}
+        ax.set_title(axes.title, **size)
     _apply_axis(ax, "x", axes.x, unit_format)
     _apply_axis(ax, "y", axes.y, unit_format)
     if axes.grid:
-        ax.grid(True)
+        ax.grid(True, which=axes.grid_which, axis=axes.grid_axis)
 
     for artist in axes.artists:
         _draw_artist(artist, ax, data, artists)
@@ -129,7 +134,8 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
     axis = ax.xaxis if name == "x" else ax.yaxis
     label = axis_label(spec, unit_format)
     if label is not None:
-        axis.set_label_text(label)
+        size = {"fontsize": spec.label_size} if spec.label_size else {}
+        axis.set_label_text(label, **size)
 
     set_scale, set_lim = (
         (ax.set_xscale, ax.set_xlim) if name == "x" else (ax.set_yscale, ax.set_ylim)
@@ -143,10 +149,16 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         set_lim(*spec.limits)
     if spec.ticks is not None:
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
-    if spec.minor_ticks:
+    elif spec.major_step is not None:
+        axis.set_major_locator(MultipleLocator(spec.major_step))
+    if spec.minor_ticks and spec.minor_divisions is not None:
+        axis.set_minor_locator(AutoMinorLocator(spec.minor_divisions))
+    elif spec.minor_ticks:
         axis.minorticks_on()
     else:
         axis.minorticks_off()
+    if spec.tick_size is not None:
+        ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
 
 
 def _draw_artist(

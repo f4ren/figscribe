@@ -37,5 +37,8 @@ class Figure(Identified):
     """
     stylesheet: str | None = None
     """Name of a bundled style or a path to an .mplstyle file."""
+    font_size: float | None = Field(None, gt=0.0)
+    """Base font size in pt; labels, ticks and legend scale with it. None
+    keeps Matplotlib's (or the style sheet's)."""
     layout: GridLayout = Field(default_factory=GridLayout)
     axes: list[Axes] = Field(default_factory=list)

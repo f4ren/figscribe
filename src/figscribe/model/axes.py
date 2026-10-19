@@ -22,7 +22,17 @@ class AxisSpec(StrictModel):
     """None means autoscale. Adopting the current zoom writes a fixed pair here."""
     ticks: list[float] | None = None
     tick_labels: list[str] | None = None
+    major_step: float | None = Field(None, gt=0.0)
+    """Distance between major ticks; None lets Matplotlib choose. Explicit
+    `ticks` win over it."""
     minor_ticks: bool = True
+    minor_divisions: int | None = Field(None, ge=2)
+    """Into how many parts minor ticks divide a major interval; None lets
+    Matplotlib choose."""
+    label_size: float | None = Field(None, gt=0.0)
+    """Font size of the axis label in pt; None follows the figure."""
+    tick_size: float | None = Field(None, gt=0.0)
+    """Font size of the tick labels in pt; None follows the figure."""
     symlog_linthresh: float | None = Field(None, gt=0.0)
     """Only for scale "symlog"."""
 
@@ -54,6 +64,8 @@ class Axes(Identified):
     colspan: int = Field(1, ge=1)
 
     title: str | None = None
+    title_size: float | None = Field(None, gt=0.0)
+    """Font size of the title in pt; None follows the figure."""
     x: AxisSpec = Field(default_factory=AxisSpec)
     y: AxisSpec = Field(default_factory=AxisSpec)
     y_right: AxisSpec | None = None
@@ -64,4 +76,8 @@ class Axes(Identified):
 
     legend: Legend = Field(default_factory=Legend)
     grid: bool = False
+    grid_axis: Literal["both", "x", "y"] = "both"
+    """Which axis draws grid lines, when `grid` is on."""
+    grid_which: Literal["major", "minor", "both"] = "major"
+    """At which ticks grid lines are drawn, when `grid` is on."""
     artists: list[Artist] = Field(default_factory=list)

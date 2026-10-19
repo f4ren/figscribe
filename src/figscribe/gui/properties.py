@@ -145,7 +145,11 @@ SECTIONS = {
     "unit_format": "Style",
     "stylesheet": "Style",
     "title": "Panel",
+    "title_size": "Panel",
     "grid": "Panel",
+    "grid_axis": "Panel",
+    "grid_which": "Panel",
+    "font_size": "Style",
     "path": "File",
     "sha256": "File",
     "label": "Legend",
@@ -205,6 +209,12 @@ PLACEHOLDERS = {
     "vmin": "automatic",
     "vmax": "automatic",
     "hspace": "automatic",
+    "font_size": "default",
+    "title_size": "default",
+    "label_size": "default",
+    "tick_size": "default",
+    "major_step": "automatic",
+    "minor_divisions": "automatic",
     "wspace": "automatic",
 }
 
@@ -600,7 +610,16 @@ LOCATIONS = [
     "center",
 ]
 UNIT_FORMATS = [("U (V)", "parentheses"), ("U / V", "slash"), ("U [V]", "brackets")]
-CHOICES = {"linestyle": LINESTYLES, "location": [(loc, loc) for loc in LOCATIONS]}
+CHOICES = {
+    "linestyle": LINESTYLES,
+    "location": [(loc, loc) for loc in LOCATIONS],
+    "grid_axis": [("both axes", "both"), ("x only", "x"), ("y only", "y")],
+    "grid_which": [
+        ("major ticks", "major"),
+        ("minor ticks", "minor"),
+        ("both", "both"),
+    ],
+}
 CHOICES["unit_format"] = UNIT_FORMATS
 """Text and literal fields with a known set of good values."""
 

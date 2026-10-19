@@ -222,3 +222,34 @@ def test_panels_added_beside_and_inside(tmp_path: Path) -> None:
     inset.artists.append(ScatterPlot(x=ref["t"], y=ref["dU"]))
     script = _assert_same(project, tmp_path)
     assert "ax_e = ax_a.inset_axes([0.55, 0.55, 0.4, 0.4])" in script
+
+
+def test_font_sizes_ticks_and_grid(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        title="Sizes",
+        title_size=14,
+        grid=True,
+        grid_axis="y",
+        grid_which="both",
+        x=AxisSpec(label="t", label_size=12, major_step=2.5, minor_divisions=5),
+        y=AxisSpec(label="U", tick_size=6, ticks=[0, 1], major_step=0.1),
+        artists=[LinePlot(x=ref["t"], y=ref["U"], label="U")],
+        legend=Legend(visible=True),
+    )
+    project.figures = [Figure(dpi=110, font_size=7, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert 'plt.rcParams["font.size"] = 7' in script
+    assert "ax.xaxis.set_major_locator(MultipleLocator(2.5))" in script
+    assert "ax.xaxis.set_minor_locator(AutoMinorLocator(5))" in script
+    assert "MultipleLocator(0.1)" not in script  # explicit ticks win
+    assert 'ax.grid(True, which="both", axis="y")' in script
+
+
+def test_font_size_with_a_style_sheet(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(x=AxisSpec(label="t"), artists=[ScatterPlot(x=ref["t"], y=ref["U"])])
+    project.figures = [
+        Figure(dpi=100, stylesheet="seaborn-v0_8-talk", font_size=9, axes=[axes])
+    ]
+    _assert_same(project, tmp_path)

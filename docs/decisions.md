@@ -626,3 +626,23 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
 - **The position is visible**: a "Position" section (row, column, spans) for
   grid panels, an "Inset" section (inside which panel, bounds) for insets.
 - Assistants get an `add_panel` tool with the same rules.
+
+## 0016 — Font sizes, tick spacing and grid options
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **One base font size per figure** (`Figure.font_size`, pt), applied like a
+  style sheet while the figure is drawn; journals ask for one size, and
+  Matplotlib's relative sizes (a larger title) follow it. The script sets
+  `plt.rcParams["font.size"]`.
+- **Overrides where people actually change them**: `Axes.title_size`,
+  `AxisSpec.label_size` and `AxisSpec.tick_size`. Unset sizes are not passed
+  to Matplotlib at all: `fontsize=None` would reset a title to the base size.
+- **Ticks by spacing**: `AxisSpec.major_step` (a MultipleLocator; explicit
+  `ticks` win) and `AxisSpec.minor_divisions` (AutoMinorLocator, at least 2).
+- **Grid options**: `Axes.grid_axis` (both, x, y) and `Axes.grid_which`
+  (major, minor, both), used when `grid` is on; `grid` stays a switch so old
+  files load unchanged.
