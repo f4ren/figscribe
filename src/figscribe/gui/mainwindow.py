@@ -5,8 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
+from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDragEnterEvent,
+    QDropEvent,
+    QKeySequence,
+)
 from PySide6.QtWidgets import (
     QDialog,
     QDockWidget,
@@ -14,12 +20,17 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QSizePolicy,
+    QToolBar,
+    QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
 from figscribe.assistant.toolserver import ToolServer
 from figscribe.commands import CommandError, InsertItem, remove_artist, remove_axes
 from figscribe.commands.core import walk
+from figscribe.gui import theme
 from figscribe.gui.document import Document
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.outline import Outline
@@ -45,6 +56,7 @@ unless you also allow it to see the figure.</p>"""
 PROJECT_FILTER = "figscribe projects (*.figscribe)"
 DATA_FILTER = "Delimited text (*.csv *.tsv *.txt *.dat);;All files (*)"
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
+DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat"}
 
 
 class MainWindow(QMainWindow):
@@ -73,21 +85,25 @@ class MainWindow(QMainWindow):
         self.outline = Outline(self.document)
         self.problems = Problems(self.document)
         self.properties = PropertyPanel(self.document)
-        project = self._dock(
-            "Project", self.outline, Qt.DockWidgetArea.LeftDockWidgetArea
+        self.outline.add_requested.connect(self._add_plot_to)
+        self.outline.import_requested.connect(lambda: self.import_csv())
+        contents = self._dock(
+            "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
         properties = self._dock(
             "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
         )
-        problems = self._dock(
+        self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
-        self.resizeDocks([project, properties], [230, 320], Qt.Orientation.Horizontal)
-        self.resizeDocks([problems], [90], Qt.Orientation.Vertical)
+        self.resizeDocks([contents, properties], [260, 340], Qt.Orientation.Horizontal)
+        self.resizeDocks([self.problems_dock], [80], Qt.Orientation.Vertical)
 
         self._build_menus()
+        self._build_toolbar()
+        self.setAcceptDrops(True)
         self._connect(self.document)
-        self.resize(1100, 720)
+        self.resize(1280, 800)
         if self._setting("assistant/preview"):
             self.preview_action.setChecked(True)
         if self._setting("assistant/mcp"):
@@ -217,6 +233,31 @@ class MainWindow(QMainWindow):
                 return axes.id
         return figure.axes[0].id if figure.axes else None
 
+    def _add_plot_to(self, oid: str) -> None:
+        self.document.select(oid)
+        self.add_plot()
+
+    def open_dropped(self, paths: list[Path]) -> None:
+        """Open a dropped project file, or add dropped data files."""
+        for path in paths:
+            if path.suffix == ".figscribe":
+                if self.confirm_discard():
+                    self.open_path(path)
+                return
+        for path in paths:
+            if path.suffix.lower() in DATA_SUFFIXES:
+                self.import_csv(path)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if _dropped_files(event):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt naming
+        paths = _dropped_files(event)
+        if paths:
+            event.acceptProposedAction()
+            self.open_dropped(paths)
+
     # --- edit actions -------------------------------------------------------
 
     def delete_selected(self) -> None:
@@ -260,7 +301,12 @@ class MainWindow(QMainWindow):
     def _connect(self, document: Document) -> None:
         document.state_changed.connect(self._update_state)
         document.selection_changed.connect(self._update_state)
+        document.changed.connect(self._show_problems)
         self._update_state()
+        self._show_problems()
+
+    def _show_problems(self) -> None:
+        self.problems_dock.setVisible(self.problems.count() > 0)
 
     def _update_state(self) -> None:
         history = self.document.history
@@ -274,6 +320,12 @@ class MainWindow(QMainWindow):
             f"&Redo {history.redo_text}" if history.can_redo else "&Redo"
         )
         self.delete_action.setEnabled(self.document.selected is not None)
+        path = self.document.path
+        self._project_name.setText(path.stem if path is not None else "Untitled")
+        if not history.is_clean:
+            self._save_state.setText("Unsaved changes")
+        else:
+            self._save_state.setText("Saved" if path is not None else "Not saved yet")
 
     def _save_to(self, path: Path | None) -> bool:
         try:
@@ -308,6 +360,9 @@ class MainWindow(QMainWindow):
         dock = QDockWidget(title, self)
         dock.setObjectName(title)
         dock.setWidget(widget)
+        # Panels, not floating tool windows: no title bar, nothing to undock.
+        dock.setTitleBarWidget(QWidget())
+        dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.addDockWidget(area, dock)
         return dock
 
@@ -318,7 +373,9 @@ class MainWindow(QMainWindow):
         self._action(file, "&Save", self.save, QKeySequence.StandardKey.Save)
         self._action(file, "Save &As…", self.save_as, QKeySequence.StandardKey.SaveAs)
         file.addSeparator()
-        self._action(file, "&Export Figure…", self._export_dialog, "Ctrl+E")
+        self.export_action = self._action(
+            file, "&Export Figure…", self._export_dialog, "Ctrl+E"
+        )
         file.addSeparator()
         self._action(file, "&Quit", self.close, QKeySequence.StandardKey.Quit)
 
@@ -335,8 +392,12 @@ class MainWindow(QMainWindow):
         )
 
         insert = self.menuBar().addMenu("&Insert")
-        self._action(insert, "&Import Data…", lambda: self.import_csv(), "Ctrl+I")
-        self._action(insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P")
+        self.import_action = self._action(
+            insert, "&Import Data…", lambda: self.import_csv(), "Ctrl+I"
+        )
+        self.plot_action = self._action(
+            insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P"
+        )
 
         assistant = self.menuBar().addMenu("&Assistant")
         self.mcp_action = self._toggle(
@@ -349,6 +410,44 @@ class MainWindow(QMainWindow):
         self._action(assistant, "&How to Connect…", self._show_mcp_help)
         self._mcp_status = QLabel()
         self.statusBar().addPermanentWidget(self._mcp_status)
+
+    def _build_toolbar(self) -> None:
+        bar = QToolBar("Main", self)
+        bar.setObjectName("main")
+        bar.setMovable(False)
+        bar.setFloatable(False)
+        bar.setIconSize(QSize(16, 16))
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        bar.toggleViewAction().setVisible(False)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
+
+        self._project_name = QLabel()
+        self._project_name.setObjectName("projectName")
+        self._save_state = QLabel()
+        self._save_state.setObjectName("saveState")
+        bar.addWidget(self._project_name)
+        bar.addWidget(self._save_state)
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        bar.addWidget(spacer)
+
+        for action, text in ((self.import_action, "Data"), (self.plot_action, "Plot")):
+            action.setIcon(theme.icon("plus"))
+            action.setIconText(text)
+            bar.addAction(action)
+        bar.addSeparator()
+        for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):
+            action.setIcon(theme.icon(name))
+            bar.addAction(action)
+            button = bar.widgetForAction(action)
+            button.setObjectName("quiet")
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        bar.addSeparator()
+        self.export_action.setIconText("Export…")
+        bar.addAction(self.export_action)
+        export_button: QToolButton = bar.widgetForAction(self.export_action)
+        export_button.setObjectName("primary")
+        export_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
 
     def _toggle(self, menu, text: str, slot) -> QAction:
         """A checkable action; `slot` runs on every change, also from code."""
@@ -368,3 +467,19 @@ class MainWindow(QMainWindow):
         # or hidden.
         self.addAction(action)
         return action
+
+
+def _side_panel(widget: QWidget) -> QWidget:
+    panel = QWidget()
+    panel.setObjectName("sidePanel")
+    layout = QVBoxLayout(panel)
+    layout.setContentsMargins(8, 10, 8, 8)
+    layout.addWidget(widget)
+    return panel
+
+
+def _dropped_files(event) -> list[Path]:
+    mime = event.mimeData()
+    if not mime.hasUrls():
+        return []
+    return [Path(url.toLocalFile()) for url in mime.urls() if url.isLocalFile()]

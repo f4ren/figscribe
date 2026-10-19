@@ -469,3 +469,37 @@ provider, its key handling and its cost; MCP leaves the choice to the user.
 - **`figscribe mcp` starts light.** It needs only the tool list, so
   `figscribe.tools` loads the parts that pull in matplotlib and SciPy on first
   use; a test keeps it that way.
+
+## 0010 — The look of the workspace
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Context
+
+The first GUI used Qt's default widgets: docks with title bars, a plain tree,
+a long form of model field names. It worked, but looked dated and asked the
+user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
+
+### Decision
+
+- **Qt Widgets with one style sheet, not QML.** Everything visual lives in
+  `gui/theme.py`: a light ground, white panels, one blue accent, line icons as
+  inline SVG. The views keep their structure and tests.
+- **IBM Plex Sans and Mono are bundled** (SIL Open Font License, the licence
+  next to the files) as TrueType, so the application looks the same on every
+  platform; WOFF2 is not loaded by every Qt build.
+- **Plain words on screen.** `gui/names.py` maps fields and kinds to names
+  ("Marker size (pt)", "Error bar plot", "Panel A · top"); the model keeps its
+  names. Values with an error are rounded to the error's two significant digits.
+- **The contents panel reads like the figure**: panels with their plots, each
+  plot in the color it is drawn in, an eye to hide it, χ²ᵣ next to fits, and
+  the data files with their columns.
+- **The property panel groups fields** into Data, Look, Legend and the like,
+  with "More" folded. Colors get swatches of the color cycle, markers get
+  buttons, line styles and legend locations get named choices; text entry
+  stays for anything else.
+- **The preview is a sheet of paper** on the ground, captioned with its size
+  and resolution, and it says what to do when the figure is empty.
+- **Panels are fixed**, without title bars; the problem list appears only
+  when there are problems. Files dropped on the window are opened or added.
