@@ -31,7 +31,14 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.assistant.toolserver import ToolServer
-from figscribe.commands import CommandError, InsertItem, remove_artist, remove_axes
+from figscribe.commands import (
+    CommandError,
+    InsertItem,
+    Macro,
+    SetField,
+    remove_artist,
+    remove_axes,
+)
 from figscribe.commands.core import walk
 from figscribe.gui import theme
 from figscribe.gui.document import Document
@@ -42,7 +49,7 @@ from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
 from figscribe.gui.start import DOCS_URL, StartPage, bundled_example
-from figscribe.model import ArtistBase, Axes
+from figscribe.model import ArtistBase, Axes, AxisSpec
 from figscribe.render import export
 from figscribe.templates import template
 
@@ -329,9 +336,38 @@ class MainWindow(QMainWindow):
         if not self.run_dialog(dialog) or dialog.source() is None:
             return False
         source = dialog.source()
-        self._push(InsertItem(None, "sources", source))
-        self.document.select(source.id)
+        artist = dialog.planned_artist() if dialog.mode == "plot" else None
+        figure = self.document.figure
+        if artist is None or figure is None:
+            self._push(InsertItem(None, "sources", source))
+            self.document.select(source.id)
+            if dialog.mode == "custom":
+                self.add_plot()
+            return True
+        steps = [InsertItem(None, "sources", source)]
+        steps += self._plot_steps(figure, artist, dialog)
+        self._push(Macro(f"Add {Path(source.path).name} and plot", steps))
+        self.document.select(artist.id)
         return True
+
+    def _plot_steps(self, figure, artist, dialog) -> list:
+        """Put `artist` into the target axes, naming its empty axes after the
+        plotted columns and their units."""
+        labels = {
+            name: AxisSpec(label=str(ref.column), unit=dialog.unit_of(ref.column))
+            for name, ref in (("x", artist.x), ("y", artist.y))
+        }
+        axes_id = self._target_axes(figure)
+        if axes_id is None:
+            axes = Axes(artists=[artist], **labels)
+            return [InsertItem(figure.id, "axes", axes)]
+        axes = next(a for a in figure.axes if a.id == axes_id)
+        steps = [
+            SetField(axes_id, (name,), spec)
+            for name, spec in labels.items()
+            if getattr(axes, name).label is None and not axes.artists
+        ]
+        return [*steps, InsertItem(axes_id, "artists", artist)]
 
     def add_plot(self) -> None:
         """Add a plot of the data's columns to the selected axes."""

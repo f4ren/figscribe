@@ -68,13 +68,67 @@ def test_the_dialog_previews_the_guessed_reading(qtbot, example: Path) -> None:
         dialog.table.horizontalHeaderItem(i).text()
         for i in range(dialog.table.columnCount())
     ]
-    assert headers == ["t", "U", "dU"]
+    assert headers == ["t [s]", "U [V]", "dU [V]"]
     assert dialog.table.item(1, 0).text() == "0.25"
 
     source = dialog.source()
     assert source.path == "scan.csv"
     assert (source.header_row, source.skip_rows) == (1, 1)
     assert source.columns == ["t", "U", "dU"]
+
+
+def test_the_dialog_says_what_it_detected(qtbot, example: Path) -> None:
+    dialog = ImportDialog(example.parent / "scan.csv", example.parent)
+    qtbot.addWidget(dialog)
+    chips = [dialog.chips.itemAt(i).widget().text() for i in range(5)]
+    assert chips == [
+        "Comma-separated ▾",
+        "Decimal point ▾",
+        "Names in line 2 ▾",
+        "Units in line 3 ▾",
+        "# comments ▾",
+    ]
+    assert dialog.chips.count() == 5
+    assert dialog.summary.text().startswith("41 rows · 3 columns")
+    assert "dU looks like the error of U." in dialog.status.text()
+    assert dialog.units == ["s", "V", "V"]
+    assert dialog.unit_of("U") == "V" and dialog.unit_of("nope") is None
+    assert dialog.header_row.text() == "2"  # lines are counted from 1 on screen
+
+    assert dialog.settings.isHidden()
+    dialog.chips.itemAt(0).widget().click()
+    assert not dialog.settings.isHidden()
+
+
+def test_the_dialog_suggests_first_plots(qtbot, example: Path) -> None:
+    dialog = ImportDialog(example.parent / "scan.csv", example.parent)
+    qtbot.addWidget(dialog)
+    assert [s.title for s in dialog.suggestions] == [
+        "U ± dU against t",
+        "U against t",
+        "U against t",
+    ]
+    assert dialog.suggestion.kind == "errorbar"
+    artist = dialog.planned_artist()
+    assert isinstance(artist, ErrorbarPlot)
+    assert artist.yerr == ColumnRef(source=dialog.source().id, column="dU")
+
+    dialog.choose(1)
+    dialog.skip_rows.setValue(0)  # the units line is now read as data: refused
+    assert dialog.planned_artist() is None
+    assert not dialog.settings.isHidden()
+    dialog.skip_rows.setValue(1)
+    assert dialog.suggestion.kind == "line"  # the choice survives
+
+
+def test_without_a_plot_to_suggest_ok_only_adds(qtbot, tmp_path: Path) -> None:
+    single = tmp_path / "single.csv"
+    single.write_text("counts\n1\n2\n3\n", encoding="utf-8")
+    dialog = ImportDialog(single, tmp_path)
+    qtbot.addWidget(dialog)
+    assert dialog.suggestions == [] and dialog.mode == "data"
+    ok = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    assert ok.text() == "Add"
 
 
 def test_a_wrong_option_disables_ok(qtbot, example: Path) -> None:
@@ -159,7 +213,16 @@ def window(qtbot) -> MainWindow:
     return win
 
 
+def _only_data(dialog) -> bool:
+    """Import without a plot; accept any later dialog as proposed."""
+    if not isinstance(dialog, ImportDialog):
+        return True
+    dialog.data_only.click()
+    return dialog.result() == ImportDialog.DialogCode.Accepted
+
+
 def test_from_a_new_project_to_a_drawn_plot(window: MainWindow, example: Path) -> None:
+    window.run_dialog = _only_data
     window.import_csv(example.parent / "scan.csv")
     source = window.document.project.sources[0]
     assert window.document.selected == source.id
@@ -180,6 +243,7 @@ def test_from_a_new_project_to_a_drawn_plot(window: MainWindow, example: Path) -
 
 
 def test_a_second_plot_goes_into_the_selected_axes(window, example: Path) -> None:
+    window.run_dialog = _only_data
     window.import_csv(example.parent / "scan.csv")
     window.add_plot()
     first = window.document.figure.axes[0].artists[0]
@@ -188,6 +252,57 @@ def test_a_second_plot_goes_into_the_selected_axes(window, example: Path) -> Non
     assert len(window.document.figure.axes) == 1
     assert len(window.document.figure.axes[0].artists) == 2
     assert window.document.history.undo_text == "Add line plot"
+
+
+def test_add_and_plot_is_one_step(window: MainWindow, example: Path) -> None:
+    window.import_csv(example.parent / "scan.csv")  # accepted as proposed
+    axes = window.document.figure.axes[0]
+    artist = axes.artists[0]
+    assert isinstance(artist, ErrorbarPlot)
+    assert (artist.x.column, artist.y.column, artist.yerr.column) == ("t", "U", "dU")
+    assert (axes.x.label, axes.x.unit) == ("t", "s")
+    assert (axes.y.label, axes.y.unit) == ("U", "V")
+    assert window.document.selected == artist.id
+    assert window.document.history.undo_text == "Add scan.csv and plot"
+    assert window.preview.error is None
+    window.document.undo()
+    assert window.document.project.sources == []
+    assert window.document.figure.axes == []
+
+
+def test_plotting_into_an_empty_panel_names_its_axes(window, example: Path) -> None:
+    window.new_from_template("single")
+    window.import_csv(example.parent / "scan.csv")
+    axes = window.document.figure.axes[0]
+    assert len(window.document.figure.axes) == 1
+    assert (axes.x.label, axes.y.unit) == ("t", "V")
+    window.document.undo()
+    assert window.document.figure.axes[0].x.label is None
+
+
+def test_a_chosen_suggestion_is_plotted(window: MainWindow, example: Path) -> None:
+    def points(dialog: ImportDialog) -> bool:
+        dialog.choose(2)
+        assert dialog.suggestion.kind == "scatter"
+        return True
+
+    window.run_dialog = points
+    window.import_csv(example.parent / "scan.csv")
+    assert isinstance(window.document.figure.axes[0].artists[0], ScatterPlot)
+
+
+def test_choosing_columns_opens_the_plot_dialog(window, example: Path) -> None:
+    def custom(dialog) -> bool:
+        if isinstance(dialog, ImportDialog):
+            dialog.custom.click()
+            return dialog.result() == ImportDialog.DialogCode.Accepted
+        assert isinstance(dialog, PlotDialog)
+        return True
+
+    window.run_dialog = custom
+    window.import_csv(example.parent / "scan.csv")
+    assert len(window.document.project.sources) == 1
+    assert isinstance(window.document.figure.axes[0].artists[0], LinePlot)
 
 
 def test_adding_a_plot_without_data_explains_why(window: MainWindow) -> None:

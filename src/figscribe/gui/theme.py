@@ -112,6 +112,7 @@ QLineEdit, QComboBox, QSpinBox {{
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {ACCENT}; }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
+QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: 0; }}
 QCheckBox {{ spacing: 8px; }}
 
 QPushButton {{
@@ -121,6 +122,10 @@ QPushButton {{
 QPushButton:hover {{ background: {SUBTLE}; }}
 QPushButton:default, QPushButton#primary {{
     background: {ACCENT}; border-color: {ACCENT}; color: {SURFACE}; font-weight: 500;
+}}
+QPushButton:disabled {{ color: #A0A0A6; border-color: {BORDER}; }}
+QPushButton#primary:disabled, QPushButton:default:disabled {{
+    background: #B9C8EE; border-color: #B9C8EE; color: {SURFACE};
 }}
 QToolButton#swatch {{ border: 2px solid {SURFACE}; border-radius: 13px; }}
 QToolButton#swatch:checked {{ border: 2px solid {INK}; }}
@@ -165,6 +170,28 @@ QPushButton#tile, QPushButton#recentRow {{
     padding: 0; text-align: left;
 }}
 QPushButton#tile:hover, QPushButton#recentRow:hover {{ border-color: {ACCENT}; }}
+QDialog {{ background: {SURFACE}; }}
+QLabel#dialogTitle {{ font-size: 20px; font-weight: 600; }}
+QFrame#rule {{ background: #ECECE7; border: 0; }}
+QWidget#aside {{ background: #FAFAF8; border-left: 1px solid #ECECE7; }}
+QToolButton#pill {{
+    background: {SURFACE}; border: 1px solid {CONTROL_BORDER}; border-radius: 13px;
+    padding: 3px 12px; min-height: 18px;
+}}
+QToolButton#pill:hover {{ background: {SUBTLE}; }}
+QPushButton#choiceTile {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 12px;
+    padding: 0; text-align: left;
+}}
+QPushButton#choiceTile:checked {{ border: 2px solid {ACCENT}; }}
+QPushButton#choiceTile:hover {{ border-color: {ACCENT}; }}
+QTableWidget#dataTable {{
+    border: 1px solid {BORDER}; border-radius: 10px; gridline-color: #F0F0EB;
+}}
+QHeaderView::section {{
+    background: {GROUND}; border: 0; border-bottom: 1px solid {BORDER};
+    padding: 6px 10px; font-weight: 600;
+}}
 QPushButton#link {{ border: 0; background: transparent; color: {ACCENT}; }}
 QPushButton#link:hover {{ color: {ACCENT_HOVER}; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
