@@ -96,6 +96,15 @@ TOOLS: list[ToolSpec] = [
         changes_project=False,
     ),
     ToolSpec(
+        "get_python_script",
+        "Return the standalone Python script (NumPy, Matplotlib, SciPy for fits) "
+        "that draws the shown figure exactly as figscribe does. Give it to the "
+        "user when they ask for the code, or read it to explain how the figure "
+        "is made.",
+        {"type": "object", "properties": {}, "additionalProperties": False},
+        changes_project=False,
+    ),
+    ToolSpec(
         "set_field",
         "Set one field of an object, e.g. a figure's width_mm, an axis label "
         '(path ["x", "label"]), a plot\'s color or an axis range (path '

@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.assistant.toolserver import ToolServer
+from figscribe.codegen import generate, script_name
 from figscribe.commands import (
     CommandError,
     InsertItem,
@@ -71,6 +72,7 @@ unless you also allow it to see the figure.</p>"""
 PROJECT_FILTER = "figscribe projects (*.figscribe)"
 DATA_FILTER = "Delimited text (*.csv *.tsv *.txt *.dat);;All files (*)"
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
+SCRIPT_FILTER = "Python script (*.py)"
 DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat"}
 START_FILTER = "Data or project (*.csv *.tsv *.txt *.dat *.figscribe);;All files (*)"
 MAX_RECENT = 6
@@ -313,6 +315,37 @@ class MainWindow(QMainWindow):
             export(figure, self.document.data, path)
         except Exception as exc:
             self.show_error(f"Cannot export to {path}", exc)
+
+    def export_script(self, path: str | Path) -> None:
+        """Write the Python script that draws the shown figure to `path`."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        path = Path(path)
+        try:
+            script = generate(
+                self.document.project,
+                figure,
+                base_dir=self.document.base_dir,
+                script_dir=path.parent,
+                output=f"{path.stem}.pdf",
+                data=self.document.data,
+            )
+            path.write_text(script, encoding="utf-8")
+        except Exception as exc:
+            self.show_error(f"Cannot write {path.name}", exc)
+
+    def _script_dialog(self) -> None:
+        figure = self.document.figure
+        if figure is None:
+            return
+        folder = self.document.project_dir or Path.home()
+        suggested = str(folder / script_name(figure))
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Python script", suggested, SCRIPT_FILTER
+        )
+        if path:
+            self.export_script(path if path.endswith(".py") else f"{path}.py")
 
     def confirm_discard(self) -> bool:
         """True when the current project may be replaced or closed."""
@@ -586,6 +619,9 @@ class MainWindow(QMainWindow):
         file.addSeparator()
         self.export_action = self._action(
             file, "&Export Figure…", self._export_dialog, "Ctrl+E"
+        )
+        self.script_action = self._action(
+            file, "Export &Python Script…", self._script_dialog, "Ctrl+Shift+E"
         )
         file.addSeparator()
         self._action(file, "&Quit", self.close, QKeySequence.StandardKey.Quit)

@@ -29,6 +29,11 @@ class Workspace(Protocol):
     def data(self) -> DataProvider: ...
 
     @property
+    def base_dir(self) -> Path:
+        """Where the project's relative data paths start."""
+        ...
+
+    @property
     def selected(self) -> str | None: ...
 
     @property
