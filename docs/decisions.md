@@ -567,3 +567,35 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   tick labels.
 - **"Fit again with the current data"** in the property panel reruns a fit
   with its stored start values, e.g. after the data file changed.
+
+## 0014 — The code generator
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **One script per figure, written with pyplot**, as a person would: a
+  docstring with size, versions and the data's SHA-256; imports; data; fit
+  models; fits; the figure with one block per panel (`ax_a`, `ax_b` like the
+  GUI's "Panel A", "Panel B"); saving. No figscribe helpers, no figscribe
+  import.
+- **The same Matplotlib calls as the renderer.** Arguments that only repeat
+  Matplotlib's default are left out; those the renderer sets explicitly and a
+  style sheet could change (line widths, marker sizes, legend location) are
+  kept. Decisions both need, such as axis labels with units and which shared
+  axes hide their tick labels, live in shared functions
+  (`render.labels`, `render.layout`) and are computed at generation time.
+- **Data paths are relative to the script** (`HERE / "scan.csv"`), and the
+  script refuses a data file whose hash changed, with a comment saying how to
+  drop the check. Only the columns the figure uses are loaded
+  (`np.loadtxt(..., usecols=..., unpack=True)`).
+- **Fits are recomputed** with `curve_fit` from the stored start values, with
+  the same weighting, and their parameters are printed; non-finite points are
+  filtered only where the data has them.
+- **The equivalence test is the contract**: the renderer's PNG and the PNG of
+  the script, run in a separate process, must be identical pixel for pixel,
+  for the examples and for projects that exercise every supported setting.
+  Every new model feature needs its code here and a case there.
+- Available from *File > Export Python Script…*, `figscribe script`, and the
+  `get_python_script` tool for assistants.

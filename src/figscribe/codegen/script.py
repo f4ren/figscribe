@@ -1,0 +1,676 @@
+"""Writing the script: header, data, fits, figure, panels, saving.
+
+Every Matplotlib call here mirrors one in `figscribe.render.figure`, with the
+same arguments where they change the drawing; arguments that only repeat
+Matplotlib's own default are left out, so the script reads like one written
+by hand. The renderer passes some values explicitly that a style sheet could
+otherwise change (line widths, marker sizes, legend location); those are kept.
+"""
+
+from __future__ import annotations
+
+import keyword
+import os
+import re
+from datetime import date
+from pathlib import Path
+from string import ascii_lowercase
+
+import numpy as np
+
+from figscribe import __version__
+from figscribe.fit import numpy_source, parameter_names
+from figscribe.io.files import resolve_path
+from figscribe.model import (
+    Axes,
+    AxisSpec,
+    ColumnRef,
+    CsvSource,
+    ErrorbarPlot,
+    ExpressionFit,
+    Figure,
+    FitCurve,
+    Legend,
+    LinePlot,
+    Project,
+    ResidualPlot,
+    ScatterPlot,
+)
+from figscribe.render.figure import CURVE_POINTS, MM_PER_INCH, DataProvider
+from figscribe.render.labels import axis_label
+from figscribe.render.layout import hidden_tick_labels, share_partner
+
+WIDTH = 88
+RESERVED = {
+    "np",
+    "plt",
+    "fig",
+    "grid",
+    "ax",
+    "x",
+    "HERE",
+    "Path",
+    "hashlib",
+    "curve_fit",
+    "popt",
+    "pcov",
+    "perr",
+    "name",
+    "value",
+    "error",
+    "valid",
+}
+
+
+def script_name(figure: Figure) -> str:
+    """A file name for the figure's script: its name, made safe."""
+    return f"{_slug(figure.name) or 'figure'}.py"
+
+
+def generate(
+    project: Project,
+    figure: Figure | None = None,
+    *,
+    base_dir: str | Path,
+    script_dir: str | Path | None = None,
+    output: str | None = None,
+    data: DataProvider | None = None,
+) -> str:
+    """The Python script that draws `figure` (the project's first by default).
+
+    `base_dir` is where the project's relative data paths start, `script_dir`
+    where the script will be saved (default: the same); data paths in the
+    script are relative to it. `output` is the file the script saves, next to
+    it. With `data`, the script leaves out what the data does not need, such
+    as filtering out non-finite values before a fit.
+    """
+    figure = figure or project.figures[0]
+    writer = _Writer(project, figure, Path(base_dir), data)
+    return writer.write(
+        Path(script_dir) if script_dir is not None else Path(base_dir),
+        output or f"{_slug(figure.name) or 'figure'}.pdf",
+    )
+
+
+class _Writer:
+    def __init__(
+        self,
+        project: Project,
+        figure: Figure,
+        base_dir: Path,
+        data: DataProvider | None,
+    ):
+        self.project = project
+        self.figure = figure
+        self.base_dir = base_dir
+        self.data = data
+        self.lines: list[str] = []
+        self.artists = {a.id: a for axes in figure.axes for a in axes.artists}
+        self.sources = {s.id: s for s in project.sources}
+        self.columns = self._name_columns()
+        self.fits = self._name_fits()
+        self.axes_names = self._name_axes()
+
+    # --- naming -----------------------------------------------------------------
+
+    def _refs(self) -> list[ColumnRef]:
+        """Every column the figure plots, in order of first use."""
+        refs: list[ColumnRef] = []
+        for axes in self.figure.axes:
+            for artist in axes.artists:
+                for field in ("x", "y", "xerr", "yerr"):
+                    ref = getattr(artist, field, None)
+                    if isinstance(ref, ColumnRef) and ref not in refs:
+                        refs.append(ref)
+        return refs
+
+    def _name_columns(self) -> dict[tuple[str, str | int], str]:
+        names: dict[tuple[str, str | int], str] = {}
+        taken = set(RESERVED)
+        for ref in self._refs():
+            source = self.sources.get(ref.source)
+            if source is None:
+                raise ValueError(f"no data source {ref.source!r} in the project")
+            plain = (
+                _identifier(ref.column)
+                if isinstance(ref.column, str)
+                else f"col{ref.column}"
+            )
+            name = plain
+            if name in taken:
+                name = f"{_slug(Path(source.path).stem) or 'data'}_{plain}"
+            while name in taken:
+                name += "_"
+            taken.add(name)
+            names[(ref.source, ref.column)] = name
+        return names
+
+    def _name_fits(self) -> dict[str, tuple[str, str]]:
+        """{fit id: (model function name, parameter variable)} for drawn fits."""
+        fits = [
+            a for a in self.artists.values() if isinstance(a, FitCurve) and a.result
+        ]
+        taken = set(RESERVED) | set(self.columns.values())
+        found = {}
+        for fit in fits:
+            base = (
+                "model"
+                if isinstance(fit.model, ExpressionFit)
+                else fit.model.name
+                if fit.model.degree is None
+                else f"poly{fit.model.degree}"
+            )
+            function = base
+            n = 2
+            while function in taken:
+                function, n = f"{base}{n}", n + 1
+            taken.add(function)
+            popt = "popt" if len(fits) == 1 else f"{function}_popt"
+            found[fit.id] = (function, popt)
+        return found
+
+    def _name_axes(self) -> list[str]:
+        if len(self.figure.axes) == 1:
+            return ["ax"]
+        return [f"ax_{_letter(i)}" for i in range(len(self.figure.axes))]
+
+    def column(self, ref: ColumnRef) -> str:
+        return self.columns[(ref.source, ref.column)]
+
+    # --- output -----------------------------------------------------------------
+
+    def emit(self, *lines: str) -> None:
+        self.lines.extend(lines)
+
+    def call(self, function: str, *args: str, indent: str = "", **kwargs: str) -> None:
+        """A call, on one line if it fits, else one argument per line."""
+        parts = [*args, *(f"{k}={v}" for k, v in kwargs.items())]
+        one = f"{indent}{function}({', '.join(parts)})"
+        if len(one) <= WIDTH:
+            self.emit(one)
+            return
+        self.emit(f"{indent}{function}(")
+        self.emit(*(f"{indent}    {p}," for p in parts))
+        self.emit(f"{indent})")
+
+    def section(self, title: str) -> None:
+        head = f"# --- {title} "
+        self.emit("", "", head + "-" * max(3, WIDTH - 1 - len(head)), "")
+
+    def write(self, script_dir: Path, output: str) -> str:
+        self._header()
+        self._imports()
+        self._data(script_dir)
+        self._fit_models()
+        self._fits()
+        self._figure()
+        self.section("Save")
+        self.emit(f"fig.savefig(HERE / {_str(output)})")
+        return "\n".join(self.lines) + "\n"
+
+    # --- parts ------------------------------------------------------------------
+
+    def _header(self) -> None:
+        figure = self.figure
+        needs = "NumPy, Matplotlib and SciPy" if self.fits else "NumPy and Matplotlib"
+        self.emit(
+            f'"""{figure.name}: {_num(figure.width_mm)} × {_num(figure.height_mm)} mm '
+            f"at {_num(figure.dpi)} dpi.",
+            "",
+            f"Generated by figscribe {__version__} on {date.today().isoformat()}.",
+            f"It runs without figscribe and needs {needs}.",
+        )
+        used = [s for s in self.project.sources if self._used(s.id)]
+        if used:
+            self.emit("", "Data:")
+            for source in used:
+                self.emit(f"    {source.path}", f"        sha256 {source.sha256}")
+        self.emit('"""')
+
+    def _used(self, source_id: str) -> bool:
+        return any(key[0] == source_id for key in self.columns)
+
+    def _imports(self) -> None:
+        self.emit("")
+        if self.columns:
+            self.emit("import hashlib")
+        self.emit("from pathlib import Path", "")
+        self.emit("import matplotlib.pyplot as plt", "import numpy as np")
+        if self.fits:
+            self.emit("from scipy.optimize import curve_fit")
+        self.emit("", "HERE = Path(__file__).resolve().parent")
+        if self.figure.stylesheet is not None:
+            self.emit(f"plt.style.use({_str(self.figure.stylesheet)})")
+
+    def _data(self, script_dir: Path) -> None:
+        used = [s for s in self.project.sources if self._used(s.id)]
+        if not used:
+            return
+        self.section("Data")
+        for i, source in enumerate(used):
+            if i:
+                self.emit("")
+            self._source(source, script_dir)
+
+    def _source(self, source, script_dir: Path) -> None:
+        if not isinstance(source, CsvSource):
+            raise NotImplementedError(
+                f"generating code for {source.format!r} sources is not implemented"
+            )
+        stem = _slug(Path(source.path).stem) or "data"
+        path = f"{stem}_path"
+        location = resolve_path(source.path, self.base_dir)
+        self.emit(f"{path} = HERE / {_str(_relative(location, script_dir))}")
+        self.emit(
+            "# The figure was made from exactly this file; delete the check to "
+            "plot a newer one.",
+            f"if hashlib.sha256({path}.read_bytes()).hexdigest() != (",
+            f'    "{source.sha256}"',
+            "):",
+            f'    raise SystemExit(f"{{{path}}} changed since the figure was made")',
+        )
+        refs = [(c, n) for (sid, c), n in self.columns.items() if sid == source.id]
+        indices = [_index(source, column) for column, _ in refs]
+        kwargs: dict[str, str] = {}
+        if source.delimiter is not None:
+            kwargs["delimiter"] = _str(source.delimiter)
+        skip = (0 if source.header_row is None else source.header_row + 1) + (
+            source.skip_rows
+        )
+        if skip:
+            kwargs["skiprows"] = str(skip)
+        if source.comment != "#":
+            kwargs["comments"] = _str(source.comment) if source.comment else "None"
+        if source.decimal != ".":
+            kwargs["converters"] = (
+                f"lambda field: float(field.replace({_str(source.decimal)}, '.'))"
+            )
+        if _has_bom(location):
+            kwargs["encoding"] = '"utf-8-sig"'
+        if len(refs) == 1:
+            kwargs["usecols"] = str(indices[0])
+            self.call(f"{refs[0][1]} = np.loadtxt", path, **kwargs)
+            return
+        if indices != list(range(len(source.columns))) or not source.columns:
+            kwargs["usecols"] = "(" + ", ".join(str(i) for i in indices) + ")"
+        if self._single_row(refs, source):
+            kwargs["ndmin"] = "2"
+        kwargs["unpack"] = "True"
+        targets = ", ".join(name for _, name in refs)
+        self.call(f"{targets} = np.loadtxt", path, **kwargs)
+
+    def _single_row(self, refs, source) -> bool:
+        if self.data is None:
+            return False
+        values = self.data(ColumnRef(source=source.id, column=refs[0][0]))
+        return len(values) == 1
+
+    def _fit_models(self) -> None:
+        if not self.fits:
+            return
+        self.section("Fit models")
+        for fit_id, (function, _) in self.fits.items():
+            fit = self.artists[fit_id]
+            names = parameter_names(fit.model)
+            self.emit("", f"def {function}(x, {', '.join(names)}):")
+            self.emit(f"    return {numpy_source(fit.model)}", "")
+
+    def _fits(self) -> None:
+        for fit_id, (function, popt) in self.fits.items():
+            fit = self.artists[fit_id]
+            target = self.artists[fit.target]
+            self.section(f"Fit: {_describe(fit)} to {_describe(target)}")
+            x, y = self.column(target.x), self.column(target.y)
+            yerr = (
+                self.column(target.yerr)
+                if isinstance(target, ErrorbarPlot) and target.yerr is not None
+                else None
+            )
+            names = parameter_names(fit.model)
+            arrays = [a for a in (x, y, yerr) if a is not None]
+            if self._finite(fit) is not True:
+                self.emit(
+                    "# curve_fit needs finite values.",
+                    "valid = " + " & ".join(f"np.isfinite({a})" for a in arrays),
+                )
+                x, y = f"{x}[valid]", f"{y}[valid]"
+                yerr = f"{yerr}[valid]" if yerr is not None else None
+            start = [fit.initial_values.get(n, 1.0) for n in names]
+            kwargs = {"p0": "[" + ", ".join(repr(float(v)) for v in start) + "]"}
+            if yerr is not None:
+                kwargs |= {"sigma": yerr, "absolute_sigma": "True"}
+            pcov = "pcov" if popt == "popt" else popt.replace("popt", "pcov")
+            self.call(f"{popt}, {pcov} = curve_fit", function, x, y, **kwargs)
+            result = fit.result
+            if result.reduced_chi_square is not None:
+                self.emit(
+                    f"# figscribe found χ²/ndf = {result.reduced_chi_square:.3g} "
+                    f"for this fit."
+                )
+            labels = "[" + ", ".join(_str(n) for n in names) + "]"
+            perr = "perr" if popt == "popt" else popt.replace("popt", "perr")
+            self.emit(
+                f"{perr} = np.sqrt(np.diag({pcov}))",
+                f"for name, value, error in zip({labels}, {popt}, {perr}):",
+                '    print(f"{name} = {value:.6g} ± {error:.2g}")',
+            )
+
+    def _finite(self, fit: FitCurve) -> bool | None:
+        """Whether all data of the fit is finite; None if unknown."""
+        if self.data is None:
+            return None
+        target = self.artists[fit.target]
+        refs = [target.x, target.y]
+        if isinstance(target, ErrorbarPlot) and target.yerr is not None:
+            refs.append(target.yerr)
+        return all(bool(np.all(np.isfinite(self.data(r)))) for r in refs)
+
+    def _figure(self) -> None:
+        figure = self.figure
+        self.section(
+            f"Figure: {figure.name}, "
+            f"{_num(figure.width_mm)} × {_num(figure.height_mm)} mm"
+        )
+        kwargs = {
+            "figsize": f"({_num(figure.width_mm)} / {_num(MM_PER_INCH)}, "
+            f"{_num(figure.height_mm)} / {_num(MM_PER_INCH)})",
+            "dpi": _num(figure.dpi),
+        }
+        if figure.layout.constrained_layout:
+            kwargs["layout"] = '"constrained"'
+        self.call("fig = plt.figure", **kwargs)
+        layout = figure.layout
+        grid_kwargs = {
+            name: _value(getattr(layout, name))
+            for name in ("width_ratios", "height_ratios", "hspace", "wspace")
+            if getattr(layout, name) is not None
+        }
+        simple = (layout.rows, layout.cols) == (1, 1) and not grid_kwargs
+        if not simple:
+            self.call(
+                "grid = fig.add_gridspec",
+                str(layout.rows),
+                str(layout.cols),
+                **grid_kwargs,
+            )
+        for i, axes in enumerate(figure.axes):
+            name = self.axes_names[i]
+            kwargs = {}
+            for axis, key in (("x", "sharex"), ("y", "sharey")):
+                partner = share_partner(figure, i, axis)
+                if partner is not None:
+                    kwargs[key] = self.axes_names[partner]
+            where = (
+                []
+                if simple
+                else [
+                    f"grid[{_span(axes.row, axes.rowspan)}, "
+                    f"{_span(axes.col, axes.colspan)}]"
+                ]
+            )
+            self.call(f"{name} = fig.add_subplot", *where, **kwargs)
+        for i, axes in enumerate(figure.axes):
+            self._panel(i, axes)
+        hidden = hidden_tick_labels(figure)
+        if any(x or y for x, y in hidden):
+            self.emit(
+                "", "# Shared axes: tick labels only where no partner shows them."
+            )
+        for name, (hide_x, hide_y) in zip(self.axes_names, hidden, strict=True):
+            if hide_x:
+                self.emit(
+                    f'{name}.tick_params(axis="x", which="both", labelbottom=False)'
+                )
+            if hide_y:
+                self.emit(
+                    f'{name}.tick_params(axis="y", which="both", labelleft=False)'
+                )
+
+    def _panel(self, index: int, axes: Axes) -> None:
+        ax = self.axes_names[index]
+        if axes.y_right is not None:
+            raise NotImplementedError("a right-hand y-axis (y_right) is planned for M5")
+        title = (
+            f"Panel {_letter(index).upper()}" if len(self.figure.axes) > 1 else "Plot"
+        )
+        self.emit("", f"# {title}" + (f": {axes.title}" if axes.title else ""))
+        if axes.title is not None:
+            self.emit(f"{ax}.set_title({_str(axes.title)})")
+        self._axis(ax, "x", axes.x)
+        self._axis(ax, "y", axes.y)
+        if axes.grid:
+            self.emit(f"{ax}.grid(True)")
+        for artist in axes.artists:
+            self._artist(ax, artist)
+        if axes.legend.visible:
+            self._legend(ax, axes.legend)
+
+    def _axis(self, ax: str, name: str, spec: AxisSpec) -> None:
+        label = axis_label(spec, self.figure.unit_format)
+        if label is not None:
+            self.emit(f"{ax}.set_{name}label({_str(label)})")
+        if spec.scale == "symlog" and spec.symlog_linthresh is not None:
+            self.emit(
+                f'{ax}.set_{name}scale("symlog", '
+                f"linthresh={_num(spec.symlog_linthresh)})"
+            )
+        elif spec.scale != "linear":
+            self.emit(f"{ax}.set_{name}scale({_str(spec.scale)})")
+        if spec.limits is not None:
+            low, high = spec.limits
+            self.emit(f"{ax}.set_{name}lim({_num(low)}, {_num(high)})")
+        if spec.ticks is not None:
+            kwargs = {}
+            if spec.tick_labels is not None:
+                kwargs["labels"] = _value(spec.tick_labels)
+            self.call(f"{ax}.set_{name}ticks", _value(spec.ticks), **kwargs)
+        if spec.minor_ticks:
+            self.emit(f"{ax}.{name}axis.minorticks_on()")
+        elif self.figure.stylesheet is not None:
+            self.emit(f"{ax}.{name}axis.minorticks_off()")
+
+    def _artist(self, ax: str, artist) -> None:
+        common = _common(
+            artist, default_zorder=1.0 if artist.kind == "scatter" else 2.0
+        )
+        if isinstance(artist, LinePlot):
+            kwargs = _some(color=artist.color)
+            kwargs |= {
+                "linestyle": _str(artist.linestyle),
+                "linewidth": _num(artist.linewidth),
+            }
+            if artist.marker is not None:
+                kwargs |= {
+                    "marker": _str(artist.marker),
+                    "markersize": _num(artist.markersize),
+                }
+            x, y = self.column(artist.x), self.column(artist.y)
+            self.call(f"{ax}.plot", x, y, **kwargs, **common)
+        elif isinstance(artist, ScatterPlot):
+            kwargs = {"s": _num(artist.size)} | _some(color=artist.color)
+            kwargs["marker"] = _str(artist.marker)
+            kwargs |= _some(edgecolors=artist.edgecolor)
+            x, y = self.column(artist.x), self.column(artist.y)
+            self.call(f"{ax}.scatter", x, y, **kwargs, **common)
+        elif isinstance(artist, ErrorbarPlot):
+            kwargs = {}
+            if artist.xerr is not None:
+                kwargs["xerr"] = self.column(artist.xerr)
+            if artist.yerr is not None:
+                kwargs["yerr"] = self.column(artist.yerr)
+            kwargs |= _some(color=artist.color)
+            kwargs |= {
+                "linestyle": _str(artist.linestyle),
+                "marker": _str(artist.marker),
+                "markersize": _num(artist.markersize),
+                "capsize": _num(artist.capsize),
+                "elinewidth": _num(artist.elinewidth),
+            }
+            x, y = self.column(artist.x), self.column(artist.y)
+            self.call(f"{ax}.errorbar", x, y, **kwargs, **common)
+        elif isinstance(artist, FitCurve):
+            self._fit_curve(ax, artist, common)
+        elif isinstance(artist, ResidualPlot):
+            self._residuals(ax, artist, common)
+        else:
+            raise NotImplementedError(
+                f"generating code for {artist.kind!r} artists is not implemented yet"
+            )
+
+    def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
+        if fit.id not in self.fits:
+            self.emit(f"# {_describe(fit)} is not fitted yet, so it is not drawn.")
+            return
+        function, popt = self.fits[fit.id]
+        x = self.column(self.artists[fit.target].x)
+        xs = f"{x}_fit" if f"{x}_fit" not in self.columns.values() else f"{x}_fit_"
+        if self._finite(fit):
+            low, high = f"{x}.min()", f"{x}.max()"
+        else:
+            low = f"{x}[np.isfinite({x})].min()"
+            high = f"{x}[np.isfinite({x})].max()"
+        self.emit(f"{xs} = np.linspace({low}, {high}, {CURVE_POINTS})")
+        kwargs = _some(color=fit.color) | {
+            "linestyle": _str(fit.linestyle),
+            "linewidth": _num(fit.linewidth),
+        }
+        self.call(f"{ax}.plot", xs, f"{function}({xs}, *{popt})", **kwargs, **common)
+
+    def _residuals(
+        self, ax: str, residuals: ResidualPlot, common: dict[str, str]
+    ) -> None:
+        self.emit(
+            f'{ax}.axhline(0.0, color="0.6", linewidth=0.8, linestyle="--", zorder=1)'
+        )
+        fit = self.artists.get(residuals.target)
+        if not isinstance(fit, FitCurve) or fit.id not in self.fits:
+            self.emit("# The fit is not run yet, so there are no residuals to draw.")
+            return
+        function, popt = self.fits[fit.id]
+        target = self.artists[fit.target]
+        x, y = self.column(target.x), self.column(target.y)
+        kwargs = {}
+        if isinstance(target, ErrorbarPlot) and target.yerr is not None:
+            kwargs["yerr"] = self.column(target.yerr)
+        kwargs |= _some(color=residuals.color) | {
+            "marker": _str(residuals.marker),
+            "markersize": _num(residuals.markersize),
+            "linestyle": _str(residuals.linestyle),
+        }
+        self.call(
+            f"{ax}.errorbar", x, f"{y} - {function}({x}, *{popt})", **kwargs, **common
+        )
+
+    def _legend(self, ax: str, legend: Legend) -> None:
+        kwargs = {}
+        if not legend.frame:
+            kwargs["frameon"] = "False"
+        if legend.ncols != 1:
+            kwargs["ncols"] = str(legend.ncols)
+        if legend.fontsize is not None:
+            kwargs["fontsize"] = _num(legend.fontsize)
+        if legend.position is not None:
+            kwargs["loc"] = '"lower left"'
+            kwargs["bbox_to_anchor"] = _value(tuple(legend.position))
+        else:
+            kwargs["loc"] = _str(legend.location)
+        self.call(f"{ax}.legend", **kwargs)
+
+
+# --- helpers ---------------------------------------------------------------------
+
+
+def _common(artist, default_zorder: float) -> dict[str, str]:
+    """The keywords every artist takes, where they differ from Matplotlib's."""
+    kwargs = {}
+    if artist.label is not None:
+        kwargs["label"] = _str(artist.label)
+    if not artist.visible:
+        kwargs["visible"] = "False"
+    if artist.zorder != default_zorder:
+        kwargs["zorder"] = _num(artist.zorder)
+    if artist.alpha != 1.0:
+        kwargs["alpha"] = _num(artist.alpha)
+    return kwargs
+
+
+def _some(**values) -> dict[str, str]:
+    """Only the given values that are set, as code."""
+    return {k: _str(v) for k, v in values.items() if v is not None}
+
+
+def _describe(artist) -> str:
+    if artist.label:
+        return artist.label
+    if isinstance(artist, FitCurve):
+        if isinstance(artist.model, ExpressionFit):
+            return "fit"
+        return f"{artist.model.name} fit"
+    return f"{artist.kind} plot"
+
+
+def _str(text: str) -> str:
+    """A string literal as a person would write it: double quotes, and a raw
+    string for LaTeX."""
+    if "\\" in text and '"' not in text and not text.endswith("\\"):
+        return f'r"{text}"'
+    if '"' not in text and "\\" not in text and "\n" not in text:
+        return f'"{text}"'
+    return repr(text)
+
+
+def _num(value: float) -> str:
+    value = float(value)
+    return str(int(value)) if value.is_integer() and abs(value) < 1e15 else repr(value)
+
+
+def _value(value) -> str:
+    if isinstance(value, str):
+        return _str(value)
+    if isinstance(value, bool) or value is None:
+        return repr(value)
+    if isinstance(value, int | float):
+        return _num(value)
+    if isinstance(value, tuple):
+        return "(" + ", ".join(_value(v) for v in value) + ")"
+    return "[" + ", ".join(_value(v) for v in value) + "]"
+
+
+def _span(start: int, count: int) -> str:
+    return str(start) if count == 1 else f"{start}:{start + count}"
+
+
+def _letter(index: int) -> str:
+    return ascii_lowercase[index] if index < 26 else f"p{index + 1}"
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^0-9a-zA-Z]+", "_", text).strip("_").lower()
+
+
+def _identifier(text: str) -> str:
+    name = re.sub(r"\W+", "_", text).strip("_") or "col"
+    if name[0].isdigit():
+        name = f"col{name}"
+    if keyword.iskeyword(name):
+        name += "_"
+    return name
+
+
+def _index(source: CsvSource, column: str | int) -> int:
+    return source.columns.index(column) if isinstance(column, str) else column
+
+
+def _relative(path: Path, script_dir: Path) -> str:
+    try:
+        return Path(os.path.relpath(path, script_dir)).as_posix()
+    except ValueError:  # another drive on Windows
+        return str(path)
+
+
+def _has_bom(path: Path) -> bool:
+    try:
+        with open(path, "rb") as file:
+            return file.read(3) == b"\xef\xbb\xbf"
+    except OSError:
+        return False

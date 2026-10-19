@@ -144,6 +144,21 @@ class Toolbox:
             FigureCanvasAgg(fig).print_png(buffer, metadata={"Software": None})
         return {"png": buffer.getvalue()}
 
+    def tool_get_python_script(self) -> dict[str, Any]:
+        """The script that draws the shown figure, as `figscribe.codegen` writes it."""
+        from figscribe.codegen import generate
+
+        figure = self.workspace.figure
+        if figure is None:
+            raise ToolError("the project has no figure")
+        try:
+            script = generate(
+                self.workspace.project, figure, base_dir=self.workspace.base_dir
+            )
+        except (NotImplementedError, ValueError) as exc:
+            raise ToolError(f"cannot write the script: {exc}") from exc
+        return {"script": script}
+
     # --- changing ------------------------------------------------------------
 
     def tool_set_field(

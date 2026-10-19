@@ -9,12 +9,22 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 
 ## Status
 
-**Early development, not usable yet.** The plot model with its JSON project
-file, the renderer for line, scatter and errorbar plots with export to
-PDF/SVG/PNG, CSV import, undoable commands and curve fitting exist and are
-tested. The GUI (`figscribe`) imports CSV data, adds line, scatter and errorbar
-plots, edits every property with undo/redo, and saves and exports projects. The
-code generator does not exist yet.
+**Early development.** The plot model with its JSON project file, the renderer
+for line, scatter and errorbar plots, fits and residuals with export to
+PDF/SVG/PNG, CSV import, undoable commands, curve fitting and the code
+generator exist and are tested. The GUI (`figscribe`) starts from a data file
+or a layout, proposes a first plot, fits models with a residual panel, edits
+every property with undo/redo, and saves and exports projects and Python
+scripts.
+
+## The generated code
+
+*File > Export Python Script…* (or `figscribe script PROJECT.figscribe -o
+plot.py`) writes a standalone script that needs only NumPy, Matplotlib and,
+for fits, SciPy. It checks the data file's SHA-256, loads it with
+`np.loadtxt`, fits with `scipy.optimize.curve_fit` from the same start values,
+and draws exactly what figscribe shows: a test runs every example script and
+compares its PNG pixel by pixel with figscribe's own export.
 
 The full project plan lives in [`plan/`](plan/).
 

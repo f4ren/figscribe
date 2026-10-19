@@ -94,6 +94,13 @@ def test_the_preview_needs_permission(tools, workspace) -> None:
     assert width == int(85 / 25.4 * 150)  # truncated to whole pixels, as Agg does
 
 
+def test_the_python_script_draws_the_shown_figure(tools, workspace) -> None:
+    script = tools.call("get_python_script", {})["script"]
+    assert "np.loadtxt" in script and "fig.savefig" in script
+    assert workspace.project.sources[0].sha256 in script
+    compile(script, "figure.py", "exec")
+
+
 # --- set_field -----------------------------------------------------------------
 
 

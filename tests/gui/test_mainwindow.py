@@ -170,3 +170,13 @@ def test_delete_and_undo_have_their_standard_keys(window: MainWindow) -> None:
     for action, key in expected.items():
         assert action.shortcut() == QKeySequence(key)
         assert action in window.actions()
+
+
+def test_export_python_script(window: MainWindow, tmp_path: Path) -> None:
+    target = tmp_path / "code" / "scan_plot.py"
+    target.parent.mkdir()
+    window.export_script(target)
+    script = target.read_text(encoding="utf-8")
+    assert 'fig.savefig(HERE / "scan_plot.pdf")' in script
+    assert "../" in script  # the data is found from where the script is
+    assert window.script_action.shortcut().toString() == "Ctrl+Shift+E"

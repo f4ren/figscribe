@@ -29,6 +29,7 @@ from figscribe.model import (
 )
 from figscribe.model.validate import FITTABLE
 from figscribe.render.labels import axis_label
+from figscribe.render.layout import hidden_tick_labels, share_partner
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
 """Resolves a column reference to its values; loading files is not our job."""
@@ -59,49 +60,27 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
         )
 
         artists = {a.id: a for axes in figure.axes for a in axes.artists}
-        drawn: list[tuple[Axes, MplAxes]] = []
-        for axes in figure.axes:
+        axs: list[MplAxes] = []
+        for i, axes in enumerate(figure.axes):
+            partners = [share_partner(figure, i, axis) for axis in ("x", "y")]
             ax = fig.add_subplot(
                 grid[
                     axes.row : axes.row + axes.rowspan,
                     axes.col : axes.col + axes.colspan,
                 ],
-                sharex=_share_partner(axes, drawn, layout.share_x, "col"),
-                sharey=_share_partner(axes, drawn, layout.share_y, "row"),
+                sharex=axs[partners[0]] if partners[0] is not None else None,
+                sharey=axs[partners[1]] if partners[1] is not None else None,
             )
             ax.set_gid(axes.id)
             _draw_axes(axes, ax, data, figure.unit_format, artists)
-            drawn.append((axes, ax))
+            axs.append(ax)
 
-        _hide_inner_tick_labels([ax for _, ax in drawn])
-    return fig
-
-
-def _hide_inner_tick_labels(axs: list[MplAxes]) -> None:
-    """Hide tick labels that a sharing partner already shows: x labels when a
-    partner lies below with exactly the same columns, y labels when one lies to
-    the left with exactly the same rows.
-
-    Not plt.subplots' rule of "only the bottom row and left column": in a grid
-    with gaps or spans, that strips labels from an axes with no partner below,
-    and its column ends up with no x tick labels at all. Same extent, not mere
-    overlap: a partner of another width spreads the shared limits over another
-    length, so its ticks do not line up and cannot stand in for these.
-    """
-    for ax in axs:
-        spec = ax.get_subplotspec()
-        for partner in ax.get_shared_x_axes().get_siblings(ax):
-            other = partner.get_subplotspec()
-            below = other.rowspan.start >= spec.rowspan.stop
-            if below and other.colspan == spec.colspan:
+        for ax, (hide_x, hide_y) in zip(axs, hidden_tick_labels(figure), strict=True):
+            if hide_x:
                 ax.xaxis.set_tick_params(which="both", labelbottom=False)
-                break
-        for partner in ax.get_shared_y_axes().get_siblings(ax):
-            other = partner.get_subplotspec()
-            left = other.colspan.stop <= spec.colspan.start
-            if left and other.rowspan == spec.rowspan:
+            if hide_y:
                 ax.yaxis.set_tick_params(which="both", labelleft=False)
-                break
+    return fig
 
 
 def style_context(figure: Figure):
@@ -109,19 +88,6 @@ def style_context(figure: Figure):
     if figure.stylesheet is None:
         return nullcontext()
     return matplotlib.style.context(figure.stylesheet)
-
-
-def _share_partner(
-    axes: Axes, drawn: list[tuple[Axes, MplAxes]], mode: str, along: str
-) -> MplAxes | None:
-    """Return the axes to share with: the first one, or the first in the same
-    column ("col") or row ("row"), counted by where an axes starts."""
-    if mode == "none":
-        return None
-    for other, ax in drawn:
-        if mode == "all" or getattr(other, along) == getattr(axes, along):
-            return ax
-    return None
 
 
 def _draw_axes(
