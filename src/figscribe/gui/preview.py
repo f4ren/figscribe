@@ -6,16 +6,22 @@ the preview is the export. Here the figure keeps its size in millimetres;
 only the resolution is chosen to fit the widget, and Agg draws it the same
 way `export` writes a PNG. Clicks are mapped back through Matplotlib's own
 hit testing, so selection works on exactly what is drawn.
+
+The wheel zooms and dragging pans a panel; that view lives only here, until
+"Use as axis range" writes it into the model. Dragging a legend moves it,
+one undo step on release.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import numpy as np
 from matplotlib.artist import Artist as MplArtist
 from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure as MplFigure
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -24,9 +30,17 @@ from PySide6.QtGui import (
     QPainter,
     QPaintEvent,
     QPen,
+    QWheelEvent,
 )
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QWidget,
+)
 
+from figscribe.commands import Macro, SetField
 from figscribe.gui import theme
 from figscribe.gui.document import Document
 from figscribe.gui.names import size_text
@@ -41,11 +55,40 @@ EMPTY_HINT = (
 )
 CAPTION = 30
 """Room below the figure for its size and resolution."""
+DRAG_THRESHOLD = 4
+"""Logical pixels the mouse moves before a press becomes a drag."""
+ZOOM_STEP = 1.25
+"""Zoom factor of one wheel step."""
+
+Limits = tuple[tuple[float, float], tuple[float, float]]
+
+
+@dataclass
+class _Press:
+    """A pressed left button: where, and what it may turn into."""
+
+    start: QPointF
+    last: QPointF
+    axes_id: str | None = None
+    """The panel under the press, which a drag pans."""
+    legend: object = None
+    """The Matplotlib legend under the press, which a drag moves."""
+    dragging: bool = False
 
 
 class Preview(QWidget):
+    view_changed = Signal()
+    """The zoomed or panned view changed, or was dropped."""
+
     def __init__(self, document: Document, parent: QWidget | None = None):
         super().__init__(parent)
+        self.view: dict[str, Limits] = {}
+        """Limits per panel id, zoomed or panned here and not (yet) in the model."""
+        self._press: _Press | None = None
+        self.view_bar = _ViewBar(self)
+        self.view_bar.adopt.clicked.connect(self.adopt_view)
+        self.view_bar.reset.clicked.connect(self.reset_view)
+        self.view_bar.hide()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumSize(200, 150)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
@@ -58,6 +101,7 @@ class Preview(QWidget):
 
     def set_document(self, document: Document) -> None:
         self.document = document
+        self.view = {}
         document.changed.connect(self.refresh)
         document.selection_changed.connect(self.update)
         self.refresh()
@@ -93,6 +137,13 @@ class Preview(QWidget):
 
     def _draw(self, model) -> tuple[MplFigure, QImage]:
         fig = render(model, self.document.data)
+        known = {ax.get_gid() for ax in _all_axes(fig)}
+        self.view = {oid: lim for oid, lim in self.view.items() if oid in known}
+        for ax in _all_axes(fig):
+            if ax.get_gid() in self.view:
+                xlim, ylim = self.view[ax.get_gid()]
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
         fig.set_dpi(self.preview_dpi())
         canvas = FigureCanvasAgg(fig)
         with style_context(model):
@@ -108,6 +159,7 @@ class Preview(QWidget):
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         super().resizeEvent(event)
         self.refresh()
+        self._place_view_bar()
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -142,6 +194,11 @@ class Preview(QWidget):
         if box is not None:
             painter.setPen(QPen(QColor(theme.ACCENT), 1.5, Qt.PenStyle.DashLine))
             painter.drawRoundedRect(box, 3, 3)
+        moved = self._moved_legend_rect()
+        if moved is not None:
+            painter.setPen(QPen(QColor(theme.ACCENT), 1.5))
+            painter.setBrush(QColor(36, 89, 214, 30))
+            painter.drawRoundedRect(moved, 3, 3)
 
     def _is_empty(self) -> bool:
         model = self.document.figure
@@ -151,7 +208,10 @@ class Preview(QWidget):
         model = self.document.figure
         if model is None:
             return ""
-        return f"{size_text(model)} · {model.dpi:g} dpi · Exactly as exported"
+        size = f"{size_text(model)} · {model.dpi:g} dpi"
+        if self.view:
+            return f"{size} · Zoomed here only; the export keeps the set ranges"
+        return f"{size} · Exactly as exported · Scroll to zoom, drag to pan"
 
     def _paint_caption(self, painter: QPainter, paper: QRectF) -> None:
         font = QFont(self.font())
@@ -227,10 +287,187 @@ class Preview(QWidget):
         bottom_right = self._to_widget(x1, y0)
         return QRectF(top_left, bottom_right).adjusted(-3, -3, 3, 3)
 
+    # --- zoom, pan and the legend ---------------------------------------------
+
+    def axes_at(self, point: QPointF):
+        """The Matplotlib axes under `point` (insets first), or None."""
+        if self._figure is None:
+            return None
+        x, y = self._to_display(point)
+        for ax in _all_axes(self._figure):
+            if ax.get_gid() and ax.bbox.contains(x, y):
+                return ax
+        return None
+
+    def zoom(self, point: QPointF, factor: float, axis: str = "both") -> None:
+        """Zoom the panel under `point` by `factor` (> 1 zooms in), keeping
+        the spot under the cursor in place; `axis` limits it to "x" or "y"."""
+        ax = self.axes_at(point)
+        if ax is None:
+            return
+        x, y = self._to_display(point)
+        box = ax.bbox
+        xs = (x - (x - box.x0) / factor, x + (box.x1 - x) / factor)
+        ys = (y - (y - box.y0) / factor, y + (box.y1 - y) / factor)
+        if axis == "y":
+            xs = (box.x0, box.x1)
+        if axis == "x":
+            ys = (box.y0, box.y1)
+        self._set_view(ax, xs, ys)
+
+    def pan(self, axes_id: str, dx: float, dy: float) -> None:
+        """Move the view of panel `axes_id` with the mouse by (dx, dy) logical
+        pixels: the data follows the cursor."""
+        ax = self._axes(axes_id)
+        if ax is None:
+            return
+        ratio = self.devicePixelRatioF()
+        box = ax.bbox
+        dx, dy = dx * ratio, -dy * ratio  # display y grows upwards
+        self._set_view(ax, (box.x0 - dx, box.x1 - dx), (box.y0 - dy, box.y1 - dy))
+
+    def reset_view(self) -> None:
+        """Back to the limits in the model, as exported."""
+        if self.view:
+            self.view = {}
+            self._view_changed()
+
+    def adopt_view(self) -> None:
+        """Write the zoomed or panned view into the model as axis ranges."""
+        if not self.view:
+            return
+        steps = []
+        for oid, (xlim, ylim) in self.view.items():
+            steps += [
+                SetField(oid, ("x", "limits"), (float(xlim[0]), float(xlim[1]))),
+                SetField(oid, ("y", "limits"), (float(ylim[0]), float(ylim[1]))),
+            ]
+        self.view = {}
+        self.document.push(Macro("Use the view as axis ranges", steps))
+        self.view_changed.emit()
+        self._place_view_bar()
+
+    def move_legend(self, axes_id: str, dx: float, dy: float) -> None:
+        """Move the legend of panel `axes_id` by (dx, dy) logical pixels, as
+        one undo step: its lower left corner gets a fixed place in the panel."""
+        ax = self._axes(axes_id)
+        legend = ax.get_legend() if ax is not None else None
+        if legend is None:
+            return
+        ratio = self.devicePixelRatioF()
+        box = legend.get_window_extent()
+        x0, y0 = box.x0 + dx * ratio, box.y0 - dy * ratio
+        fx, fy = ax.transAxes.inverted().transform((x0, y0))
+        # Matplotlib keeps borderaxespad between the anchor and the frame.
+        pad = legend.borderaxespad * legend.prop.get_size_in_points()
+        pad *= self._figure.dpi / 72
+        position = (float(fx - pad / ax.bbox.width), float(fy - pad / ax.bbox.height))
+        self.document.push(SetField(axes_id, ("legend", "position"), position))
+
+    def _axes(self, axes_id: str):
+        if self._figure is None:
+            return None
+        return next(
+            (a for a in _all_axes(self._figure) if a.get_gid() == axes_id), None
+        )
+
+    def _set_view(self, ax, xs, ys) -> None:
+        inverse = ax.transData.inverted()
+        (x0, y0), (x1, y1) = inverse.transform([(xs[0], ys[0]), (xs[1], ys[1])])
+        self.view[ax.get_gid()] = ((float(x0), float(x1)), (float(y0), float(y1)))
+        self._view_changed()
+
+    def _view_changed(self) -> None:
+        self.refresh()
+        self.view_changed.emit()
+        self._place_view_bar()
+
+    def _place_view_bar(self) -> None:
+        self.view_bar.setVisible(bool(self.view))
+        self.view_bar.adjustSize()
+        width = self.view_bar.width()
+        self.view_bar.move(max(0, (self.width() - width) // 2), 8)
+
+    def _moved_legend_rect(self) -> QRectF | None:
+        press = self._press
+        if press is None or press.legend is None or not press.dragging:
+            return None
+        box = press.legend.get_window_extent()
+        rect = QRectF(self._to_widget(box.x0, box.y1), self._to_widget(box.x1, box.y0))
+        return rect.translated(press.last - press.start)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802 - Qt naming
+        steps = event.angleDelta().y() / 120
+        if not steps:
+            return
+        modifiers = event.modifiers()
+        axis = "both"
+        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+            axis = "x"
+        elif modifiers & (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier
+        ):
+            axis = "y"
+        self.zoom(event.position(), ZOOM_STEP**steps, axis)
+        event.accept()
+
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.document.select(self.object_at(event.position()))
-        super().mousePressEvent(event)
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        point = event.position()
+        if self._figure is None:
+            self.document.select(None)
+            return
+        ax = self.axes_at(point)
+        self._press = _Press(
+            point,
+            point,
+            axes_id=ax.get_gid() if ax is not None else None,
+            legend=self._legend_at(point),
+        )
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        press = self._press
+        if press is None:
+            return
+        point = event.position()
+        if not press.dragging:
+            moved = point - press.start
+            if abs(moved.x()) + abs(moved.y()) < DRAG_THRESHOLD:
+                return
+            press.dragging = True
+        if press.legend is None and press.axes_id is not None:
+            delta = point - press.last
+            self.pan(press.axes_id, delta.x(), delta.y())
+        press.last = point
+        self.update()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        press, self._press = self._press, None
+        if press is None or event.button() != Qt.MouseButton.LeftButton:
+            return
+        if not press.dragging:
+            self.document.select(self.object_at(press.start))
+        elif press.legend is not None:
+            moved = event.position() - press.start
+            self.move_legend(press.legend.get_gid(), moved.x(), moved.y())
+        self.update()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        if event.key() == Qt.Key.Key_Escape and self.view:
+            self.reset_view()
+            return
+        super().keyPressEvent(event)
+
+    def _legend_at(self, point: QPointF):
+        x, y = self._to_display(point)
+        event = MouseEvent("button_press_event", self._figure.canvas, x, y)
+        for ax in _all_axes(self._figure):
+            legend = ax.get_legend()
+            if legend is not None and legend.get_gid() and legend.contains(event)[0]:
+                return legend
+        return None
 
     # Matplotlib's display coordinates are device pixels from the bottom left.
 
@@ -274,3 +511,21 @@ def _shadow(painter: QPainter, paper: QRectF) -> None:
         painter.setBrush(QColor(0, 0, 0, 4 + (8 - step)))
         spread = paper.adjusted(-step, -step + 3, step, step + 3)
         painter.drawRoundedRect(spread, step, step)
+
+
+class _ViewBar(QWidget):
+    """Shown while a panel is zoomed or panned: keep it, or go back."""
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setObjectName("viewBar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(12, 6, 8, 6)
+        row.setSpacing(10)
+        row.addWidget(QLabel("Zoomed in the preview only"))
+        self.adopt = QPushButton("Use as axis range")
+        self.adopt.setObjectName("primary")
+        self.reset = QPushButton("Reset")
+        row.addWidget(self.adopt)
+        row.addWidget(self.reset)
