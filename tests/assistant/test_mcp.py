@@ -273,3 +273,89 @@ def test_switches_are_remembered(qtbot, tmp_path: Path) -> None:
     assert again.preview_action.isChecked() and again.document.allow_preview
     assert again.tool_server.listening
     again.close()
+
+
+# --- found while hardening -----------------------------------------------------
+
+
+async def _serve_once(reply: bytes | None, delay: float = 0.0):
+    """A stand-in for figscribe that answers one request with `reply`."""
+
+    async def handle(reader, writer):
+        await reader.readline()
+        await asyncio.sleep(delay)
+        if reply is not None:
+            writer.write(reply)
+            await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    endpoint.publish(endpoint.Endpoint(port=port, token="t", pid=os.getpid()))
+    return server
+
+
+@pytest.mark.parametrize(
+    ("reply", "message"),
+    [(None, "closed the connection"), (b"not json\n", "lost the connection")],
+)
+def test_forward_turns_a_broken_answer_into_an_error(reply, message) -> None:
+    async def run():
+        server = await _serve_once(reply)
+        async with server:
+            return await forward("get_project", {})
+
+    response = asyncio.run(run())
+    assert response["ok"] is False and message in response["error"]
+
+
+def test_forward_gives_up_after_the_timeout(monkeypatch) -> None:
+    import figscribe.assistant.mcpserver as bridge
+
+    monkeypatch.setattr(bridge, "TIMEOUT", 0.2)
+
+    async def run():
+        server = await _serve_once(b'{"ok": true}\n', delay=2.0)
+        async with server:
+            return await forward("get_project", {})
+
+    response = asyncio.run(run())
+    assert "did not answer" in response["error"]
+
+
+def test_a_stale_endpoint_file_reads_as_not_running() -> None:
+    with socket.socket() as s:  # a port nobody listens on once closed
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    endpoint.publish(endpoint.Endpoint(port=port, token="t", pid=1))
+    assert asyncio.run(forward("get_project", {})) == {
+        "ok": False,
+        "error": NOT_RUNNING,
+    }
+
+
+def test_no_listening_without_the_endpoint_file(qtbot, document, monkeypatch) -> None:
+    def fail(_):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr(endpoint, "publish", fail)
+    tool_server = ToolServer(lambda: document)
+    with pytest.raises(PermissionError):
+        tool_server.start()
+    assert not tool_server.listening and tool_server.endpoint is None
+
+
+@pytest.mark.parametrize(
+    ("argument", "expected"),
+    [("--help", "usage: figscribe"), ("--version", "figscribe 0.")],
+)
+def test_command_line_help_and_version(argument, expected) -> None:
+    import subprocess
+
+    out = subprocess.run(
+        [sys.executable, "-m", "figscribe", argument],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.startswith(expected)

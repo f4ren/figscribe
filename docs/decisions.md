@@ -418,7 +418,14 @@ should not need an API key or carry the cost of one.
   measurements. `render_preview` shows the data, so it works only when the
   user allows it in the workspace.
 - **Data files are not imported by tools.** That would let an assistant open
-  any path on the machine; importing stays a user action.
+  any path on the machine; importing stays a user action. For the same reason
+  a source's `path`, `sha256` and `columns` cannot be set by a tool; how the
+  file is read (delimiter, header, comment) can.
+- **Tool arguments are validated by the tool's signature** before anything
+  runs, in single calls and in each operation of `apply_changes` alike: a
+  path given as a string or an index as text is refused with a message, not
+  half-interpreted. A missing or changed data file is a refusal too, never an
+  internal error.
 - **MCP is the first front end** (the next change): any MCP client and model
   can drive figscribe, with no key or cost inside the application. A built-in
   chat may follow, using the same tool definitions (`figscribe.tools.TOOLS`).
@@ -456,3 +463,9 @@ provider, its key handling and its cost; MCP leaves the choice to the user.
   Closing the window or switching access off removes the endpoint file.
 - **One line of JSON per request and per answer.** Binary data (the preview)
   travels as base64 and leaves `figscribe mcp` as MCP image content.
+- **`figscribe mcp` never fails a call by raising.** No endpoint file, a stale
+  one, a refused or dropped connection, a malformed answer, or no answer
+  within 120 s all become an error result the client shows to the model.
+- **`figscribe mcp` starts light.** It needs only the tool list, so
+  `figscribe.tools` loads the parts that pull in matplotlib and SciPy on first
+  use; a test keeps it that way.

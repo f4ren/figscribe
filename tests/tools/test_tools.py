@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -11,15 +10,11 @@ import pytest
 from figscribe.model import ErrorbarPlot, LinePlot, dumps, loads
 from figscribe.tools import TOOLS, ProjectWorkspace, Toolbox, ToolError
 
-EXAMPLE = Path(__file__).parents[2] / "examples" / "gaussian-scan"
-
 
 @pytest.fixture
-def workspace(tmp_path: Path) -> ProjectWorkspace:
-    target = tmp_path / "gaussian-scan"
-    shutil.copytree(EXAMPLE, target)
-    project = loads((target / "scan.figscribe").read_text(encoding="utf-8"))
-    return ProjectWorkspace(project, target)
+def workspace(example: Path) -> ProjectWorkspace:
+    project = loads(example.read_text(encoding="utf-8"))
+    return ProjectWorkspace(project, example.parent)
 
 
 @pytest.fixture
@@ -416,3 +411,111 @@ def test_error_bars_survive_a_roundtrip_through_json(tools, workspace) -> None:
     artist["id"] = "copy"
     tools.call("insert", {"parent_id": axes, "field": "artists", "object": artist})
     assert isinstance(workspace.project.figures[0].axes[0].artists[-1], ErrorbarPlot)
+
+
+# --- found while hardening -----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "message"),
+    [
+        ("set_field", {"object_id": None, "path": "name", "value": "x"}, "path"),
+        ("move", {"object_id": "a", "index": "two"}, "index"),
+        (
+            "apply_changes",
+            {"description": "x", "operations": {"op": "move"}},
+            "operations",
+        ),
+        ("apply_changes", {"description": "x", "operations": ["move"]}, "operations.0"),
+        ("insert", {"parent_id": None, "field": "figures", "object": "fig"}, "object"),
+    ],
+)
+def test_arguments_of_the_wrong_type_are_refused(
+    tools, workspace, tool, arguments, message
+) -> None:
+    before = dumps(workspace.project)
+    with pytest.raises(ToolError, match=f"bad arguments for {tool}: {message}"):
+        tools.call(tool, arguments)
+    assert dumps(workspace.project) == before
+
+
+def test_operations_are_checked_like_single_calls(tools, workspace) -> None:
+    figure, *_ = _ids(workspace)
+    with pytest.raises(
+        ToolError, match=r"operation 0 \('set_field'\).*bad arguments.*path"
+    ):
+        tools.call(
+            "apply_changes",
+            {
+                "description": "x",
+                "operations": [
+                    {"op": "set_field", "object_id": figure, "path": "name", "value": 1}
+                ],
+            },
+        )
+    with pytest.raises(ToolError, match="operation 0.*unexpected keyword"):
+        tools.call(
+            "apply_changes",
+            {
+                "description": "x",
+                "operations": [
+                    {"op": "move", "object_id": figure, "index": 0, "where": 1}
+                ],
+            },
+        )
+
+
+@pytest.mark.parametrize("field", ["path", "sha256", "columns"])
+def test_a_source_cannot_be_pointed_elsewhere(tools, workspace, field) -> None:
+    *_, source = _ids(workspace)
+    value = (
+        ["a"] if field == "columns" else "/etc/passwd" if field == "path" else "0" * 64
+    )
+    with pytest.raises(ToolError, match="importing the file"):
+        tools.call("set_field", {"object_id": source, "path": [field], "value": value})
+
+
+def test_how_a_source_is_read_may_change(tools, workspace) -> None:
+    *_, source = _ids(workspace)
+    tools.call("set_field", {"object_id": source, "path": ["comment"], "value": "%"})
+    assert workspace.project.sources[0].comment == "%"
+
+
+def test_a_missing_data_file_is_a_refusal_not_a_crash(tools, workspace) -> None:
+    _, _, data, _ = _ids(workspace)
+    (workspace.base_dir / "scan.csv").unlink()
+    with pytest.raises(ToolError, match="scan.csv"):
+        tools.call(
+            "fit",
+            {"target_id": data, "model": {"kind": "predefined", "name": "linear"}},
+        )
+    with pytest.raises(ToolError, match=r"operation 0 \('fit'\).*scan.csv"):
+        tools.call(
+            "apply_changes",
+            {
+                "description": "x",
+                "operations": [
+                    {
+                        "op": "fit",
+                        "target_id": data,
+                        "model": {"kind": "predefined", "name": "linear"},
+                    }
+                ],
+            },
+        )
+
+
+def test_reading_the_tool_list_stays_light() -> None:
+    """`figscribe mcp` needs the tool list only; it must not load the heavy parts."""
+    import subprocess
+    import sys
+
+    heavy = "('matplotlib', 'scipy', 'PySide6')"
+    code = (
+        "import sys, figscribe.tools as t; t.TOOLS; "
+        f"print(sorted(m for m in {heavy} if m in sys.modules))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "[]"

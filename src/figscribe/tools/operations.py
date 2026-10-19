@@ -14,12 +14,13 @@ from __future__ import annotations
 import inspect
 import io
 import json
+import typing
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError, validate_call
 
 from figscribe.commands import (
     Command,
@@ -35,6 +36,7 @@ from figscribe.commands import (
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
 from figscribe.fit import FitError, refit
+from figscribe.io import DataError
 from figscribe.model import (
     Axes,
     DataSource,
@@ -48,6 +50,13 @@ from figscribe.model.artists import Artist
 from figscribe.render import render
 from figscribe.render.figure import style_context
 from figscribe.tools.workspace import Workspace, column_choices
+
+PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns"})
+"""Set by importing a file in figscribe; a tool must not point a source
+elsewhere on the machine. How a file is read (delimiter, header...) may change."""
+
+_REFUSED = (CommandError, FitError, DataError)
+"""Errors that mean the request cannot be carried out, as opposed to bugs."""
 
 PREVIEW_DPI = 150.0
 """Enough to judge a layout, at a fraction of the export's pixels."""
@@ -80,8 +89,12 @@ class Toolbox:
         except TypeError as exc:
             raise ToolError(f"bad arguments for {name}: {exc}") from None
         try:
-            return method(**arguments)
-        except (CommandError, FitError) as exc:
+            return validate_call(method)(**arguments)
+        except ValidationError as exc:
+            raise ToolError(
+                f"bad arguments for {name}: {_reasons(exc, name)}"
+            ) from None
+        except _REFUSED as exc:
             raise ToolError(str(exc)) from exc
 
     # --- reading -------------------------------------------------------------
@@ -190,7 +203,7 @@ class Toolbox:
             try:
                 command, new_id = self._build(staging, dict(operation))
                 command.apply(staging)
-            except (ToolError, CommandError, FitError, TypeError) as exc:
+            except (ToolError, TypeError, *_REFUSED) as exc:
                 raise ToolError(
                     f"operation {i} ({operation.get('op')!r}) failed, "
                     f"nothing was changed: {exc}"
@@ -215,19 +228,25 @@ class Toolbox:
         self, project: Project, operation: dict[str, Any]
     ) -> tuple[Command, str | None]:
         op = operation.pop("op", None)
-        if op == "set_field":
-            return _set_field(project, **operation), None
-        if op == "insert":
-            return _insert(project, **operation)
-        if op == "remove":
-            return _remove(project, **operation), None
-        if op == "move":
-            return _move(project, **operation), None
-        if op == "fit":
-            return _fit(project, self.workspace.data, **operation)
-        raise ToolError(
-            f"unknown op {op!r}; use set_field, insert, remove, move or fit"
-        )
+        builders = {
+            "set_field": lambda **a: (_set_field(project, **a), None),
+            "insert": lambda **a: _insert(project, **a),
+            "remove": lambda **a: (_remove(project, **a), None),
+            "move": lambda **a: (_move(project, **a), None),
+            "fit": lambda **a: _fit(project, self.workspace.data, **a),
+        }
+        if op not in builders:
+            raise ToolError(
+                f"unknown op {op!r}; use set_field, insert, remove, move or fit"
+            )
+        # The same argument check as a single call of that tool.
+        signature = inspect.signature(getattr(self, f"tool_{op}"))
+        try:
+            signature.bind(**operation)
+            arguments = validate_call(_echo(signature))(**operation)
+        except ValidationError as exc:
+            raise ToolError(f"bad arguments: {_reasons(exc, op)}") from None
+        return builders[op](**arguments)
 
     def _push(self, command: Command, info: dict[str, Any]) -> dict[str, Any]:
         self.workspace.push(command)
@@ -253,6 +272,10 @@ def _set_field(
     name = path[-1]
     if name not in type(owner).model_fields:
         raise ToolError(f"{type(owner).__name__} has no field {name!r}")
+    if len(path) == 1 and name in PROTECTED_SOURCE_FIELDS and _is_source(owner):
+        raise ToolError(
+            f"a data source's {name} is set by importing the file in figscribe"
+        )
     annotation = type(owner).model_fields[name].annotation
     parsed = _validate(annotation, value, ".".join(path))
     return SetField(object_id, tuple(path), parsed)
@@ -332,13 +355,33 @@ def _validate(annotation: Any, value: Any, where: str) -> Any:
     try:
         return TypeAdapter(annotation).validate_json(json.dumps(value), strict=True)
     except ValidationError as exc:
-        reasons = "; ".join(
-            f"{'.'.join(str(p) for p in e['loc']) or where}: {e['msg']}"
-            for e in exc.errors()
-        )
-        raise ToolError(f"invalid {where}: {reasons}") from None
+        raise ToolError(f"invalid {where}: {_reasons(exc, where)}") from None
     except TypeError as exc:  # not JSON-serializable
         raise ToolError(f"invalid {where}: {exc}") from None
+
+
+def _is_source(obj: BaseModel) -> bool:
+    return isinstance(obj, typing.get_args(typing.get_args(DataSource)[0]))
+
+
+def _echo(signature: inspect.Signature) -> Callable[..., dict[str, Any]]:
+    """A function with `signature` (minus self) that returns its arguments."""
+
+    def echo(**arguments: Any) -> dict[str, Any]:
+        return arguments
+
+    echo.__signature__ = signature  # type: ignore[attr-defined]
+    echo.__annotations__ = {
+        name: p.annotation for name, p in signature.parameters.items()
+    }
+    return echo
+
+
+def _reasons(exc: ValidationError, where: str) -> str:
+    return "; ".join(
+        f"{'.'.join(str(p) for p in e['loc']) or where}: {e['msg']}"
+        for e in exc.errors()
+    )
 
 
 def _field_value(owner: BaseModel, name: str) -> Any:
