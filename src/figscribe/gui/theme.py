@@ -148,6 +148,25 @@ QLabel#value {{ font-family: "{MONO}"; }}
 QLabel#panelKicker {{ color: {ACCENT}; font-size: 11px; font-weight: 600; }}
 
 QScrollArea {{ border: 0; background: {SURFACE}; }}
+
+QScrollArea#startPage, QWidget#startBody {{ background: {GROUND}; }}
+QWidget#startHeader {{ background: {SURFACE}; border-bottom: 1px solid {BORDER}; }}
+QLabel#startTitle {{ font-size: 30px; font-weight: 600; }}
+QLabel#lead {{ color: {MUTED}; font-size: 15px; }}
+QLabel#sectionHeading {{ font-size: 16px; font-weight: 600; }}
+QLabel#zoneTitle {{ font-size: 17px; font-weight: 600; }}
+QLabel#tileTitle {{ font-weight: 600; }}
+QFrame#dropZone {{
+    background: {SURFACE}; border: 2px dashed {CONTROL_BORDER}; border-radius: 16px;
+}}
+QFrame#dropZone[active="true"] {{ background: {ACCENT_SOFT}; border-color: {ACCENT}; }}
+QPushButton#tile, QPushButton#recentRow {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 12px;
+    padding: 0; text-align: left;
+}}
+QPushButton#tile:hover, QPushButton#recentRow:hover {{ border-color: {ACCENT}; }}
+QPushButton#link {{ border: 0; background: transparent; color: {ACCENT}; }}
+QPushButton#link:hover {{ color: {ACCENT_HOVER}; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{
     background: #CFCFC9; border-radius: 3px; min-height: 30px;
