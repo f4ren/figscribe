@@ -170,6 +170,11 @@ QPushButton#tile, QPushButton#recentRow {{
     padding: 0; text-align: left;
 }}
 QPushButton#tile:hover, QPushButton#recentRow:hover {{ border-color: {ACCENT}; }}
+QWidget#codePanel {{ background: {SURFACE}; border-top: 1px solid {BORDER}; }}
+QPlainTextEdit#code {{
+    background: #FBFBF9; border: 0; border-top: 1px solid {BORDER};
+    padding: 6px 10px; selection-background-color: {ACCENT_SOFT};
+}}
 QWidget#viewBar {{
     background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px;
 }}

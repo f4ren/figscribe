@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSizePolicy,
+    QSplitter,
     QStackedWidget,
     QToolBar,
     QToolButton,
@@ -44,6 +45,7 @@ from figscribe.commands import (
 from figscribe.commands.core import walk
 from figscribe.fit import FitError, add_fit
 from figscribe.gui import theme
+from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.document import Document
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
@@ -106,10 +108,19 @@ class MainWindow(QMainWindow):
         self.preview = Preview(self.document)
         self.start = StartPage()
         self._connect_start(self.start)
+        self.code = CodePanel(self.document)
+        self.code.save_requested.connect(self._script_dialog)
+        self.code.hide()
+        self.workspace = QSplitter(Qt.Orientation.Vertical)
+        self.workspace.setChildrenCollapsible(False)
+        self.workspace.addWidget(self.preview)
+        self.workspace.addWidget(self.code)
+        self.workspace.setStretchFactor(0, 3)
+        self.workspace.setStretchFactor(1, 2)
         self.pages = QStackedWidget()
         self.pages.addWidget(self.start)
-        self.pages.addWidget(self.preview)
-        self.pages.setCurrentWidget(self.preview)
+        self.pages.addWidget(self.workspace)
+        self.pages.setCurrentWidget(self.workspace)
         self.setCentralWidget(self.pages)
         self.examples_dir = _documents() / "figscribe examples"
         """Where the example is copied to, so it can be edited and saved."""
@@ -143,6 +154,8 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         self._connect(self.document)
         self.resize(1280, 800)
+        if self._setting("view/code"):
+            self.code_action.setChecked(True)
         if self._setting("assistant/preview"):
             self.preview_action.setChecked(True)
         if self._setting("assistant/mcp"):
@@ -243,7 +256,7 @@ class MainWindow(QMainWindow):
 
     def show_workspace(self) -> None:
         self._worked = True
-        self.pages.setCurrentWidget(self.preview)
+        self.pages.setCurrentWidget(self.workspace)
         self._show_panels(True)
 
     def _show_panels(self, on: bool) -> None:
@@ -497,6 +510,11 @@ class MainWindow(QMainWindow):
             self._push(command)
         self.document.select(new.id)
 
+    def show_code(self, on: bool) -> None:
+        """Show or hide the Python code drawer under the preview."""
+        self.code.setVisible(on)
+        self._remember("view/code", on)
+
     def _delete(self, oid: str) -> None:
         self.document.select(oid)
         self.delete_selected()
@@ -553,7 +571,8 @@ class MainWindow(QMainWindow):
     def set_document(self, document: Document) -> None:
         document.allow_preview = self.document.allow_preview
         self.document = document
-        for view in (self.preview, self.outline, self.problems, self.properties):
+        views = (self.preview, self.outline, self.problems, self.properties, self.code)
+        for view in views:
             view.set_document(document)
         self._connect(document)
         self.show_workspace()
@@ -686,6 +705,11 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
             self.panel_actions[side] = action
 
+        view = self.menuBar().addMenu("&View")
+        self.code_action = self._toggle(view, "&Python Code", self.show_code)
+        self.code_action.setShortcut(QKeySequence("Ctrl+Shift+Y"))
+        self.addAction(self.code_action)
+
         assistant = self.menuBar().addMenu("&Assistant")
         self.mcp_action = self._toggle(
             assistant, "Allow &MCP Access", self.set_mcp_enabled
@@ -748,6 +772,9 @@ class MainWindow(QMainWindow):
             button = bar.widgetForAction(action)
             button.setObjectName("quiet")
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.code_action.setIcon(theme.icon("code"))
+        self.code_action.setIconText("Python code")
+        bar.addAction(self.code_action)
         bar.addSeparator()
         self.export_action.setIconText("Export…")
         bar.addAction(self.export_action)
