@@ -66,3 +66,7 @@ path = "src/figscribe/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/figscribe"]
+
+# The start page opens a copy of the example; installed, it lives in the package.
+[tool.hatch.build.targets.wheel.force-include]
+"examples/gaussian-scan" = "figscribe/examples/gaussian-scan"

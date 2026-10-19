@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtCore import QSettings, QSize, QStandardPaths, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
+    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSizePolicy,
+    QStackedWidget,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -38,8 +41,10 @@ from figscribe.gui.plotdialog import PlotDialog, add_plot
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
+from figscribe.gui.start import DOCS_URL, StartPage, bundled_example
 from figscribe.model import ArtistBase, Axes
 from figscribe.render import export
+from figscribe.templates import template
 
 MCP_HELP = """\
 <p>An MCP client (Claude Desktop, Claude Code, an IDE, a local model's front
@@ -57,6 +62,8 @@ PROJECT_FILTER = "figscribe projects (*.figscribe)"
 DATA_FILTER = "Delimited text (*.csv *.tsv *.txt *.dat);;All files (*)"
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
 DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat"}
+START_FILTER = "Data or project (*.csv *.tsv *.txt *.dat *.figscribe);;All files (*)"
+MAX_RECENT = 6
 
 
 class MainWindow(QMainWindow):
@@ -75,28 +82,43 @@ class MainWindow(QMainWindow):
         self.tool_server.tool_called.connect(
             lambda name: self.statusBar().showMessage(f"Assistant: {name}", 3000)
         )
+        self._recent: list[Path] = []
+        self._worked = False
+        """Whether the workspace was shown: the start page then offers a way back."""
         self.ask: Callable[[str, str], bool] = self._ask_user
         """Asks a yes/no question; replaced in tests."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         """Runs a dialog, True if accepted; replaced in tests."""
 
         self.preview = Preview(self.document)
-        self.setCentralWidget(self.preview)
+        self.start = StartPage()
+        self._connect_start(self.start)
+        self.pages = QStackedWidget()
+        self.pages.addWidget(self.start)
+        self.pages.addWidget(self.preview)
+        self.pages.setCurrentWidget(self.preview)
+        self.setCentralWidget(self.pages)
+        self.examples_dir = _documents() / "figscribe examples"
+        """Where the example is copied to, so it can be edited and saved."""
         self.outline = Outline(self.document)
         self.problems = Problems(self.document)
         self.properties = PropertyPanel(self.document)
         self.outline.add_requested.connect(self._add_plot_to)
         self.outline.import_requested.connect(lambda: self.import_csv())
-        contents = self._dock(
+        self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
-        properties = self._dock(
+        self.properties_dock = self._dock(
             "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
         )
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
-        self.resizeDocks([contents, properties], [260, 340], Qt.Orientation.Horizontal)
+        self.resizeDocks(
+            [self.contents_dock, self.properties_dock],
+            [260, 340],
+            Qt.Orientation.Horizontal,
+        )
         self.resizeDocks([self.problems_dock], [80], Qt.Orientation.Vertical)
 
         self._build_menus()
@@ -156,6 +178,14 @@ class MainWindow(QMainWindow):
         if self.confirm_discard():
             self.set_document(Document())
 
+    def new_from_template(self, key: str) -> None:
+        """Start a new project whose figure is the template's layout."""
+        if not self.confirm_discard():
+            return
+        project = Document().project
+        project.figures = [template(key).build()]
+        self.set_document(Document(project))
+
     def open_path(self, path: str | Path) -> None:
         """Open a project file; errors are shown, the current project stays."""
         try:
@@ -164,6 +194,93 @@ class MainWindow(QMainWindow):
             self.show_error(f"Cannot open {path}", exc)
             return
         self.set_document(document)
+        self._add_recent(document.path)
+
+    def open_example(self) -> None:
+        """Open a copy of the example project that can be changed and saved."""
+        if not self.confirm_discard():
+            return
+        target = self.examples_dir / "gaussian-scan"
+        if not (target / "scan.figscribe").is_file():
+            try:
+                shutil.copytree(bundled_example(), target, dirs_exist_ok=True)
+            except OSError as exc:
+                self.show_error("Cannot copy the example", exc)
+                return
+        self.open_path(target / "scan.figscribe")
+
+    # --- start page -----------------------------------------------------------
+
+    @property
+    def on_start_page(self) -> bool:
+        return self.pages.currentWidget() is self.start
+
+    def show_start(self) -> None:
+        """Show the start page; the open project stays until it is replaced."""
+        self.start.set_recent(self.recent)
+        path = self.document.path
+        name = path.stem if path is not None else "Untitled"
+        self.start.set_back(name if self._worked else None)
+        self.pages.setCurrentWidget(self.start)
+        self._show_panels(False)
+
+    def show_workspace(self) -> None:
+        self._worked = True
+        self.pages.setCurrentWidget(self.preview)
+        self._show_panels(True)
+
+    def _show_panels(self, on: bool) -> None:
+        self.toolbar.setVisible(on)
+        self.contents_dock.setVisible(on)
+        self.properties_dock.setVisible(on)
+        self._show_problems()
+
+    def _connect_start(self, start: StartPage) -> None:
+        start.files_dropped.connect(self.open_dropped)
+        start.choose_file.connect(self._choose_start_file)
+        start.open_project.connect(self._open_dialog)
+        start.template_chosen.connect(self.new_from_template)
+        start.example_requested.connect(self.open_example)
+        start.assistant_requested.connect(self._show_mcp_help)
+        start.recent_chosen.connect(self._open_recent)
+        start.back_requested.connect(self.show_workspace)
+        start.docs_requested.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
+
+    def _choose_start_file(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Open", "", START_FILTER)
+        if path:
+            self.open_dropped([Path(path)])
+
+    def _open_recent(self, path: Path) -> None:
+        if self.confirm_discard():
+            self.open_path(path)
+
+    def _start_with_data(self, path: Path) -> None:
+        """A new project around a data file; back to the start if cancelled."""
+        if not self.confirm_discard():
+            return
+        self.new_from_template("single")
+        if not self.import_csv(path):
+            self.show_start()
+
+    @property
+    def recent(self) -> list[Path]:
+        """Recently opened or saved projects, most recent first."""
+        if self.settings is None:
+            return list(self._recent)
+        value = self.settings.value("recent", [])
+        if isinstance(value, str):
+            value = [value]
+        return [Path(p) for p in value or []]
+
+    def _add_recent(self, path: Path | None) -> None:
+        if path is None:
+            return
+        path = path.resolve()
+        paths = [path, *(p for p in self.recent if p != path)][:MAX_RECENT]
+        self._recent = paths
+        if self.settings is not None:
+            self.settings.setValue("recent", [str(p) for p in paths])
 
     def save(self) -> bool:
         if self.document.path is None:
@@ -195,21 +312,26 @@ class MainWindow(QMainWindow):
 
     # --- insert actions -----------------------------------------------------
 
-    def import_csv(self, path: str | Path | None = None) -> None:
-        """Add a delimited text file as a data source, asking how to read it."""
+    def import_csv(self, path: str | Path | None = None) -> bool:
+        """Add a delimited text file as a data source, asking how to read it.
+
+        True if a source was added.
+        """
         if path is None:
             path, _ = QFileDialog.getOpenFileName(self, "Import data", "", DATA_FILTER)
             if not path:
-                return
+                return False
         try:
             dialog = ImportDialog(path, self.document.project_dir, self)
         except OSError as exc:
             self.show_error(f"Cannot read {path}", exc)
-            return
-        if self.run_dialog(dialog) and dialog.source() is not None:
-            source = dialog.source()
-            self._push(InsertItem(None, "sources", source))
-            self.document.select(source.id)
+            return False
+        if not self.run_dialog(dialog) or dialog.source() is None:
+            return False
+        source = dialog.source()
+        self._push(InsertItem(None, "sources", source))
+        self.document.select(source.id)
+        return True
 
     def add_plot(self) -> None:
         """Add a plot of the data's columns to the selected axes."""
@@ -244,9 +366,11 @@ class MainWindow(QMainWindow):
                 if self.confirm_discard():
                     self.open_path(path)
                 return
-        for path in paths:
-            if path.suffix.lower() in DATA_SUFFIXES:
-                self.import_csv(path)
+        data = [p for p in paths if p.suffix.lower() in DATA_SUFFIXES]
+        if data and self.on_start_page:
+            self._start_with_data(data.pop(0))
+        for path in data:
+            self.import_csv(path)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if _dropped_files(event):
@@ -286,6 +410,7 @@ class MainWindow(QMainWindow):
         for view in (self.preview, self.outline, self.problems, self.properties):
             view.set_document(document)
         self._connect(document)
+        self.show_workspace()
 
     def show_error(self, title: str, error: Exception) -> None:
         QMessageBox.warning(self, title, str(error))
@@ -306,7 +431,8 @@ class MainWindow(QMainWindow):
         self._show_problems()
 
     def _show_problems(self) -> None:
-        self.problems_dock.setVisible(self.problems.count() > 0)
+        wanted = self.problems.count() > 0 and not self.on_start_page
+        self.problems_dock.setVisible(wanted)
 
     def _update_state(self) -> None:
         history = self.document.history
@@ -333,6 +459,7 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             self.show_error("Cannot save the project", exc)
             return False
+        self._add_recent(self.document.path)
         return True
 
     def _open_dialog(self) -> None:
@@ -368,6 +495,8 @@ class MainWindow(QMainWindow):
 
     def _build_menus(self) -> None:
         file = self.menuBar().addMenu("&File")
+        self.home_action = self._action(file, "Start &Page", self.show_start)
+        file.addSeparator()
         self._action(file, "&New", self.new_project, QKeySequence.StandardKey.New)
         self._action(file, "&Open…", self._open_dialog, QKeySequence.StandardKey.Open)
         self._action(file, "&Save", self.save, QKeySequence.StandardKey.Save)
@@ -420,6 +549,14 @@ class MainWindow(QMainWindow):
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         bar.toggleViewAction().setVisible(False)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
+        self.toolbar = bar
+
+        self.home_action.setIcon(theme.icon("fit", theme.ACCENT, 18))
+        self.home_action.setToolTip("Start page")
+        bar.addAction(self.home_action)
+        home = bar.widgetForAction(self.home_action)
+        home.setObjectName("quiet")
+        home.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
         self._project_name = QLabel()
         self._project_name.setObjectName("projectName")
@@ -467,6 +604,12 @@ class MainWindow(QMainWindow):
         # or hidden.
         self.addAction(action)
         return action
+
+
+def _documents() -> Path:
+    location = QStandardPaths.StandardLocation.DocumentsLocation
+    folder = QStandardPaths.writableLocation(location)
+    return Path(folder) if folder else Path.home()
 
 
 def _side_panel(widget: QWidget) -> QWidget:

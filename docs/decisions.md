@@ -503,3 +503,22 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   and resolution, and it says what to do when the figure is empty.
 - **Panels are fixed**, without title bars; the problem list appears only
   when there are problems. Files dropped on the window are opened or added.
+
+## 0011 — The start page
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **figscribe starts on a start page when no file is given**: drop a data
+  file (or a project), pick a layout, open the example, or go back to a
+  recent project. "File > Start Page" and the mark in the toolbar return to
+  it; the open project stays until something replaces it.
+- **Layouts are templates in `figscribe.templates`**, independent of the GUI:
+  each builds a Figure with its size in millimetres and empty panels (single
+  and double column, data with residuals, side by side, a 16:9 slide).
+- **The example opens as a copy** in "Documents/figscribe examples", so it
+  can be changed and saved; the wheel carries it inside the package.
+- **Recent projects** are those opened or saved in the window, kept in the
+  user's settings, at most six; files that are gone are not shown.

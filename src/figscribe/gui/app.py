@@ -21,6 +21,8 @@ def create_window(argv: Sequence[str], remember: bool = False) -> MainWindow:
     window = MainWindow(settings=settings)
     if argv:
         window.open_path(argv[0])
+    else:
+        window.show_start()
     return window
 
 

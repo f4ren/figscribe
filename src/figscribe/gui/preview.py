@@ -129,9 +129,15 @@ class Preview(QWidget):
         painter.drawRect(paper.adjusted(-0.5, -0.5, 0.5, 0.5))
         self._paint_caption(painter, paper)
         if self._is_empty():
-            painter.setPen(QColor(theme.MUTED))
             flags = Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap
-            painter.drawText(paper.adjusted(24, 24, -24, -24), flags, EMPTY_HINT)
+            area = paper.adjusted(24, 24, -24, -24)
+            box = painter.boundingRect(area, flags, EMPTY_HINT)
+            box.adjust(-14, -10, 14, 10)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(theme.GROUND))
+            painter.drawRoundedRect(box, 8, 8)
+            painter.setPen(QColor(theme.MUTED))
+            painter.drawText(area, flags, EMPTY_HINT)
         box = self.selection_rect()
         if box is not None:
             painter.setPen(QPen(QColor(theme.ACCENT), 1.5, Qt.PenStyle.DashLine))
