@@ -34,7 +34,11 @@ dependencies = [
 mcp = [
     "mcp>=2.3",
 ]
+chat = [
+    "anthropic>=1.15",
+]
 dev = [
+    "anthropic>=1.15",
     "mcp>=2.3",
     "pytest>=8",
     "pytest-qt>=4.4",

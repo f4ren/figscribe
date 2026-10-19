@@ -45,6 +45,14 @@ claude mcp add figscribe -- figscribe mcp      # e.g. for Claude Code
 Then enable *Assistant > Allow MCP access* in figscribe; *Assistant > How to
 connect* shows the configuration for other clients.
 
+Or use the built-in assistant (*Assistant > Chat*, Ctrl+Shift+A), which talks
+to Claude through the Anthropic API with the same tools:
+
+```
+pip install "figscribe[chat]"
+export ANTHROPIC_API_KEY=...        # or sign in with `ant auth login`
+```
+
 ## Design principle
 
 The declarative plot model is the single source of truth:
