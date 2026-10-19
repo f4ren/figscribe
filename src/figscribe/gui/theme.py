@@ -170,6 +170,9 @@ QPushButton#tile, QPushButton#recentRow {{
     padding: 0; text-align: left;
 }}
 QPushButton#tile:hover, QPushButton#recentRow:hover {{ border-color: {ACCENT}; }}
+QWidget#viewBar {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px;
+}}
 QDialog {{ background: {SURFACE}; }}
 QLabel#dialogTitle {{ font-size: 20px; font-weight: 600; }}
 QFrame#rule {{ background: #ECECE7; border: 0; }}

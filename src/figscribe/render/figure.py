@@ -127,7 +127,7 @@ def _draw_axes(
         _draw_artist(artist, ax, data, artists)
 
     if axes.legend.visible:
-        _draw_legend(axes.legend, ax)
+        _draw_legend(axes.legend, ax).set_gid(axes.id)
 
 
 def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> None:
@@ -303,13 +303,14 @@ def _referenced(artists: Mapping[str, Artist], oid: str, kinds: tuple, what: str
     return found
 
 
-def _draw_legend(legend: Legend, ax: MplAxes) -> None:
+def _draw_legend(legend: Legend, ax: MplAxes):
+    """Draw the legend; it carries its axes' id, so a click on it selects them."""
     if legend.position is not None:
         # A dragged legend: anchor its lower-left corner at the axes position.
         placement = {"loc": "lower left", "bbox_to_anchor": legend.position}
     else:
         placement = {"loc": legend.location}
-    ax.legend(
+    return ax.legend(
         frameon=legend.frame,
         ncols=legend.ncols,
         fontsize=legend.fontsize,

@@ -646,3 +646,27 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
 - **Grid options**: `Axes.grid_axis` (both, x, y) and `Axes.grid_which`
   (major, minor, both), used when `grid` is on; `grid` stays a switch so old
   files load unchanged.
+
+## 0017 — Zoom, pan and dragging the legend
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **The wheel zooms the panel under the cursor** (Shift: x only, Ctrl or Alt:
+  y only), keeping the point under the cursor in place; **dragging a panel's
+  background pans it**. Both work in display coordinates through the axes'
+  own transform, so log and symlog axes zoom in their own scale.
+- **That view is the preview's, not the model's.** The export keeps the set
+  ranges; a bar over the preview says so and offers "Use as axis range"
+  (writes x and y limits of every zoomed panel as one undo step) and "Reset"
+  (also Escape). The caption changes while zoomed, so the promise "exactly as
+  exported" is never silently broken.
+- **Dragging a legend moves it**: on release its lower-left corner gets a
+  fixed place in the panel (`Legend.position`, Matplotlib's
+  `bbox_to_anchor` with `loc="lower left"`, minus `borderaxespad`), one undo
+  step. The legend carries its panel's id, so a click on it selects the panel
+  whose legend settings it has.
+- A press selects only on release without movement, so a drag never changes
+  the selection.
