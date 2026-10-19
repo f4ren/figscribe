@@ -102,3 +102,21 @@ def test_data_is_reread_when_the_sources_change(qtbot, example: Path) -> None:
     source = document.project.sources[0]
     document.push(SetField(source.id, ("comment",), "%"))
     assert document.data is not first
+
+
+def test_the_document_is_a_workspace_for_the_tools(qtbot, example: Path) -> None:
+    from figscribe.tools import Toolbox
+
+    document = Document.open(example)
+    tools = Toolbox(document)
+    artist = document.project.figures[0].axes[0].artists[0]
+    document.select(artist.id)
+    assert tools.call("get_project", {})["selected"] == artist.id
+
+    with qtbot.waitSignal(document.changed):
+        tools.call(
+            "set_field",
+            {"object_id": artist.id, "path": ["color"], "value": "tab:green"},
+        )
+    assert document.history.undo_text == "Set color"
+    assert document.title.endswith("* — figscribe")

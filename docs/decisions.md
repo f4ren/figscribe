@@ -387,3 +387,43 @@ class would have to be kept in step with every field added to the model.
   selected plot, or the figure's first axes.
 - **Columns without names are offered by number**; the file is read once to
   count them.
+
+---
+
+## 0008 — Assistant tools, served over MCP
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Context
+
+The brief lists natural-language input as optional after the MVP: an LLM
+that produces commands against the model, not code, so that everything stays
+traceable and undoable. Which model to use is the user's choice, and figscribe
+should not need an API key or carry the cost of one.
+
+### Decision
+
+- **One tool layer, `figscribe.tools`, independent of Qt and of any LLM
+  provider.** It reads the project (`get_project`, `get_schema`,
+  `list_columns`, `render_preview`) and changes it only through commands
+  (`set_field`, `insert`, `remove`, `move`, `fit`, `undo`), each one undo step;
+  `apply_changes` runs several operations as one step, all or nothing.
+- **Inputs are validated strictly from JSON** against the model's field types,
+  as a project file is loaded: `"300"` is not a number, lists become tuples,
+  unknown fields are refused. A refusal returns the model's message, so the
+  assistant can correct itself; nothing is changed.
+- **No data leaves through the tools by default.** `get_project` drops file
+  locations (only file names remain) and hashes; the project holds no
+  measurements. `render_preview` shows the data, so it works only when the
+  user allows it in the workspace.
+- **Data files are not imported by tools.** That would let an assistant open
+  any path on the machine; importing stays a user action.
+- **MCP is the first front end** (the next change): any MCP client and model
+  can drive figscribe, with no key or cost inside the application. A built-in
+  chat may follow, using the same tool definitions (`figscribe.tools.TOOLS`).
+
+### Alternatives considered
+
+**A built-in chat on one provider's API first.** Ties figscribe to that
+provider, its key handling and its cost; MCP leaves the choice to the user.
