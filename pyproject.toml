@@ -31,14 +31,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = [
+    "mcp>=2.3",
+]
 dev = [
+    "mcp>=2.3",
     "pytest>=8",
     "pytest-qt>=4.4",
     "ruff>=0.15",
 ]
 
 [project.scripts]
-figscribe = "figscribe.gui.app:main"
+figscribe = "figscribe.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/f4ren/figscribe"

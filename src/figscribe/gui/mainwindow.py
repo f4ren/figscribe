@@ -5,17 +5,19 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
     QDockWidget,
     QFileDialog,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QWidget,
 )
 
+from figscribe.assistant.toolserver import ToolServer
 from figscribe.commands import CommandError, InsertItem, remove_artist, remove_axes
 from figscribe.commands.core import walk
 from figscribe.gui.document import Document
@@ -28,15 +30,39 @@ from figscribe.gui.properties import PropertyPanel
 from figscribe.model import ArtistBase, Axes
 from figscribe.render import export
 
+MCP_HELP = """\
+<p>An MCP client (Claude Desktop, Claude Code, an IDE, a local model's front
+end) can change the open project through figscribe's tools. Every change
+appears here at once and can be undone.</p>
+<p>Install the MCP part once: <code>pip install "figscribe[mcp]"</code></p>
+<p>Then add figscribe to the client. Claude Code:</p>
+<pre>claude mcp add figscribe -- figscribe mcp</pre>
+<p>Clients with a JSON configuration (e.g. Claude Desktop):</p>
+<pre>{"mcpServers": {"figscribe": {"command": "figscribe", "args": ["mcp"]}}}</pre>
+<p>The client sees the project's structure and column names, never the data,
+unless you also allow it to see the figure.</p>"""
+
 PROJECT_FILTER = "figscribe projects (*.figscribe)"
 DATA_FILTER = "Delimited text (*.csv *.tsv *.txt *.dat);;All files (*)"
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, document: Document | None = None, parent: QWidget | None = None):
+    def __init__(
+        self,
+        document: Document | None = None,
+        parent: QWidget | None = None,
+        settings: QSettings | None = None,
+    ):
         super().__init__(parent)
         self.document = document or Document()
+        self.settings = settings
+        """Remembers the assistant switches; None (tests) remembers nothing."""
+        self.tool_server = ToolServer(lambda: self.document, self)
+        self.tool_server.clients_changed.connect(self._show_clients)
+        self.tool_server.tool_called.connect(
+            lambda name: self.statusBar().showMessage(f"Assistant: {name}", 3000)
+        )
         self.ask: Callable[[str, str], bool] = self._ask_user
         """Asks a yes/no question; replaced in tests."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
@@ -62,6 +88,51 @@ class MainWindow(QMainWindow):
         self._build_menus()
         self._connect(self.document)
         self.resize(1100, 720)
+        if self._setting("assistant/preview"):
+            self.preview_action.setChecked(True)
+        if self._setting("assistant/mcp"):
+            self.mcp_action.setChecked(True)
+
+    # --- assistant ------------------------------------------------------------
+
+    def set_mcp_enabled(self, on: bool) -> None:
+        """Let MCP clients reach the open project, or stop them."""
+        if on and not self.tool_server.listening:
+            try:
+                self.tool_server.start()
+            except OSError as exc:
+                self.show_error("Cannot open the MCP connection", exc)
+                self.mcp_action.setChecked(False)
+                return
+        elif not on and self.tool_server.listening:
+            self.tool_server.stop()
+        self._remember("assistant/mcp", on)
+        self._show_clients(0)
+
+    def set_preview_allowed(self, on: bool) -> None:
+        """Whether tools may return an image of the figure, which shows the data."""
+        self.document.allow_preview = on
+        self._remember("assistant/preview", on)
+
+    def _show_clients(self, count: int) -> None:
+        if not self.tool_server.listening:
+            self.statusBar().clearMessage()
+            self._mcp_status.setText("")
+            return
+        clients = "no client" if count == 0 else f"{count} client(s)"
+        self._mcp_status.setText(f"MCP: {clients} connected")
+
+    def _setting(self, key: str) -> bool:
+        if self.settings is None:
+            return False
+        return self.settings.value(key, False, type=bool)
+
+    def _remember(self, key: str, value: bool) -> None:
+        if self.settings is not None:
+            self.settings.setValue(key, value)
+
+    def _show_mcp_help(self) -> None:
+        QMessageBox.information(self, "Connecting an assistant", MCP_HELP)
 
     # --- file actions -------------------------------------------------------
 
@@ -169,6 +240,7 @@ class MainWindow(QMainWindow):
     # --- window -------------------------------------------------------------
 
     def set_document(self, document: Document) -> None:
+        document.allow_preview = self.document.allow_preview
         self.document = document
         for view in (self.preview, self.outline, self.problems, self.properties):
             view.set_document(document)
@@ -178,7 +250,12 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, title, str(error))
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt naming
-        event.accept() if self.confirm_discard() else event.ignore()
+        if not self.confirm_discard():
+            event.ignore()
+            return
+        if self.tool_server.listening:
+            self.tool_server.stop()
+        event.accept()
 
     def _connect(self, document: Document) -> None:
         document.state_changed.connect(self._update_state)
@@ -260,6 +337,26 @@ class MainWindow(QMainWindow):
         insert = self.menuBar().addMenu("&Insert")
         self._action(insert, "&Import Data…", lambda: self.import_csv(), "Ctrl+I")
         self._action(insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P")
+
+        assistant = self.menuBar().addMenu("&Assistant")
+        self.mcp_action = self._toggle(
+            assistant, "Allow &MCP Access", self.set_mcp_enabled
+        )
+        self.preview_action = self._toggle(
+            assistant, "Let It See the &Figure", self.set_preview_allowed
+        )
+        assistant.addSeparator()
+        self._action(assistant, "&How to Connect…", self._show_mcp_help)
+        self._mcp_status = QLabel()
+        self.statusBar().addPermanentWidget(self._mcp_status)
+
+    def _toggle(self, menu, text: str, slot) -> QAction:
+        """A checkable action; `slot` runs on every change, also from code."""
+        action = QAction(text, self)
+        action.setCheckable(True)
+        action.toggled.connect(slot)
+        menu.addAction(action)
+        return action
 
     def _action(self, menu, text: str, slot, shortcut=None) -> QAction:
         action = QAction(text, self)

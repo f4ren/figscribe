@@ -427,3 +427,32 @@ should not need an API key or carry the cost of one.
 
 **A built-in chat on one provider's API first.** Ties figscribe to that
 provider, its key handling and its cost; MCP leaves the choice to the user.
+
+---
+
+## 0009 — How MCP clients reach the running application
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **`figscribe mcp` is a small MCP server on stdio**, started by the client:
+  every MCP client supports stdio, and setting it up is one line naming the
+  command. It holds no project state and imports no Qt; it lists the tools
+  from `figscribe.tools.TOOLS` and forwards each call to the application.
+- **The application listens on 127.0.0.1 at a free port** and writes the port
+  and a random token to `mcp-endpoint.json` in the user's state directory,
+  readable by the user only. Requests without the token are refused. TCP on
+  localhost behaves the same on every platform; a `QLocalServer` would be a
+  named pipe on Windows, which a Qt-free process reaches only with
+  platform-specific code.
+- **Requests run on the GUI thread**, through the Toolbox of the open
+  Document: changes are commands on its history, appear at once and are
+  undone like any other. A failing tool or a bug returns an error to the
+  client and never takes the window down.
+- **Off by default.** "Assistant > Allow MCP access" starts listening, and so
+  does "Let it see the figure" for `render_preview`; both are remembered.
+  Closing the window or switching access off removes the endpoint file.
+- **One line of JSON per request and per answer.** Binary data (the preview)
+  travels as base64 and leaves `figscribe mcp` as MCP image content.
