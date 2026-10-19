@@ -14,9 +14,10 @@ from PySide6.QtCore import QObject, Signal
 
 from figscribe import __version__
 from figscribe.commands import Command, CommandError, History, find
-from figscribe.io import DataError, load_data
+from figscribe.io import load_data
 from figscribe.model import ColumnRef, Figure, Project, dumps, loads
 from figscribe.render import DataProvider
+from figscribe.tools.workspace import column_choices
 
 
 class Document(QObject):
@@ -89,30 +90,8 @@ class Document(QObject):
         return self._data
 
     def column_choices(self) -> list[tuple[str, ColumnRef]]:
-        """Every column of every source, labelled for a choice box.
-
-        Columns are named where the file has a header, numbered otherwise;
-        for a source without names the file is read to count its columns.
-        """
-        choices = []
-        for source in self.project.sources:
-            columns: list[str | int] = list(source.columns)
-            if not columns:
-                columns = list(range(self._width(source)))
-            for column in columns:
-                ref = ColumnRef(source=source.id, column=column)
-                choices.append((f"{Path(source.path).name}: {column}", ref))
-        return choices
-
-    def _width(self, source) -> int:
-        """Number of columns of a source; 0 if it cannot be read."""
-        width = 0
-        while True:
-            try:
-                self.data(ColumnRef(source=source.id, column=width))
-            except DataError:
-                return width
-            width += 1
+        """Every column of every source, labelled for a choice box."""
+        return column_choices(self.project, self.data)
 
     # --- selection ----------------------------------------------------------
 
@@ -149,6 +128,8 @@ class Document(QObject):
         self._data: DataProvider | None = None
         self._data_sources: list | None = None
         self._selected: str | None = None
+        self.allow_preview = False
+        """Whether tools may return an image of the figure; it shows the data."""
         self.current_figure: str | None = (
             project.figures[0].id if project.figures else None
         )
