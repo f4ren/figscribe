@@ -670,3 +670,17 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   whose legend settings it has.
 - A press selects only on release without movement, so a drag never changes
   the selection.
+
+## 0018 — The Python code drawer
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **View > Python Code** (and the toolbar's "Python code") opens a drawer
+  under the preview with the script *Export Python Script…* would write,
+  highlighted, with "Copy" and "Save as .py…". It follows every change after
+  a short pause and costs nothing while closed. A project the generator
+  cannot handle yet shows the reason as a comment instead of code.
+- Whether the drawer is open is remembered, like the assistant switches.
