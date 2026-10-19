@@ -51,7 +51,13 @@ class ToolServer(QObject):
         self.endpoint = endpoint.Endpoint(
             port=self._server.serverPort(), token=endpoint.new_token(), pid=os.getpid()
         )
-        endpoint.publish(self.endpoint)
+        try:
+            endpoint.publish(self.endpoint)
+        except OSError:
+            # Unreachable without the file: do not keep listening for nobody.
+            self._server.close()
+            self.endpoint = None
+            raise
 
     def stop(self) -> None:
         if self.endpoint is not None:

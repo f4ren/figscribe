@@ -64,7 +64,6 @@ def publish(endpoint: Endpoint) -> Path:
     data = json.dumps(
         {"port": endpoint.port, "token": endpoint.token, "pid": endpoint.pid}
     )
-    # Created with owner-only permissions before the token goes in.
     # Owner-only permissions before the token goes in, also when the file
     # already existed with others. On Windows the per-user directory protects it.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

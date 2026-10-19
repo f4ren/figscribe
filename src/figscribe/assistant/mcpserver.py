@@ -18,7 +18,7 @@ from mcp.server.stdio import stdio_server
 
 from figscribe import __version__
 from figscribe.assistant import endpoint
-from figscribe.tools import TOOLS
+from figscribe.tools.spec import TOOLS
 
 INSTRUCTIONS = """\
 figscribe is a desktop application for scientific plots; these tools act on the
@@ -35,6 +35,9 @@ is refused, read the message: it names the field and the reason. If the user
 allowed it, render_preview shows the figure to check your result.
 """
 
+TIMEOUT = 120.0
+"""Seconds to wait for figscribe to answer; a fit on much data takes a while."""
+
 NOT_RUNNING = (
     "figscribe is not reachable. Ask the user to start figscribe and enable "
     "'Assistant > Allow MCP access'."
@@ -42,16 +45,30 @@ NOT_RUNNING = (
 
 
 async def forward(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Send one tool call to the running application and return its answer."""
+    """Send one tool call to the running application and return its answer.
+
+    Never raises: anything that goes wrong on the way is an error answer, which
+    the client shows to the model like a refused call.
+    """
     target = endpoint.read()
     if target is None:
         return {"ok": False, "error": NOT_RUNNING}
     try:
-        reader, writer = await asyncio.open_connection(
-            "127.0.0.1", target.port, limit=endpoint.MAX_LINE
-        )
-    except OSError:
+        return await asyncio.wait_for(_exchange(target, tool, arguments), TIMEOUT)
+    except ConnectionRefusedError:
         return {"ok": False, "error": NOT_RUNNING}
+    except TimeoutError:
+        return {"ok": False, "error": f"figscribe did not answer within {TIMEOUT:g} s"}
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "error": f"lost the connection to figscribe: {exc}"}
+
+
+async def _exchange(
+    target: endpoint.Endpoint, tool: str, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    reader, writer = await asyncio.open_connection(
+        "127.0.0.1", target.port, limit=endpoint.MAX_LINE
+    )
     try:
         writer.write(
             endpoint.encode(
