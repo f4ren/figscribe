@@ -17,14 +17,32 @@ def share_partner(figure: Figure, index: int, axis: str) -> int | None:
     the axes is the first of its group.
     """
     mode = figure.layout.share_x if axis == "x" else figure.layout.share_y
-    if mode == "none":
+    me = figure.axes[index]
+    if mode == "none" or me.inset is not None:
         return None
     along = "col" if axis == "x" else "row"
-    me = figure.axes[index]
     for i, other in enumerate(figure.axes[:index]):
+        if other.inset is not None:
+            continue
         if mode == "all" or getattr(other, along) == getattr(me, along):
             return i
     return None
+
+
+def creation_order(figure: Figure) -> list[int]:
+    """Indices of the axes in the order they are made: the grid's first, then
+    the insets, which need their parent panel to exist."""
+    grid = [i for i, a in enumerate(figure.axes) if a.inset is None]
+    return grid + [i for i, a in enumerate(figure.axes) if a.inset is not None]
+
+
+def inset_parent(figure: Figure, index: int) -> int:
+    """Index of the panel the inset `index` sits in."""
+    parent = figure.axes[index].inset.parent
+    for i, axes in enumerate(figure.axes):
+        if axes.id == parent and axes.inset is None:
+            return i
+    raise ValueError(f"the inset sits in {parent!r}, which is not a panel in the grid")
 
 
 def hidden_tick_labels(figure: Figure) -> list[tuple[bool, bool]]:
@@ -43,6 +61,9 @@ def hidden_tick_labels(figure: Figure) -> list[tuple[bool, bool]]:
     groups = {axis: _groups(figure, axis) for axis in ("x", "y")}
     hidden = []
     for i, axes in enumerate(figure.axes):
+        if axes.inset is not None:
+            hidden.append((False, False))
+            continue
         below = any(
             other.row >= axes.row + axes.rowspan
             and (other.col, other.colspan) == (axes.col, axes.colspan)
@@ -66,6 +87,10 @@ def _groups(figure: Figure, axis: str) -> list[list[Axes]]:
             root, partner = partner, share_partner(figure, partner, axis)
         roots.append(root)
     return [
-        [figure.axes[j] for j in range(len(roots)) if roots[j] == roots[i] and j != i]
+        [
+            figure.axes[j]
+            for j in range(len(roots))
+            if roots[j] == roots[i] and j != i and figure.axes[j].inset is None
+        ]
         for i in range(len(roots))
     ]

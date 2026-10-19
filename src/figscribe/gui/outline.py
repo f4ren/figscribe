@@ -16,13 +16,14 @@ from PySide6.QtGui import QBrush, QColor, QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
+    QMenu,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QWidget,
 )
 
-from figscribe.commands import CommandError, SetField
+from figscribe.commands import CommandError, SetField, find
 from figscribe.gui import theme
 from figscribe.gui.document import Document
 from figscribe.gui.names import artist_name, panel_name, size_text
@@ -30,6 +31,13 @@ from figscribe.gui.widgets import FlowLayout, chip
 from figscribe.model import Axes, Figure
 
 ID_ROLE = Qt.ItemDataRole.UserRole
+PANEL_SIDES = [
+    ("right", "Add panel to the right"),
+    ("left", "Add panel to the left"),
+    ("above", "Add panel above"),
+    ("below", "Add panel below"),
+    ("inset", "Add inset"),
+]
 VISIBLE_ROLE = Qt.ItemDataRole.UserRole + 1
 """On plot rows: whether the plot is drawn; the eye column toggles it."""
 
@@ -42,6 +50,9 @@ class Outline(QTreeWidget):
     add_requested = Signal(str)
     """Add a plot to the panel (or figure) with this id."""
     import_requested = Signal()
+    panel_requested = Signal(str, str)
+    """Add a panel beside or inside the panel with this id: (id, side)."""
+    delete_requested = Signal(str)
 
     def __init__(self, document: Document, parent: QWidget | None = None):
         super().__init__(parent)
@@ -199,6 +210,48 @@ class Outline(QTreeWidget):
         self._fit_chip_rows()
 
     # --- selection ------------------------------------------------------------
+
+    def context_menu(self, oid: str) -> QMenu | None:
+        """What can be done with the object `oid`, as a menu; None if nothing."""
+        try:
+            obj = find(self.document.project, oid)
+        except CommandError:
+            return None
+        menu = QMenu(self)
+        if isinstance(obj, Axes):
+            if obj.inset is None:
+                for side, text in PANEL_SIDES:
+                    action = menu.addAction(text)
+                    action.triggered.connect(
+                        lambda _=False, s=side: self.panel_requested.emit(oid, s)
+                    )
+                menu.addSeparator()
+            menu.addAction("Delete panel", lambda: self.delete_requested.emit(oid))
+        elif isinstance(obj, Figure):
+            if not obj.axes:
+                menu.addAction(
+                    "Add a panel", lambda: self.panel_requested.emit(oid, "right")
+                )
+            else:
+                return None
+        elif hasattr(obj, "visible") and hasattr(obj, "kind"):
+            menu.addAction(
+                "Hide" if obj.visible else "Show",
+                lambda: self.set_visible(oid, not obj.visible),
+            )
+            menu.addSeparator()
+            menu.addAction("Delete", lambda: self.delete_requested.emit(oid))
+        else:
+            return None
+        return menu
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        item = self.itemAt(event.pos())
+        oid = item.data(0, ID_ROLE) if item is not None else None
+        menu = self.context_menu(oid) if oid else None
+        if menu is not None:
+            self.document.select(oid)
+            menu.exec(event.globalPos())
 
     def _on_click(self, item: QTreeWidgetItem, column: int) -> None:
         visible = item.data(0, VISIBLE_ROLE)

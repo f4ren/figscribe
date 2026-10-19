@@ -38,6 +38,15 @@ class Legend(StrictModel):
     fontsize: float | None = Field(None, gt=0.0)
 
 
+class Inset(StrictModel):
+    """Places an axes inside another panel instead of in the grid."""
+
+    parent: str = Field(min_length=1)
+    """Axes.id of the panel it sits in; that one must be in the grid."""
+    bounds: tuple[float, float, float, float] = (0.55, 0.55, 0.4, 0.4)
+    """(left, bottom, width, height) as fractions of the parent panel."""
+
+
 class Axes(Identified):
     row: int = Field(0, ge=0)
     col: int = Field(0, ge=0)
@@ -49,6 +58,9 @@ class Axes(Identified):
     y: AxisSpec = Field(default_factory=AxisSpec)
     y_right: AxisSpec | None = None
     """Second y-axis; artists opt into it via their `axis` field."""
+
+    inset: Inset | None = None
+    """Set for a panel inside another; row, col and the spans are then unused."""
 
     legend: Legend = Field(default_factory=Legend)
     grid: bool = False

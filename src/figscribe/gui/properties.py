@@ -72,7 +72,7 @@ SKIPPED = {
 """Fields with no editor here: identity, item lists (edited in the outline),
 and values that need a dedicated editor (fits, histogram bins)."""
 
-READ_ONLY = {"path", "sha256", "target"}
+READ_ONLY = {"path", "sha256", "target", "parent"}
 """Shown, but changed only through their own actions (re-import, refit)."""
 
 COLOR_FIELDS = {"color", "edgecolor"}
@@ -113,6 +113,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         return Spec("float", optional)
     if annotation is str:
         return Spec("color" if name in COLOR_FIELDS else "text", optional)
+    if origin is tuple and args == (float,) * 4:
+        return Spec("quad", optional)
     if origin is tuple and args == (float, float):
         return Spec("pair", optional)
     if origin is list and args == (float,):
@@ -150,10 +152,10 @@ SECTIONS = {
     "visible": "More",
     "zorder": "More",
     "axis": "More",
-    "row": "More",
-    "col": "More",
-    "rowspan": "More",
-    "colspan": "More",
+    "row": "Position",
+    "col": "Position",
+    "rowspan": "Position",
+    "colspan": "Position",
 }
 """Where a top-level field is shown; the rest goes to "Look" for plots and
 "Reading" for data files. Nested models get a section of their own."""
@@ -175,7 +177,17 @@ SECTION_NAMES = {"x": "X axis", "y": "Y axis", "y_right": "Right y axis"}
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
 
-ORDER = ["Data", "Size", "Panel", "File", "Reading", "Look", "Style", "Legend"]
+ORDER = [
+    "Data",
+    "Size",
+    "Panel",
+    "Position",
+    "File",
+    "Reading",
+    "Look",
+    "Style",
+    "Legend",
+]
 COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
 
@@ -331,12 +343,21 @@ class PropertyPanel(QScrollArea):
         fallback = "Reading" if hasattr(obj, "format") else "Look"
         groups: dict[str, list[str]] = {}
         nested: list[str] = []
+        inset = isinstance(obj, Axes) and obj.inset is not None
         for name, field in type(obj).model_fields.items():
             if name in SKIPPED:
                 continue
+            if name == "inset":
+                if inset:
+                    nested.append(name)
+                continue
+            if inset and SECTIONS.get(name) == "Position":
+                continue  # an inset is placed by its bounds, not in the grid
             spec = spec_for(name, field.annotation)
             if spec is not None and spec.kind == "model":
                 nested.append(name)
+                continue
+            if spec is None and name not in READ_ONLY:
                 continue
             groups.setdefault(SECTIONS.get(name, fallback), []).append(name)
         if "Look" in groups:
@@ -682,7 +703,9 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         parse, format_ = _TEXT[spec.kind]
         editor = TextEditor(spec, path, panel, parse, format_)
     if spec.optional:
-        editor.line.setPlaceholderText(PLACEHOLDERS.get(name, "none"))
+        nested = len(path) > 1  # e.g. an axis label, which no legend shows
+        placeholder = "none" if nested and name == "label" else PLACEHOLDERS.get(name)
+        editor.line.setPlaceholderText(placeholder or "none")
     return editor
 
 
@@ -711,6 +734,13 @@ def _pair(text: str) -> tuple[float, float]:
     return values[0], values[1]
 
 
+def _quad(text: str) -> tuple[float, float, float, float]:
+    values = _floats(text)
+    if len(values) != 4:
+        raise ValueError(f"needs four numbers separated by commas, got {len(values)}")
+    return values[0], values[1], values[2], values[3]
+
+
 def _join(values) -> str:
     return ", ".join(repr(v) if isinstance(v, float) else str(v) for v in values)
 
@@ -720,6 +750,7 @@ _TEXT: dict[str, tuple[Callable[[str], Any], Callable[[Any], str]]] = {
     "int": (_int, str),
     "float": (_float, repr),
     "pair": (_pair, _join),
+    "quad": (_quad, _join),
     "floats": (_floats, _join),
     "strings": (lambda t: [part.strip() for part in t.split(",")], _join),
 }
@@ -753,6 +784,12 @@ def _section_name(name: str) -> str:
 def _read_only_text(name: str, value: Any, document: Document) -> str:
     if name == "sha256":
         return f"{value[:12]}…"
+    if name == "parent":
+        for figure in document.project.figures:
+            for axes in figure.axes:
+                if axes.id == value:
+                    return panel_name(figure, axes)
+        return f"{value} (missing)"
     if name == "target":
         try:
             return artist_name(find(document.project, value))

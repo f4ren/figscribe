@@ -17,7 +17,7 @@ import json
 import typing
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from pydantic import BaseModel, TypeAdapter, ValidationError, validate_call
@@ -30,6 +30,7 @@ from figscribe.commands import (
     MoveItem,
     RemoveItem,
     SetField,
+    add_panel,
     find,
     remove_artist,
     remove_axes,
@@ -182,6 +183,12 @@ class Toolbox:
     def tool_remove(self, object_id: str) -> dict[str, Any]:
         command = _remove(self.workspace.project, object_id)
         return self._push(command, {"removed": _removed_ids(command)})
+
+    def tool_add_panel(
+        self, axes_id: str, side: Literal["right", "left", "above", "below", "inset"]
+    ) -> dict[str, Any]:
+        command, new = add_panel(self.workspace.project, axes_id, side)
+        return self._push(command, {"id": new.id})
 
     def tool_move(self, object_id: str, index: int) -> dict[str, Any]:
         return self._push(_move(self.workspace.project, object_id, index), {})

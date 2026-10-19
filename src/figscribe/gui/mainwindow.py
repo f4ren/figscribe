@@ -37,6 +37,7 @@ from figscribe.commands import (
     InsertItem,
     Macro,
     SetField,
+    add_panel,
     remove_artist,
     remove_axes,
 )
@@ -46,7 +47,7 @@ from figscribe.gui import theme
 from figscribe.gui.document import Document
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
-from figscribe.gui.outline import Outline
+from figscribe.gui.outline import PANEL_SIDES, Outline
 from figscribe.gui.plotdialog import PlotDialog, add_plot
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
@@ -117,6 +118,10 @@ class MainWindow(QMainWindow):
         self.properties = PropertyPanel(self.document)
         self.outline.add_requested.connect(self._add_plot_to)
         self.outline.import_requested.connect(lambda: self.import_csv())
+        self.outline.panel_requested.connect(
+            lambda oid, side: self.add_panel(side, oid)
+        )
+        self.outline.delete_requested.connect(self._delete)
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
@@ -470,6 +475,32 @@ class MainWindow(QMainWindow):
         fittable = [a for a in plots if isinstance(a, FITTABLE)]
         return fittable[0] if len(fittable) == 1 else None
 
+    def add_panel(self, side: str, oid: str | None = None) -> None:
+        """Add an empty panel beside or inside the panel `oid` (default: the
+        selected one, or that of the selected plot, or the first)."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        target = oid if oid is not None else self._target_axes(figure)
+        axes = next((a for a in figure.axes if a.id == target), None)
+        if axes is not None and axes.inset is not None:
+            axes = next(a for a in figure.axes if a.id == axes.inset.parent)
+        if axes is None:
+            new = Axes()
+            self._push(InsertItem(figure.id, "axes", new))
+        else:
+            try:
+                command, new = add_panel(self.document.project, axes.id, side)
+            except CommandError as exc:
+                self.show_error("Cannot add the panel", exc)
+                return
+            self._push(command)
+        self.document.select(new.id)
+
+    def _delete(self, oid: str) -> None:
+        self.document.select(oid)
+        self.delete_selected()
+
     def _add_plot_to(self, oid: str) -> None:
         self.document.select(oid)
         self.add_plot()
@@ -648,6 +679,12 @@ class MainWindow(QMainWindow):
         self.fit_action = self._action(
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
+        self.panel_menu = insert.addMenu("Add Pa&nel")
+        self.panel_actions = {}
+        for side, text in PANEL_SIDES:
+            action = self.panel_menu.addAction(text.replace("Add ", "").capitalize())
+            action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
+            self.panel_actions[side] = action
 
         assistant = self.menuBar().addMenu("&Assistant")
         self.mcp_action = self._toggle(
@@ -696,6 +733,14 @@ class MainWindow(QMainWindow):
         self.fit_action.setIcon(theme.icon("fit"))
         self.fit_action.setIconText("Fit")
         bar.addAction(self.fit_action)
+        panel = QToolButton()
+        panel.setText("Panel")
+        panel.setIcon(theme.icon("plus"))
+        panel.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        panel.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        panel.setMenu(self.panel_menu)
+        panel.setToolTip("Add a panel beside or inside the selected one")
+        bar.addWidget(panel)
         bar.addSeparator()
         for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):
             action.setIcon(theme.icon(name))

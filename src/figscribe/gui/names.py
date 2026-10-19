@@ -73,6 +73,9 @@ FIELD_NAMES = {
     "col": "Column",
     "rowspan": "Rows spanned",
     "colspan": "Columns spanned",
+    "inset": "Inset",
+    "parent": "Inside",
+    "bounds": "Left, bottom, width, height",
     "grid": "Grid lines",
     "legend": "Legend",
     "unit": "Unit",
@@ -118,13 +121,20 @@ def artist_name(artist) -> str:
 
 def panel_name(figure: Figure, axes: Axes) -> str:
     """ "Panel A", with where it sits when the figure has several."""
-    index = figure.axes.index(axes)
-    letter = ascii_uppercase[index] if index < 26 else str(index + 1)
-    name = f"Panel {letter}"
+    name = f"Panel {_letter(figure, axes)}"
+    if axes.inset is not None:
+        host = next((a for a in figure.axes if a.id == axes.inset.parent), None)
+        where = f"inset in {_letter(figure, host)}" if host else "inset"
+        return f"{name} · {axes.title}" if axes.title else f"{name} · {where}"
     where = _position(figure, axes)
     if axes.title:
         return f"{name} · {axes.title}"
     return f"{name} · {where}" if where else name
+
+
+def _letter(figure: Figure, axes: Axes) -> str:
+    index = figure.axes.index(axes)
+    return ascii_uppercase[index] if index < 26 else str(index + 1)
 
 
 def _position(figure: Figure, axes: Axes) -> str:

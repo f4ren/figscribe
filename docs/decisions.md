@@ -599,3 +599,30 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   Every new model feature needs its code here and a case there.
 - Available from *File > Export Python Script…*, `figscribe script`, and the
   `get_python_script` tool for assistants.
+
+## 0015 — Adding panels, insets and the context menu
+
+**Date:** 2026-10-19
+**Status:** accepted
+
+### Decision
+
+- **`add_panel(project, axes_id, side)`** puts an empty panel to the right,
+  left, above or below a panel: into free cells of the grid if there are,
+  otherwise a column or row is inserted there, the panels behind it move along
+  and those spanning across it grow; width or height ratios get the
+  neighbour's value. The figure keeps its size: a journal's column width is
+  fixed, and the user decides about the height.
+- **An inset is an Axes with `inset = {parent, bounds}`**: placed inside its
+  parent panel at (left, bottom, width, height) in the parent's fractions,
+  outside the grid, never sharing axes. The renderer and the generated script
+  make grid panels first and insets after (`parent.inset_axes(bounds)`).
+  Removing a panel removes its insets.
+- **The contents panel has a context menu**: panels get "Add panel to the
+  right / left / above / below", "Add inset" and "Delete panel"; plots "Hide"
+  or "Show" and "Delete"; an empty figure "Add a panel". The same choices are
+  under Insert > Add Panel and the toolbar's "Panel" button, acting on the
+  selected panel or that of the selected plot.
+- **The position is visible**: a "Position" section (row, column, spans) for
+  grid panels, an "Inset" section (inside which panel, bounds) for insets.
+- Assistants get an `add_panel` tool with the same rules.

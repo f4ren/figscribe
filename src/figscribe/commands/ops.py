@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from figscribe.commands.core import CommandError, Macro, RemoveItem, noun, walk
-from figscribe.model import FitCurve, Project, ResidualPlot
+from figscribe.commands.core import (
+    CommandError,
+    InsertItem,
+    Macro,
+    RemoveItem,
+    SetField,
+    noun,
+    walk,
+)
+from figscribe.model import Axes, Figure, FitCurve, Inset, Project, ResidualPlot
+
+Side = Literal["right", "left", "above", "below", "inset"]
 
 
 def remove_artist(project: Project, artist_id: str) -> Macro:
@@ -27,14 +37,92 @@ def remove_axes(project: Project, axes_id: str) -> Macro:
     The grid keeps its size; only the panel goes.
     """
     axes, figure = _locate(project, axes_id, "axes")
-    inside = {a.id for a in axes.artists}
+    going = [axes, *(a for a in figure.axes if a.inset and a.inset.parent == axes_id)]
+    panels = {a.id for a in going}
+    inside = {artist.id for a in going for artist in a.artists}
     steps = [
         step
         for step in _remove_dependents(project, inside)
-        if step.parent != axes_id  # those go with the axes
+        if step.parent not in panels  # those go with their axes
     ]
-    steps.append(RemoveItem(figure.id, "axes", axes_id))
+    steps += [RemoveItem(figure.id, "axes", a.id) for a in reversed(going)]
     return Macro("Remove axes", steps)
+
+
+def add_panel(project: Project, axes_id: str, side: Side) -> tuple[Macro, Axes]:
+    """A new, empty panel next to the panel `axes_id`, or inside it.
+
+    Beside the panel, free cells of the grid are used if there are any;
+    otherwise a row or column is inserted there, the panels behind it move
+    along and those spanning across it grow. The figure keeps its size.
+    """
+    axes, figure = _locate(project, axes_id, "axes")
+    if axes.inset is not None:
+        raise CommandError("an inset cannot have panels beside or inside it")
+    if side == "inset":
+        new = Axes(inset=Inset(parent=axes_id))
+        return Macro("Add inset", [InsertItem(figure.id, "axes", new)]), new
+    across = side in ("left", "right")
+    start, span = (axes.col, axes.colspan) if across else (axes.row, axes.rowspan)
+    lines = (
+        range(axes.row, axes.row + axes.rowspan)
+        if across
+        else range(axes.col, axes.col + axes.colspan)
+    )
+    size = figure.layout.cols if across else figure.layout.rows
+    target = start + span if side in ("right", "below") else start - 1
+    steps: list = []
+    if not (0 <= target < size and _free(figure, across, target, lines)):
+        target = start + span if side in ("right", "below") else start
+        steps = _insert_line(figure, across, target)
+    place = (
+        {"row": axes.row, "rowspan": axes.rowspan, "col": target}
+        if across
+        else {"col": axes.col, "colspan": axes.colspan, "row": target}
+    )
+    new = Axes(**place)
+    steps.append(InsertItem(figure.id, "axes", new))
+    where = {"right": "to the right", "left": "to the left"}.get(side, side)
+    return Macro(f"Add panel {where}", steps), new
+
+
+def _free(figure: Figure, across: bool, line: int, cells: range) -> bool:
+    """Whether no grid panel covers `line` (a column if `across`, else a row)
+    at any of `cells` (rows if `across`, else columns)."""
+    for other in figure.axes:
+        if other.inset is not None:
+            continue
+        mine = range(other.col, other.col + other.colspan)
+        theirs = range(other.row, other.row + other.rowspan)
+        if not across:
+            mine, theirs = theirs, mine
+        if line in mine and any(c in theirs for c in cells):
+            return False
+    return True
+
+
+def _insert_line(figure: Figure, across: bool, at: int) -> list:
+    """Steps that insert an empty column (`across`) or row at index `at`."""
+    layout = figure.layout
+    count, ratios_name = (
+        ("cols", "width_ratios") if across else ("rows", "height_ratios")
+    )
+    ratios = getattr(layout, ratios_name)
+    update = {count: getattr(layout, count) + 1}
+    if ratios is not None:
+        neighbour = ratios[at - 1] if at > 0 else ratios[0]
+        update[ratios_name] = [*ratios[:at], neighbour, *ratios[at:]]
+    steps: list = [SetField(figure.id, ("layout",), layout.model_copy(update=update))]
+    position, span = ("col", "colspan") if across else ("row", "rowspan")
+    for other in figure.axes:
+        if other.inset is not None:
+            continue
+        first = getattr(other, position)
+        if first >= at:
+            steps.append(SetField(other.id, (position,), first + 1))
+        elif first + getattr(other, span) > at:
+            steps.append(SetField(other.id, (span,), getattr(other, span) + 1))
+    return steps
 
 
 def _remove_dependents(project: Project, removed: set[str]) -> list[RemoveItem]:

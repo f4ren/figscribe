@@ -17,6 +17,7 @@ import pytest
 from PIL import Image
 
 from figscribe.codegen import generate
+from figscribe.commands import add_panel
 from figscribe.fit import add_fit, refit
 from figscribe.io import load_data
 from figscribe.io.csvfile import csv_source
@@ -209,3 +210,15 @@ def test_a_style_sheet_and_whitespace_columns(tmp_path: Path) -> None:
     )
     script = _assert_same(project, tmp_path)
     assert "usecols=(2, 1)" in script and 'plt.style.use("seaborn-v0_8-talk")' in script
+
+
+def test_panels_added_beside_and_inside(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    first = Axes(artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(dpi=100, width_mm=120, axes=[first])]
+    for side in ("right", "right", "below", "inset"):
+        add_panel(project, first.id, side)[0].apply(project)
+    inset = project.figures[0].axes[-1]
+    inset.artists.append(ScatterPlot(x=ref["t"], y=ref["dU"]))
+    script = _assert_same(project, tmp_path)
+    assert "ax_e = ax_a.inset_axes([0.55, 0.55, 0.4, 0.4])" in script

@@ -221,7 +221,19 @@ def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None
                 )
             )
 
+    in_grid = {a.id for a in figure.axes if a.inset is None}
     for ai, axes in enumerate(figure.axes):
+        if axes.inset is not None:
+            if axes.inset.parent not in in_grid:
+                issues.append(
+                    ReferenceIssue(
+                        f"{path}.axes[{ai}].inset.parent",
+                        axes.id,
+                        f"sits in {axes.inset.parent!r}, which is not a panel "
+                        "in this figure's grid",
+                    )
+                )
+            continue
         if axes.row + axes.rowspan > layout.rows:
             issues.append(
                 ReferenceIssue(

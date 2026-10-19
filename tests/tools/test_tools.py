@@ -101,6 +101,15 @@ def test_the_python_script_draws_the_shown_figure(tools, workspace) -> None:
     compile(script, "figure.py", "exec")
 
 
+def test_add_panel_grows_the_grid(tools, workspace) -> None:
+    axes = workspace.project.figures[0].axes[0]
+    new = tools.call("add_panel", {"axes_id": axes.id, "side": "below"})["id"]
+    figure = workspace.project.figures[0]
+    assert figure.layout.rows == 2 and figure.axes[-1].id == new
+    with pytest.raises(ToolError, match="side"):
+        tools.call("add_panel", {"axes_id": axes.id, "side": "diagonal"})
+
+
 # --- set_field -----------------------------------------------------------------
 
 

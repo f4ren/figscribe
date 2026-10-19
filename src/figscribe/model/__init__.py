@@ -24,7 +24,7 @@ from figscribe.model.artists import (
     ResidualPlot,
     ScatterPlot,
 )
-from figscribe.model.axes import Axes, AxisSpec, Legend
+from figscribe.model.axes import Axes, AxisSpec, Inset, Legend
 from figscribe.model.base import Identified, StrictModel, new_id
 from figscribe.model.data import (
     ArrayRef,
@@ -68,6 +68,7 @@ __all__ = [
     "Histogram",
     "Identified",
     "ImagePlot",
+    "Inset",
     "Legend",
     "LinePlot",
     "NumpySource",
