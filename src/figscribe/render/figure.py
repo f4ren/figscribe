@@ -146,7 +146,8 @@ def _draw_axes(
         right.set_gid(f"{axes.id}{RIGHT}")
         _apply_axis(right, "y", axes.y_right, unit_format)
     if axes.grid:
-        ax.grid(True, which=axes.grid_which, axis=axes.grid_axis)
+        color = {"color": axes.grid_color} if axes.grid_color else {}
+        ax.grid(True, which=axes.grid_which, axis=axes.grid_axis, **color)
 
     for artist in axes.artists:
         # Without a right axis, a plot meant for it is drawn against the left

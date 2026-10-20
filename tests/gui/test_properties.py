@@ -290,3 +290,11 @@ def test_font_tick_and_grid_settings_have_names(panel: PropertyPanel, document) 
     ]
     combo.activated.emit(2)
     assert _axes(document).grid_axis == "y"
+
+
+def test_the_grid_color_is_a_color_field(panel: PropertyPanel, document) -> None:
+    document.select(_axes(document).id)
+    editor = panel.editors[("grid_color",)]
+    assert editor.line.placeholderText() == "automatic"
+    _type(panel, ("grid_color",), "#696969")
+    assert _axes(document).grid_color == "#696969"

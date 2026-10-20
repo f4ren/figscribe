@@ -599,6 +599,8 @@ class _Writer:
                 kwargs["which"] = _str(axes.grid_which)
             if axes.grid_axis != "both":
                 kwargs["axis"] = _str(axes.grid_axis)
+            if axes.grid_color is not None:
+                kwargs["color"] = _str(axes.grid_color)
             self.call(f"{ax}.grid", "True", **kwargs)
         for artist in axes.artists:
             on_right = artist.axis == "right" and right is not None

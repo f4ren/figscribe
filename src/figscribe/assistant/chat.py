@@ -59,8 +59,8 @@ Common set_field paths (get_schema has all of them):
 - figure: `width_mm`, `height_mm`, `font_size`, `layout.share_x` ("none", \
 "col", "all"), `layout.share_y` ("none", "row", "all"), `tick_direction` \
 ("in", "out", "inout"), `ticks_all_sides`
-- panel (axes): `title`, `grid`, `x.label`, `x.unit`, `x.scale` ("linear", \
-"log", "symlog"), `x.limits` ([min, max]), `x.major_step`, \
+- panel (axes): `title`, `grid`, `grid_color`, `x.label`, `x.unit`, \
+`x.scale` ("linear", "log", "symlog"), `x.limits` ([min, max]), `x.major_step`, \
 `x.minor_divisions` (4 minor ticks between majors = 5), `x.prefix` ("k" \
 shows Hz values as kHz; limits and steps stay in Hz), the same for `y`, \
 `legend.location` ("upper left", "lower right", …), `legend.frame`, \
