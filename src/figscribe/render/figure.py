@@ -12,19 +12,23 @@ from contextlib import nullcontext
 import matplotlib.style
 import numpy as np
 from matplotlib.axes import Axes as MplAxes
+from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure as MplFigure
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 
 from figscribe.model import (
     Annotation,
+    ArrayRef,
     Artist,
     Axes,
     AxisSpec,
+    ColorMesh,
     ColumnRef,
     ErrorbarPlot,
     Figure,
     FitCurve,
     Histogram,
+    ImagePlot,
     Legend,
     LinePlot,
     ResidualPlot,
@@ -39,8 +43,9 @@ from figscribe.render.layout import (
     share_partner,
 )
 
-DataProvider = Callable[[ColumnRef], np.ndarray]
-"""Resolves a column reference to its values; loading files is not our job."""
+DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
+"""Resolves a column (1-D) or array (2-D) reference to its values; loading
+files is not our job."""
 
 MM_PER_INCH = 25.4
 RIGHT = "#right"
@@ -237,6 +242,8 @@ def _draw_artist(
             patch.set_gid(artist.id)
     elif isinstance(artist, Annotation):
         _draw_annotation(artist, ax, common)
+    elif isinstance(artist, ImagePlot | ColorMesh):
+        _draw_2d(artist, ax, data, common)
     elif isinstance(artist, FitCurve):
         _draw_fit(artist, ax, data, artists, common)
     elif isinstance(artist, ResidualPlot):
@@ -275,6 +282,42 @@ def _draw_annotation(note: Annotation, ax: MplAxes, common: dict) -> None:
         **style,
         **common,
     )
+
+
+def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
+    """An image (pixels on a grid) or a colour mesh (cells at given x and y),
+    with its colour bar."""
+    values = np.asarray(
+        data(artist.data if isinstance(artist, ImagePlot) else artist.c)
+    )
+    scaling = colour_scaling(artist)
+    if isinstance(artist, ImagePlot):
+        placement = {"origin": artist.origin, "aspect": artist.aspect}
+        if artist.extent is not None:
+            placement["extent"] = artist.extent
+        mappable = ax.imshow(values, cmap=artist.cmap, **scaling, **placement, **common)
+    else:
+        grid = []
+        if artist.x is not None and artist.y is not None:
+            grid = [data(artist.x), data(artist.y)]
+        mappable = ax.pcolormesh(
+            *grid, values, cmap=artist.cmap, shading="auto", **scaling, **common
+        )
+    bar = artist.colorbar
+    if bar is not None and bar.visible:
+        label = {"label": bar.label} if bar.label is not None else {}
+        ax.figure.colorbar(mappable, ax=ax, **label).ax.set_gid(artist.id)
+
+
+def colour_scaling(artist) -> dict:
+    """How values map to colours: vmin and vmax, or a LogNorm with them."""
+    if artist.norm == "log":
+        return {"norm": LogNorm(vmin=artist.vmin, vmax=artist.vmax)}
+    return {
+        key: value
+        for key, value in (("vmin", artist.vmin), ("vmax", artist.vmax))
+        if value is not None
+    }
 
 
 CURVE_POINTS = 400

@@ -14,7 +14,7 @@ import numpy as np
 
 from figscribe.commands import Command, History
 from figscribe.io import DataError, load_data
-from figscribe.model import ColumnRef, Figure, Project
+from figscribe.model import ArrayRef, ColumnRef, Figure, Project
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
 
@@ -80,9 +80,26 @@ def column_choices(project: Project, data: DataProvider) -> list[tuple[str, Colu
         columns: list[str | int] = list(source.columns)
         if not columns:
             columns = list(range(_width(source.id, data)))
+        name = Path(source.path).name
+        if getattr(source, "array", None):
+            name = f"{name}[{source.array}]"
         for column in columns:
             ref = ColumnRef(source=source.id, column=column)
-            choices.append((f"{Path(source.path).name}: {column}", ref))
+            choices.append((f"{name}: {column}", ref))
+    return choices
+
+
+def array_choices(project: Project) -> list[tuple[str, ArrayRef]]:
+    """Every source as 2-D data for an image: a CSV file's whole table, a
+    NumPy file's array."""
+    choices = []
+    for source in project.sources:
+        name = Path(source.path).name
+        if getattr(source, "array", None):
+            name = f"{name}[{source.array}]"
+        elif source.format == "csv":
+            name = f"{name} (whole table)"
+        choices.append((name, ArrayRef(source=source.id)))
     return choices
 
 

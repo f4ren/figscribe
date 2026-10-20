@@ -52,7 +52,15 @@ from figscribe.gui.names import (
 )
 from figscribe.gui.widgets import Section, label
 from figscribe.io.errors import DataError
-from figscribe.model import ArrayRef, Axes, AxisSpec, ColumnRef, Figure, FitCurve
+from figscribe.model import (
+    ArrayRef,
+    Axes,
+    AxisSpec,
+    Colorbar,
+    ColumnRef,
+    Figure,
+    FitCurve,
+)
 
 SKIPPED = {
     "id",
@@ -88,12 +96,17 @@ class Spec:
     model: type[BaseModel] | None = None
 
 
+OPTIONAL_PARTS: dict[str, type[BaseModel]] = {"y_right": AxisSpec, "colorbar": Colorbar}
+"""Optional nested models switched on and off with a check box; when on, their
+fields get a section of their own."""
+
+
 def spec_for(name: str, annotation: Any) -> Spec | None:
     """The editor for a field, or None when the panel has none for it."""
     if name == "bins":
         return Spec("bins")
-    if name == "y_right":
-        return Spec("right_axis")
+    if name in OPTIONAL_PARTS:
+        return Spec("part", model=OPTIONAL_PARTS[name])
     optional = False
     args = typing.get_args(annotation)
     if _is_union(annotation) and type(None) in args:
@@ -126,7 +139,7 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
     if annotation is ColumnRef:
         return Spec("column", optional)
     if annotation is ArrayRef:
-        return None  # 2-D data needs its own picker
+        return Spec("array", optional)
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return None if optional else Spec("model", model=annotation)
     return None
@@ -160,6 +173,7 @@ SECTIONS = {
     "zorder": "More",
     "axis": "Data",
     "y_right": "Panel",
+    "data": "Data",
     "row": "Position",
     "col": "Position",
     "rowspan": "Position",
@@ -181,7 +195,12 @@ LOOK = [
     "elinewidth",
 ]
 """How the "Look" section starts; other fields follow in model order."""
-SECTION_NAMES = {"x": "X axis", "y": "Y axis", "y_right": "Right y axis"}
+SECTION_NAMES = {
+    "x": "X axis",
+    "y": "Y axis",
+    "y_right": "Right y axis",
+    "colorbar": "Color bar",
+}
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
 
@@ -332,6 +351,10 @@ class PropertyPanel(QScrollArea):
     def _command(self, obj: BaseModel, path: Path, value: Any):
         """The change for one field; a right y axis comes and goes with the
         plots drawn against it."""
+        if path == ("colorbar",):
+            if value:
+                return Macro("Show a color bar", [SetField(obj.id, path, Colorbar())])
+            return Macro("Remove the color bar", [SetField(obj.id, path, None)])
         if path == ("y_right",):
             if value:
                 return Macro(
@@ -393,7 +416,7 @@ class PropertyPanel(QScrollArea):
                 if inset:
                     nested.append(name)
                 continue
-            if name == "y_right" and obj.y_right is not None:
+            if name in OPTIONAL_PARTS and getattr(obj, name) is not None:
                 nested.append(name)
             if inset and SECTIONS.get(name) == "Position":
                 continue  # an inset is placed by its bounds, not in the grid
@@ -560,8 +583,8 @@ class CheckEditor(Editor):
         self.widget.blockSignals(False)
 
 
-class RightAxisEditor(CheckEditor):
-    """Whether the panel has a right y axis; shows the field's presence."""
+class PartEditor(CheckEditor):
+    """Whether an optional part (a right y axis, a color bar) is there."""
 
     def show(self, value: Any) -> None:
         super().show(value is not None)
@@ -570,8 +593,12 @@ class RightAxisEditor(CheckEditor):
 class ChoiceEditor(Editor):
     """A fixed set of values: literals, or the columns of the data sources."""
 
-    def __init__(self, spec, path, panel, choices: list[tuple[str, Any]]):
+    def __init__(
+        self, spec, path, panel, choices: list[tuple[str, Any]], missing=" (missing)"
+    ):
         super().__init__(spec, path, panel)
+        self.missing = missing
+        """Added to a value not among the choices, as it is shown."""
         self.choices = list(choices)
         if spec.optional:
             self.choices.insert(0, ("(none)", None))
@@ -583,7 +610,7 @@ class ChoiceEditor(Editor):
     def show(self, value: Any) -> None:
         values = [v for _, v in self.choices]
         if value not in values:
-            self.choices.append((f"{value} (missing)", value))
+            self.choices.append((f"{value}{self.missing}", value))
             self.widget.addItem(self.choices[-1][0])
             values.append(value)
         self.widget.blockSignals(True)
@@ -663,6 +690,24 @@ CHOICES = {
 }
 CHOICES["unit_format"] = UNIT_FORMATS
 """Text and literal fields with a known set of good values."""
+COLORMAPS = [
+    "viridis",
+    "plasma",
+    "inferno",
+    "magma",
+    "cividis",
+    "gray",
+    "Greys",
+    "Blues",
+    "Reds",
+    "coolwarm",
+    "RdBu_r",
+    "seismic",
+    "twilight",
+    "turbo",
+]
+"""Perceptually uniform maps first, then grey, single-hue and diverging ones;
+any other Matplotlib name stays usable, it is just not offered."""
 
 
 class ColorEditor(TextEditor):
@@ -749,14 +794,19 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     name = path[-1]
     if spec.kind == "bool":
         return CheckEditor(spec, path, panel)
-    if spec.kind == "right_axis":
-        return RightAxisEditor(spec, path, panel)
+    if spec.kind == "part":
+        return PartEditor(spec, path, panel)
+    if name == "cmap":
+        choices = [(c, c) for c in COLORMAPS]
+        return ChoiceEditor(spec, path, panel, choices, missing="")
     if name in CHOICES and spec.kind in ("choice", "text"):
         return ChoiceEditor(spec, path, panel, CHOICES[name])
     if spec.kind == "choice":
         return ChoiceEditor(spec, path, panel, [(str(o), o) for o in spec.options])
     if spec.kind == "column":
         return ChoiceEditor(spec, path, panel, panel.document.column_choices())
+    if spec.kind == "array":
+        return ChoiceEditor(spec, path, panel, panel.document.array_choices())
     if spec.kind == "color":
         editor = ColorEditor(spec, path, panel)
     elif name == "marker" and spec.kind == "text":
@@ -842,7 +892,8 @@ def _is_union(annotation: Any) -> bool:
 def _shape(obj: BaseModel) -> tuple:
     """What decides the form's layout: the object, and its optional parts."""
     parts = tuple(
-        getattr(obj, name, None) is None for name in ("y_right", "inset", "result")
+        getattr(obj, name, None) is None
+        for name in ("y_right", "colorbar", "inset", "result")
     )
     return (obj.id, type(obj), parts)
 
