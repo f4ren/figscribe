@@ -7,7 +7,6 @@ does the work, through the signals below.
 from __future__ import annotations
 
 from datetime import datetime
-from importlib import resources
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, Signal
@@ -24,22 +23,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-import figscribe
 from figscribe.gui import theme
 from figscribe.gui.widgets import label
 from figscribe.model import Figure
 from figscribe.templates import TEMPLATES, Template
 
 DOCS_URL = "https://github.com/f4ren/figscribe#readme"
-
-
-def bundled_example() -> Path:
-    """The example project's folder: inside the package when installed, in
-    the repository when run from a checkout."""
-    packaged = resources.files("figscribe") / "examples" / "gaussian-scan"
-    if packaged.is_dir():
-        return Path(str(packaged))
-    return Path(figscribe.__file__).parents[2] / "examples" / "gaussian-scan"
 
 
 class StartPage(QScrollArea):

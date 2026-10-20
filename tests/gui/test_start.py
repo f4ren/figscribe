@@ -8,9 +8,10 @@ import pytest
 from PySide6.QtCore import QRectF, QSettings
 
 from figscribe.commands import SetField
+from figscribe.examples import bundled_example
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
-from figscribe.gui.start import bundled_example, panel_boxes
+from figscribe.gui.start import panel_boxes
 from figscribe.model import validate_references
 from figscribe.render import render
 from figscribe.templates import TEMPLATES, template

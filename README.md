@@ -64,6 +64,15 @@ pip install "figscribe[chat]"
 The model and server are remembered; an API key typed into figscribe is kept
 for the session only.
 
+Which model is good enough? `figscribe bench` asks a model 21 typical requests
+(easy to hard: axis labels and ranges, fits, a right axis, insets, residual
+panels) on the example project and checks each result automatically:
+
+```
+figscribe bench --base-url http://localhost:1234/v1 --model qwen3-30b --no-vision
+figscribe bench --model claude-sonnet-5-5 --json sonnet.json
+```
+
 ## Design principle
 
 The declarative plot model is the single source of truth:

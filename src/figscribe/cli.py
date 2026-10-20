@@ -11,6 +11,7 @@ usage: figscribe [PROJECT.figscribe]   open the GUI, optionally with a project
        figscribe script PROJECT.figscribe [-o SCRIPT.py]
                                        write the Python script for its first figure
        figscribe mcp                   serve the open project to an MCP client
+       figscribe bench [--help]        measure a model on typical assistant requests
        figscribe --version"""
 
 
@@ -24,6 +25,10 @@ def main() -> int:
         return 0
     if args[:1] == ["script"]:
         return _script(args[1:])
+    if args[:1] == ["bench"]:
+        from figscribe.assistant.bench import main as bench
+
+        return bench(args[1:])
     if args[:1] == ["mcp"]:
         try:
             from figscribe.assistant.mcpserver import main as serve

@@ -58,6 +58,11 @@ _FIT_FIELDS = {
         "additionalProperties": {"type": "number"},
         "description": "Start values; guessed from the data when omitted",
     },
+    "residuals": {
+        "type": "boolean",
+        "description": "Also show the residuals in a panel below the plot, "
+        "sharing its x axis (added if there is none)",
+    },
 }
 
 

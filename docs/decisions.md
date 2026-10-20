@@ -832,3 +832,33 @@ and a local model keeps even file and column names on the computer.
   adapters.
 - Only MCP: LM Studio and others can already use `figscribe mcp`, but a chat
   inside the window needs no second application.
+
+## 0024 — Measuring models: `figscribe bench`
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Context
+
+Whether a local model is good enough for the chat cannot be argued, only
+measured, and only on figscribe's own tasks.
+
+### Decision
+
+- **21 cases** in `assistant/bench.py`, from easy (one field: a label, a
+  range, a colour) through medium (two changes, a new plot, a fit, a note, a
+  right axis, a histogram panel) to hard (a shared-x panel below, a journal
+  layout, an inset zoomed in, a fit with residuals). One request is German.
+- Each case starts from the bundled example project in a `ProjectWorkspace`
+  (no window, files only read), runs the chat's own tool loop, and is judged
+  by a **check of the resulting project** that tolerates equivalent answers
+  (any red colour, a dragged or a named legend corner, either kind of
+  Gaussian model). A chat error counts as a failure.
+- **Every check is tested**: it must fail on the untouched project and pass
+  after the case's reference solution, a function that calls the tools.
+- The table shows passes per level, time, tool rounds and refused tool calls;
+  `--json` keeps the results for comparing models.
+- **Help for smaller models** where it costs nothing: the system prompt lists
+  the common field paths (a test keeps them valid), and the `fit` tool takes
+  `residuals: true` to add the residual panel as the GUI does, instead of
+  four separate steps.
