@@ -159,6 +159,25 @@ examples/       # example data and example projects
 
 Every milestone ends with green tests and a runnable state.
 
+## Open tasks
+
+- **Measure which models the assistant needs** (`figscribe bench`, decision
+  0024). The tool exists; what is missing are measurements with real models,
+  which have to run where the models are:
+  1. Run the 21 cases against several local models in LM Studio or Ollama,
+     from small (7–8 B) to mid-sized (20–30 B), with `--no-vision` where the
+     model cannot read images, and `--repeat 3` because answers vary.
+  2. Run the same against ChatGPT and Claude (Haiku 5.5, Sonnet 5.5,
+     Opus 5.5) as the reference.
+  3. Keep each run's `--json` file and compare passes per level, time and
+     refused tool calls.
+  4. For the cases local models fail: improve tool descriptions, the
+     prompt's field list or the tools themselves (as `fit` with
+     `residuals`), then measure again; add cases for requests users really
+     make.
+  5. Write down in the README which model sizes are good enough for which
+     kind of request, and choose the default model accordingly.
+
 ## Working agreement for the coding agent
 
 - Before M1: present the plot model as a code draft with a rationale, and only
@@ -173,7 +192,8 @@ Every milestone ends with green tests and a runnable state.
 
 ## Optional, after the MVP
 
-- Natural-language input via an LLM that produces **commands against the model**
-  (not code), so that everything stays traceable and undoable.
+- ~~Natural-language input via an LLM that produces **commands against the
+  model**~~ – done: the built-in chat and the MCP server change the project
+  through undoable commands, with Claude, ChatGPT or a local model.
 - Import of older Origin projects (.opj) via liborigin.
 - Live data mode (watch a file, update the plot).
