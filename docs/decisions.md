@@ -788,3 +788,47 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   (without the key for `.npy`), names its variables after the arrays, and
   mirrors `imshow`/`pcolormesh`/`colorbar`; the equivalence test covers
   images, meshes, log scaling and color bars.
+
+## 0023 — The chat talks to Claude, ChatGPT or a local model
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Context
+
+The built-in chat was tied to Claude. Its task is narrow (calling ~13 tools
+whose every input figscribe validates), so smaller and local models may do,
+and a local model keeps even file and column names on the computer.
+
+### Decision
+
+- **The conversation is provider-neutral**: user text, `Reply` (text, tool
+  calls, a stop reason, the provider's own record) and lists of `ToolResult`.
+  Each `Model` translates it to its API; the tool loop, limits and error
+  handling are shared.
+- **Two kinds of provider**: Claude through the Anthropic SDK (as before:
+  streaming, eager tool input, the server-side refusal fallback where the
+  model takes it), and **everything else through the OpenAI-compatible chat
+  completions API** with the `openai` SDK: ChatGPT, LM Studio, Ollama, vLLM,
+  llama.cpp. One adapter covers them all; the Responses API and provider
+  specifics (reasoning effort, token limits) are left out because local
+  servers do not share them.
+- **Robust to weaker models**: tool arguments that are not a JSON object are
+  answered with an error result instead of failing the request; streamed tool
+  calls are assembled from their pieces, with ids made up where a server sends
+  none. A model marked as not reading images is not offered `render_preview`;
+  one that does gets the picture as a user message after the tool result,
+  since tool messages carry text only.
+- **Settings**: *Assistant > Choose Model…* (or the model button in the chat)
+  picks provider, server (presets for ChatGPT, LM Studio, Ollama, or any URL)
+  and model, which can be listed from the server. The window remembers them;
+  API keys are never stored. Claude stays the default with Claude Opus 5.5;
+  Sonnet and Haiku are offered.
+- The `chat` extra installs both SDKs.
+
+### Alternatives
+
+- LiteLLM or a similar abstraction: one more large dependency for two
+  adapters.
+- Only MCP: LM Studio and others can already use `figscribe mcp`, but a chat
+  inside the window needs no second application.

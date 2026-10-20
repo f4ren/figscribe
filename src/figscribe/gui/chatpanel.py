@@ -12,16 +12,19 @@ from collections.abc import Callable
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QHBoxLayout,
     QLineEdit,
     QPushButton,
     QTextBrowser,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from figscribe.assistant.chat import Chat, ChatError, ClaudeModel, Model
+from figscribe.assistant.chat import Chat, ChatError, Model, Provider, make_model
 from figscribe.gui import theme
+from figscribe.gui.assistantdialog import AssistantDialog
 from figscribe.gui.document import Document
 from figscribe.gui.widgets import label
 from figscribe.tools import Toolbox
@@ -51,13 +54,24 @@ class _Turn(QThread):
 
 class ChatPanel(QWidget):
     busy_changed = Signal(bool)
+    provider_changed = Signal(object)
+    """A new Provider was chosen; the window remembers it."""
 
-    def __init__(self, document: Document, parent: QWidget | None = None):
+    def __init__(
+        self,
+        document: Document,
+        parent: QWidget | None = None,
+        provider: Provider | None = None,
+    ):
         super().__init__(parent)
         self.setObjectName("chatPanel")
         self.document = document
-        self.make_model: Callable[[str | None], Model] = ClaudeModel
-        """Creates the model from an optional API key; replaced in tests."""
+        self.provider = provider or Provider()
+        self.make_model: Callable[[Provider, str | None], Model] = make_model
+        """Creates the model from the provider and an optional API key;
+        replaced in tests."""
+        self.run_dialog: Callable[[QDialog], bool] = lambda d: d.exec() == 1
+        """Runs the settings dialog; replaced in tests."""
         self.chat: Chat | None = None
         self._turn: _Turn | None = None
         self._reply = ""
@@ -74,16 +88,22 @@ class ChatPanel(QWidget):
         self.send_button.setObjectName("primary")
         self.send_button.clicked.connect(self.send)
         self.key = QLineEdit()
-        self.key.setPlaceholderText("Anthropic API key (kept for this session only)")
+        self.key.setPlaceholderText("API key (kept for this session only)")
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         self.key.hide()
         self.status = label("", "caption")
+        self.model_button = QToolButton()
+        self.model_button.setObjectName("modelButton")
+        self.model_button.setToolTip("Choose the model")
+        self.model_button.clicked.connect(self.choose_model)
+        self.model_button.setText(self.provider.label)
 
         header = QHBoxLayout()
         header.addWidget(label("Assistant", "tileTitle"))
         header.addWidget(
             label("changes are undoable · sees names, not your data", "caption"), 1
         )
+        header.addWidget(self.model_button)
         row = QHBoxLayout()
         row.addWidget(self.input, 1)
         row.addWidget(self.send_button)
@@ -105,6 +125,25 @@ class ChatPanel(QWidget):
         self.chat = None
         self.transcript.clear()
 
+    def choose_model(self) -> None:
+        """Let the user pick provider and model in a dialog."""
+        dialog = AssistantDialog(self.provider, self.key.text().strip() or None, self)
+        if self.run_dialog(dialog):
+            if dialog.api_key() is not None:
+                self.key.setText(dialog.api_key())
+            self.set_provider(dialog.provider())
+
+    def set_provider(self, provider: Provider) -> None:
+        """Talk to another model; the conversation starts over."""
+        if provider == self.provider:
+            return
+        self.wait()
+        self.provider = provider
+        self.chat = None
+        self.model_button.setText(provider.label)
+        self._add("tool", f"Now talking to {provider.label}.")
+        self.provider_changed.emit(provider)
+
     @property
     def busy(self) -> bool:
         return self._turn is not None
@@ -116,7 +155,8 @@ class ChatPanel(QWidget):
             return
         if self.chat is None:
             try:
-                self.chat = Chat(self.make_model(self.key.text().strip() or None))
+                key = self.key.text().strip() or None
+                self.chat = Chat(self.make_model(self.provider, key))
             except ChatError as exc:
                 self._show_error(str(exc))
                 return
@@ -140,14 +180,13 @@ class ChatPanel(QWidget):
         self._reply += text
         self.status.setText("Writing…")
 
-    def _on_done(self, response) -> None:
+    def _on_done(self, reply) -> None:
         self._turn = None
-        # The final message is the record; the streamed text only showed progress.
-        reply = "".join(b.text for b in response.content if b.type == "text")
-        if reply.strip():
-            self._add("assistant", reply.strip())
+        # The reply is the record; the streamed text only showed progress.
+        if reply.text.strip():
+            self._add("assistant", reply.text.strip())
         try:
-            more = self.chat.handle(response, self._run_tool, self._on_tool)
+            more = self.chat.handle(reply, self._run_tool, self._on_tool)
         except ChatError as exc:
             self._on_failed(str(exc))
             return

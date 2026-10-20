@@ -36,9 +36,11 @@ mcp = [
 ]
 chat = [
     "anthropic>=1.15",
+    "openai>=1.60",
 ]
 dev = [
     "anthropic>=1.15",
+    "openai>=1.60",
     "mcp>=2.3",
     "pytest>=8",
     "pytest-qt>=4.4",

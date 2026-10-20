@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe.assistant.chat import Provider
 from figscribe.assistant.toolserver import ToolServer
 from figscribe.codegen import generate, script_name
 from figscribe.commands import (
@@ -130,7 +131,8 @@ class MainWindow(QMainWindow):
         self.preview = Preview(self.document)
         self.start = StartPage()
         self._connect_start(self.start)
-        self.chat = ChatPanel(self.document)
+        self.chat = ChatPanel(self.document, provider=self._provider())
+        self.chat.provider_changed.connect(self._remember_provider)
         self.chat.hide()
         self.chat.busy_changed.connect(
             lambda busy: self.statusBar().showMessage(
@@ -229,6 +231,26 @@ class MainWindow(QMainWindow):
     def _remember(self, key: str, value: bool) -> None:
         if self.settings is not None:
             self.settings.setValue(key, value)
+
+    def _provider(self) -> Provider:
+        """The assistant's model from the settings; API keys are never stored."""
+        if self.settings is None or not self.settings.value("assistant/kind"):
+            return Provider()
+        value = self.settings.value
+        return Provider(
+            kind=value("assistant/kind"),
+            model=value("assistant/model", "", type=str),
+            base_url=value("assistant/base_url", "", type=str) or None,
+            vision=value("assistant/vision", True, type=bool),
+        )
+
+    def _remember_provider(self, provider: Provider) -> None:
+        if self.settings is None:
+            return
+        self.settings.setValue("assistant/kind", provider.kind)
+        self.settings.setValue("assistant/model", provider.model)
+        self.settings.setValue("assistant/base_url", provider.base_url or "")
+        self.settings.setValue("assistant/vision", provider.vision)
 
     def _show_mcp_help(self) -> None:
         QMessageBox.information(self, "Connecting an assistant", MCP_HELP)
@@ -613,6 +635,10 @@ class MainWindow(QMainWindow):
         if on:
             self.chat.input.setFocus()
 
+    def _choose_model(self) -> None:
+        self.chat_action.setChecked(True)
+        self.chat.choose_model()
+
     def show_code(self, on: bool) -> None:
         """Show or hide the Python code drawer under the preview."""
         self.code.setVisible(on)
@@ -826,6 +852,7 @@ class MainWindow(QMainWindow):
         self.chat_action = self._toggle(assistant, "&Chat", self.show_chat)
         self.chat_action.setShortcut(QKeySequence("Ctrl+Shift+A"))
         self.addAction(self.chat_action)
+        self._action(assistant, "Choose &Model…", lambda: self._choose_model())
         assistant.addSeparator()
         self.mcp_action = self._toggle(
             assistant, "Allow &MCP Access", self.set_mcp_enabled
