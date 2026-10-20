@@ -92,6 +92,10 @@ class ImagePlot(ArtistBase):
     vmax: float | None = None
     extent: tuple[float, float, float, float] | None = None
     """(left, right, bottom, top) in data coordinates; None lets Matplotlib pick."""
+    origin: Literal["upper", "lower"] = "upper"
+    """Where the first row goes: "upper" as in the file, "lower" as on a y axis."""
+    aspect: Literal["auto", "equal"] = "auto"
+    """"auto" fills the panel; "equal" keeps square pixels."""
     colorbar: Colorbar | None = None
 
 

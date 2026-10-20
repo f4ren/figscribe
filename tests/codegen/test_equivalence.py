@@ -345,3 +345,62 @@ def test_a_right_y_axis(tmp_path: Path) -> None:
     script = _assert_same(project, tmp_path)
     assert "ax_a_right = ax_a.twinx()" in script
     assert "ax_a.legend(handles + right_handles, labels + right_labels" in script
+
+
+def test_images_meshes_and_colour_bars(tmp_path: Path) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ColorMesh, ImagePlot
+
+    yy, xx = np.mgrid[0:20, 0:30]
+    matrix = np.exp(-((xx - 12.0) ** 2 + (yy - 8.0) ** 2) / 40.0) + 0.01
+    rows = "\n".join(";".join(f"{v:.6f}" for v in row) for row in matrix)
+    (tmp_path / "map.csv").write_text(rows + "\n", encoding="utf-8")
+    table = csv_source(tmp_path / "map.csv", tmp_path, delimiter=";", header_row=None)
+    np.save(tmp_path / "frame.npy", (matrix * 100).astype(int))
+    frame = numpy_source(tmp_path / "frame.npy", tmp_path)
+    np.savez(
+        tmp_path / "scan.npz",
+        counts=matrix[:5, :6],
+        x=np.arange(6.0) * 0.5,
+        y=np.array([0.0, 1.0, 1.5, 3.0, 4.0]),
+    )
+    mesh_source = numpy_source(tmp_path / "scan.npz", tmp_path, array="x")
+    y_source = numpy_source(tmp_path / "scan.npz", tmp_path, array="y")
+
+    image = ImagePlot(
+        data=ArrayRef(source=table.id),
+        cmap="magma",
+        norm="log",
+        vmin=0.01,
+        origin="lower",
+        extent=(0.0, 3.0, 0.0, 2.0),
+        colorbar=Colorbar(label="intensity"),
+    )
+    raw = ImagePlot(data=ArrayRef(source=frame.id), aspect="equal", vmax=80.0)
+    mesh = ColorMesh(
+        c=ArrayRef(source=mesh_source.id, key="counts"),
+        x=ColumnRef(source=mesh_source.id, column=0),
+        y=ColumnRef(source=y_source.id, column=0),
+        cmap="cividis",
+        colorbar=Colorbar(),
+    )
+    project = Project(
+        sources=[table, frame, mesh_source, y_source],
+        figures=[
+            Figure(
+                dpi=100,
+                width_mm=175,
+                layout=GridLayout(cols=3),
+                axes=[
+                    Axes(col=0, artists=[image]),
+                    Axes(col=1, artists=[raw]),
+                    Axes(col=2, artists=[mesh]),
+                ],
+            )
+        ],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "map_table = np.loadtxt(map_path" in script
+    assert 'scan_counts = np.load(scan_path)["counts"].astype(float)' in script
+    assert 'fig.colorbar(image, ax=ax_a, label="intensity")' in script
+    assert "norm=LogNorm(vmin=0.01)" in script

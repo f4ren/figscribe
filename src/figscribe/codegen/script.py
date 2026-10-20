@@ -23,8 +23,10 @@ from figscribe.fit import numpy_source, parameter_names
 from figscribe.io.files import resolve_path
 from figscribe.model import (
     Annotation,
+    ArrayRef,
     Axes,
     AxisSpec,
+    ColorMesh,
     ColumnRef,
     CsvSource,
     ErrorbarPlot,
@@ -32,8 +34,10 @@ from figscribe.model import (
     Figure,
     FitCurve,
     Histogram,
+    ImagePlot,
     Legend,
     LinePlot,
+    NumpySource,
     Project,
     ResidualPlot,
     ScatterPlot,
@@ -48,7 +52,13 @@ from figscribe.render.layout import (
 )
 
 WIDTH = 88
-DEFAULT_ZORDER = {"scatter": 1.0, "histogram": 1.0, "annotation": 3.0}
+DEFAULT_ZORDER = {
+    "scatter": 1.0,
+    "histogram": 1.0,
+    "annotation": 3.0,
+    "image": 0.0,
+    "colormesh": 1.0,
+}
 """Matplotlib's own z-order per kind; 2 (lines) for the rest."""
 RESERVED = {
     "np",
@@ -68,6 +78,8 @@ RESERVED = {
     "value",
     "error",
     "valid",
+    "image",
+    "mesh",
     "handles",
     "labels",
     "right_handles",
@@ -118,9 +130,11 @@ class _Writer:
         self.base_dir = base_dir
         self.data = data
         self.lines: list[str] = []
+        self._mappables = 0
         self.artists = {a.id: a for axes in figure.axes for a in axes.artists}
         self.sources = {s.id: s for s in project.sources}
         self.columns = self._name_columns()
+        self.arrays = self._name_arrays()
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
 
@@ -144,11 +158,15 @@ class _Writer:
             source = self.sources.get(ref.source)
             if source is None:
                 raise ValueError(f"no data source {ref.source!r} in the project")
-            plain = (
-                _identifier(ref.column)
-                if isinstance(ref.column, str)
-                else f"col{ref.column}"
-            )
+            if isinstance(ref.column, str):
+                plain = _identifier(ref.column)
+            elif isinstance(source, NumpySource) and source.array:
+                # Columns of an .npz array are named after it: x, x1, x2, ...
+                plain = _identifier(source.array) + (
+                    str(ref.column) if ref.column else ""
+                )
+            else:
+                plain = f"col{ref.column}"
             name = plain
             if name in taken:
                 name = f"{_slug(Path(source.path).stem) or 'data'}_{plain}"
@@ -156,6 +174,36 @@ class _Writer:
                 name += "_"
             taken.add(name)
             names[(ref.source, ref.column)] = name
+        return names
+
+    def _name_arrays(self) -> dict[tuple[str, str | None], str]:
+        """{(source id, key): variable} for every 2-D array the figure plots."""
+        names: dict[tuple[str, str | None], str] = {}
+        taken = set(RESERVED) | set(self.columns.values())
+        for axes in self.figure.axes:
+            for artist in axes.artists:
+                for field in ("data", "c"):
+                    ref = getattr(artist, field, None)
+                    if not isinstance(ref, ArrayRef):
+                        continue
+                    source = self.sources.get(ref.source)
+                    if source is None:
+                        raise ValueError(
+                            f"no data source {ref.source!r} in the project"
+                        )
+                    key = (ref.source, ref.key)
+                    if key in names:
+                        continue
+                    stem = _slug(Path(source.path).stem) or "data"
+                    name = f"{stem}_{_slug(ref.key)}" if ref.key else stem
+                    if isinstance(source, CsvSource):
+                        name = f"{stem}_table"
+                    if name[0].isdigit():
+                        name = f"data_{name}"
+                    while name in taken:
+                        name += "_"
+                    taken.add(name)
+                    names[key] = name
         return names
 
     def _name_fits(self) -> dict[str, tuple[str, str]]:
@@ -241,17 +289,19 @@ class _Writer:
         self.emit('"""')
 
     def _used(self, source_id: str) -> bool:
-        return any(key[0] == source_id for key in self.columns)
+        return any(key[0] == source_id for key in [*self.columns, *self.arrays])
 
     def _imports(self) -> None:
         self.emit("")
-        if self.columns:
+        if self.columns or self.arrays:
             self.emit("import hashlib")
         self.emit("from pathlib import Path", "")
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
         locators = self._locators()
         if locators:
             self.emit(f"from matplotlib.ticker import {', '.join(locators)}")
+        if any(getattr(a, "norm", None) == "log" for a in self.artists.values()):
+            self.emit("from matplotlib.colors import LogNorm")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
         self.emit("", "HERE = Path(__file__).resolve().parent")
@@ -281,7 +331,7 @@ class _Writer:
             self._source(source, script_dir)
 
     def _source(self, source, script_dir: Path) -> None:
-        if not isinstance(source, CsvSource):
+        if not isinstance(source, CsvSource | NumpySource):
             raise NotImplementedError(
                 f"generating code for {source.format!r} sources is not implemented"
             )
@@ -299,6 +349,9 @@ class _Writer:
         )
         refs = [(c, n) for (sid, c), n in self.columns.items() if sid == source.id]
         indices = [_index(source, column) for column, _ in refs]
+        if isinstance(source, NumpySource):
+            self._numpy(source, path, refs, indices)
+            return
         kwargs: dict[str, str] = {}
         if source.delimiter is not None:
             kwargs["delimiter"] = _str(source.delimiter)
@@ -315,6 +368,13 @@ class _Writer:
             )
         if _has_bom(location):
             kwargs["encoding"] = '"utf-8-sig"'
+        table = self.arrays.get((source.id, None))
+        if table is not None:
+            # The whole table is plotted as an image; columns are slices of it.
+            self.call(f"{table} = np.loadtxt", path, **kwargs)
+            for (_, name), index in zip(refs, indices, strict=True):
+                self.emit(f"{name} = {table}[:, {index}]")
+            return
         if len(refs) == 1:
             kwargs["usecols"] = str(indices[0])
             self.call(f"{refs[0][1]} = np.loadtxt", path, **kwargs)
@@ -326,6 +386,35 @@ class _Writer:
         kwargs["unpack"] = "True"
         targets = ", ".join(name for _, name in refs)
         self.call(f"{targets} = np.loadtxt", path, **kwargs)
+
+    def _numpy(self, source: NumpySource, path: str, refs, indices) -> None:
+        """np.load the arrays used, as floats like figscribe reads them."""
+        keys = {key for sid, key in self.arrays if sid == source.id}
+        flat = self.data is not None and (
+            self.data(ArrayRef(source=source.id)).ndim == 1
+        )
+        if flat and len(refs) == 1 and (source.id, None) not in self.arrays:
+            # A 1-D array used as one column: load it under the column's name.
+            self.arrays[(source.id, None)] = refs[0][1]
+            refs, indices = [], []
+            keys.add(None)
+        elif refs:
+            keys.add(None)  # columns come out of the source's own array
+        for key in sorted(keys, key=lambda k: (k is not None, k or "")):
+            name = self.arrays.get((source.id, key))
+            if name is None:
+                stem = _slug(Path(source.path).stem) or "data"
+                name = f"{stem}_{_slug(source.array)}" if source.array else stem
+                taken = {*self.arrays.values(), *self.columns.values(), *RESERVED}
+                while name in taken:
+                    name += "_"
+                self.arrays[(source.id, key)] = name
+            wanted = key or source.array
+            item = f"[{_str(wanted)}]" if source.format == "npz" else ""
+            self.emit(f"{name} = np.load({path}){item}.astype(float)")
+        base = self.arrays.get((source.id, None))
+        for (_, name), index in zip(refs, indices, strict=True):
+            self.emit(f"{name} = {base}" if flat else f"{name} = {base}[:, {index}]")
 
     def _single_row(self, refs, source) -> bool:
         if self.data is None:
@@ -580,6 +669,8 @@ class _Writer:
             self.call(f"{ax}.hist", values, **kwargs, **common)
         elif isinstance(artist, Annotation):
             self._annotation(ax, artist, common)
+        elif isinstance(artist, ImagePlot | ColorMesh):
+            self._two_d(ax, artist, common)
         elif isinstance(artist, FitCurve):
             self._fit_curve(ax, artist, common)
         elif isinstance(artist, ResidualPlot):
@@ -609,6 +700,46 @@ class _Writer:
             kwargs["fontsize"] = _num(note.fontsize)
         kwargs |= _some(color=note.color)
         self.call(f"{ax}.annotate", _str(note.text), **kwargs, **common)
+
+    def _two_d(self, ax: str, artist, common: dict[str, str]) -> None:
+        image = isinstance(artist, ImagePlot)
+        ref = artist.data if image else artist.c
+        values = self.arrays[(ref.source, ref.key)]
+        kwargs = {"cmap": _str(artist.cmap)}
+        if artist.norm == "log":
+            limits = ", ".join(
+                f"{k}={_num(v)}"
+                for k, v in (("vmin", artist.vmin), ("vmax", artist.vmax))
+                if v is not None
+            )
+            kwargs["norm"] = f"LogNorm({limits})"
+        else:
+            for key in ("vmin", "vmax"):
+                if getattr(artist, key) is not None:
+                    kwargs[key] = _num(getattr(artist, key))
+        if image:
+            kwargs |= {"origin": _str(artist.origin), "aspect": _str(artist.aspect)}
+            if artist.extent is not None:
+                kwargs["extent"] = _value(list(artist.extent))
+            args = [values]
+            call = f"{ax}.imshow"
+        else:
+            args = [values]
+            if artist.x is not None and artist.y is not None:
+                args = [self.column(artist.x), self.column(artist.y), values]
+            kwargs["shading"] = '"auto"'
+            call = f"{ax}.pcolormesh"
+        bar = artist.colorbar
+        if bar is None or not bar.visible:
+            self.call(call, *args, **kwargs, **common)
+            return
+        self._mappables += 1
+        mappable = "image" if image else "mesh"
+        if self._mappables > 1:
+            mappable += str(self._mappables)
+        self.call(f"{mappable} = {call}", *args, **kwargs, **common)
+        label = {"label": _str(bar.label)} if bar.label is not None else {}
+        self.call("fig.colorbar", mappable, ax=ax, **label)
 
     def _all_finite(self, refs) -> bool:
         """Whether the data behind `refs` is all finite; False if unknown."""

@@ -245,14 +245,6 @@ def test_share_all_joins_every_axes(data) -> None:
     assert a.get_shared_y_axes().joined(a, b)
 
 
-def test_artists_not_drawn_yet_are_refused(data) -> None:
-    from figscribe.model import ArrayRef, ImagePlot
-
-    axes = Axes(artists=[ImagePlot(data=ArrayRef(source="s"))])
-    with pytest.raises(NotImplementedError, match="image"):
-        render(Figure(axes=[axes]), data)
-
-
 def test_a_histogram_leaves_out_values_it_cannot_place(data, ref, columns) -> None:
     from figscribe.model import Histogram
 
@@ -342,3 +334,48 @@ def test_an_untitled_size_keeps_matplotlibs_defaults(data) -> None:
     fig = render(Figure(axes=[Axes(title="T", x=AxisSpec(label="t"))]), data)
     ax = fig.axes[0]
     assert ax.title.get_fontsize() > ax.xaxis.label.get_fontsize()  # "large"
+
+
+def test_an_image_with_a_colour_bar(source) -> None:
+    from figscribe.model import ArrayRef, Colorbar, ImagePlot
+
+    table = np.arange(12.0).reshape(3, 4)
+    image = ImagePlot(
+        data=ArrayRef(source=source.id),
+        cmap="magma",
+        norm="log",
+        vmin=1.0,
+        vmax=10.0,
+        origin="lower",
+        extent=(0.0, 4.0, 0.0, 3.0),
+        colorbar=Colorbar(label="counts"),
+    )
+    fig = render(Figure(axes=[Axes(artists=[image])]), lambda ref: table)
+    ax, bar = fig.axes
+    (shown,) = ax.get_images()
+    assert shown.get_gid() == image.id and shown.get_cmap().name == "magma"
+    assert shown.norm.vmin == 1.0 and type(shown.norm).__name__ == "LogNorm"
+    assert shown.origin == "lower" and tuple(shown.get_extent()) == (0, 4, 0, 3)
+    assert bar.get_ylabel() == "counts" and bar.get_gid() == image.id
+
+
+def test_a_colour_mesh_on_its_grid(source) -> None:
+    from figscribe.model import ArrayRef, ColorMesh, ColumnRef
+
+    values = {"x": np.array([0.0, 1.0, 3.0]), "y": np.array([0.0, 2.0])}
+
+    def data(ref):
+        if isinstance(ref, ArrayRef):
+            return np.ones((2, 3))
+        return values[ref.column]
+
+    mesh = ColorMesh(
+        c=ArrayRef(source=source.id),
+        x=ColumnRef(source=source.id, column="x"),
+        y=ColumnRef(source=source.id, column="y"),
+        vmax=2.0,
+    )
+    (ax,) = render(Figure(axes=[Axes(artists=[mesh])]), data).axes
+    (quad,) = ax.collections
+    assert quad.get_gid() == mesh.id and quad.norm.vmax == 2.0
+    assert ax.dataLim.x1 > 3.0  # cells around the given centres

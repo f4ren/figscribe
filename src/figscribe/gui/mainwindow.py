@@ -57,13 +57,18 @@ from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
 from figscribe.gui.start import DOCS_URL, StartPage, bundled_example
+from figscribe.io import DataError, numpy_source
+from figscribe.io.numpyfile import array_names, read_numpy
 from figscribe.model import (
     Annotation,
+    ArrayRef,
     ArtistBase,
     Axes,
     AxisSpec,
+    Colorbar,
     FitCurve,
     Histogram,
+    ImagePlot,
 )
 from figscribe.model.validate import FITTABLE
 from figscribe.render import export
@@ -82,11 +87,17 @@ appears here at once and can be undone.</p>
 unless you also allow it to see the figure.</p>"""
 
 PROJECT_FILTER = "figscribe projects (*.figscribe)"
-DATA_FILTER = "Delimited text (*.csv *.tsv *.txt *.dat);;All files (*)"
+DATA_FILTER = (
+    "Data (*.csv *.tsv *.txt *.dat *.npy *.npz);;Delimited text (*.csv *.tsv "
+    "*.txt *.dat);;NumPy (*.npy *.npz);;All files (*)"
+)
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
 SCRIPT_FILTER = "Python script (*.py)"
-DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat"}
-START_FILTER = "Data or project (*.csv *.tsv *.txt *.dat *.figscribe);;All files (*)"
+DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat", ".npy", ".npz"}
+NUMPY_SUFFIXES = {".npy", ".npz"}
+START_FILTER = (
+    "Data or project (*.csv *.tsv *.txt *.dat *.npy *.npz *.figscribe);;All files (*)"
+)
 MAX_RECENT = 6
 
 
@@ -402,6 +413,8 @@ class MainWindow(QMainWindow):
             path, _ = QFileDialog.getOpenFileName(self, "Import data", "", DATA_FILTER)
             if not path:
                 return False
+        if Path(path).suffix.lower() in NUMPY_SUFFIXES:
+            return self.import_numpy(path)
         try:
             dialog = ImportDialog(path, self.document.project_dir, self)
         except OSError as exc:
@@ -422,6 +435,40 @@ class MainWindow(QMainWindow):
         steps += self._plot_steps(figure, artist, dialog)
         self._push(Macro(f"Add {Path(source.path).name} and plot", steps))
         self.document.select(artist.id)
+        return True
+
+    def import_numpy(self, path: str | Path) -> bool:
+        """Add a .npy or .npz file; a 2-D array is shown as an image at once,
+        with a colour bar, in the same undo step."""
+        path = Path(path)
+        base = self.document.project_dir or path.parent
+        try:
+            raw = path.read_bytes()
+            chosen = None
+            if path.suffix.lower() == ".npz":
+                names = array_names(raw, path.name)
+                chosen = next((n for n in names if _ndim(raw, n) == 2), names[0])
+            source = numpy_source(path, base, array=chosen)
+            if self.document.project_dir is None:
+                source = source.model_copy(update={"path": str(path.resolve())})
+            values = read_numpy(source, raw, path.name)
+        except (OSError, DataError) as exc:
+            self.show_error(f"Cannot read {path.name}", exc)
+            return False
+        steps = [InsertItem(None, "sources", source)]
+        figure = self.document.figure
+        if values.ndim != 2 or figure is None:
+            self._push(Macro(f"Add {path.name}", steps))
+            self.document.select(source.id)
+            return True
+        image = ImagePlot(data=ArrayRef(source=source.id), colorbar=Colorbar())
+        axes_id = self._target_axes(figure)
+        if axes_id is None:
+            steps.append(InsertItem(figure.id, "axes", Axes(artists=[image])))
+        else:
+            steps.append(InsertItem(axes_id, "artists", image))
+        self._push(Macro(f"Add {path.name} as an image", steps))
+        self.document.select(image.id)
         return True
 
     def _plot_steps(self, figure, artist, dialog) -> list:
@@ -455,11 +502,12 @@ class MainWindow(QMainWindow):
     def add_plot(self) -> None:
         """Add a plot of the data's columns to the selected axes."""
         columns = self.document.column_choices()
+        arrays = self.document.array_choices()
         figure = self.document.figure
-        if not columns or figure is None:
+        if not (columns or arrays) or figure is None:
             self.show_error("Nothing to plot", ValueError("Import a data file first."))
             return
-        dialog = PlotDialog(columns, self)
+        dialog = PlotDialog(columns, self, arrays=arrays)
         if not self.run_dialog(dialog):
             return
         artist = dialog.artist()
@@ -871,6 +919,16 @@ class MainWindow(QMainWindow):
         # or hidden.
         self.addAction(action)
         return action
+
+
+def _ndim(raw: bytes, name: str) -> int:
+    """Dimensions of the array `name` in an .npz file's bytes."""
+    import io
+
+    import numpy as np
+
+    with np.load(io.BytesIO(raw), allow_pickle=False) as archive:
+        return archive[name].ndim
 
 
 def _documents() -> Path:

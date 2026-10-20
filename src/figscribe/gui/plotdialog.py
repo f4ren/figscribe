@@ -14,12 +14,16 @@ from PySide6.QtWidgets import (
 from figscribe.commands import InsertItem, Macro
 from figscribe.commands.core import noun
 from figscribe.model import (
+    ArrayRef,
     ArtistBase,
     Axes,
+    Colorbar,
+    ColorMesh,
     ColumnRef,
     ErrorbarPlot,
     Figure,
     Histogram,
+    ImagePlot,
     LinePlot,
     ScatterPlot,
 )
@@ -29,19 +33,33 @@ KINDS: dict[str, type[ArtistBase]] = {
     "Scatter": ScatterPlot,
     "Error bars": ErrorbarPlot,
     "Histogram": Histogram,
+    "Image": ImagePlot,
+    "Color mesh": ColorMesh,
 }
+TWO_D = (ImagePlot, ColorMesh)
 
 
 class PlotDialog(QDialog):
-    """Asks for a plot of two (or, with error bars, up to four) columns."""
+    """Asks for a plot of two (or, with error bars, up to four) columns, or
+    of one 2-D array."""
 
-    def __init__(self, columns: list[tuple[str, ColumnRef]], parent=None):
+    def __init__(
+        self,
+        columns: list[tuple[str, ColumnRef]],
+        parent=None,
+        arrays: list[tuple[str, ArrayRef]] = (),
+    ):
         super().__init__(parent)
         self.setWindowTitle("Add plot")
         self.columns = columns
 
         self.kind = QComboBox()
-        self.kind.addItems(list(KINDS))
+        self.kind.addItems(
+            [k for k, cls in KINDS.items() if arrays or cls not in TWO_D]
+        )
+        self.array = QComboBox()
+        for text, ref in arrays:
+            self.array.addItem(text, ref)
         self.x = self._column_box(optional=False)
         self.y = self._column_box(optional=False)
         self.yerr = self._column_box(optional=True)
@@ -51,6 +69,7 @@ class PlotDialog(QDialog):
 
         form = QFormLayout()
         form.addRow("Kind", self.kind)
+        form.addRow("Array", self.array)
         form.addRow("x", self.x)
         form.addRow("y", self.y)
         form.addRow("y error", self.yerr)
@@ -77,6 +96,10 @@ class PlotDialog(QDialog):
     def artist(self) -> ArtistBase:
         """The plot as chosen."""
         cls = KINDS[self.kind.currentText()]
+        if cls is ImagePlot:
+            return ImagePlot(data=self.array.currentData(), colorbar=Colorbar())
+        if cls is ColorMesh:
+            return ColorMesh(c=self.array.currentData(), colorbar=Colorbar())
         if cls is Histogram:
             return Histogram(
                 values=self.y.currentData(), label=self.label.text() or None
@@ -103,7 +126,10 @@ class PlotDialog(QDialog):
         kind = KINDS[self.kind.currentText()]
         self.yerr.setEnabled(kind is ErrorbarPlot)
         self.xerr.setEnabled(kind is ErrorbarPlot)
-        self.x.setEnabled(kind is not Histogram)  # a histogram has only values
+        self.x.setEnabled(kind not in (Histogram, *TWO_D))  # only values
+        self.y.setEnabled(kind not in TWO_D)
+        self.array.setEnabled(kind in TWO_D)
+        self.label.setEnabled(kind not in TWO_D)  # the colour bar explains it
 
     def _update_label(self) -> None:
         ref = self.y.currentData()

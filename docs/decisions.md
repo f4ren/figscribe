@@ -755,3 +755,36 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   (its plots go back to the left, one undo step); choosing "right" for a plot
   creates the axis if the panel has none. A fit is drawn against the axis of
   its data.
+
+## 0022 — 2-D data: NumPy files, images, color meshes, color bars
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Decision
+
+- **NumPy files** (`.npy`, `.npz`) are sources like CSV files: hashed on
+  import and checked before every read. They are read with
+  `np.load(..., allow_pickle=False)`, so a data file can never run code, and
+  converted to floats; arrays with more than two dimensions are refused. An
+  `.npz` source names one array; an `ArrayRef.key` may pick another from the
+  same file. A 1-D array is one column, a 2-D array's columns are columns, so
+  every plot kind can use them.
+- **An `ArrayRef` is the whole 2-D data**: a NumPy array, or a CSV file's
+  whole table. Images use `ax.imshow` (`origin` and `aspect` settable,
+  `extent` optional), color meshes `ax.pcolormesh(shading="auto")` with
+  optional cell coordinates from columns. Both scale linearly (with optional
+  `vmin`/`vmax`) or logarithmically with `LogNorm`.
+- **A color bar** is an optional part of the plot, drawn with
+  `fig.colorbar(mappable, ax=ax)`. Its Matplotlib axes carries the plot's id,
+  so clicking it selects the plot; zoom and pan never act on it.
+- **In the GUI**, importing a file with a 2-D array (in an `.npz` file the
+  first 2-D one) draws it at once as an image with a color bar, one undo
+  step; a 1-D file is only added. The plot dialog offers "Image" and "Color
+  mesh" once there is 2-D data. The property panel picks the data from a
+  list, switches the color bar on and off like the right y axis, and offers
+  common color maps while keeping any other Matplotlib name.
+- The script loads NumPy data with `np.load(path)[key].astype(float)`
+  (without the key for `.npy`), names its variables after the arrays, and
+  mirrors `imshow`/`pcolormesh`/`colorbar`; the equivalence test covers
+  images, meshes, log scaling and color bars.

@@ -15,9 +15,9 @@ from PySide6.QtCore import QObject, Signal
 from figscribe import __version__
 from figscribe.commands import Command, CommandError, History, find
 from figscribe.io import load_data
-from figscribe.model import ColumnRef, Figure, Project, dumps, loads
+from figscribe.model import ArrayRef, ColumnRef, Figure, Project, dumps, loads
 from figscribe.render import DataProvider
-from figscribe.tools.workspace import column_choices
+from figscribe.tools.workspace import array_choices, column_choices
 
 
 class Document(QObject):
@@ -92,6 +92,10 @@ class Document(QObject):
     def column_choices(self) -> list[tuple[str, ColumnRef]]:
         """Every column of every source, labelled for a choice box."""
         return column_choices(self.project, self.data)
+
+    def array_choices(self) -> list[tuple[str, ArrayRef]]:
+        """Every source as 2-D data, labelled for a choice box."""
+        return array_choices(self.project)
 
     # --- selection ----------------------------------------------------------
 

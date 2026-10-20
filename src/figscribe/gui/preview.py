@@ -301,8 +301,10 @@ class Preview(QWidget):
         if self._figure is None:
             return None
         x, y = self._to_display(point)
+        # Only panels: a colour bar or a right y axis has its own Matplotlib axes.
+        panels = {a.id for a in self.document.figure.axes}
         for ax in _all_axes(self._figure):
-            if ax.get_gid() and ax.bbox.contains(x, y):
+            if ax.get_gid() in panels and ax.bbox.contains(x, y):
                 return ax
         return None
 

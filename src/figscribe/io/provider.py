@@ -10,12 +10,23 @@ import numpy as np
 from figscribe.io.csvfile import ENCODING, read_csv
 from figscribe.io.errors import DataChangedError, DataError
 from figscribe.io.files import resolve_path
-from figscribe.model import ColumnRef, CsvSource, DataSource, Project
+from figscribe.io.numpyfile import read_numpy
+from figscribe.model import (
+    ArrayRef,
+    ColumnRef,
+    CsvSource,
+    DataSource,
+    NumpySource,
+    Project,
+)
 from figscribe.render import DataProvider
 
 
 def load_data(project: Project, base_dir: str | Path) -> DataProvider:
     """Return a provider that reads each source on first use and caches it.
+
+    A ColumnRef gives one column; an ArrayRef a whole table (CSV) or array
+    (NumPy) as 2-D data for images and colour meshes.
 
     Every file is checked against its recorded hash before it is parsed, and
     the bytes that were hashed are the bytes that get parsed. A changed file
@@ -23,24 +34,31 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
     a project and its generated script reproduce the same figure.
     """
     sources = {s.id: s for s in project.sources}
-    tables: dict[str, np.ndarray] = {}
+    tables: dict[tuple[str, str | None], np.ndarray] = {}
 
-    def resolve(ref: ColumnRef) -> np.ndarray:
+    def table(source: DataSource, key: str | None = None) -> np.ndarray:
+        if (source.id, key) not in tables:
+            loaded = _load(source, base_dir, key)
+            loaded.flags.writeable = False  # shared by every reference into it
+            tables[source.id, key] = loaded
+        return tables[source.id, key]
+
+    def resolve(ref: ColumnRef | ArrayRef) -> np.ndarray:
         source = sources.get(ref.source)
         if source is None:
             raise DataError(f"unknown data source {ref.source!r}")
-        if source.id not in tables:
-            table = _load(source, base_dir)
-            table.flags.writeable = False  # shared by every reference into it
-            tables[source.id] = table
-        table = tables[source.id]
-        return table[:, _column_index(source, ref.column, table.shape[1])]
+        if isinstance(ref, ArrayRef):
+            return table(source, ref.key)
+        values = table(source)
+        if values.ndim == 1:
+            values = values[:, np.newaxis]  # a 1-D array is one column
+        return values[:, _column_index(source, ref.column, values.shape[1])]
 
     return resolve
 
 
-def _load(source: DataSource, base_dir: str | Path) -> np.ndarray:
-    if not isinstance(source, CsvSource):
+def _load(source: DataSource, base_dir: str | Path, key: str | None) -> np.ndarray:
+    if not isinstance(source, CsvSource | NumpySource):
         raise NotImplementedError(
             f"reading {source.format!r} sources is not implemented yet"
         )
@@ -53,6 +71,8 @@ def _load(source: DataSource, base_dir: str | Path) -> np.ndarray:
 
     if hashlib.sha256(raw).hexdigest() != source.sha256:
         raise DataChangedError(f"{path} has changed since it was imported")
+    if isinstance(source, NumpySource):
+        return read_numpy(source, raw, str(path), key)
     return read_csv(source, raw.decode(ENCODING), str(path))
 
 
