@@ -39,6 +39,8 @@ PANEL_SIDES = [
     ("inset", "Add inset"),
 ]
 VISIBLE_ROLE = Qt.ItemDataRole.UserRole + 1
+COLOR_ROLE = Qt.ItemDataRole.UserRole + 2
+"""On plot rows: the colour the plot is drawn in, as shown by its icon."""
 """On plot rows: whether the plot is drawn; the eye column toggles it."""
 
 LINE_CYCLE = {"line", "errorbar", "fit", "residual"}
@@ -121,9 +123,12 @@ class Outline(QTreeWidget):
     def _axes_rows(self, figure: Figure, axes: Axes) -> None:
         heading = self._row(panel_name(figure, axes).upper(), axes.id)
         _kicker(heading)
-        cycles = {"line": 0, "patch": 0}
+        # Every Matplotlib axes has its own colour cycle; a right y axis too.
+        cycles = {}
         for artist in axes.artists:
-            family = "line" if artist.kind in LINE_CYCLE else "patch"
+            side = artist.axis if axes.y_right is not None else "left"
+            family = ("line" if artist.kind in LINE_CYCLE else "patch", side)
+            cycles.setdefault(family, 0)
             color = getattr(artist, "color", None)
             shown = theme.plot_color(color, cycles[family])
             if color is None and artist.kind in LINE_CYCLE | PATCH_CYCLE:
@@ -132,6 +137,7 @@ class Outline(QTreeWidget):
             item = self._row(artist_name(artist), artist.id)
             item.setIcon(0, theme.icon(name, shown if artist.visible else "#B5B5BA"))
             item.setData(0, VISIBLE_ROLE, artist.visible)
+            item.setData(0, COLOR_ROLE, shown)
             eye = "eye" if artist.visible else "eye-off"
             item.setIcon(1, theme.icon(eye, "#8A8A90"))
             item.setToolTip(1, "Hide" if artist.visible else "Show")

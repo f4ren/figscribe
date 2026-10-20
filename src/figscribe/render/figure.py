@@ -43,6 +43,8 @@ DataProvider = Callable[[ColumnRef], np.ndarray]
 """Resolves a column reference to its values; loading files is not our job."""
 
 MM_PER_INCH = 25.4
+RIGHT = "#right"
+"""Appended to an axes id to name the Matplotlib axes of its right y axis."""
 
 
 def render(figure: Figure, data: DataProvider) -> MplFigure:
@@ -114,22 +116,27 @@ def _draw_axes(
     unit_format: str,
     artists: Mapping[str, Artist],
 ) -> None:
-    if axes.y_right is not None:
-        raise NotImplementedError("a right-hand y-axis (y_right) is planned for M5")
-
     if axes.title is not None:
         size = {"fontsize": axes.title_size} if axes.title_size else {}
         ax.set_title(axes.title, **size)
     _apply_axis(ax, "x", axes.x, unit_format)
     _apply_axis(ax, "y", axes.y, unit_format)
+    right = None
+    if axes.y_right is not None:
+        right = ax.twinx()
+        right.set_gid(f"{axes.id}{RIGHT}")
+        _apply_axis(right, "y", axes.y_right, unit_format)
     if axes.grid:
         ax.grid(True, which=axes.grid_which, axis=axes.grid_axis)
 
     for artist in axes.artists:
-        _draw_artist(artist, ax, data, artists)
+        # Without a right axis, a plot meant for it is drawn against the left
+        # one; validate_references reports it.
+        target = right if artist.axis == "right" and right is not None else ax
+        _draw_artist(artist, target, data, artists)
 
     if axes.legend.visible:
-        _draw_legend(axes.legend, ax).set_gid(axes.id)
+        _draw_legend(axes.legend, ax, right).set_gid(axes.id)
 
 
 def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> None:
@@ -168,9 +175,6 @@ def _draw_artist(
 ) -> None:
     """Draw one artist; `artists` finds the plots that fits and residuals
     refer to, wherever in the figure they are."""
-    if artist.axis == "right":
-        raise NotImplementedError("drawing against y_right is planned for M5")
-
     common = {
         "label": artist.label if artist.label is not None else "_nolegend_",
         "visible": artist.visible,
@@ -350,14 +354,21 @@ def _referenced(artists: Mapping[str, Artist], oid: str, kinds: tuple, what: str
     return found
 
 
-def _draw_legend(legend: Legend, ax: MplAxes):
-    """Draw the legend; it carries its axes' id, so a click on it selects them."""
+def _draw_legend(legend: Legend, ax: MplAxes, right: MplAxes | None = None):
+    """Draw the legend, with the plots of the right y axis if there is one; it
+    carries its axes' id, so a click on it selects them."""
     if legend.position is not None:
         # A dragged legend: anchor its lower-left corner at the axes position.
         placement = {"loc": "lower left", "bbox_to_anchor": legend.position}
     else:
         placement = {"loc": legend.location}
+    entries = ()
+    if right is not None:
+        handles, labels = ax.get_legend_handles_labels()
+        more_handles, more_labels = right.get_legend_handles_labels()
+        entries = (handles + more_handles, labels + more_labels)
     return ax.legend(
+        *entries,
         frameon=legend.frame,
         ncols=legend.ncols,
         fontsize=legend.fontsize,
