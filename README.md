@@ -46,13 +46,23 @@ claude mcp add figscribe -- figscribe mcp      # e.g. for Claude Code
 Then enable *Assistant > Allow MCP access* in figscribe; *Assistant > How to
 connect* shows the configuration for other clients.
 
-Or use the built-in assistant (*Assistant > Chat*, Ctrl+Shift+A), which talks
-to Claude through the Anthropic API with the same tools:
+Or use the built-in assistant (*Assistant > Chat*, Ctrl+Shift+A) with the
+same tools. *Assistant > Choose Model…* picks what it talks to:
+
+- **Claude** through the Anthropic API (`ANTHROPIC_API_KEY`, or `ant auth login`);
+- **ChatGPT** or any other server with the OpenAI chat completions API
+  (`OPENAI_API_KEY`);
+- **a local model** in LM Studio (`http://localhost:1234/v1`), Ollama
+  (`http://localhost:11434/v1`), vLLM or llama.cpp: nothing leaves your
+  computer. *Load models* lists what the server offers; pick one that supports
+  tool calling.
 
 ```
 pip install "figscribe[chat]"
-export ANTHROPIC_API_KEY=...        # or sign in with `ant auth login`
 ```
+
+The model and server are remembered; an API key typed into figscribe is kept
+for the session only.
 
 ## Design principle
 
