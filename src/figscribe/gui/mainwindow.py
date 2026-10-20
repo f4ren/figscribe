@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDockWidget,
     QFileDialog,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -56,7 +57,14 @@ from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
 from figscribe.gui.start import DOCS_URL, StartPage, bundled_example
-from figscribe.model import ArtistBase, Axes, AxisSpec, FitCurve
+from figscribe.model import (
+    Annotation,
+    ArtistBase,
+    Axes,
+    AxisSpec,
+    FitCurve,
+    Histogram,
+)
 from figscribe.model.validate import FITTABLE
 from figscribe.render import export
 from figscribe.templates import template
@@ -104,6 +112,8 @@ class MainWindow(QMainWindow):
         self.ask: Callable[[str, str], bool] = self._ask_user
         """Asks a yes/no question; replaced in tests."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
+        self.ask_text: Callable[[str, str], str | None] = self._ask_text
+        """Asks for a line of text, None if cancelled; replaced in tests."""
         """Runs a dialog, True if accepted; replaced in tests."""
 
         self.preview = Preview(self.document)
@@ -142,6 +152,7 @@ class MainWindow(QMainWindow):
             lambda oid, side: self.add_panel(side, oid)
         )
         self.outline.delete_requested.connect(self._delete)
+        self.outline.note_requested.connect(self.add_note)
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
@@ -416,10 +427,19 @@ class MainWindow(QMainWindow):
     def _plot_steps(self, figure, artist, dialog) -> list:
         """Put `artist` into the target axes, naming its empty axes after the
         plotted columns and their units."""
-        labels = {
-            name: AxisSpec(label=str(ref.column), unit=dialog.unit_of(ref.column))
-            for name, ref in (("x", artist.x), ("y", artist.y))
-        }
+        if isinstance(artist, Histogram):
+            values = artist.values
+            labels = {
+                "x": AxisSpec(
+                    label=str(values.column), unit=dialog.unit_of(values.column)
+                ),
+                "y": AxisSpec(label="Count"),
+            }
+        else:
+            labels = {
+                name: AxisSpec(label=str(ref.column), unit=dialog.unit_of(ref.column))
+                for name, ref in (("x", artist.x), ("y", artist.y))
+            }
         axes_id = self._target_axes(figure)
         if axes_id is None:
             axes = Axes(artists=[artist], **labels)
@@ -483,6 +503,26 @@ class MainWindow(QMainWindow):
             return
         self._push(command)
         self.document.select(fit.id)
+
+    def add_note(self, oid: str | None = None) -> None:
+        """Add a note in the middle of a panel; drag it in the preview."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        target = oid if oid is not None else self._target_axes(figure)
+        if target is None:
+            self.show_error("No panel", ValueError("Add a panel or a plot first."))
+            return
+        text = self.ask_text("Add note", "Text (LaTeX allowed, e.g. $\\mu$):")
+        if not text:
+            return
+        note = Annotation(text=text, position=(0.5, 0.5), coords="axes")
+        self._push(InsertItem(target, "artists", note))
+        self.document.select(note.id)
+
+    def _ask_text(self, title: str, prompt: str) -> str | None:
+        text, ok = QInputDialog.getText(self, title, prompt)
+        return text.strip() if ok else None
 
     def _fit_target(self):
         figure = self.document.figure
@@ -721,6 +761,7 @@ class MainWindow(QMainWindow):
         self.fit_action = self._action(
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
+        self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
         self.panel_menu = insert.addMenu("Add Pa&nel")
         self.panel_actions = {}
         for side, text in PANEL_SIDES:

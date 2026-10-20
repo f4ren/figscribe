@@ -253,3 +253,68 @@ def test_font_size_with_a_style_sheet(tmp_path: Path) -> None:
         Figure(dpi=100, stylesheet="seaborn-v0_8-talk", font_size=9, axes=[axes])
     ]
     _assert_same(project, tmp_path)
+
+
+def test_histograms_and_notes(tmp_path: Path) -> None:
+    from figscribe.model import Annotation, Histogram
+
+    project, ref = _scan(tmp_path)
+    left = Axes(
+        col=0,
+        legend=Legend(visible=True),
+        artists=[
+            Histogram(values=ref["U"], bins=12, label="U"),
+            Histogram(
+                values=ref["t"],
+                bins=[0.0, 2.5, 5.0, 10.0],
+                density=True,
+                histtype="step",
+                color="C3",
+                label="t",
+            ),
+            Annotation(text="counts", position=(0.05, 0.9), coords="axes"),
+        ],
+    )
+    right = Axes(
+        col=1,
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"]),
+            Annotation(
+                text=r"$\mu$",
+                position=(7.0, 0.8),
+                arrow_to=(5.0, 1.0),
+                fontsize=12,
+                color="C1",
+            ),
+            Annotation(
+                text="corner",
+                position=(0.7, 0.1),
+                coords="axes",
+                arrow_to=(0.9, 0.3),
+                zorder=4,
+            ),
+        ],
+    )
+    project.figures = [
+        Figure(dpi=100, width_mm=150, layout=GridLayout(cols=2), axes=[left, right])
+    ]
+    script = _assert_same(project, tmp_path)
+    assert "bins=[0, 2.5, 5, 10]" in script and 'histtype="step"' in script
+    assert 'arrowprops=dict(arrowstyle="->", color="C1")' in script
+
+
+def test_a_histogram_of_values_with_gaps(tmp_path: Path) -> None:
+    from figscribe.model import Histogram
+
+    rows = "\n".join(["1.0", "nan", "2.5", "2.0", "inf", "3.5", "2.2"])
+    (tmp_path / "gaps.csv").write_text(f"v\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "gaps.csv", tmp_path)
+    values = ColumnRef(source=source.id, column="v")
+    project = Project(
+        sources=[source],
+        figures=[
+            Figure(dpi=100, axes=[Axes(artists=[Histogram(values=values, bins=4)])])
+        ],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "ax.hist(v[np.isfinite(v)], bins=4" in script

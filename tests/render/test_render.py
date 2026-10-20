@@ -245,10 +245,34 @@ def test_share_all_joins_every_axes(data) -> None:
     assert a.get_shared_y_axes().joined(a, b)
 
 
-def test_artists_outside_m1_are_refused(data) -> None:
-    axes = Axes(artists=[Annotation(text="x", position=(0.0, 0.0))])
-    with pytest.raises(NotImplementedError, match="annotation"):
+def test_artists_not_drawn_yet_are_refused(data) -> None:
+    from figscribe.model import ArrayRef, ImagePlot
+
+    axes = Axes(artists=[ImagePlot(data=ArrayRef(source="s"))])
+    with pytest.raises(NotImplementedError, match="image"):
         render(Figure(axes=[axes]), data)
+
+
+def test_a_histogram_leaves_out_values_it_cannot_place(data, ref, columns) -> None:
+    from figscribe.model import Histogram
+
+    columns["U"][3] = np.nan
+    hist = Histogram(values=ref("U"), bins=[0.0, 0.5, 1.0], density=True, label="h")
+    ax = render(Figure(axes=[Axes(artists=[hist])]), data).axes[0]
+    heights = [patch.get_height() for patch in ax.patches]
+    assert len(heights) == 2 and all(p.get_gid() == hist.id for p in ax.patches)
+    assert sum(h * 0.5 for h in heights) == pytest.approx(1.0)  # a density
+
+
+def test_an_annotation_with_and_without_arrow(data) -> None:
+    plain = Annotation(text="peak", position=(0.1, 0.9), coords="axes")
+    arrow = Annotation(text="here", position=(2.0, 0.5), arrow_to=(5.0, 1.0))
+    ax = render(Figure(axes=[Axes(artists=[plain, arrow])]), data).axes[0]
+    first, second = ax.texts
+    assert first.get_text() == "peak" and first.xycoords == "axes fraction"
+    assert first.arrow_patch is None
+    assert second.xy == (5.0, 1.0) and second.xyann == (2.0, 0.5)
+    assert second.arrow_patch is not None and second.get_gid() == arrow.id
 
 
 def test_right_y_axis_is_refused_for_now(data) -> None:

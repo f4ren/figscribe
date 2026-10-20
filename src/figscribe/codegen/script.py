@@ -22,6 +22,7 @@ from figscribe import __version__
 from figscribe.fit import numpy_source, parameter_names
 from figscribe.io.files import resolve_path
 from figscribe.model import (
+    Annotation,
     Axes,
     AxisSpec,
     ColumnRef,
@@ -30,13 +31,14 @@ from figscribe.model import (
     ExpressionFit,
     Figure,
     FitCurve,
+    Histogram,
     Legend,
     LinePlot,
     Project,
     ResidualPlot,
     ScatterPlot,
 )
-from figscribe.render.figure import CURVE_POINTS, MM_PER_INCH, DataProvider
+from figscribe.render.figure import COORDS, CURVE_POINTS, MM_PER_INCH, DataProvider
 from figscribe.render.labels import axis_label
 from figscribe.render.layout import (
     creation_order,
@@ -46,6 +48,8 @@ from figscribe.render.layout import (
 )
 
 WIDTH = 88
+DEFAULT_ZORDER = {"scatter": 1.0, "histogram": 1.0, "annotation": 3.0}
+"""Matplotlib's own z-order per kind; 2 (lines) for the rest."""
 RESERVED = {
     "np",
     "plt",
@@ -123,7 +127,7 @@ class _Writer:
         refs: list[ColumnRef] = []
         for axes in self.figure.axes:
             for artist in axes.artists:
-                for field in ("x", "y", "xerr", "yerr"):
+                for field in ("x", "y", "xerr", "yerr", "values"):
                     ref = getattr(artist, field, None)
                     if isinstance(ref, ColumnRef) and ref not in refs:
                         refs.append(ref)
@@ -519,9 +523,7 @@ class _Writer:
             )
 
     def _artist(self, ax: str, artist) -> None:
-        common = _common(
-            artist, default_zorder=1.0 if artist.kind == "scatter" else 2.0
-        )
+        common = _common(artist, default_zorder=DEFAULT_ZORDER.get(artist.kind, 2.0))
         if isinstance(artist, LinePlot):
             kwargs = _some(color=artist.color)
             kwargs |= {
@@ -557,6 +559,19 @@ class _Writer:
             }
             x, y = self.column(artist.x), self.column(artist.y)
             self.call(f"{ax}.errorbar", x, y, **kwargs, **common)
+        elif isinstance(artist, Histogram):
+            values = self.column(artist.values)
+            if not self._all_finite([artist.values]):
+                values = f"{values}[np.isfinite({values})]"
+            kwargs = {"bins": _value(artist.bins)}
+            if artist.density:
+                kwargs["density"] = "True"
+            if artist.histtype != "bar":
+                kwargs["histtype"] = _str(artist.histtype)
+            kwargs |= _some(color=artist.color)
+            self.call(f"{ax}.hist", values, **kwargs, **common)
+        elif isinstance(artist, Annotation):
+            self._annotation(ax, artist, common)
         elif isinstance(artist, FitCurve):
             self._fit_curve(ax, artist, common)
         elif isinstance(artist, ResidualPlot):
@@ -565,6 +580,33 @@ class _Writer:
             raise NotImplementedError(
                 f"generating code for {artist.kind!r} artists is not implemented yet"
             )
+
+    def _annotation(self, ax: str, note: Annotation, common: dict[str, str]) -> None:
+        coords = COORDS[note.coords]
+        point = note.arrow_to if note.arrow_to is not None else note.position
+        kwargs = {"xy": _value(tuple(point))}
+        if coords != "data":
+            kwargs["xycoords"] = _str(coords)
+        if note.arrow_to is not None:
+            kwargs["xytext"] = _value(tuple(note.position))
+            if coords != "data":
+                kwargs["textcoords"] = _str(coords)
+            props = {"arrowstyle": "->"}
+            if note.color is not None:
+                props["color"] = note.color
+            kwargs["arrowprops"] = (
+                "dict(" + ", ".join(f"{k}={_str(v)}" for k, v in props.items()) + ")"
+            )
+        if note.fontsize is not None:
+            kwargs["fontsize"] = _num(note.fontsize)
+        kwargs |= _some(color=note.color)
+        self.call(f"{ax}.annotate", _str(note.text), **kwargs, **common)
+
+    def _all_finite(self, refs) -> bool:
+        """Whether the data behind `refs` is all finite; False if unknown."""
+        if self.data is None:
+            return False
+        return all(bool(np.all(np.isfinite(self.data(r)))) for r in refs)
 
     def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
         if fit.id not in self.fits:

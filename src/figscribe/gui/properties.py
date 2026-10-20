@@ -67,7 +67,6 @@ SKIPPED = {
     "model",
     "initial_values",
     "result",
-    "bins",
 }
 """Fields with no editor here: identity, item lists (edited in the outline),
 and values that need a dedicated editor (fits, histogram bins)."""
@@ -92,6 +91,8 @@ class Spec:
 
 def spec_for(name: str, annotation: Any) -> Spec | None:
     """The editor for a field, or None when the panel has none for it."""
+    if name == "bins":
+        return Spec("bins")
     optional = False
     args = typing.get_args(annotation)
     if _is_union(annotation) and type(None) in args:
@@ -136,6 +137,7 @@ SECTIONS = {
     "xerr": "Data",
     "yerr": "Data",
     "values": "Data",
+    "bins": "Data",
     "c": "Data",
     "target": "Data",
     "name": "Size",
@@ -753,6 +755,13 @@ def _pair(text: str) -> tuple[float, float]:
     return values[0], values[1]
 
 
+def _bins(text: str) -> int | list[float]:
+    """A number of bins ("20") or their edges ("0, 1, 2.5")."""
+    if "," not in text:
+        return _int(text)
+    return _floats(text)
+
+
 def _quad(text: str) -> tuple[float, float, float, float]:
     values = _floats(text)
     if len(values) != 4:
@@ -770,6 +779,7 @@ _TEXT: dict[str, tuple[Callable[[str], Any], Callable[[Any], str]]] = {
     "float": (_float, repr),
     "pair": (_pair, _join),
     "quad": (_quad, _join),
+    "bins": (_bins, lambda v: str(v) if isinstance(v, int) else _join(v)),
     "floats": (_floats, _join),
     "strings": (lambda t: [part.strip() for part in t.split(",")], _join),
 }

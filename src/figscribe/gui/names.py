@@ -40,6 +40,8 @@ FIELD_NAMES = {
     "capsize": "Cap size (pt)",
     "elinewidth": "Error bar width (pt)",
     "histtype": "Style",
+    "bins": "Bins (count, or edges)",
+    "values": "Values",
     "density": "Normalize to density",
     "cmap": "Color map",
     "norm": "Scale",

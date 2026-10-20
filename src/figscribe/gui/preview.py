@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from figscribe.commands import Macro, SetField
+from figscribe.commands import CommandError, Macro, SetField, find
 from figscribe.gui import theme
 from figscribe.gui.document import Document
 from figscribe.gui.names import size_text
@@ -73,6 +73,13 @@ class _Press:
     """The panel under the press, which a drag pans."""
     legend: object = None
     """The Matplotlib legend under the press, which a drag moves."""
+    note: object = None
+    """The Matplotlib annotation under the press, which a drag moves."""
+
+    @property
+    def moving(self):
+        return self.legend if self.legend is not None else self.note
+
     dragging: bool = False
 
 
@@ -390,9 +397,9 @@ class Preview(QWidget):
 
     def _moved_legend_rect(self) -> QRectF | None:
         press = self._press
-        if press is None or press.legend is None or not press.dragging:
+        if press is None or press.moving is None or not press.dragging:
             return None
-        box = press.legend.get_window_extent()
+        box = press.moving.get_window_extent()
         rect = QRectF(self._to_widget(box.x0, box.y1), self._to_widget(box.x1, box.y0))
         return rect.translated(press.last - press.start)
 
@@ -420,11 +427,13 @@ class Preview(QWidget):
             self.document.select(None)
             return
         ax = self.axes_at(point)
+        legend = self._legend_at(point)
         self._press = _Press(
             point,
             point,
             axes_id=ax.get_gid() if ax is not None else None,
-            legend=self._legend_at(point),
+            legend=legend,
+            note=self._note_at(point) if legend is None else None,
         )
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
@@ -437,7 +446,7 @@ class Preview(QWidget):
             if abs(moved.x()) + abs(moved.y()) < DRAG_THRESHOLD:
                 return
             press.dragging = True
-        if press.legend is None and press.axes_id is not None:
+        if press.moving is None and press.axes_id is not None:
             delta = point - press.last
             self.pan(press.axes_id, delta.x(), delta.y())
         press.last = point
@@ -452,6 +461,9 @@ class Preview(QWidget):
         elif press.legend is not None:
             moved = event.position() - press.start
             self.move_legend(press.legend.get_gid(), moved.x(), moved.y())
+        elif press.note is not None:
+            moved = event.position() - press.start
+            self.move_note(press.note.get_gid(), moved.x(), moved.y())
         self.update()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt naming
@@ -459,6 +471,38 @@ class Preview(QWidget):
             self.reset_view()
             return
         super().keyPressEvent(event)
+
+    def move_note(self, note_id: str, dx: float, dy: float) -> None:
+        """Move the note `note_id` by (dx, dy) logical pixels, as one undo
+        step, in the coordinates it is placed in; an arrow keeps its tip."""
+        try:
+            note = find(self.document.project, note_id)
+        except CommandError:
+            return
+        found = [
+            (ax, t)
+            for ax in _all_axes(self._figure)
+            for t in ax.texts
+            if t.get_gid() == note_id
+        ]
+        if not found:
+            return
+        ax = found[0][0]
+        transform = ax.transAxes if note.coords == "axes" else ax.transData
+        ratio = self.devicePixelRatioF()
+        x, y = transform.transform(note.position)
+        new = transform.inverted().transform((x + dx * ratio, y - dy * ratio))
+        position = (float(new[0]), float(new[1]))
+        self.document.push(SetField(note_id, ("position",), position))
+
+    def _note_at(self, point: QPointF):
+        x, y = self._to_display(point)
+        event = MouseEvent("button_press_event", self._figure.canvas, x, y)
+        for ax in _all_axes(self._figure):
+            for text in ax.texts:
+                if text.get_gid() and text.get_visible() and text.contains(event)[0]:
+                    return text
+        return None
 
     def _legend_at(self, point: QPointF):
         x, y = self._to_display(point)

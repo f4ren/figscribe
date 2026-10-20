@@ -713,3 +713,25 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   return the preview image.
 - Tests drive the loop with a scripted model, and the real SDK path against a
   local server, so they need neither network nor key.
+
+## 0020 — Histograms and notes
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Decision
+
+- **Histograms** draw the finite values of their column (NaN and inf are
+  left out, as in a fit; the script filters only where the data has them),
+  with a bin count or explicit edges, density and style. A file with a single
+  column suggests a histogram on import, with "Count" on the y axis; the plot
+  dialog offers "Histogram"; the property panel takes "20" or "0, 1, 2.5" as
+  bins.
+- **Notes** are `Annotation`s drawn with `ax.annotate`: text at a position in
+  data or axes coordinates, and with `arrow_to` an arrow from the text to
+  that point. Unset font size and colour are not passed, like other text.
+  *Insert > Add Note…* and the panel's context menu put a note in the middle
+  of the panel; dragging it in the preview moves its text (the arrow keeps
+  its tip), one undo step, in the coordinates it is placed in.
+- The script sets z-orders only where they differ from Matplotlib's own per
+  kind (1 for scatter and histogram patches, 3 for text, 2 otherwise).

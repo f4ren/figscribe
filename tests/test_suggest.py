@@ -57,10 +57,17 @@ def test_an_error_column_is_never_x_or_y() -> None:
     assert (found[0].x, found[0].y, found[0].yerr) == ("t", "U", "dU")
 
 
-def test_numbered_columns_and_too_few_columns() -> None:
+def test_numbered_columns_and_single_columns() -> None:
     assert [(s.kind, s.x, s.y) for s in suggest([0, 1])] == [
         ("line", 0, 1),
         ("scatter", 0, 1),
     ]
-    assert suggest(["t"]) == []
-    assert suggest(["U", "dU"]) == []
+    (single,) = suggest(["t"])
+    assert (single.kind, single.title, single.detail) == (
+        "histogram",
+        "Distribution of t",
+        "Histogram",
+    )
+    assert single.build("src").values.column == "t"
+    assert [s.kind for s in suggest(["U", "dU"])] == ["histogram"]
+    assert suggest([]) == []
