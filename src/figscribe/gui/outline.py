@@ -53,6 +53,8 @@ class Outline(QTreeWidget):
     panel_requested = Signal(str, str)
     """Add a panel beside or inside the panel with this id: (id, side)."""
     delete_requested = Signal(str)
+    note_requested = Signal(str)
+    """Add a note to the panel with this id."""
 
     def __init__(self, document: Document, parent: QWidget | None = None):
         super().__init__(parent)
@@ -226,6 +228,8 @@ class Outline(QTreeWidget):
                         lambda _=False, s=side: self.panel_requested.emit(oid, s)
                     )
                 menu.addSeparator()
+            menu.addAction("Add note…", lambda: self.note_requested.emit(oid))
+            menu.addSeparator()
             menu.addAction("Delete panel", lambda: self.delete_requested.emit(oid))
         elif isinstance(obj, Figure):
             if not obj.axes:

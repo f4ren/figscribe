@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from figscribe.model import ColumnRef, ErrorbarPlot, LinePlot, ScatterPlot
+from figscribe.model import ColumnRef, ErrorbarPlot, Histogram, LinePlot, ScatterPlot
 
 _PREFIXES = (
     "delta_",
@@ -81,27 +81,34 @@ class Suggestion:
     """A first plot of the data: what it is called, and how to build it."""
 
     kind: str
-    """"errorbar", "line" or "scatter"."""
+    """"errorbar", "line", "scatter" or "histogram"."""
     x: str | int
     y: str | int
     yerr: str | int | None = None
 
     @property
     def title(self) -> str:
+        if self.kind == "histogram":
+            return f"Distribution of {self.y}"
         if self.yerr is not None:
             return f"{self.y} ± {self.yerr} against {self.x}"
         return f"{self.y} against {self.x}"
 
     @property
     def detail(self) -> str:
-        return {"errorbar": "Error bars", "line": "Line", "scatter": "Points"}[
-            self.kind
-        ]
+        return {
+            "errorbar": "Error bars",
+            "line": "Line",
+            "scatter": "Points",
+            "histogram": "Histogram",
+        }[self.kind]
 
     def build(self, source_id: str):
         def ref(column: str | int) -> ColumnRef:
             return ColumnRef(source=source_id, column=column)
 
+        if self.kind == "histogram":
+            return Histogram(values=ref(self.y))
         if self.kind == "errorbar":
             return ErrorbarPlot(x=ref(self.x), y=ref(self.y), yerr=ref(self.yerr))
         cls = LinePlot if self.kind == "line" else ScatterPlot
@@ -117,8 +124,10 @@ def suggest(columns: list[str | int]) -> list[Suggestion]:
     names = [str(c) for c in columns]
     errors = error_columns(names)
     plain = [c for c, n in zip(columns, names, strict=True) if n not in errors]
-    if len(plain) < 2:
+    if not plain:
         return []
+    if len(plain) == 1:
+        return [Suggestion("histogram", plain[0], plain[0])]
     x, y = plain[0], plain[1]
     yerr = next(
         (c for c, n in zip(columns, names, strict=True) if errors.get(n) == str(y)),

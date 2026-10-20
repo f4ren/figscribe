@@ -19,6 +19,7 @@ from figscribe.model import (
     ColumnRef,
     ErrorbarPlot,
     Figure,
+    Histogram,
     LinePlot,
     ScatterPlot,
 )
@@ -27,6 +28,7 @@ KINDS: dict[str, type[ArtistBase]] = {
     "Line": LinePlot,
     "Scatter": ScatterPlot,
     "Error bars": ErrorbarPlot,
+    "Histogram": Histogram,
 }
 
 
@@ -75,6 +77,10 @@ class PlotDialog(QDialog):
     def artist(self) -> ArtistBase:
         """The plot as chosen."""
         cls = KINDS[self.kind.currentText()]
+        if cls is Histogram:
+            return Histogram(
+                values=self.y.currentData(), label=self.label.text() or None
+            )
         fields = {
             "x": self.x.currentData(),
             "y": self.y.currentData(),
@@ -94,9 +100,10 @@ class PlotDialog(QDialog):
         return box
 
     def _update(self) -> None:
-        errors = KINDS[self.kind.currentText()] is ErrorbarPlot
-        self.yerr.setEnabled(errors)
-        self.xerr.setEnabled(errors)
+        kind = KINDS[self.kind.currentText()]
+        self.yerr.setEnabled(kind is ErrorbarPlot)
+        self.xerr.setEnabled(kind is ErrorbarPlot)
+        self.x.setEnabled(kind is not Histogram)  # a histogram has only values
 
     def _update_label(self) -> None:
         ref = self.y.currentData()

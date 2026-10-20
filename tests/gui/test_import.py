@@ -121,14 +121,25 @@ def test_the_dialog_suggests_first_plots(qtbot, example: Path) -> None:
     assert dialog.suggestion.kind == "line"  # the choice survives
 
 
-def test_without_a_plot_to_suggest_ok_only_adds(qtbot, tmp_path: Path) -> None:
+def test_a_single_column_suggests_a_histogram(qtbot, tmp_path: Path) -> None:
     single = tmp_path / "single.csv"
     single.write_text("counts\n1\n2\n3\n", encoding="utf-8")
     dialog = ImportDialog(single, tmp_path)
     qtbot.addWidget(dialog)
-    assert dialog.suggestions == [] and dialog.mode == "data"
+    assert [s.kind for s in dialog.suggestions] == ["histogram"]
+    assert dialog.mode == "plot"
     ok = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
-    assert ok.text() == "Add"
+    assert ok.text() == "Add and plot"
+
+
+def test_a_histogram_on_import_names_its_axes(window, tmp_path: Path) -> None:
+    single = tmp_path / "single.csv"
+    single.write_text("counts\n1\n2\n3\n", encoding="utf-8")
+    window.import_csv(single)
+    axes = window.document.figure.axes[0]
+    assert axes.artists[0].kind == "histogram"
+    assert (axes.x.label, axes.y.label) == ("counts", "Count")
+    assert window.preview.error is None
 
 
 def test_a_wrong_option_disables_ok(qtbot, example: Path) -> None:

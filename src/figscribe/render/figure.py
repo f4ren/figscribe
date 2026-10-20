@@ -16,6 +16,7 @@ from matplotlib.figure import Figure as MplFigure
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 
 from figscribe.model import (
+    Annotation,
     Artist,
     Axes,
     AxisSpec,
@@ -23,6 +24,7 @@ from figscribe.model import (
     ErrorbarPlot,
     Figure,
     FitCurve,
+    Histogram,
     Legend,
     LinePlot,
     ResidualPlot,
@@ -216,6 +218,21 @@ def _draw_artist(
         # or a bar maps back to the artist as well.
         for part in container.get_children():
             part.set_gid(artist.id)
+    elif isinstance(artist, Histogram):
+        values = np.asarray(data(artist.values), dtype=float)
+        # np.histogram cannot place NaN or inf; they are left out, like in a fit.
+        _, _, patches = ax.hist(
+            values[np.isfinite(values)],
+            bins=artist.bins,
+            density=artist.density,
+            histtype=artist.histtype,
+            color=artist.color,
+            **common,
+        )
+        for patch in patches:
+            patch.set_gid(artist.id)
+    elif isinstance(artist, Annotation):
+        _draw_annotation(artist, ax, common)
     elif isinstance(artist, FitCurve):
         _draw_fit(artist, ax, data, artists, common)
     elif isinstance(artist, ResidualPlot):
@@ -224,6 +241,36 @@ def _draw_artist(
         raise NotImplementedError(
             f"rendering {artist.kind!r} artists is not implemented yet"
         )
+
+
+COORDS = {"data": "data", "axes": "axes fraction"}
+"""Annotation coordinates, as Matplotlib names them."""
+
+
+def _draw_annotation(note: Annotation, ax: MplAxes, common: dict) -> None:
+    """A note at its position; with `arrow_to`, an arrow from it to there."""
+    coords = COORDS[note.coords]
+    arrow = {}
+    if note.arrow_to is not None:
+        props = {"arrowstyle": "->"}
+        if note.color is not None:
+            props["color"] = note.color
+        arrow = {"xytext": note.position, "textcoords": coords, "arrowprops": props}
+    # Unset sizes and colours are not passed: None is not the same as the
+    # default for every Matplotlib text property.
+    style = {
+        key: value
+        for key, value in (("fontsize", note.fontsize), ("color", note.color))
+        if value is not None
+    }
+    ax.annotate(
+        note.text,
+        xy=note.arrow_to if note.arrow_to is not None else note.position,
+        xycoords=coords,
+        **arrow,
+        **style,
+        **common,
+    )
 
 
 CURVE_POINTS = 400
