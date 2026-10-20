@@ -19,6 +19,22 @@ from figscribe.model import ArrayRef, ColumnRef, Figure, Project, dumps, loads
 from figscribe.render import DataProvider
 from figscribe.tools.workspace import array_choices, column_choices
 
+AXIS_FIELDS = ("x", "y", "y_right")
+"""The axes of a panel that can be selected on their own."""
+
+
+def axis_id(axes_id: str, field: str) -> str:
+    """The selection id of one axis of a panel, e.g. "3f2a…/x"."""
+    return f"{axes_id}/{field}"
+
+
+def split_axis(oid: str | None) -> tuple[str, str] | None:
+    """(panel id, "x" | "y" | "y_right") for an axis's selection id."""
+    if oid is None or "/" not in oid:
+        return None
+    axes_id, field = oid.rsplit("/", 1)
+    return (axes_id, field) if field in AXIS_FIELDS else None
+
 
 class Document(QObject):
     changed = Signal()
@@ -146,13 +162,17 @@ class Document(QObject):
         self.state_changed.emit()
 
     def _exists(self, oid: str) -> bool:
+        axis = split_axis(oid)
         try:
-            find(self.project, oid)
+            obj = find(self.project, axis[0] if axis else oid)
         except CommandError:
             return False
-        return True
+        return axis is None or getattr(obj, axis[1], None) is not None
 
     def _figure_of(self, oid: str) -> Figure | None:
+        axis = split_axis(oid)
+        if axis is not None:
+            oid = axis[0]
         for figure in self.project.figures:
             if figure.id == oid:
                 return figure

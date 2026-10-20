@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from figscribe.commands import CommandError, SetField, find
 from figscribe.gui import theme
-from figscribe.gui.document import Document
+from figscribe.gui.document import Document, split_axis
 from figscribe.gui.names import artist_name, panel_name, size_text
 from figscribe.gui.widgets import FlowLayout, chip
 from figscribe.model import Axes, Figure
@@ -277,6 +277,9 @@ class Outline(QTreeWidget):
     def _show_selection(self, oid: str | None) -> None:
         self._syncing = True
         try:
+            axis = split_axis(oid)
+            if axis is not None:
+                oid = axis[0]  # an axis is shown as its panel's row
             item = self.item_for(oid) if oid is not None else None
             self.setCurrentItem(item) if item else self.clearSelection()
         finally:

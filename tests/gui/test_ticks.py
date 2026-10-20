@@ -42,9 +42,10 @@ def test_the_figure_sets_the_tick_style(panel, document) -> None:
 
 def test_an_axis_shows_its_values_with_a_prefix(panel, document) -> None:
     axes = document.figure.axes[0]
-    document.select(axes.id)
-    assert panel.editors[("x", "prefix")].widget.currentText() == "as in the data"
-    _choose(panel, ("x", "prefix"), "m (×10⁻³)")
+    document.select(f"{axes.id}/x")
+    combo = panel.axis_form.prefix
+    assert combo.currentText() == "s, as in the data"
+    combo.activated.emit(combo.findText("ms"))
     assert document.figure.axes[0].x.prefix == "m"
     document.undo()
     assert document.figure.axes[0].x.prefix is None

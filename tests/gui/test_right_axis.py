@@ -34,12 +34,13 @@ def test_a_panel_gets_and_loses_its_right_axis(panel, document) -> None:
     axes = _axes(document)
     document.select(axes.id)
     switch = panel.editors[("y_right",)].widget
-    assert not switch.isChecked() and "Right y axis" not in panel.sections
+    assert not switch.isChecked() and "y_right" not in panel.axis_links
     switch.setChecked(True)
     assert _axes(document).y_right is not None
     assert document.history.undo_text == "Add the right y axis"
-    assert "Right y axis" in panel.sections
-    assert ("y_right", "label") in panel.editors
+    panel.axis_links["y_right"].click()
+    assert document.selected == f"{axes.id}/y_right"
+    assert "Label" in panel.sections
 
     plot = _axes(document).artists[0]
     document.push(_right(plot))

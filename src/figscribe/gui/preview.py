@@ -21,6 +21,7 @@ from matplotlib.artist import Artist as MplArtist
 from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure as MplFigure
+from matplotlib.transforms import Bbox
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
@@ -42,10 +43,10 @@ from PySide6.QtWidgets import (
 
 from figscribe.commands import CommandError, Macro, SetField, find
 from figscribe.gui import theme
-from figscribe.gui.document import Document
+from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.names import size_text
 from figscribe.render import render
-from figscribe.render.figure import MM_PER_INCH, style_context
+from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
 
 MARGIN = 28
 """Logical pixels kept free around the figure."""
@@ -58,6 +59,8 @@ CAPTION = 30
 DRAG_THRESHOLD = 4
 """Logical pixels the mouse moves before a press becomes a drag."""
 ZOOM_STEP = 1.25
+AXIS_STRIP = 8.0
+"""Pixels along a panel's edge that count as its axis when clicked."""
 """Zoom factor of one wheel step."""
 
 Limits = tuple[tuple[float, float], tuple[float, float]]
@@ -267,22 +270,88 @@ class Preview(QWidget):
                     hits.append((artist.get_zorder(), gid))
             if hits:
                 return max(hits)[1]
+        axis = self.axis_at(point)
+        if axis is not None:
+            return axis
         for ax in _all_axes(self._figure):
             if ax.get_gid() and ax.contains(event)[0]:
                 return ax.get_gid()
         return None
+
+    def axis_at(self, point: QPointF) -> str | None:
+        """Selection id of the axis whose numbers or label lie at `point`."""
+        if self._figure is None:
+            return None
+        x, y = self._to_display(point)
+        for oid, boxes in self._axis_boxes():
+            if any(box.contains(x, y) for box in boxes):
+                return oid
+        return None
+
+    def axis_limits(self, oid: str) -> tuple[float, float] | None:
+        """The range an axis shows right now, automatic or not."""
+        for ax, field in self._model_axes():
+            if axis_id(_host(ax), field) == oid:
+                axis = ax.xaxis if field == "x" else ax.yaxis
+                low, high = axis.get_view_interval()
+                return (min(low, high), max(low, high))
+        return None
+
+    def _model_axes(self):
+        """(Matplotlib axes, field) for every axis of a model panel."""
+        if self._figure is None or self.document.figure is None:
+            return
+        panels = {a.id for a in self.document.figure.axes}
+        for ax in _all_axes(self._figure):
+            gid = ax.get_gid() or ""
+            if _host(ax) not in panels:
+                continue
+            if gid.endswith(RIGHT):
+                yield ax, "y_right"
+            else:
+                yield ax, "x"
+                yield ax, "y"
+
+    def _axis_boxes(self):
+        """(axis selection id, boxes of its numbers, label and edge strip)."""
+        renderer = self._figure.canvas.get_renderer()
+        for ax, field in self._model_axes():
+            axis = ax.xaxis if field == "x" else ax.yaxis
+            box = ax.bbox
+            strip = AXIS_STRIP
+            if field == "x":
+                edge = Bbox([[box.x0, box.y0 - strip], [box.x1, box.y0]])
+            elif field == "y":
+                edge = Bbox([[box.x0 - strip, box.y0], [box.x0, box.y1]])
+            else:
+                edge = Bbox([[box.x1, box.y0], [box.x1 + strip, box.y1]])
+            boxes = [edge]
+            if axis.label.get_visible() and axis.label.get_text():
+                boxes.append(axis.label.get_window_extent(renderer))
+            low, high = sorted(axis.get_view_interval())
+            span = (high - low) * 1e-9
+            for tick in axis.get_major_ticks():
+                if not low - span <= tick.get_loc() <= high + span:
+                    continue  # placed by the locator, but not drawn
+                for text in (tick.label1, tick.label2):
+                    if text.get_visible() and text.get_text():
+                        boxes.append(text.get_window_extent(renderer))
+            yield axis_id(_host(ax), field), boxes
 
     def selection_rect(self) -> QRectF | None:
         """Outline of the selected object, in widget coordinates."""
         oid = self.document.selected
         if self._figure is None or oid is None:
             return None
-        boxes = [
-            a.get_window_extent()
-            for ax in _all_axes(self._figure)
-            for a in (ax, *_children(ax))
-            if a.get_gid() == oid and a.get_visible()
-        ]
+        if split_axis(oid) is not None:
+            boxes = next((b for a, b in self._axis_boxes() if a == oid), [])
+        else:
+            boxes = [
+                a.get_window_extent()
+                for ax in _all_axes(self._figure)
+                for a in (ax, *_children(ax))
+                if a.get_gid() == oid and a.get_visible()
+            ]
         boxes = [b for b in boxes if np.all(np.isfinite(b.extents)) and b.width >= 0]
         if not boxes:
             return None
@@ -531,6 +600,12 @@ class Preview(QWidget):
         return QPointF(
             self._origin.x() + x / ratio, self._origin.y() + (height - y) / ratio
         )
+
+
+def _host(ax) -> str:
+    """The model panel id of a Matplotlib axes, also of its right twin."""
+    gid = ax.get_gid() or ""
+    return gid[: -len(RIGHT)] if gid.endswith(RIGHT) else gid
 
 
 def _all_axes(fig: MplFigure) -> list:

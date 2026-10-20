@@ -41,7 +41,8 @@ from PySide6.QtWidgets import (
 from figscribe.commands import CommandError, Macro, SetField, find
 from figscribe.fit import FitError, refit
 from figscribe.gui import theme
-from figscribe.gui.document import Document
+from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
+from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
 from figscribe.gui.names import (
     KIND_NAMES,
     artist_name,
@@ -211,6 +212,7 @@ ORDER = [
     "Data",
     "Size",
     "Panel",
+    "Axes",
     "Position",
     "File",
     "Reading",
@@ -244,6 +246,35 @@ PLACEHOLDERS = {
     "wspace": "automatic",
 }
 
+TIPS = {
+    "name": "Shown in the contents list and used for the file names of exports.",
+    "width_mm": "Width of the whole figure as printed; 85 mm is a typical "
+    "single journal column, 175 mm a double one.",
+    "height_mm": "Height of the whole figure as printed.",
+    "dpi": "Resolution of PNG exports; PDF and SVG stay sharp at any size.",
+    "unit_format": "How a unit is joined to an axis label.",
+    "stylesheet": "A Matplotlib style sheet the figure starts from.",
+    "font_size": "Base font size; labels, numbers and legend scale with it.",
+    "tick_direction": "Whether tick marks point into the plot, out of it, or both.",
+    "ticks_all_sides": "Tick marks also on the top and right edge of every "
+    "panel; the numbers stay at the bottom and left.",
+    "title": "Text above the panel; LaTeX between $ signs.",
+    "title_size": "Font size of the title; empty follows the figure.",
+    "y_right": "A second y axis on the right, for plots in another unit.",
+    "grid": "Grid lines behind the plots.",
+    "grid_axis": "Which axes get grid lines.",
+    "grid_which": "Grid lines at the numbered ticks, the minor ticks, or both.",
+    "row": "Grid row of the panel, from the top, starting at 0.",
+    "col": "Grid column of the panel, from the left, starting at 0.",
+    "rowspan": "How many grid rows the panel covers.",
+    "colspan": "How many grid columns the panel covers.",
+    "label": "Entry in the legend; empty keeps the plot out of it.",
+    "zorder": "Plots with a higher number are drawn on top.",
+    "alpha": "1 is opaque, 0 invisible.",
+    "axis": "Which y axis the plot is drawn against.",
+}
+"""Explanations shown when the mouse rests on a field."""
+
 GREEK = {
     "alpha": "α",
     "beta": "β",
@@ -273,6 +304,9 @@ class PropertyPanel(QScrollArea):
         self.sections: dict[str, Section] = {}
         self._shown: tuple | None = None
         self._fit_result = None
+        self.axis_form: AxisForm | None = None
+        self.axis_range: Callable[[str], tuple[float, float] | None] = lambda _: None
+        """The range an axis shows right now; the window asks the preview."""
         self._folded = {title: True for title in COLLAPSED}
         self.set_document(document)
 
@@ -293,12 +327,15 @@ class PropertyPanel(QScrollArea):
                 self._folded[title] = not section.expanded
         self.editors = {}
         self.sections = {}
+        self.axis_links: dict[str, QPushButton] = {}
         body = QWidget()
         body.setObjectName("sidePanel")
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        self.axis_form = None
+        axis = split_axis(self.document.selected)
         obj = self._selected_object()
         if obj is None:
             self._shown = None
@@ -308,13 +345,19 @@ class PropertyPanel(QScrollArea):
             hint.setContentsMargins(16, 16, 16, 16)
             layout.addWidget(hint)
         else:
-            self._shown = _shape(obj)
+            self._shown = self._shape_of(obj)
             layout.addWidget(self._header(obj))
         self._error = label("", "error")
         self._error.setContentsMargins(16, 8, 16, 0)
         self._error.hide()
         layout.addWidget(self._error)
-        if obj is not None:
+        if axis is not None and obj is not None:
+            oid = self.document.selected
+            self.axis_form = AxisForm(
+                self, axis[0], axis[1], layout, lambda: self.axis_range(oid)
+            )
+            self.axis_form.show(obj)
+        elif obj is not None:
             self._fill(obj, layout)
         layout.addStretch(1)
         self.setWidget(body)
@@ -322,13 +365,15 @@ class PropertyPanel(QScrollArea):
     def refresh(self) -> None:
         """Show the model's current values; rebuild if the object changed."""
         obj = self._selected_object()
-        if obj is None or self._shown != _shape(obj):
+        if obj is None or self._shown != self._shape_of(obj):
             self.rebuild()
             return
         if isinstance(obj, FitCurve) and obj.result != self._fit_result:
             self.rebuild()
             return
         self._update_header(obj)
+        if self.axis_form is not None:
+            self.axis_form.show(obj)
         for path, editor in self.editors.items():
             editor.show(_get(obj, path))
 
@@ -387,6 +432,13 @@ class PropertyPanel(QScrollArea):
         self._error.setText(message)
         self._error.show()
 
+    def clear_report(self) -> None:
+        self._error.hide()
+
+    def _shape_of(self, obj: BaseModel) -> tuple:
+        oid = self.document.selected
+        return ("axis", oid) if split_axis(oid) else _shape(obj)
+
     # --- layout ---------------------------------------------------------------
 
     def _header(self, obj: BaseModel) -> QWidget:
@@ -403,7 +455,13 @@ class PropertyPanel(QScrollArea):
         return box
 
     def _update_header(self, obj: BaseModel) -> None:
-        kicker, title = _describe(obj, self.document)
+        axis = split_axis(self.document.selected)
+        if axis is not None:
+            axes = find(self.document.project, axis[0])
+            panel = _describe(axes, self.document)[1]
+            kicker, title = f"{AXIS_TITLES[axis[1]]} · {panel}", axis_summary(obj)
+        else:
+            kicker, title = _describe(obj, self.document)
         self._kicker.setText(kicker.upper())
         self._title.setText(title)
 
@@ -419,10 +477,16 @@ class PropertyPanel(QScrollArea):
                 if inset:
                     nested.append(name)
                 continue
-            if name in OPTIONAL_PARTS and getattr(obj, name) is not None:
+            if (
+                name in OPTIONAL_PARTS
+                and getattr(obj, name) is not None
+                and not (isinstance(obj, Axes) and name in AXIS_FIELDS)
+            ):
                 nested.append(name)
             if inset and SECTIONS.get(name) == "Position":
                 continue  # an inset is placed by its bounds, not in the grid
+            if isinstance(obj, Axes) and name in ("x", "y"):
+                continue  # each axis has its own form, linked from "Axes"
             spec = spec_for(name, field.annotation)
             if spec is not None and spec.kind == "model":
                 nested.append(name)
@@ -433,6 +497,8 @@ class PropertyPanel(QScrollArea):
         if "Look" in groups:
             groups["Look"].sort(key=lambda n: LOOK.index(n) if n in LOOK else 99)
         titles = {_section_name(n): n for n in nested}
+        if isinstance(obj, Axes):
+            groups.setdefault("Axes", [])
         order = [t for t in ORDER if t in groups]
         order += [t for t in titles if t not in groups]
         order += [t for t in groups if t not in order]
@@ -443,6 +509,8 @@ class PropertyPanel(QScrollArea):
             if title in titles:
                 name = titles[title]
                 self._nested(form, getattr(obj, name), (name,))
+            if title == "Axes":
+                self._axis_links(form, obj)
             if title == "Data" and isinstance(obj, FitCurve):
                 layout.addWidget(self._fit_card(obj))
         self._fit_result = getattr(obj, "result", None)
@@ -493,7 +561,27 @@ class PropertyPanel(QScrollArea):
         editor = make_editor(spec, path, self)
         editor.show(value)
         self.editors[path] = editor
-        form.addRow(_form_label(name), editor.widget)
+        caption = _form_label(name)
+        if top and name in TIPS:
+            caption.setToolTip(TIPS[name])
+            editor.widget.setToolTip(TIPS[name])
+        form.addRow(caption, editor.widget)
+
+    def _axis_links(self, form: QFormLayout, axes: Axes) -> None:
+        """One line per axis; clicking it opens the axis's own form."""
+        for field in AXIS_FIELDS:
+            spec = getattr(axes, field)
+            if spec is None:
+                continue
+            text = f"{AXIS_TITLES[field].capitalize()}\n{axis_summary(spec)}  ›"
+            link = QPushButton(text)
+            link.setObjectName("axisLink")
+            link.setToolTip(f"Range, ticks and label of the {AXIS_TITLES[field]}")
+            link.clicked.connect(
+                lambda _=False, f=field: self.document.select(axis_id(axes.id, f))
+            )
+            self.axis_links[field] = link
+            form.addRow(link)
 
     def _fit_card(self, fit: FitCurve) -> QWidget:
         holder = QWidget()
@@ -542,10 +630,12 @@ class PropertyPanel(QScrollArea):
         oid = self.document.selected
         if oid is None:
             return None
+        axis = split_axis(oid)
         try:
-            return find(self.document.project, oid)
+            obj = find(self.document.project, axis[0] if axis else oid)
         except CommandError:
             return None
+        return getattr(obj, axis[1]) if axis else obj
 
     def _pick_color(self, current: str | None) -> str | None:
         start = QColor(theme.plot_color(current, 0))
@@ -922,7 +1012,11 @@ def _axes_of(project, artist_id: str) -> Axes | None:
 
 
 def _form_label(name: str) -> QLabel:
-    widget = QLabel(field_name(name))
+    return _caption(field_name(name))
+
+
+def _caption(text: str) -> QLabel:
+    widget = QLabel(text)
     widget.setObjectName("caption")
     widget.setFixedWidth(LABEL_WIDTH)
     widget.setWordWrap(True)
