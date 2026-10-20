@@ -4,10 +4,6 @@ against local fake servers."""
 from __future__ import annotations
 
 import json
-import threading
-from collections.abc import Callable
-from contextlib import contextmanager
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -29,6 +25,8 @@ from figscribe.assistant.chat import (
 from figscribe.gui import Document
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.tools import TOOLS, Toolbox
+
+from .fakeserver import chunk, json_reply, serve, sse
 
 
 def call(name: str, arguments, uid: str = "t1") -> ToolCall:
@@ -167,68 +165,14 @@ def test_pause_turn_continues(document: Document) -> None:
 # --- local fake servers -----------------------------------------------------------
 
 
-@contextmanager
-def serve(answer: Callable[[str, str, dict | None], tuple[int, str, bytes]]):
-    """An HTTP server on localhost; `answer(method, path, body)` gives the
-    status, content type and body of each response."""
-    requests: list[tuple[str, str, dict | None]] = []
-
-    class Handler(BaseHTTPRequestHandler):
-        def _reply(self, method: str) -> None:
-            length = int(self.headers.get("content-length", 0))
-            body = json.loads(self.rfile.read(length)) if length else None
-            requests.append((method, self.path, body))
-            status, kind, data = answer(method, self.path, body)
-            self.send_response(status)
-            self.send_header("content-type", kind)
-            self.send_header("content-length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-
-        def do_GET(self):  # noqa: N802 - http.server naming
-            self._reply("GET")
-
-        def do_POST(self):  # noqa: N802
-            self._reply("POST")
-
-        def log_message(self, *args):
-            pass
-
-    server = HTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        yield f"http://127.0.0.1:{server.server_port}", requests
-    finally:
-        server.shutdown()
-
-
-def _json(status: int, value) -> tuple[int, str, bytes]:
-    return status, "application/json", json.dumps(value).encode()
-
-
-def _sse(*chunks: dict) -> tuple[int, str, bytes]:
-    lines = [f"data: {json.dumps(c)}\n\n" for c in chunks] + ["data: [DONE]\n\n"]
-    return 200, "text/event-stream", "".join(lines).encode()
-
-
-def _chunk(delta: dict, finish: str | None = None) -> dict:
-    return {
-        "id": "c1",
-        "object": "chat.completion.chunk",
-        "created": 0,
-        "model": "local",
-        "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
-    }
-
-
 def test_an_openai_compatible_server_runs_the_tools(document: Document) -> None:
     """A local server as LM Studio or Ollama would answer: the tool call
     streamed in pieces, then text."""
     figure = document.figure
     arguments = json.dumps({"object_id": figure.id, "path": ["name"], "value": "B"})
-    first = _sse(
-        _chunk({"role": "assistant", "content": "Renaming. "}),
-        _chunk(
+    first = sse(
+        chunk({"role": "assistant", "content": "Renaming. "}),
+        chunk(
             {
                 "tool_calls": [
                     {
@@ -240,12 +184,12 @@ def test_an_openai_compatible_server_runs_the_tools(document: Document) -> None:
                 ]
             }
         ),
-        _chunk(
+        chunk(
             {"tool_calls": [{"index": 0, "function": {"arguments": arguments[20:]}}]}
         ),
-        _chunk({}, "tool_calls"),
+        chunk({}, "tool_calls"),
     )
-    second = _sse(_chunk({"content": "Done."}), _chunk({}, "stop"))
+    second = sse(chunk({"content": "Done."}), chunk({}, "stop"))
     answers = [first, second]
 
     def answer(method, path, body):
@@ -292,8 +236,10 @@ def test_a_preview_goes_to_a_seeing_model_as_the_users_image() -> None:
 def test_openai_errors_are_explained() -> None:
     def refuse(method, path, body):
         if path.endswith("/models"):
-            return _json(200, {"object": "list", "data": [{"id": "b"}, {"id": "a"}]})
-        return _json(404, {"error": {"message": "model not found", "type": "x"}})
+            return json_reply(
+                200, {"object": "list", "data": [{"id": "b"}, {"id": "a"}]}
+            )
+        return json_reply(404, {"error": {"message": "model not found", "type": "x"}})
 
     with serve(refuse) as (url, _):
         provider = Provider("openai", "nope", f"{url}/v1")
@@ -315,7 +261,7 @@ def test_the_claude_client_reports_a_refused_key(monkeypatch) -> None:
 
     def refuse(method, path, body):
         error = {"type": "authentication_error", "message": "invalid x-api-key"}
-        return _json(401, {"type": "error", "error": error})
+        return json_reply(401, {"type": "error", "error": error})
 
     with serve(refuse) as (url, requests):
         monkeypatch.setenv("ANTHROPIC_BASE_URL", url)
@@ -469,3 +415,29 @@ def test_the_window_remembers_the_model_but_never_the_key(qtbot, tmp_path) -> No
     again = MainWindow(settings=QSettings(str(path), QSettings.Format.IniFormat))
     qtbot.addWidget(again)
     assert again.chat.provider == provider
+
+
+def test_every_field_path_in_the_prompt_exists() -> None:
+    """The cheat sheet for smaller models must not send them astray."""
+    import re
+
+    from figscribe.assistant.chat import SYSTEM
+    from figscribe.model import Axes, ErrorbarPlot, Figure, LinePlot
+
+    def exists(model, path: str) -> bool:
+        for part in path.split("."):
+            fields = getattr(model, "model_fields", {})
+            if part not in fields:
+                return False
+            annotation = fields[part].annotation
+            options = [
+                a for a in getattr(annotation, "__args__", ()) if a is not type(None)
+            ]
+            model = options[0] if len(options) == 1 else annotation
+        return True
+
+    paths = re.findall(r"`([a-z_.]+)`", SYSTEM)
+    assert len(paths) >= 15
+    owners = (Figure, Axes, LinePlot, ErrorbarPlot)
+    missing = [p for p in paths if not any(exists(m, p) for m in owners)]
+    assert missing == []

@@ -45,6 +45,7 @@ from figscribe.commands import (
     remove_axes,
 )
 from figscribe.commands.core import walk
+from figscribe.examples import bundled_example
 from figscribe.fit import FitError, add_fit
 from figscribe.gui import theme
 from figscribe.gui.chatpanel import ChatPanel
@@ -57,7 +58,7 @@ from figscribe.gui.plotdialog import PlotDialog, add_plot
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
-from figscribe.gui.start import DOCS_URL, StartPage, bundled_example
+from figscribe.gui.start import DOCS_URL, StartPage
 from figscribe.io import DataError, numpy_source
 from figscribe.io.numpyfile import array_names, read_numpy
 from figscribe.model import (

@@ -53,7 +53,22 @@ names; render_preview shows the figure if the user allowed it. Sizes are in \
 millimetres and points, as a journal states them.
 
 Answer briefly in the user's language: what you changed, or why you could \
-not. Ask when the request is ambiguous instead of guessing."""
+not. Ask when the request is ambiguous instead of guessing.
+
+Common set_field paths (get_schema has all of them):
+- figure: `width_mm`, `height_mm`, `font_size`, `layout.share_x` ("none", \
+"col", "all"), `layout.share_y` ("none", "row", "all")
+- panel (axes): `title`, `grid`, `x.label`, `x.unit`, `x.scale` ("linear", \
+"log", "symlog"), `x.limits` ([min, max]), the same for `y`, \
+`legend.location` ("upper left", "lower right", …), `legend.frame`, \
+`legend.visible`, `y_right` (an axis object such as {"label": "dU"}; null \
+removes it)
+- plot: `color`, `label` (legend entry), `marker`, `markersize`, \
+`linestyle`, `linewidth`, `capsize`, `axis` ("left" or "right")
+New plots: insert into a panel's "artists" with "kind" line, scatter, \
+errorbar, histogram or annotation; columns are {"source": id, "column": \
+name}. New panels: add_panel, then insert into the id it returns. A fit with \
+its residual panel: fit with "residuals": true."""
 
 
 class ChatError(Exception):

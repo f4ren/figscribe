@@ -36,7 +36,7 @@ from figscribe.commands import (
     remove_axes,
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
-from figscribe.fit import FitError, refit
+from figscribe.fit import FitError, add_fit, refit
 from figscribe.io import DataError
 from figscribe.model import (
     Axes,
@@ -199,6 +199,7 @@ class Toolbox:
         model: dict[str, Any],
         label: str | None = None,
         initial_values: dict[str, float] | None = None,
+        residuals: bool = False,
     ) -> dict[str, Any]:
         command, fit_id = _fit(
             self.workspace.project,
@@ -207,6 +208,7 @@ class Toolbox:
             model,
             label,
             initial_values,
+            residuals,
         )
         info = self._push(command, {"id": fit_id})
         info["result"] = find(self.workspace.project, fit_id).result.model_dump()
@@ -347,8 +349,10 @@ def _fit(
     model: dict[str, Any],
     label: str | None = None,
     initial_values: dict[str, float] | None = None,
+    residuals: bool = False,
 ) -> tuple[Macro, str]:
-    """A FitCurve on `target_id`, in the target's axes, fitted at once."""
+    """A FitCurve on `target_id`, in the target's axes, fitted at once; with
+    `residuals` also their panel below, as the GUI's fit dialog makes it."""
     axes_id = next(
         (
             parent.id
@@ -365,11 +369,11 @@ def _fit(
         label=label,
         initial_values=initial_values or {},
     )
-    insert = InsertItem(axes_id, "artists", fit)
+    placed = add_fit(project, fit, residuals)
     staging = project.model_copy(deep=True)
-    insert.apply(staging)
+    placed.apply(staging)
     fitted = refit(staging, fit.id, data)
-    return Macro(fitted.description, [insert, *fitted.steps]), fit.id
+    return Macro(fitted.description, [*placed.steps, *fitted.steps]), fit.id
 
 
 def _validate(annotation: Any, value: Any, where: str) -> Any:
