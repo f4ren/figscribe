@@ -76,6 +76,9 @@ def add_fit(project: Project, fit: FitCurve, residuals: bool = False) -> Macro:
     one showing x tick labels.
     """
     figure, axes = _home(project, fit.target)
+    target = next(a for a in axes.artists if a.id == fit.target)
+    if target.axis != fit.axis:
+        fit = fit.model_copy(update={"axis": target.axis})  # drawn where its data is
     steps: list = [InsertItem(axes.id, "artists", fit)]
     name = fit.label or _model_name(fit)
     if not residuals:

@@ -735,3 +735,23 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   its tip), one undo step, in the coordinates it is placed in.
 - The script sets z-orders only where they differ from Matplotlib's own per
   kind (1 for scatter and histogram patches, 3 for text, 2 otherwise).
+
+## 0021 — The right y axis
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Decision
+
+- **`Axes.y_right` is drawn with `ax.twinx()`**, with all the settings of an
+  axis; plots with `axis="right"` are drawn against it, the others against
+  the left one. Without a right axis, a plot meant for it is drawn against
+  the left one and validate_references reports it.
+- **One legend for both axes**: the panel's legend lists the plots of both,
+  left first; the script collects the handles the same way.
+- **Each axis has its own colour cycle**, as in Matplotlib: the first plot on
+  the right is blue again. The contents panel shows it that way.
+- **In the GUI**, a panel's "Right y axis" switch adds the axis or removes it
+  (its plots go back to the left, one undo step); choosing "right" for a plot
+  creates the axis if the panel has none. A fit is drawn against the axis of
+  its data.

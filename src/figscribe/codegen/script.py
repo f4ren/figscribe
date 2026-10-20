@@ -68,6 +68,10 @@ RESERVED = {
     "value",
     "error",
     "valid",
+    "handles",
+    "labels",
+    "right_handles",
+    "right_labels",
 }
 
 
@@ -458,8 +462,6 @@ class _Writer:
 
     def _panel(self, index: int, axes: Axes) -> None:
         ax = self.axes_names[index]
-        if axes.y_right is not None:
-            raise NotImplementedError("a right-hand y-axis (y_right) is planned for M5")
         title = (
             f"Panel {_letter(index).upper()}" if len(self.figure.axes) > 1 else "Plot"
         )
@@ -472,6 +474,11 @@ class _Writer:
             self.call(f"{ax}.set_title", _str(axes.title), **size)
         self._axis(ax, "x", axes.x)
         self._axis(ax, "y", axes.y)
+        right = None
+        if axes.y_right is not None:
+            right = f"{ax}_right"
+            self.emit(f"{right} = {ax}.twinx()")
+            self._axis(right, "y", axes.y_right)
         if axes.grid:
             kwargs = {}
             if axes.grid_which != "major":
@@ -480,9 +487,10 @@ class _Writer:
                 kwargs["axis"] = _str(axes.grid_axis)
             self.call(f"{ax}.grid", "True", **kwargs)
         for artist in axes.artists:
-            self._artist(ax, artist)
+            on_right = artist.axis == "right" and right is not None
+            self._artist(right if on_right else ax, artist)
         if axes.legend.visible:
-            self._legend(ax, axes.legend)
+            self._legend(ax, axes.legend, right)
 
     def _axis(self, ax: str, name: str, spec: AxisSpec) -> None:
         label = axis_label(spec, self.figure.unit_format)
@@ -652,7 +660,15 @@ class _Writer:
             f"{ax}.errorbar", x, f"{y} - {function}({x}, *{popt})", **kwargs, **common
         )
 
-    def _legend(self, ax: str, legend: Legend) -> None:
+    def _legend(self, ax: str, legend: Legend, right: str | None = None) -> None:
+        args = []
+        if right is not None:
+            self.emit(
+                "# One legend for the plots of both y axes.",
+                f"handles, labels = {ax}.get_legend_handles_labels()",
+                f"right_handles, right_labels = {right}.get_legend_handles_labels()",
+            )
+            args = ["handles + right_handles", "labels + right_labels"]
         kwargs = {}
         if not legend.frame:
             kwargs["frameon"] = "False"
@@ -665,7 +681,7 @@ class _Writer:
             kwargs["bbox_to_anchor"] = _value(tuple(legend.position))
         else:
             kwargs["loc"] = _str(legend.location)
-        self.call(f"{ax}.legend", **kwargs)
+        self.call(f"{ax}.legend", *args, **kwargs)
 
 
 # --- helpers ---------------------------------------------------------------------

@@ -318,3 +318,30 @@ def test_a_histogram_of_values_with_gaps(tmp_path: Path) -> None:
     )
     script = _assert_same(project, tmp_path)
     assert "ax.hist(v[np.isfinite(v)], bins=4" in script
+
+
+def test_a_right_y_axis(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(label="t", unit="s"),
+        y=AxisSpec(label="U", unit="V"),
+        y_right=AxisSpec(label="$t^2$", unit="s²", scale="log", tick_size=7),
+        legend=Legend(visible=True, location="upper left"),
+        artists=[
+            ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="U"),
+            LinePlot(x=ref["t"], y=ref["t2"], axis="right", color="C1", label="t²"),
+            ScatterPlot(x=ref["t"], y=ref["t2"], axis="right", size=6),
+        ],
+    )
+    other = Axes(row=1, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [
+        Figure(
+            dpi=100,
+            height_mm=90,
+            layout=GridLayout(rows=2, share_x="col"),
+            axes=[axes, other],
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert "ax_a_right = ax_a.twinx()" in script
+    assert "ax_a.legend(handles + right_handles, labels + right_labels" in script

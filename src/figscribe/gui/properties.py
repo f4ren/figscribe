@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from figscribe.commands import CommandError, SetField, find
+from figscribe.commands import CommandError, Macro, SetField, find
 from figscribe.fit import FitError, refit
 from figscribe.gui import theme
 from figscribe.gui.document import Document
@@ -52,7 +52,7 @@ from figscribe.gui.names import (
 )
 from figscribe.gui.widgets import Section, label
 from figscribe.io.errors import DataError
-from figscribe.model import ArrayRef, Axes, ColumnRef, Figure, FitCurve
+from figscribe.model import ArrayRef, Axes, AxisSpec, ColumnRef, Figure, FitCurve
 
 SKIPPED = {
     "id",
@@ -63,7 +63,6 @@ SKIPPED = {
     "axes",
     "artists",
     "columns",
-    "y_right",
     "model",
     "initial_values",
     "result",
@@ -93,6 +92,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
     """The editor for a field, or None when the panel has none for it."""
     if name == "bins":
         return Spec("bins")
+    if name == "y_right":
+        return Spec("right_axis")
     optional = False
     args = typing.get_args(annotation)
     if _is_union(annotation) and type(None) in args:
@@ -157,7 +158,8 @@ SECTIONS = {
     "label": "Legend",
     "visible": "More",
     "zorder": "More",
-    "axis": "More",
+    "axis": "Data",
+    "y_right": "Panel",
     "row": "Position",
     "col": "Position",
     "rowspan": "Position",
@@ -247,7 +249,7 @@ class PropertyPanel(QScrollArea):
         """Asks for a color; replaced in tests."""
         self.editors: dict[Path, Editor] = {}
         self.sections: dict[str, Section] = {}
-        self._shown: tuple[str, type] | None = None
+        self._shown: tuple | None = None
         self._fit_result = None
         self._folded = {title: True for title in COLLAPSED}
         self.set_document(document)
@@ -284,7 +286,7 @@ class PropertyPanel(QScrollArea):
             hint.setContentsMargins(16, 16, 16, 16)
             layout.addWidget(hint)
         else:
-            self._shown = (obj.id, type(obj))
+            self._shown = _shape(obj)
             layout.addWidget(self._header(obj))
         self._error = label("", "error")
         self._error.setContentsMargins(16, 8, 16, 0)
@@ -298,7 +300,7 @@ class PropertyPanel(QScrollArea):
     def refresh(self) -> None:
         """Show the model's current values; rebuild if the object changed."""
         obj = self._selected_object()
-        if obj is None or self._shown != (obj.id, type(obj)):
+        if obj is None or self._shown != _shape(obj):
             self.rebuild()
             return
         if isinstance(obj, FitCurve) and obj.result != self._fit_result:
@@ -320,12 +322,40 @@ class PropertyPanel(QScrollArea):
             obj = find(self.document.project, oid)
             if _get(obj, path) == value:
                 return
-            self.document.push(SetField(oid, path, value))
+            self.document.push(self._command(obj, path, value))
         except CommandError as exc:
             self.report(str(exc))
             self.refresh()
         else:
             self._error.hide()
+
+    def _command(self, obj: BaseModel, path: Path, value: Any):
+        """The change for one field; a right y axis comes and goes with the
+        plots drawn against it."""
+        if path == ("y_right",):
+            if value:
+                return Macro(
+                    "Add the right y axis", [SetField(obj.id, path, AxisSpec())]
+                )
+            back = [
+                SetField(a.id, ("axis",), "left")
+                for a in obj.artists
+                if a.axis == "right"
+            ]
+            return Macro(
+                "Remove the right y axis", [*back, SetField(obj.id, path, None)]
+            )
+        if path == ("axis",) and value == "right":
+            axes = _axes_of(self.document.project, obj.id)
+            if axes is not None and axes.y_right is None:
+                return Macro(
+                    "Draw against a new right y axis",
+                    [
+                        SetField(axes.id, ("y_right",), AxisSpec()),
+                        SetField(obj.id, path, value),
+                    ],
+                )
+        return SetField(obj.id, path, value)
 
     def report(self, message: str) -> None:
         self._error.setText(message)
@@ -363,6 +393,8 @@ class PropertyPanel(QScrollArea):
                 if inset:
                     nested.append(name)
                 continue
+            if name == "y_right" and obj.y_right is not None:
+                nested.append(name)
             if inset and SECTIONS.get(name) == "Position":
                 continue  # an inset is placed by its bounds, not in the grid
             spec = spec_for(name, field.annotation)
@@ -526,6 +558,13 @@ class CheckEditor(Editor):
         self.widget.blockSignals(True)
         self.widget.setChecked(bool(value))
         self.widget.blockSignals(False)
+
+
+class RightAxisEditor(CheckEditor):
+    """Whether the panel has a right y axis; shows the field's presence."""
+
+    def show(self, value: Any) -> None:
+        super().show(value is not None)
 
 
 class ChoiceEditor(Editor):
@@ -710,6 +749,8 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     name = path[-1]
     if spec.kind == "bool":
         return CheckEditor(spec, path, panel)
+    if spec.kind == "right_axis":
+        return RightAxisEditor(spec, path, panel)
     if name in CHOICES and spec.kind in ("choice", "text"):
         return ChoiceEditor(spec, path, panel, CHOICES[name])
     if spec.kind == "choice":
@@ -796,6 +837,22 @@ def _get(obj: BaseModel, path: Path) -> Any:
 
 def _is_union(annotation: Any) -> bool:
     return typing.get_origin(annotation) in (typing.Union, types.UnionType)
+
+
+def _shape(obj: BaseModel) -> tuple:
+    """What decides the form's layout: the object, and its optional parts."""
+    parts = tuple(
+        getattr(obj, name, None) is None for name in ("y_right", "inset", "result")
+    )
+    return (obj.id, type(obj), parts)
+
+
+def _axes_of(project, artist_id: str) -> Axes | None:
+    for figure in project.figures:
+        for axes in figure.axes:
+            if any(a.id == artist_id for a in axes.artists):
+                return axes
+    return None
 
 
 def _form_label(name: str) -> QLabel:

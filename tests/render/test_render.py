@@ -275,9 +275,29 @@ def test_an_annotation_with_and_without_arrow(data) -> None:
     assert second.arrow_patch is not None and second.get_gid() == arrow.id
 
 
-def test_right_y_axis_is_refused_for_now(data) -> None:
-    with pytest.raises(NotImplementedError, match="y_right"):
-        render(Figure(axes=[Axes(y_right=AxisSpec())]), data)
+def test_a_right_y_axis_takes_its_plots(data, ref) -> None:
+    left = LinePlot(x=ref("t"), y=ref("U"), label="U")
+    right = LinePlot(x=ref("t"), y=ref("dU"), axis="right", label="dU")
+    axes = Axes(
+        y=AxisSpec(label="U"),
+        y_right=AxisSpec(label="dU", unit="V", scale="log"),
+        legend=Legend(visible=True),
+        artists=[left, right],
+    )
+    fig = render(Figure(axes=[axes]), data)
+    host, twin = fig.axes
+    assert twin.get_gid() == f"{axes.id}#right"
+    assert [line.get_gid() for line in host.get_lines()] == [left.id]
+    assert [line.get_gid() for line in twin.get_lines()] == [right.id]
+    assert twin.get_ylabel() == "dU (V)" and twin.get_yscale() == "log"
+    texts = [t.get_text() for t in host.get_legend().get_texts()]
+    assert texts == ["U", "dU"]  # one legend for both axes
+
+
+def test_a_plot_for_a_missing_right_axis_goes_left(data, ref) -> None:
+    lonely = LinePlot(x=ref("t"), y=ref("U"), axis="right")
+    (ax,) = render(Figure(axes=[Axes(artists=[lonely])]), data).axes
+    assert ax.get_lines()[0].get_gid() == lonely.id
 
 
 def test_an_inset_is_drawn_inside_its_panel(data) -> None:
