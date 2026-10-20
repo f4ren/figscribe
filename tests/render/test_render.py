@@ -379,3 +379,35 @@ def test_a_colour_mesh_on_its_grid(source) -> None:
     (quad,) = ax.collections
     assert quad.get_gid() == mesh.id and quad.norm.vmax == 2.0
     assert ax.dataLim.x1 > 3.0  # cells around the given centres
+
+
+def test_tick_style_and_prefixes(data, ref) -> None:
+    from figscribe.model import Axes, AxisSpec, Figure, LinePlot
+    from figscribe.render import render
+
+    axes = Axes(
+        x=AxisSpec(label="f", unit="Hz", prefix="k", limits=(0, 225e3)),
+        y=AxisSpec(
+            label="A",
+            scale="log",
+            limits=(1300, 1400),
+            major_step=50,
+            minor_divisions=5,
+        ),
+        artists=[LinePlot(x=ref("t"), y=ref("U"))],
+    )
+    figure = Figure(tick_direction="in", ticks_all_sides=True, axes=[axes])
+    fig = render(figure, data)
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    assert ax.get_xlabel() == "f (kHz)"
+    labels = [t.get_text() for t in ax.get_xticklabels() if t.get_text()]
+    assert labels[:3] == ["0", "50", "100"]
+    assert list(ax.get_yticks()) == [1250, 1300, 1350, 1400, 1450]
+    assert [t.get_text() for t in ax.get_yticklabels()][1:4] == ["1300", "1350", "1400"]
+    minor = ax.yaxis.get_minorticklocs()
+    assert any(abs(m - 1310) < 1e-6 for m in minor)  # four between 1300 and 1350
+    tick = ax.xaxis.get_major_ticks()[1]
+    assert tick.tick2line.get_visible()  # on the top edge too
+    assert not tick.label2.get_visible()  # but numbers only at the bottom
+    assert tick._tickdir == "in"

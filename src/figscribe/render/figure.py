@@ -14,7 +14,12 @@ import numpy as np
 from matplotlib.axes import Axes as MplAxes
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure as MplFigure
-from matplotlib.ticker import AutoMinorLocator, MultipleLocator
+from matplotlib.ticker import (
+    AutoMinorLocator,
+    FuncFormatter,
+    MultipleLocator,
+    NullFormatter,
+)
 
 from figscribe.model import (
     Annotation,
@@ -41,6 +46,13 @@ from figscribe.render.layout import (
     hidden_tick_labels,
     inset_parent,
     share_partner,
+)
+from figscribe.render.ticks import (
+    minor_ticks,
+    scaling,
+    shown,
+    silent_minor_labels,
+    tick_style,
 )
 
 DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
@@ -111,6 +123,8 @@ def style_context(figure: Figure):
         styles.append(figure.stylesheet)
     if figure.font_size is not None:
         styles.append({"font.size": figure.font_size})
+    if tick_style(figure):
+        styles.append(tick_style(figure))
     return matplotlib.style.context(styles) if styles else nullcontext()
 
 
@@ -165,12 +179,20 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
     elif spec.major_step is not None:
         axis.set_major_locator(MultipleLocator(spec.major_step))
-    if spec.minor_ticks and spec.minor_divisions is not None:
-        axis.set_minor_locator(AutoMinorLocator(spec.minor_divisions))
-    elif spec.minor_ticks:
+    how, value = minor_ticks(spec)
+    if how == "parts":
+        axis.set_minor_locator(AutoMinorLocator(value))
+    elif how == "step":
+        axis.set_minor_locator(MultipleLocator(value))
+    elif how == "on":
         axis.minorticks_on()
     else:
         axis.minorticks_off()
+    scaled = scaling(spec)
+    if scaled is not None:
+        axis.set_major_formatter(FuncFormatter(lambda v, _: shown(v, scaled)))
+    if silent_minor_labels(spec):
+        axis.set_minor_formatter(NullFormatter())
     if spec.tick_size is not None:
         ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
 

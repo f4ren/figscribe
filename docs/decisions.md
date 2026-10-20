@@ -862,3 +862,39 @@ measured, and only on figscribe's own tasks.
   the common field paths (a test keeps them valid), and the `fit` tool takes
   `residuals: true` to add the residual panel as the GUI does, instead of
   four separate steps.
+
+## 0025 — Tick style, log minor ticks and SI prefixes
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Context
+
+A spectrum as journals print it could not be made: ticks inward on all four
+sides were missing, minor ticks vanished on log axes, and a frequency axis in
+Hz could not be shown in kHz.
+
+### Decision
+
+- **Tick style per figure** (`tick_direction`: in, out, inout or the style's
+  default; `ticks_all_sides`), because it is a house style rather than a
+  property of one panel. It goes into the rcParams while the figure is
+  built, so insets and right axes follow; the script sets the same rcParams
+  at its top.
+- **Log axes with a fixed major step** get their minor ticks from
+  `MultipleLocator(step / divisions)`, since AutoMinorLocator refuses log
+  scales, and plain numbers (`1350`, not `1.35×10³`); minor tick labels are
+  switched off there.
+- **`AxisSpec.prefix`** (p … T) divides the shown numbers by the power of
+  ten and puts the prefix before the unit (`Hz` → `kHz`; without a unit the
+  label gets `×10³`). Data, limits, ticks and steps stay in the data's unit,
+  so fits and files are untouched. The script uses a `FuncFormatter` with
+  the same arithmetic, written as `v / 1e3` or `v * 1e3`.
+- The decisions live in `render/ticks.py`, used by renderer and generator
+  alike; the equivalence test covers them.
+
+### Alternatives
+
+- `EngFormatter` (a prefix at every tick, "50 kHz"): for data sheets more
+  than for journals; may come later as an option.
+- Scaling the data instead: would change fit parameters and residuals.
