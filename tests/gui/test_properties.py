@@ -83,10 +83,12 @@ def test_every_simple_field_gets_an_editor(
     assert not absent & set(panel.editors)
 
 
-def test_axes_nest_their_axis_and_legend(panel: PropertyPanel, document) -> None:
+def test_a_panel_links_its_axes_and_nests_its_legend(panel, document) -> None:
     document.select(_axes(document).id)
-    assert {("x", "label"), ("y", "scale"), ("legend", "visible")} <= set(panel.editors)
-    assert ("y_right", "label") not in panel.editors
+    assert ("legend", "visible") in panel.editors
+    assert ("x", "label") not in panel.editors  # each axis has its own form
+    assert set(panel.axis_links) == {"x", "y"}
+    assert panel.axis_links["x"].text().startswith("X axis\nt (s) · linear")
 
 
 def test_a_number_commits_as_one_undo_step(panel: PropertyPanel, document) -> None:
@@ -137,10 +139,10 @@ def test_empty_text_clears_an_optional_field(panel: PropertyPanel, document) -> 
 
 def test_literals_are_a_choice(panel: PropertyPanel, document) -> None:
     document.select(_axes(document).id)
-    combo = panel.editors[("y", "scale")].widget
+    combo = panel.editors[("legend", "location")].widget
     assert isinstance(combo, QComboBox)
-    combo.activated.emit(combo.findText("log"))
-    assert _axes(document).y.scale == "log"
+    combo.activated.emit(combo.findText("upper left"))
+    assert _axes(document).legend.location == "upper left"
 
 
 def test_booleans_are_a_checkbox(panel: PropertyPanel, document) -> None:
@@ -153,17 +155,16 @@ def test_booleans_are_a_checkbox(panel: PropertyPanel, document) -> None:
 
 def test_pairs_and_lists_of_numbers(panel: PropertyPanel, document) -> None:
     document.select(_axes(document).id)
-    _type(panel, ("x", "limits"), "0, 12.5")
-    assert _axes(document).x.limits == (0.0, 12.5)
-    _type(panel, ("x", "limits"), "3")
+    _type(panel, ("legend", "position"), "0.1, 0.9")
+    assert _axes(document).legend.position == (0.1, 0.9)
+    _type(panel, ("legend", "position"), "3")
     assert "two numbers" in panel.error
-    _type(panel, ("x", "limits"), "")
-    assert _axes(document).x.limits is None
+    _type(panel, ("legend", "position"), "")
+    assert _axes(document).legend.position is None
 
-    _type(panel, ("x", "ticks"), "0, 5, 10")
-    assert _axes(document).x.ticks == [0.0, 5.0, 10.0]
-    _type(panel, ("x", "tick_labels"), "a, b, c")
-    assert _axes(document).x.tick_labels == ["a", "b", "c"]
+    document.select(_figure(document).id)
+    _type(panel, ("layout", "width_ratios"), "1, 2.5")
+    assert _figure(document).layout.width_ratios == [1.0, 2.5]
 
 
 def test_whole_numbers(panel: PropertyPanel, document) -> None:
@@ -281,10 +282,6 @@ def test_font_tick_and_grid_settings_have_names(panel: PropertyPanel, document) 
     assert _figure(document).font_size == 8.0
 
     document.select(_axes(document).id)
-    _type(panel, ("x", "major_step"), "2.5")
-    assert _axes(document).x.major_step == 2.5
-    _type(panel, ("x", "minor_divisions"), "1")
-    assert "minor_divisions" in panel.error  # at least two parts
     combo = panel.editors[("grid_axis",)].widget
     assert [combo.itemText(i) for i in range(combo.count())] == [
         "both axes",

@@ -214,6 +214,11 @@ QHeaderView::section {{
     padding: 6px 10px; font-weight: 600;
 }}
 QPushButton#link {{ border: 0; background: transparent; color: {ACCENT}; }}
+QPushButton#axisLink {{
+    border: 1px solid {BORDER}; border-radius: 6px; background: transparent;
+    color: {INK}; text-align: left; padding: 6px 10px;
+}}
+QPushButton#axisLink:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}
 QPushButton#link:hover {{ color: {ACCENT_HOVER}; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{

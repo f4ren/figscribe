@@ -898,3 +898,40 @@ Hz could not be shown in kHz.
 - `EngFormatter` (a prefix at every tick, "50 kHz"): for data sheets more
   than for journals; may come later as an option.
 - Scaling the data instead: would change fit parameters and residuals.
+
+## 0026 — An axis has its own form
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Context
+
+A panel's form listed every field of the panel and of both axes, named as in
+the model (`major_step`, `minor_divisions`, `limits` as one pair). Setting up
+an axis meant knowing the model: four minor ticks had to be entered as five
+divisions, and a range in kHz in Hz.
+
+### Decision
+
+- **An axis is selectable** with the id `<panel id>/x`, `/y` or `/y_right`:
+  by clicking its numbers, its label or the strip along its edge in the
+  preview, or from the panel's form, which now shows one line per axis
+  ("t (s) · linear · automatic range ›") instead of their fields. The outline
+  shows the panel's row; Delete does nothing for an axis.
+- **The axis form** (`gui/axisform.py`) is written by hand, not generated:
+  Label (text, unit, *show values in* with the resulting units), Range (scale,
+  from … to with the current range in grey, the symlog threshold only for
+  symlog), Major ticks (automatically / every … / at these values, with
+  labels), Minor ticks (none / automatically / *n* between majors, stored as
+  n + 1 divisions), Text size. Each change is one undo step, "Change the x
+  axis".
+- **Numbers are typed in the shown unit**: with values shown in kHz, ranges,
+  steps and tick values are entered in kHz and stored in Hz. An empty end of a
+  range keeps the one drawn now.
+- Fields in the generated forms get explanations as tooltips, and LaTeX in
+  summaries is shown as plain text (`$\Delta t$` as Δ t).
+
+### Alternatives
+
+- Better names in the generated form only: would keep pairs like `limits`
+  and the divisions-versus-ticks confusion, which need a different input.

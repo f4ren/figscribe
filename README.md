@@ -101,7 +101,10 @@ script.
 
 **Working with the figure**
 - Click to select, edit in the property panel; every change is one undo
-  step.
+  step. Click an axis, its numbers or its label, to set its range, ticks and
+  label in plain terms: *major ticks every 50*, *4 minor ticks between
+  them*; with values shown in kHz you type the range in kHz too. Hovering
+  over a field explains it.
 - Drag the legend and notes into place. Zoom with the mouse wheel and pan by
   dragging to look closer; *Use as axis range* keeps that view.
 - The **Python code** drawer under the figure shows the generated script,

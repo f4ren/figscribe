@@ -50,7 +50,7 @@ from figscribe.fit import FitError, add_fit
 from figscribe.gui import theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
-from figscribe.gui.document import Document
+from figscribe.gui.document import Document, split_axis
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.outline import PANEL_SIDES, Outline
@@ -160,6 +160,7 @@ class MainWindow(QMainWindow):
         self.outline = Outline(self.document)
         self.problems = Problems(self.document)
         self.properties = PropertyPanel(self.document)
+        self.properties.axis_range = self.preview.axis_limits
         self.outline.add_requested.connect(self._add_plot_to)
         self.outline.import_requested.connect(lambda: self.import_csv())
         self.outline.panel_requested.connect(
@@ -540,6 +541,9 @@ class MainWindow(QMainWindow):
     def _target_axes(self, figure) -> str | None:
         """The selected axes, the axes of the selected plot, or the first one."""
         selected = self.document.selected
+        axis = split_axis(selected)
+        if axis is not None:
+            selected = axis[0]  # an axis stands for its panel
         for axes in figure.axes:
             if axes.id == selected or any(a.id == selected for a in axes.artists):
                 return axes.id
@@ -748,7 +752,10 @@ class MainWindow(QMainWindow):
         self.redo_action.setText(
             f"&Redo {history.redo_text}" if history.can_redo else "&Redo"
         )
-        self.delete_action.setEnabled(self.document.selected is not None)
+        selected = self.document.selected
+        self.delete_action.setEnabled(
+            selected is not None and split_axis(selected) is None
+        )
         path = self.document.path
         self._project_name.setText(path.stem if path is not None else "Untitled")
         if not history.is_clean:
