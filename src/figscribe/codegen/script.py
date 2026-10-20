@@ -43,12 +43,18 @@ from figscribe.model import (
     ScatterPlot,
 )
 from figscribe.render.figure import COORDS, CURVE_POINTS, MM_PER_INCH, DataProvider
-from figscribe.render.labels import axis_label
+from figscribe.render.labels import axis_label, unit_shown
 from figscribe.render.layout import (
     creation_order,
     hidden_tick_labels,
     inset_parent,
     share_partner,
+)
+from figscribe.render.ticks import (
+    minor_ticks,
+    scaling,
+    silent_minor_labels,
+    tick_style,
 )
 
 WIDTH = 88
@@ -309,15 +315,34 @@ class _Writer:
             self.emit(f"plt.style.use({_str(self.figure.stylesheet)})")
         if self.figure.font_size is not None:
             self.emit(f'plt.rcParams["font.size"] = {_num(self.figure.font_size)}')
+        style = tick_style(self.figure)
+        if style:
+            entries = [f"{_str(k)}: {_value(v)}" for k, v in style.items()]
+            line = f"plt.rcParams.update({{{', '.join(entries)}}})"
+            if len(line) <= WIDTH:
+                self.emit(line)
+            else:
+                self.emit("plt.rcParams.update(", "    {")
+                self.emit(*(f"        {entry}," for entry in entries))
+                self.emit("    }", ")")
 
     def _locators(self) -> list[str]:
-        """The tick locators the script needs to import."""
-        specs = [s for a in self.figure.axes for s in (a.x, a.y)]
+        """The tick locators and formatters the script needs to import."""
+        specs = [
+            s for a in self.figure.axes for s in (a.x, a.y, a.y_right) if s is not None
+        ]
         needed = []
-        if any(s.minor_ticks and s.minor_divisions for s in specs):
+        if any(minor_ticks(s)[0] == "parts" for s in specs):
             needed.append("AutoMinorLocator")
-        if any(s.ticks is None and s.major_step for s in specs):
+        if any(scaling(s) is not None for s in specs):
+            needed.append("FuncFormatter")
+        if any(
+            (s.ticks is None and s.major_step) or minor_ticks(s)[0] == "step"
+            for s in specs
+        ):
             needed.append("MultipleLocator")
+        if any(silent_minor_labels(s) for s in specs):
+            needed.append("NullFormatter")
         return needed
 
     def _data(self, script_dir: Path) -> None:
@@ -604,13 +629,29 @@ class _Writer:
         elif spec.major_step is not None:
             step = _num(spec.major_step)
             self.emit(f"{ax}.{name}axis.set_major_locator(MultipleLocator({step}))")
-        if spec.minor_ticks and spec.minor_divisions is not None:
-            parts = spec.minor_divisions
-            self.emit(f"{ax}.{name}axis.set_minor_locator(AutoMinorLocator({parts}))")
-        elif spec.minor_ticks:
+        how, value = minor_ticks(spec)
+        if how == "parts":
+            self.emit(f"{ax}.{name}axis.set_minor_locator(AutoMinorLocator({value}))")
+        elif how == "step":
+            self.emit(
+                f"{ax}.{name}axis.set_minor_locator(MultipleLocator({_num(value)}))"
+            )
+        elif how == "on":
             self.emit(f"{ax}.{name}axis.minorticks_on()")
         elif self.figure.stylesheet is not None:
             self.emit(f"{ax}.{name}axis.minorticks_off()")
+        scaled = scaling(spec)
+        if scaled is not None:
+            op, factor = scaled
+            number = "v" if (op, factor) == ("*", "1") else f"v {op} {factor}"
+            if spec.prefix is not None:
+                self.emit(f"# Values shown in {unit_shown(spec)}")
+            self.emit(
+                f"{ax}.{name}axis.set_major_formatter("
+                f'FuncFormatter(lambda v, _: f"{{{number}:g}}"))'
+            )
+        if silent_minor_labels(spec):
+            self.emit(f"{ax}.{name}axis.set_minor_formatter(NullFormatter())")
         if spec.tick_size is not None:
             self.call(
                 f"{ax}.tick_params",

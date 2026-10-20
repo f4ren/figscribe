@@ -61,6 +61,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
 )
+from figscribe.render.ticks import PREFIXES
 
 SKIPPED = {
     "id",
@@ -166,6 +167,8 @@ SECTIONS = {
     "grid_axis": "Panel",
     "grid_which": "Panel",
     "font_size": "Style",
+    "tick_direction": "Style",
+    "ticks_all_sides": "Style",
     "path": "File",
     "sha256": "File",
     "label": "Legend",
@@ -601,7 +604,7 @@ class ChoiceEditor(Editor):
         """Added to a value not among the choices, as it is shown."""
         self.choices = list(choices)
         if spec.optional:
-            self.choices.insert(0, ("(none)", None))
+            self.choices.insert(0, (NONE_TEXT.get(path[-1], "(none)"), None))
         self.widget = QComboBox()
         for text, _ in self.choices:
             self.widget.addItem(text)
@@ -689,6 +692,18 @@ CHOICES = {
     ],
 }
 CHOICES["unit_format"] = UNIT_FORMATS
+CHOICES["tick_direction"] = [
+    ("outward", "out"),
+    ("inward", "in"),
+    ("both ways", "inout"),
+]
+NONE_TEXT = {"tick_direction": "style default", "prefix": "as in the data"}
+"""What an unset optional choice means, where "(none)" would mislead."""
+SUPERSCRIPTS = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
+CHOICES["prefix"] = [
+    (f"{prefix} (×10{str(power).translate(SUPERSCRIPTS)})", prefix)
+    for prefix, power in PREFIXES.items()
+]
 """Text and literal fields with a known set of good values."""
 COLORMAPS = [
     "viridis",

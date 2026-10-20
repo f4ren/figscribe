@@ -93,8 +93,11 @@ script.
 - Several panels in a grid: add one to the right, left, above or below, or
   as an inset. Shared x and y axes, a second y axis on the right.
 - Exact figure size in mm, font sizes in pt, linear, log and symlog axes,
-  axis ranges, major and minor ticks, grid, LaTeX in labels
+  axis ranges, major ticks every *n* with minor ticks between them, tick
+  marks inward or outward and on all four sides, grid, LaTeX in labels
   (`$\Delta U$`), units in labels as `U (V)`, `U / V` or `U [V]`.
+- Values shown with an SI prefix: frequencies in Hz drawn as `0 … 225` with
+  the label `f (kHz)`, while the data stay in Hz.
 
 **Working with the figure**
 - Click to select, edit in the property panel; every change is one undo

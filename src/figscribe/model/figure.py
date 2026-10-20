@@ -40,5 +40,11 @@ class Figure(Identified):
     font_size: float | None = Field(None, gt=0.0)
     """Base font size in pt; labels, ticks and legend scale with it. None
     keeps Matplotlib's (or the style sheet's)."""
+    tick_direction: Literal["in", "out", "inout"] | None = None
+    """Which way the tick marks point, in every panel; None keeps Matplotlib's
+    (or the style sheet's), which is "out"."""
+    ticks_all_sides: bool = False
+    """Tick marks also on the top and right edge of every panel, as many
+    physics journals have them; the numbers stay bottom and left."""
     layout: GridLayout = Field(default_factory=GridLayout)
     axes: list[Axes] = Field(default_factory=list)

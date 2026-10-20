@@ -35,6 +35,10 @@ class AxisSpec(StrictModel):
     """Font size of the tick labels in pt; None follows the figure."""
     symlog_linthresh: float | None = Field(None, gt=0.0)
     """Only for scale "symlog"."""
+    prefix: Literal["p", "n", "µ", "m", "k", "M", "G", "T"] | None = None
+    """Shows the values with an SI prefix: "k" draws 225000 Hz as 225 and the
+    unit as kHz. The data, limits, ticks and steps stay in the data's unit;
+    None shows the values as they are."""
 
 
 class Legend(StrictModel):

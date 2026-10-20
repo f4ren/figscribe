@@ -404,3 +404,48 @@ def test_images_meshes_and_colour_bars(tmp_path: Path) -> None:
     assert 'scan_counts = np.load(scan_path)["counts"].astype(float)' in script
     assert 'fig.colorbar(image, ax=ax_a, label="intensity")' in script
     assert "norm=LogNorm(vmin=0.01)" in script
+
+
+def test_ticks_inside_on_all_sides_with_prefixes(tmp_path: Path) -> None:
+    """A spectrum as journals print it: kHz on x, a stepped y range with four
+    minor ticks, ticks inside on all four sides; the right axis and an inset
+    get the same tick style."""
+    project, ref = _scan(tmp_path)
+    spectrum = Axes(
+        x=AxisSpec(label="t", unit="s", prefix="m", major_step=2.5),
+        y=AxisSpec(
+            label="U", unit="V", limits=(0, 1.2), major_step=0.4, minor_divisions=5
+        ),
+        y_right=AxisSpec(label="P", prefix="k"),
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"]),
+            ScatterPlot(x=ref["t"], y=ref["dU"], axis="right"),
+        ],
+    )
+    project.figures = [
+        Figure(dpi=110, tick_direction="in", ticks_all_sides=True, axes=[spectrum])
+    ]
+    script = _assert_same(project, tmp_path)
+    assert '"xtick.direction": "in"' in script and '"ytick.right": True' in script
+    assert 'f"{v * 1e3:g}"' in script and 'f"{v / 1e3:g}"' in script
+    assert '"t (ms)"' in script
+
+
+def test_a_stepped_log_axis_keeps_its_minor_ticks(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(
+            label="t",
+            scale="log",
+            limits=(1.3, 1.4),
+            major_step=0.05,
+            minor_divisions=5,
+        ),
+        y=AxisSpec(label="U", scale="log", prefix="m"),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=110, tick_direction="inout", axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert "MultipleLocator(0.01)" in script  # 0.05 in five parts
+    assert "AutoMinorLocator" not in script
+    assert "NullFormatter()" in script
