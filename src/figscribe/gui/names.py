@@ -68,6 +68,7 @@ FIELD_NAMES = {
     "minor_divisions": "Minor divisions",
     "grid_axis": "Grid lines for",
     "grid_which": "Grid lines at",
+    "grid_color": "Grid color",
     "layout": "Layout",
     "rows": "Rows",
     "cols": "Columns",

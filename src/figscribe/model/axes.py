@@ -84,4 +84,6 @@ class Axes(Identified):
     """Which axis draws grid lines, when `grid` is on."""
     grid_which: Literal["major", "minor", "both"] = "major"
     """At which ticks grid lines are drawn, when `grid` is on."""
+    grid_color: str | None = None
+    """A Matplotlib color for the grid lines; None keeps the style's."""
     artists: list[Artist] = Field(default_factory=list)

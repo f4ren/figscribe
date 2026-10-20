@@ -83,7 +83,7 @@ and values that need a dedicated editor (fits, histogram bins)."""
 READ_ONLY = {"path", "sha256", "target", "parent"}
 """Shown, but changed only through their own actions (re-import, refit)."""
 
-COLOR_FIELDS = {"color", "edgecolor"}
+COLOR_FIELDS = {"color", "edgecolor", "grid_color"}
 
 Path = tuple[str, ...]
 
@@ -167,6 +167,7 @@ SECTIONS = {
     "grid": "Panel",
     "grid_axis": "Panel",
     "grid_which": "Panel",
+    "grid_color": "Panel",
     "font_size": "Style",
     "tick_direction": "Style",
     "ticks_all_sides": "Style",
@@ -227,6 +228,7 @@ PLACEHOLDERS = {
     "label": "not in the legend",
     "color": "automatic",
     "edgecolor": "automatic",
+    "grid_color": "automatic",
     "limits": "automatic",
     "ticks": "automatic",
     "tick_labels": "automatic",
@@ -264,6 +266,8 @@ TIPS = {
     "grid": "Grid lines behind the plots.",
     "grid_axis": "Which axes get grid lines.",
     "grid_which": "Grid lines at the numbered ticks, the minor ticks, or both.",
+    "grid_color": "Color of the grid lines, e.g. dimgray or #696969; empty "
+    "keeps the style's light gray.",
     "row": "Grid row of the panel, from the top, starting at 0.",
     "col": "Grid column of the panel, from the left, starting at 0.",
     "rowspan": "How many grid rows the panel covers.",

@@ -449,3 +449,16 @@ def test_a_stepped_log_axis_keeps_its_minor_ticks(tmp_path: Path) -> None:
     assert "MultipleLocator(0.01)" in script  # 0.05 in five parts
     assert "AutoMinorLocator" not in script
     assert "NullFormatter()" in script
+
+
+def test_a_grid_in_its_own_color(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(label="t"),
+        grid=True,
+        grid_color="dimgray",
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=110, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert 'ax.grid(True, color="dimgray")' in script
