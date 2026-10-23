@@ -144,39 +144,24 @@ examples/       # example data and example projects
 ## Milestones
 
 1. **M1 model and renderer**: model, JSON persistence, renderer for line,
-   scatter and errorbar, export. No GUI yet. Tests 1 and 3.
+   scatter and errorbar, export. No GUI yet. Tests 1 and 3. *Done.*
 2. **M2 code generator**: codegen for all M1 features, equivalence test (test 2)
-   green.
+   green. *Done.*
 3. **M3 GUI skeleton**: main window, data import dialog, canvas, click to
-   select, generic property panel, undo/redo.
+   select, generic property panel, undo/redo. *Done.*
 4. **M4 interaction**: drag for legend, labels and annotations, adopt zoom as
-   limits.
+   limits. *Done* (legend and notes; labels are edited, not dragged).
 5. **M5 extensions**: multi-panel layouts, secondary y-axis, histogram, 2D
-   plots, colorbar.
+   plots, colorbar. *Done.*
 6. **M6 fits**: fit dialog, result display, residual panel, codegen including
-   the fit.
+   the fit. *Done.*
 7. **M7 polish**: style templates, snapping and alignment guides, packaging.
+   *Open.*
 
 Every milestone ends with green tests and a runnable state.
 
-## Open tasks
-
-- **Measure which models the assistant needs** (`figscribe bench`, decision
-  0024). The tool exists; what is missing are measurements with real models,
-  which have to run where the models are:
-  1. Run the 21 cases against several local models in LM Studio or Ollama,
-     from small (7–8 B) to mid-sized (20–30 B), with `--no-vision` where the
-     model cannot read images, and `--repeat 3` because answers vary.
-  2. Run the same against ChatGPT and Claude (Haiku 5.5, Sonnet 5.5,
-     Opus 5.5) as the reference.
-  3. Keep each run's `--json` file and compare passes per level, time and
-     refused tool calls.
-  4. For the cases local models fail: improve tool descriptions, the
-     prompt's field list or the tools themselves (as `fit` with
-     `residuals`), then measure again; add cases for requests users really
-     make.
-  5. Write down in the README which model sizes are good enough for which
-     kind of request, and choose the default model accordingly.
+The work from here on, including bugs found, missing settings and features,
+is planned task by task in [`roadmap.md`](roadmap.md).
 
 ## Working agreement for the coding agent
 

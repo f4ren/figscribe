@@ -34,8 +34,8 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 **Pre-alpha.** The features below are implemented and tested on Linux,
 Windows and macOS with Python 3.11 and 3.13; file formats and behaviour may
 still change. figscribe is not on PyPI yet. Still to come: style templates,
-snapping and alignment guides, and packaged installers (milestone M7 in the
-[plan](plan/project-brief.md)).
+snapping and alignment guides, and packaged installers (see the
+[roadmap](plan/roadmap.md)).
 
 ## Installation
 
@@ -245,8 +245,9 @@ the renderer, and the code generator mirrors its calls, so all three show the
 same figure.
 
 Design decisions and their reasons are recorded in
-[`docs/decisions.md`](docs/decisions.md); the project plan is in
-[`plan/`](plan/project-brief.md).
+[`docs/decisions.md`](docs/decisions.md); the project brief is in
+[`plan/project-brief.md`](plan/project-brief.md) and the work list in
+[`plan/roadmap.md`](plan/roadmap.md).
 
 ## Scope
 

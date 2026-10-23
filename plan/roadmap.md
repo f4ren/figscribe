@@ -1,0 +1,482 @@
+# Roadmap: from the current state to a release
+
+This plan picks up where the milestones in the [project brief](project-brief.md)
+left off. The brief stays the vision; this file is the work list. It is written
+so that a coding session can take the next open task and finish it without
+asking what was meant.
+
+**State as of 2026-10-23** (branch `develop`, commit `9063d71`):
+
+- M1 to M6 of the brief are done: model, renderer, code generator with the
+  pixel equivalence test, GUI with import, property panel, outline, undo/redo,
+  zoom/pan, panels and insets, right y axis, histograms, notes, 2-D data, fits
+  with residuals. Beyond the brief: the built-in assistant (Claude, ChatGPT,
+  local models), the MCP server and `figscribe bench`.
+- M7 is open: style templates, snapping and alignment guides, packaging.
+- About 650 tests run in about 25 s; CI is green on Linux, Windows and macOS
+  with Python 3.11 and 3.13. Decisions 0001 to 0026 are in
+  [`docs/decisions.md`](../docs/decisions.md).
+- `main` is behind `develop` (last merged: PR #31). PyPI still has the 0.0.2
+  placeholder.
+
+The findings below marked **(verified)** were reproduced on 2026-10-23; the
+reproduction is given so a session can turn it into a failing test first.
+
+---
+
+## How to work on this plan
+
+1. **Pick the first open task** of the lowest open phase, unless the user names
+   another. Tasks within a phase are ordered by value.
+2. **Tasks marked `[decide]` need the user's answer first.** Ask the question
+   in the task, record the answer in `docs/decisions.md`, then implement. Do not
+   guess; the working agreement in the brief says to ask.
+3. **One task, one branch, one pull request** into `develop`. Branch from
+   `develop`, name the branch after the task (`b1-tick-limit`). CI must be green
+   on all three platforms before merging.
+4. **Test first.** For a bug, the first commit is a failing test that
+   reproduces it. Every model change gets a roundtrip test, every new command an
+   undo test, every rendered feature an image baseline and a codegen
+   equivalence case.
+5. **Keep the four outputs in step.** A new model field must reach the
+   renderer, the code generator (with an equivalence case), the property panel
+   (with a plain name in `gui/names.py` and a tooltip) and the assistant tools
+   (`tools/spec.py`). Task U1 turns this into a test.
+6. **Record decisions** that are not obvious from the code in
+   `docs/decisions.md` (context, decision, alternatives), numbered on from 0026.
+7. **Update this file in the same pull request**: tick the task, add what was
+   learned, add follow-up tasks you discovered.
+8. Everything in the repository is written in English, commit messages
+   included. Run `ruff check . && ruff format --check .` before pushing.
+9. A schema change to the project file bumps `SCHEMA_VERSION` and adds a
+   migration with a stored example file of the old version (see `_migrate` in
+   `model/project.py`), unless the new field has a default and no released file
+   predates it — say which in the pull request.
+
+Sizes: **S** is up to half a day, **M** a day or two, **L** more; split an L
+into pull requests that each leave `develop` working.
+
+---
+
+## Phase 0 — Bugs and robustness
+
+Nothing here adds features. The goal: no input, file or setting can freeze or
+crash the application, and every error says in plain words what to do.
+
+### B1 A small tick step freezes the application (verified) — S
+
+*Repro:* x range 0 to 10 000, *Major tick every* 1. Rendering takes over 20 s
+per redraw; time grows linearly at about 2.5 ms per tick (1 000 ticks: 2.4 s,
+2 000: 5.2 s). The preview redraws on every change, so the window hangs.
+Matplotlib only warns (`Locator.MAXTICKS`). Same with `minor_divisions` on top.
+
+*Do:* refuse steps that would give more than a sane number of ticks (about 50
+major ticks per axis; pick and justify the number). The axis form says so
+inline ("every 1 gives 10 000 ticks; at most 50") and does not commit;
+`validate_references` reports it for project files and assistant edits; the
+renderer falls back to automatic ticks for a model that still has it, so a
+loaded file never hangs. Code generator mirrors the fallback.
+
+*Done when:* a test renders the repro under one second; the axis form and an
+assistant edit both get a clear refusal.
+
+### B2 A changed or moved data file is a dead end — M
+
+*Now:* the preview shows "Cannot draw the figure … has changed since it was
+imported", and nothing in the GUI fixes it. Same for a file that moved.
+
+*Do:* a bar above the preview naming the file, with
+- **Use the new version**: re-hash and re-read the columns, one undoable
+  command; if columns used by plots are gone, list them;
+- **Locate file…** for a missing file (relink, keep the options);
+- **Show what changed**: rows and columns before and after.
+
+Also for several files at once (one bar, a list). The assistant tools get the
+same action. Record the decision (changes 0007).
+
+*Done when:* GUI tests cover changed, missing, and changed-with-lost-columns.
+
+### B3 Text files from older instruments fail to import (verified) — S
+
+*Repro:* a CSV in cp1252/Latin-1 with `µ` in the header: `csv_source` raises a
+raw `UnicodeDecodeError` (not even a `DataError`), the import dialog has no way
+around it. Lab software on Windows writes these often.
+
+*Do:* add `CsvSource.encoding` (default `"utf-8-sig"`); the import dialog
+detects it (UTF-8 if it decodes, else cp1252, else Latin-1) and shows it as an
+option; the code generator passes `encoding=` to `np.loadtxt`. Any decode error
+becomes a `DataError` that names the file and suggests the encoding option.
+
+### B4 Raw library errors reach the user (verified) — S
+
+*Repro:* x and y columns of different length give Matplotlib's "x and y must
+have same first dimension, but have shapes (3,) and (4,)"; an invalid color
+gives a long Matplotlib message. Both only appear at render time, after the
+bad value is in the model.
+
+*Do:*
+- validate style strings when they are set, through a check shared by the
+  property panel, the commands and the assistant tools: colors with
+  `matplotlib.colors.is_color_like`, markers and line styles against what
+  Matplotlib accepts (this settles the open point from decision 0002 to close
+  these free strings);
+- report columns of unequal length as a problem naming both columns and their
+  lengths (in `validate_references` when data is available, otherwise in the
+  renderer as a `DataError`);
+- go through every `except Exception` in `gui/` and make sure the message shown
+  is written for a scientist, not a developer.
+
+### B5 Numbers typed the way people type them (verified) — S
+
+*Repro:* the property panel refuses `1,5` (decimal comma) and `−3` (the
+typographic minus that comes with text copied from a PDF), but accepts `inf`
+and `nan`, which make no sense for a size or a range. `_pair("0,5; 1,5")` fails
+with the confusing "'5; 1' is not a number".
+
+*Do:* one number parser for every field in `gui/` (property panel, axis form,
+fit dialog): accept `,` as decimal mark where unambiguous, `−` as minus, thin
+and normal spaces as thousands separators; refuse non-finite values except
+where a field means them; error messages quote what was typed. Pairs and lists
+use `;` as the separator when the decimal mark is a comma. Also check whether
+pydantic accepts `inf` for `gt=0` fields (`Figure(width_mm=inf)`) and close it
+in the model.
+
+### B6 Optional parts break the test run without their extras (verified) — S
+
+*Repro:* without the `mcp` extra, `tests/assistant/test_mcp.py` aborts the whole
+collection; without `anthropic`/`openai`, four chat and bench tests fail.
+
+*Do:* `pytest.importorskip` at the top of those modules or tests, so a plain
+`pip install -e ".[dev]"`-less checkout still runs everything else. CI keeps
+installing all extras so nothing is skipped there.
+
+### B7 A systematic bug hunt — M, repeat before every release
+
+Each item is its own pull request; write the failing tests first and fix what
+they find.
+
+1. **Edge-case data matrix**: for line, scatter, errorbar, histogram, image,
+   fit: empty column, all NaN, one point, two points, constant values, values
+   ≤ 0 on a log axis, 1e-30 and 1e30, integer columns, reversed and equal
+   limits. Render, export, and run the generated script for each. Nothing may
+   crash; a problem shows as a message.
+2. **Undo stress**: random sequences of commands (add, change, delete, move
+   panels, fit), then undo all: the project equals the start; redo all: equals
+   the end. `[decide]` whether to add `hypothesis` as a dev dependency for this
+   and for model roundtrips with generated projects.
+3. **Fits that should fail politely**: fewer points than parameters, all NaN,
+   exponential on negative data, start values that overflow. Each gives a
+   message in the fit dialog, never a traceback.
+4. **Files**: paths with spaces and non-ASCII characters (verified fine for
+   the code generator), network paths on Windows, read-only directories, a data
+   file deleted while the project is open, a project file saved by a newer
+   figscribe.
+5. **GUI**: small window (1024 × 700), high-DPI scaling 150 % and 200 %, dark
+   mode on all three platforms, keyboard-only use of the import dialog, fit
+   dialog and property panel.
+6. **Code generator**: every project in `examples/` and every bench case
+   through the equivalence test (some bench cases may not be covered yet).
+
+---
+
+## Phase 1 — The settings: complete, tidy, easy to find
+
+The property panel is generated from the model (decision 0006), which keeps it
+complete, but also shows the model's technical terms. This phase makes every
+setting reachable, explained and phrased for a scientist, and moves rarely used
+ones out of the way.
+
+### U1 A test that no setting is forgotten — S
+
+*Do:* a test that walks every field of every model class and asserts that it
+- has a plain name in `gui/names.py` (`FIELD_NAMES`),
+- has a tooltip in `TIPS` (today about 25 of about 90 fields have one),
+- has an editor, or is listed in `SKIPPED` / `READ_ONLY` with a reason,
+- has a placeholder if it is optional,
+- is described for the assistant in `tools/spec.py`.
+
+Then fill the gaps it reports. From now on a new field fails this test until it
+is wired up everywhere.
+
+### U2 Plain terms instead of model terms — M
+
+Concrete changes found in `gui/properties.py` and `gui/names.py`:
+
+- **Counting from 1** on screen: *Row*, *Column* ("starting at 0") and *Header
+  line (first = 0)* show 1-based numbers; the model stays 0-based.
+- **Drawing order** as a number becomes *Bring to front* / *Send to back* in
+  the context menu; the number moves to *More*.
+- **Marker sizes**: lines say *Marker size (pt)*, points say *Marker area
+  (pt²)*. One term, *Marker size (pt)*, everywhere; points convert to area for
+  Matplotlib. `[decide]` whether the model field changes (schema bump) or only
+  the panel converts.
+- **Gaps between panels** (`hspace`, `wspace`) are Matplotlib fractions of the
+  average axes size; show them in mm and convert.
+- **Resolution (dpi)** only matters for PNG; move it from *Size* to an export
+  section and say so.
+- **Style sheet** as free text becomes a list of the bundled styles plus
+  *Choose file…*.
+- **Inset bounds**, **image extent**, **width/height ratios** as typed lists:
+  inset bounds are set by dragging (see U4); extent gets four labelled fields;
+  ratios get one field per row/column.
+- **Colors**: four swatches today. Offer the ten of the current color cycle,
+  recently used colors, and *same as …* another plot.
+
+### U3 Find any setting quickly — M
+
+- A **search field** on top of the property panel that filters fields by name
+  and tooltip ("tick", "font", "legend").
+- A **command palette** (Ctrl+K): every menu action and every setting of the
+  selection, by typing.
+- **Basic first**: per object type, the five most used settings open, the rest
+  under *More*; decide the five from the bench cases and from what users ask
+  the assistant.
+- Settings that **apply to several objects**: select several plots in the
+  outline and change color, marker size or line width for all at once (one
+  undo step).
+
+### U4 Change things where they are drawn — M
+
+- Double-click an axis label, title, legend entry or note to edit its text in
+  place.
+- Drag the corners of an inset to resize it and the gap between grid panels
+  to change the ratios (one undo step on release, like the legend).
+- Right-click a plot: *Style like…*, *Bring to front*, *Fit…*, *Hide*.
+
+### U5 Missing everyday actions — S each
+
+- **Duplicate** a plot, a panel, a figure (Ctrl+D).
+- **Copy style / paste style** between plots (the format painter).
+- **Same range in all panels** for x or y, from the panel's context menu.
+- **Copy figure to clipboard** as PNG and SVG, for slides and documents.
+- **Reveal data file** in the file manager.
+
+---
+
+## Phase 2 — What a scientist needs to analyse and publish
+
+Ordered by how often the need comes up when evaluating measurements. Each new
+artist or field goes through all four outputs (see "How to work", rule 5).
+
+### F1 Fits that hold up in a paper — L
+
+The fit core is sound (weighted `curve_fit`, 1σ, reduced χ², singular
+covariance detected). Missing:
+1. **Fit range**: fit only x in [a, b], typed or dragged in the preview; stored
+   on `FitCurve`, applied in the script with a mask. Draw the curve over the
+   fit range or the full range (option).
+2. **Fixed parameters and bounds** per parameter in the fit dialog (bounds go
+   to `curve_fit(bounds=...)`, fixed ones become constants of the model).
+3. **Show the result in the figure**: a text box (a note bound to the fit)
+   with chosen parameters as `value ± error unit`, rounded to two significant
+   digits of the error as `names.with_error` already does; updates on refit.
+4. **Export the result**: copy as text, CSV, or a LaTeX table row.
+5. **Confidence band** (1σ) around the curve from the covariance, shaded.
+6. **More models**: sine, power law, logistic, Voigt, sum of two Gaussians or
+   Lorentzians, exponential with offset; templates for the custom expression.
+7. **Weighting** choice: none, y errors (today's default), Poisson (√y).
+8. `[decide]` **x errors**: orthogonal distance regression via `scipy.odr`
+   when x errors exist, or document that they are ignored.
+
+### F2 Leave points out, reproducibly — M
+
+Click points in the preview to exclude them from a plot or a fit (outliers,
+detector glitches). Stored as indices on the plot, shown hollow or grey,
+emitted in the script as a mask with a comment. Also a row range per plot
+("rows 100 to 2 000"). The data file stays untouched.
+
+### F3 Panel labels for journals — S
+
+(a), (b), (c) on each panel, automatically in reading order: style `(a)`,
+`a)`, `a`, `A`, bold or not, position inside or outside the corner, font size.
+A setting on `Figure`; insets get none by default.
+
+### F4 Plot types that are missing — M each
+
+In order of demand:
+1. **Reference lines and shaded spans**: horizontal/vertical line at a value,
+   shaded x or y interval (`axhline`, `axvline`, `axvspan`), with label.
+2. **Error band**: a line with a shaded ±error region (`fill_between`), for
+   dense data where error bars clutter.
+3. **Hollow markers** and marker edge width; separate error bar color and cap
+   thickness; *error bar on every n-th point* for dense data.
+4. **Step plot** (drawstyle) for spectra and histograms of counts.
+5. **Points colored by a third column**, with a color bar.
+6. **Series with offset** (waterfall) for spectra or curves at several
+   temperatures, with a colormap across the series.
+7. **Contour lines** and filled contours for 2-D data.
+8. **Bar chart** for categories.
+
+### F5 Axes for publication — M
+
+1. **Number format** of tick labels: automatic, fixed decimals, scientific
+   (×10ⁿ at the axis end or per tick), and the **decimal comma** for German
+   theses and journals. Per figure, overridable per axis.
+2. **Invert** an axis (wavenumbers, binding energies).
+3. **Second x axis on top** that converts the bottom one (wavelength ↔
+   energy, temperature ↔ 1/T), from a small set of conversions or an
+   expression, like the right y axis.
+4. **Frame**: hide the top/right spines; offset spines.
+5. `[decide]` **Date and time** axes for logged data.
+6. `[later]` Broken axes.
+
+### F6 Several files as one series — M
+
+Import many files at once (a folder or a multi-selection) with the same
+column choice, one plot per file, legend from the file name or a number in
+it, colors from a colormap in file order. The everyday case of "the same
+measurement at ten temperatures". The script loads them in a loop.
+
+### F7 Data formats — M each
+
+1. **HDF5** (in the brief's MVP, model class exists, reader missing): dataset
+   browser in the import dialog, `h5py` as an optional extra.
+2. **Tab/whitespace `.txt` and `.dat`** are already readable; make sure the
+   import dialog's detection finds them, including several blanks.
+3. `[decide]` **Excel `.xlsx`**: very common in labs, needs `openpyxl`;
+   decide whether it is worth the dependency, or whether to say "save as CSV".
+
+### F8 Several figures in one project — M
+
+The model holds a list of figures, but the GUI and `figscribe script` only
+use the first, and there is no *Add figure*. Add, duplicate, rename, reorder
+and switch figures (tabs or the outline), *Export all*, and
+`figscribe script --figure NAME` / `--all`.
+
+### F9 Reading values off the figure — S
+
+A data cursor: hover shows the nearest point's x and y in the status bar; a
+selected plot shows N, mean, standard deviation, min and max of its visible
+data. Read-only, nothing stored: a quick look, not a statistics suite.
+
+### F10 Questions of scope for analysis tools — `[decide]`
+
+The brief excludes column formulas and a statistics suite. Some light analysis
+is still asked for when plotting measurements. Decide each before building:
+- **Scale and offset per plotted column** (unit conversion, baseline
+  subtraction, normalise to maximum), stored on the column reference and
+  written as one line in the script. Small, but touches the non-goal.
+- **Smoothing** (moving average, Savitzky–Golay) as a derived plot.
+- **Peak finding** (`scipy.signal.find_peaks`) that adds notes at the peaks.
+
+---
+
+## Phase 3 — Speed and working faster
+
+### E1 The preview with large data (verified) — M
+
+*Measured* (render plus draw, one panel, 150 dpi): line 1e6 points 86 ms,
+points 1e6 389 ms, **error bars 1e5 616 ms, 1e6 5.8 s**. The preview renders
+synchronously in the GUI thread on every change (`gui/preview.py`, `refresh`),
+so each click in the property panel waits that long. The brief asks for fluid
+interaction up to about 1e6 points, with downsampling in the preview only.
+
+*Do:*
+1. **Coalesce redraws**: changes within ~50 ms render once.
+2. **Render off the GUI thread**: show the previous image until the new one is
+   ready; drop outdated renders.
+3. **Downsample in the preview only**: per pixel column keep min and max for
+   lines (looks identical), thin out points and error bars beyond what the
+   pixels can show; export and script always use all data. Mark the preview
+   while it is downsampled. Record the decision: it relaxes "the preview is the
+   export" for large data only.
+4. **A performance test** with budgets (marker `perf`, run in CI on Linux):
+   1e6-point line and 1e5-point error bars stay under a stated time.
+
+### E2 Never lose work — S
+
+Autosave to a recovery file every minute while there are unsaved changes;
+offer recovery on the next start after a crash. Keep the last saved version as
+`.bak` when saving.
+
+### E3 Start from your own figure — S
+
+*Save as template*: a figure's size, fonts, ticks, colors and layout without
+the data, offered on the start page next to the built-in layouts. Applying a
+template to an existing figure is one undo step.
+
+### E4 Fewer steps for the common path — S each
+
+- The import dialog's proposed plot can be accepted with Enter, and *Fit…*
+  is offered right after for error bar data.
+- After *Add fit*, offer *Show result in figure* and *Add residuals*.
+- Remember per file type the last import options and column choice.
+- Keyboard shortcuts for every menu action and for switching panels.
+
+---
+
+## Phase 4 — M7: polish and release
+
+### R1 Style templates for journals — M
+
+Bundled `.mplstyle` files plus the figure settings that go with them (width,
+fonts, tick direction, unit format, line widths): single and double column for
+APS/AIP, Nature, Elsevier, ACS, IEEE, an A4 thesis page, and a 16:9 slide.
+Include font choice: sans, serif, and math in Computer Modern or STIX
+(`mathtext.fontset`), so figures match a LaTeX document; `[decide]` whether
+to support full `text.usetex` (needs a LaTeX installation, breaks
+"runs anywhere"). Colorblind-safe palettes (Okabe–Ito, Tol) as color cycles.
+Applying a template is one undo step and shows what it changed.
+
+### R2 Snapping and alignment guides — M
+
+While dragging legends, notes and insets: snap to panel edges, centres and to
+other objects, with guide lines; Alt disables snapping.
+
+### R3 Export for every journal — S
+
+TIFF (often required, with LZW compression) and EPS in addition to PDF, SVG
+and PNG; transparent background option; *Export all figures*; a dpi override
+at export time instead of a model field (see U2).
+
+### R4 Release 0.1.0 — M
+
+1. Merge `develop` into `main`, tag `v0.1.0`, publish to PyPI through the
+   existing Trusted Publishing workflow (check it still builds with the new
+   extras).
+2. Installers: `[decide]` PyInstaller or Briefcase; one for each platform,
+   built in CI; on macOS signing and notarisation need an Apple developer
+   account — ask.
+3. README: status "alpha", installation from PyPI, screenshots.
+4. A small gallery in `examples/`: fit with residuals, 2-D map with color
+   bar, histogram, multi-panel, series of spectra; each with its generated
+   script, each in the codegen equivalence test.
+
+### R5 The assistant: measure models (carried over from the brief) — M
+
+Run `figscribe bench` against local models (7–8 B to 20–30 B, `--repeat 3`,
+`--no-vision` where needed) and against ChatGPT and Claude Haiku 5.5, Sonnet 5.5,
+Opus 5.5 as the reference; keep the `--json` files; improve tool descriptions
+where local models fail; write down in the README which model size is good
+enough for which request, and pick the default. New features from phases 1–3
+get bench cases.
+
+---
+
+## Phase 5 — Later, optional
+
+- Live data: watch a file and redraw when it grows (from the brief).
+- Origin `.opj` import via liborigin (from the brief).
+- `[decide]` A German user interface (Qt translations); number formats
+  follow the figure setting from F5 regardless.
+- Global fits sharing parameters across several data sets.
+- Broken axes.
+
+---
+
+## Open decisions for the user
+
+Collected from the tasks above, so they can be answered in one go. Record each
+answer in `docs/decisions.md` when the task is started.
+
+| Task | Question |
+|---|---|
+| B7.2 | Add `hypothesis` as a dev dependency for property-based tests? |
+| U2 | Marker size: change the model field for points to a size in pt (schema bump), or convert only in the panel? |
+| F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
+| F5.5 | Date and time axes? |
+| F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
+| F10 | Scale/offset per column, smoothing, peak finding: in scope or not? |
+| R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
+| R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
+| Phase 5 | German user interface? |
