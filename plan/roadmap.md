@@ -80,6 +80,15 @@ loaded file never hangs. Code generator mirrors the fallback.
 *Done when:* a test renders the repro under one second; the axis form and an
 assistant edit both get a clear refusal.
 
+**Done** (2026-10-24, decision 0027): at most 50 major and 250 minor ticks
+per axis. *Learned:* the repro was worse than measured above, about 21 s for
+2 000 major ticks, because the automatic minor ticks multiply the count by
+five; so minor ticks are limited too. An automatic range is only known after
+drawing, so the renderer now sets steps after all panels are drawn, and the
+code generator draws the figure when it needs such a range. *Follow-up:*
+`validate_references` cannot check an automatic range without data; give it
+the data when B4 does.
+
 ### B2 A changed or moved data file is a dead end — M
 
 *Now:* the preview shows "Cannot draw the figure … has changed since it was

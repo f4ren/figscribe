@@ -111,6 +111,26 @@ def test_tick_labels_without_positions_are_reported(project: Project) -> None:
     assert "without tick positions" in issues[0].message
 
 
+def test_a_tick_step_too_small_for_a_fixed_range_is_reported(project: Project) -> None:
+    project.figures[0].axes[0].x = AxisSpec(limits=(0.0, 10_000.0), major_step=1.0)
+
+    issues = validate_references(project)
+    assert [i.location for i in issues] == ["figures[0].axes[0].x.major_step"]
+    assert "10001 major ticks" in issues[0].message
+    assert "at most 50" in issues[0].message
+
+
+def test_too_many_minor_ticks_for_a_fixed_range_are_reported(project: Project) -> None:
+    project.figures[0].axes[0].x = AxisSpec(
+        limits=(0.0, 40.0), major_step=1.0, minor_divisions=10
+    )
+
+    issues = validate_references(project)
+    assert [i.location for i in issues] == ["figures[0].axes[0].x.minor_divisions"]
+    assert "360 minor ticks" in issues[0].message
+    assert "at most 250" in issues[0].message
+
+
 def test_bin_edges_must_increase(project: Project) -> None:
     source = project.sources[0]
     project.figures[0].axes[0].artists = [

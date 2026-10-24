@@ -246,6 +246,20 @@ def test_font_sizes_ticks_and_grid(tmp_path: Path) -> None:
     assert 'ax.grid(True, which="both", axis="y")' in script
 
 
+def test_a_tick_step_too_small_is_left_to_matplotlib(tmp_path: Path) -> None:
+    # The renderer falls back to automatic ticks; the script must do the same,
+    # for a fixed range and for one that follows the data.
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(limits=(0, 10_000), major_step=1),
+        y=AxisSpec(major_step=0.0001),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=100, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert "MultipleLocator" not in script
+
+
 def test_font_size_with_a_style_sheet(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     axes = Axes(x=AxisSpec(label="t"), artists=[ScatterPlot(x=ref["t"], y=ref["U"])])

@@ -6,9 +6,13 @@ field reaches the right Matplotlib property.
 
 from __future__ import annotations
 
+import io
+import time
+
 import numpy as np
 import pytest
 from matplotlib.collections import PathCollection
+from matplotlib.ticker import MultipleLocator
 
 from figscribe.model import (
     Annotation,
@@ -420,3 +424,45 @@ def test_tick_style_and_prefixes(data, ref) -> None:
     assert tick.tick2line.get_visible()  # on the top edge too
     assert not tick.label2.get_visible()  # but numbers only at the bottom
     assert tick._tickdir == "in"
+
+
+def _drawn(fig) -> float:
+    """Seconds to draw `fig` as the preview does, ticks and all."""
+    start = time.perf_counter()
+    fig.savefig(io.BytesIO(), format="png")
+    return time.perf_counter() - start
+
+
+def test_a_tick_step_far_too_small_falls_back_to_automatic_ticks(data) -> None:
+    # Every 1 from 0 to 10 000 took over 20 s per redraw (roadmap B1).
+    axes = Axes(x=AxisSpec(limits=(0.0, 10_000.0), major_step=1.0))
+    fig = render(Figure(axes=[axes]), data)
+    assert _drawn(fig) < 1.0
+    ax = fig.axes[0]
+    assert not isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+
+
+def test_the_tick_limit_applies_to_an_automatic_range(data) -> None:
+    # The data run from 0 to 10; the range is not fixed.
+    fig = render(Figure(axes=[Axes(x=AxisSpec(major_step=0.001))]), data)
+    assert _drawn(fig) < 1.0
+    assert not isinstance(fig.axes[0].xaxis.get_major_locator(), MultipleLocator)
+
+
+def test_too_many_minor_ticks_keep_the_major_step(data) -> None:
+    # 41 major ticks are fine; ten parts between each give 400 minor ticks.
+    axes = Axes(x=AxisSpec(limits=(0.0, 40.0), major_step=1.0, minor_divisions=10))
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    assert np.allclose(np.diff(ax.get_xticks()), 1.0)
+    assert len(ax.xaxis.get_minorticklocs()) <= 250
+
+
+def test_a_tick_step_that_fits_is_kept(data) -> None:
+    axes = Axes(x=AxisSpec(limits=(0.0, 40.0), major_step=1.0, minor_divisions=5))
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    assert isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+    assert len(ax.xaxis.get_minorticklocs()) == 40 * 4  # four between each pair

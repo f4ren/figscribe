@@ -54,6 +54,7 @@ from figscribe.render.ticks import (
     shown,
     silent_minor_labels,
     tick_style,
+    ticks_that_fit,
 )
 
 DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
@@ -89,6 +90,7 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
 
         artists = {a.id: a for axes in figure.axes for a in axes.artists}
         axs: dict[int, MplAxes] = {}
+        ticked: list[tuple[MplAxes, str, AxisSpec]] = []
         for i in creation_order(figure):
             axes = figure.axes[i]
             if axes.inset is not None:
@@ -105,8 +107,20 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
                     sharey=axs[partners[1]] if partners[1] is not None else None,
                 )
             ax.set_gid(axes.id)
-            _draw_axes(axes, ax, data, figure.unit_format, artists)
+            ticked += _draw_axes(axes, ax, data, figure.unit_format, artists)
             axs[i] = ax
+
+        # Only now are the automatic ranges known that decide whether a tick
+        # step fits. A style with axes.autolimit_mode "round_numbers" rounds
+        # the range to the ticks, so there it is worked out again with the new
+        # ones, as the script does when it draws. Elsewhere it must not be:
+        # done early, it gives empty panels another range than drawing does.
+        rounded = matplotlib.rcParams["axes.autolimit_mode"] == "round_numbers"
+        for ax, name, spec in ticked:
+            interval = ax.get_xlim() if name == "x" else ax.get_ylim()
+            _apply_ticks(ax, name, ticks_that_fit(spec, interval))
+            if rounded:
+                ax.autoscale_view(scalex=name == "x", scaley=name == "y")
 
         for i, (hide_x, hide_y) in enumerate(hidden_tick_labels(figure)):
             ax = axs[i]
@@ -115,6 +129,37 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
             if hide_y:
                 ax.yaxis.set_tick_params(which="both", labelleft=False)
     return fig
+
+
+def tick_ranges(
+    figure: Figure, data: DataProvider | None
+) -> dict[tuple[str, str], tuple[float, float]]:
+    """The range of each axis with its own tick step or divisions, by
+    (Axes.id, "x", "y" or "y_right"): what the renderer counts ticks over.
+
+    An automatic range is only known by drawing, so the figure is drawn when
+    there is one and `data` is given; without data such axes are left out.
+    """
+    specs = {
+        (axes.id, field): spec
+        for axes in figure.axes
+        for field in ("x", "y", "y_right")
+        if (spec := getattr(axes, field)) is not None
+        and (spec.major_step is not None or spec.minor_divisions is not None)
+    }
+    ranges = {key: s.limits for key, s in specs.items() if s.limits is not None}
+    if len(ranges) == len(specs) or data is None:
+        return ranges
+    for ax in render(figure, data).findobj(MplAxes):
+        gid = ax.get_gid()
+        if gid is None:
+            continue
+        if gid.endswith(RIGHT):
+            drawn = {(gid.removesuffix(RIGHT), "y_right"): ax.get_ylim()}
+        else:
+            drawn = {(gid, "x"): ax.get_xlim(), (gid, "y"): ax.get_ylim()}
+        ranges.update({key: r for key, r in drawn.items() if key in specs})
+    return ranges
 
 
 def style_context(figure: Figure):
@@ -135,7 +180,8 @@ def _draw_axes(
     data: DataProvider,
     unit_format: str,
     artists: Mapping[str, Artist],
-) -> None:
+) -> list[tuple[MplAxes, str, AxisSpec]]:
+    """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
         size = {"fontsize": axes.title_size} if axes.title_size else {}
         ax.set_title(axes.title, **size)
@@ -159,6 +205,11 @@ def _draw_axes(
     if axes.legend.visible:
         _draw_legend(axes.legend, ax, right).set_gid(axes.id)
 
+    ticked = [(ax, "x", axes.x), (ax, "y", axes.y)]
+    if axes.y_right is not None:
+        ticked.append((right, "y", axes.y_right))
+    return ticked
+
 
 def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> None:
     axis = ax.xaxis if name == "x" else ax.yaxis
@@ -179,7 +230,12 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         set_lim(*spec.limits)
     if spec.ticks is not None:
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
-    elif spec.major_step is not None:
+
+
+def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec) -> None:
+    """The tick step, minor ticks and tick numbers, once the range is known."""
+    axis = ax.xaxis if name == "x" else ax.yaxis
+    if spec.ticks is None and spec.major_step is not None:
         axis.set_major_locator(MultipleLocator(spec.major_step))
     how, value = minor_ticks(spec)
     if how == "parts":

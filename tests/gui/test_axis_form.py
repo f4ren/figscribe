@@ -134,6 +134,25 @@ def test_major_and_minor_ticks_in_plain_words(panel, document) -> None:
     assert not _axes(document).y.minor_ticks
 
 
+def test_a_tick_step_that_gives_too_many_ticks_is_refused(panel, document) -> None:
+    axes = _axes(document)
+    document.select(axis_id(axes.id, "x"))
+    form = panel.axis_form
+    _choose(form.major, "step")
+    _enter(form.major_value, "0.001")  # the automatic range spans about 10
+    assert _axes(document).x.major_step is None
+    assert "at most 50" in panel._error.text()
+
+    _enter(form.low, "0")
+    _enter(form.high, "10000")
+    _choose(form.major, "step")  # the form shows the model again after a change
+    _enter(form.major_value, "500")
+    assert _axes(document).x.major_step == 500
+    _enter(form.high, "1000000")  # the step stays, so the range is refused
+    assert _axes(document).x.limits == (0.0, 10_000.0)
+    assert "at most 50" in panel._error.text()
+
+
 def test_scale_choices_and_their_extra_rows(panel, document) -> None:
     axes = _axes(document)
     document.select(axis_id(axes.id, "x"))

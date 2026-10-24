@@ -347,10 +347,23 @@ def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None
 
 
 def _check_axis_ticks(axes: Axes, path: str, issues: list[ReferenceIssue]) -> None:
+    # Imported here: the renderer imports the model, and listing the assistant
+    # tools must not load Matplotlib.
+    from figscribe.render.ticks import too_many_ticks
+
     for name in ("x", "y", "y_right"):
         spec = getattr(axes, name)
         if spec is None:
             continue
+        # An automatic range depends on the data, which is not known here; the
+        # renderer falls back to automatic ticks in either case.
+        if spec.limits is not None:
+            problem = too_many_ticks(spec, spec.limits)
+            if problem is not None:
+                field, message = problem
+                issues.append(
+                    ReferenceIssue(f"{path}.{name}.{field}", axes.id, message)
+                )
         if spec.tick_labels is None:
             continue
         if spec.ticks is None:
