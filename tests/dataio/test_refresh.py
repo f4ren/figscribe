@@ -6,11 +6,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from figscribe.io.refresh import describe_change, source_state, use_new_version
 
 from figscribe.commands import History
 from figscribe.io import DataError, csv_source, sha256_of
 from figscribe.io.numpyfile import numpy_source
+from figscribe.io.refresh import describe_change, source_state, use_new_version
 from figscribe.model import ColumnRef, LinePlot, Project, loads
 
 SCAN = "# a scan\nt;U;dU\ns;V;V\n0;1,5;0,1\n1;2,5;0,1\n"
@@ -26,9 +26,9 @@ def _project(tmp_path: Path, text: str = SCAN) -> Project:
 
 
 def test_the_number_of_rows_is_recorded_on_import(tmp_path: Path) -> None:
-    assert _project(tmp_path).sources[0].rows == 2
+    assert _project(tmp_path).sources[0].row_count == 2
     np.save(tmp_path / "a.npy", np.zeros((7, 3)))
-    assert numpy_source(tmp_path / "a.npy", tmp_path).rows == 7
+    assert numpy_source(tmp_path / "a.npy", tmp_path).row_count == 7
 
 
 def test_a_changed_file_is_told_from_a_missing_one(tmp_path: Path) -> None:
@@ -53,7 +53,7 @@ def test_the_new_version_is_one_step_and_keeps_how_the_file_is_read(
 
     new = project.sources[0]
     assert new.sha256 == sha256_of(tmp_path / "scan.csv")
-    assert (new.rows, new.columns) == (3, ["t", "U", "dU", "T"])
+    assert (new.row_count, new.columns) == (3, ["t", "U", "dU", "T"])
     assert (new.delimiter, new.decimal, new.header_row) == (";", ",", 1)
     assert history.undo_text == "Use the new version of scan.csv"
     history.undo()
@@ -85,12 +85,12 @@ def test_a_new_version_that_cannot_be_read_changes_nothing(tmp_path: Path) -> No
 
 def test_what_changed_is_said_in_rows_and_columns(tmp_path: Path) -> None:
     old = _project(tmp_path).sources[0]
-    new = old.model_copy(update={"rows": 5, "columns": ["t", "U", "T"]})
+    new = old.model_copy(update={"row_count": 5, "columns": ["t", "U", "T"]})
     text = describe_change(old, new)
     assert "2 → 5 rows" in text
     assert "dU" in text and "T" in text
 
-    unknown = old.model_copy(update={"rows": None})
+    unknown = old.model_copy(update={"row_count": None})
     assert "unknown → 5 rows" in describe_change(unknown, new)
 
 
@@ -117,4 +117,4 @@ def test_a_plot_of_a_column_the_file_lost_is_reported(tmp_path: Path) -> None:
 
 def test_an_older_project_without_rows_still_loads(example: Path) -> None:
     project = loads(example.read_text(encoding="utf-8"))
-    assert project.sources[0].rows is None
+    assert project.sources[0].row_count is None

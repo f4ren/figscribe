@@ -33,6 +33,9 @@ class CsvSource(Identified):
     """Lines starting with this are skipped; counted lines above include them."""
     columns: list[str] = Field(default_factory=list)
     """Column names discovered on import, cached for the GUI."""
+    row_count: int | None = Field(None, ge=0)
+    """Rows of data when the file was imported, to tell what changed; None in
+    projects from before it was recorded."""
 
 
 class Hdf5Source(Identified):
@@ -42,6 +45,9 @@ class Hdf5Source(Identified):
     dataset: str = Field(min_length=1)
     """Path of the dataset inside the file, e.g. "/run3/voltage"."""
     columns: list[str] = Field(default_factory=list)
+    row_count: int | None = Field(None, ge=0)
+    """Rows of data when the file was imported, to tell what changed; None in
+    projects from before it was recorded."""
 
 
 class NumpySource(Identified):
@@ -51,6 +57,9 @@ class NumpySource(Identified):
     array: str | None = None
     """Array name inside an .npz archive; None for a plain .npy file."""
     columns: list[str] = Field(default_factory=list)
+    row_count: int | None = Field(None, ge=0)
+    """Rows of data when the file was imported, to tell what changed; None in
+    projects from before it was recorded."""
 
 
 DataSource = Annotated[

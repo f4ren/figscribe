@@ -56,7 +56,7 @@ def test_get_project_shows_structure_but_no_file_locations(tools, workspace) -> 
     assert source["path"] == "scan.csv"
     assert "sha256" not in source
     assert source["columns"] == ["t", "U", "dU"]
-    assert result["problems"] == []
+    assert result["problems"] == ["scan.csv is missing; the user can locate it"]
     assert result["shown_figure"] == workspace.project.figures[0].id
     json.dumps(result)  # plain JSON all the way down
 
@@ -132,26 +132,6 @@ def test_set_field_is_strict(tools, workspace) -> None:
         tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": -1})
     tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": 150})
     assert workspace.project.figures[0].dpi == 150.0
-
-
-def test_a_changed_data_file_can_be_taken_as_it_is_now(
-    tools, workspace, example: Path
-) -> None:
-    from figscribe.io import sha256_of
-
-    csv = example.parent / "scan.csv"
-    csv.write_text(csv.read_text(encoding="utf-8") + "10.25,0.01,0.04\n", "utf-8")
-    problems = tools.call("get_project", {})["problems"]
-    assert any("scan.csv has changed" in problem for problem in problems)
-
-    source = workspace.project.sources[0].id
-    result = tools.call("use_new_data_version", {"source_id": source})
-    assert workspace.project.sources[0].sha256 == sha256_of(csv)
-    assert workspace.project.sources[0].rows == 42
-    assert result["undo_step"] == "Use the new version of scan.csv"
-    assert result["problems"] == []
-    with pytest.raises(ToolError, match="has not changed"):
-        tools.call("use_new_data_version", {"source_id": source})
 
 
 @pytest.mark.parametrize(
@@ -555,3 +535,23 @@ def test_reading_the_tool_list_stays_light() -> None:
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_a_changed_data_file_can_be_taken_as_it_is_now(
+    tools, workspace, example: Path
+) -> None:
+    from figscribe.io import sha256_of
+
+    csv = example.parent / "scan.csv"
+    csv.write_text(csv.read_text(encoding="utf-8") + "10.25,0.01,0.04\n", "utf-8")
+    problems = tools.call("get_project", {})["problems"]
+    assert any("scan.csv has changed" in problem for problem in problems)
+
+    source = workspace.project.sources[0].id
+    result = tools.call("use_new_data_version", {"source_id": source})
+    assert workspace.project.sources[0].sha256 == sha256_of(csv)
+    assert workspace.project.sources[0].row_count == 42
+    assert result["undo_step"] == "Use the new version of scan.csv"
+    assert result["problems"] == []
+    with pytest.raises(ToolError, match="has not changed"):
+        tools.call("use_new_data_version", {"source_id": source})

@@ -216,8 +216,10 @@ def test_data_sources_show_their_file_read_only(panel: PropertyPanel, document) 
     source = document.project.sources[0]
     document.select(source.id)
     assert ("path",) not in panel.editors and ("sha256",) not in panel.editors
+    assert ("row_count",) not in panel.editors  # recorded on import, not typed
     texts = [label.text() for label in panel.widget().findChildren(QLabel)]
     assert source.path in texts
+    assert "not recorded" in texts  # the example predates counting rows
     _type(panel, ("comment",), "%")
     assert document.project.sources[0].comment == "%"
 

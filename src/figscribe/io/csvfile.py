@@ -42,6 +42,7 @@ def csv_source(
     path = Path(path)
     text = path.read_bytes().decode(ENCODING)
     columns = [] if header_row is None else _header(text, delimiter, header_row, path)
+    first = (0 if header_row is None else header_row + 1) + skip_rows
     return CsvSource(
         path=stored_path(path, base_dir),
         sha256=sha256_of(path),
@@ -51,6 +52,7 @@ def csv_source(
         skip_rows=skip_rows,
         comment=comment,
         columns=columns,
+        row_count=_data_rows(text.splitlines()[first:], comment),
     )
 
 
@@ -84,6 +86,13 @@ def read_csv(source: CsvSource, text: str, name: str) -> np.ndarray:
     except ValueError as exc:
         raise DataError(f"cannot read {name}: {exc}") from exc
     return table
+
+
+def _data_rows(lines: list[str], comment: str | None) -> int:
+    """The lines np.loadtxt reads as data: all but blank and comment-only ones."""
+    if comment:
+        lines = [line.split(comment, 1)[0] for line in lines]
+    return sum(1 for line in lines if line.strip())
 
 
 def _header(text: str, delimiter: str | None, header_row: int, path: Path) -> list[str]:

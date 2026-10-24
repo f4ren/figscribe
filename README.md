@@ -79,7 +79,9 @@ script.
   unit rows; NumPy `.npy` and `.npz` files (read without pickles, so a data
   file cannot run code).
 - Each data file is recorded with its SHA-256. If it changes later,
-  figscribe says so instead of silently plotting different data.
+  figscribe says so instead of silently plotting different data, shows
+  what changed, and takes the new version on request, or lets you point it
+  to where a moved file went.
 
 **Plots**
 - Line, scatter, error bars, histograms, images and color meshes with color

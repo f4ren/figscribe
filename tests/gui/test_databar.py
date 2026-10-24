@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QLabel, QPushButton
 
 from figscribe.gui import MainWindow
-from figscribe.gui.mainwindow import create_window
+from figscribe.gui.app import create_window
 from figscribe.io import sha256_of
 
 ROWS = "\n".join(f"{t:.2f},{t / 10:.3f},0.040" for t in range(12))
@@ -21,15 +21,26 @@ def _open(qtbot, project: Path) -> MainWindow:
     qtbot.addWidget(win)
     win.ask = lambda title, question: True
     win.show_error = lambda title, exc: None
+    win.show()
+    qtbot.waitExposed(win)
     return win
 
 
 def _texts(window: MainWindow) -> str:
-    return " ".join(label.text() for label in window.data_bar.findChildren(QLabel))
+    """What the bar shows; labels it holds but hides do not count."""
+    bar = window.data_bar
+    return " ".join(
+        label.text() for label in bar.findChildren(QLabel) if label.isVisibleTo(bar)
+    )
 
 
 def _click(window: MainWindow, text: str, row: int = 0) -> None:
-    buttons = [b for b in window.data_bar.findChildren(QPushButton) if b.text() == text]
+    bar = window.data_bar
+    buttons = [
+        b
+        for b in bar.findChildren(QPushButton)
+        if b.text() == text and b.isVisibleTo(bar)
+    ]
     buttons[row].click()
 
 
@@ -42,6 +53,8 @@ def test_a_changed_file_can_be_taken_as_it_is_now(qtbot, example: Path) -> None:
     (example.parent / "scan.csv").write_text(LONGER, encoding="utf-8")
     window = _open(qtbot, example)
     assert not window.data_bar.isHidden()
+    assert "scan.csv has changed" in _texts(window)
+    window.data_bar.rebuild()  # as when the window comes to the front again
     assert "scan.csv has changed" in _texts(window)
     assert window.preview.error is not None
 

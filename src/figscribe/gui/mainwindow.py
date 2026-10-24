@@ -6,7 +6,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, QStandardPaths, Qt, QUrl
+from PySide6.QtCore import QEvent, QSettings, QSize, QStandardPaths, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -50,6 +50,7 @@ from figscribe.fit import FitError, add_fit
 from figscribe.gui import theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
+from figscribe.gui.databar import DataBar
 from figscribe.gui.document import Document, split_axis
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
@@ -143,9 +144,16 @@ class MainWindow(QMainWindow):
         self.code = CodePanel(self.document)
         self.code.save_requested.connect(self._script_dialog)
         self.code.hide()
+        self.data_bar = DataBar(self.document)
+        figure_area = QWidget()
+        column = QVBoxLayout(figure_area)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(self.data_bar)
+        column.addWidget(self.preview, 1)
         self.workspace = QSplitter(Qt.Orientation.Vertical)
         self.workspace.setChildrenCollapsible(False)
-        self.workspace.addWidget(self.preview)
+        self.workspace.addWidget(figure_area)
         self.workspace.addWidget(self.chat)
         self.workspace.addWidget(self.code)
         self.workspace.setStretchFactor(0, 3)
@@ -706,6 +714,7 @@ class MainWindow(QMainWindow):
         document.allow_preview = self.document.allow_preview
         self.document = document
         views = (
+            self.data_bar,
             self.preview,
             self.outline,
             self.problems,
@@ -717,6 +726,12 @@ class MainWindow(QMainWindow):
             view.set_document(document)
         self._connect(document)
         self.show_workspace()
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 - Qt naming
+        super().changeEvent(event)
+        # A data file may have been changed in another program meanwhile.
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            self.data_bar.rebuild()
 
     def show_error(self, title: str, error: Exception) -> None:
         QMessageBox.warning(self, title, str(error))
