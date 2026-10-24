@@ -230,6 +230,16 @@ def test_points_take_their_marker_size_in_pt_like_lines(
     assert "-5" in panel.error and _axes(document).artists[-1].size == 25.0
 
 
+def test_the_resolution_is_an_export_setting(panel: PropertyPanel, document) -> None:
+    from figscribe.gui.names import field_name
+
+    document.select(_figure(document).id)
+    resolution = panel.editors[("dpi",)].widget
+    assert panel.sections["Export"].isAncestorOf(resolution)
+    assert not panel.sections["Size"].isAncestorOf(resolution)
+    assert "PNG" in field_name("dpi")
+
+
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:
     artist = _artist(document)
     source = document.project.sources[0]

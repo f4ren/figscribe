@@ -189,7 +189,7 @@ SECTIONS = {
     "name": "Size",
     "width_mm": "Size",
     "height_mm": "Size",
-    "dpi": "Size",
+    "dpi": "Export",
     "unit_format": "Style",
     "stylesheet": "Style",
     "title": "Panel",
@@ -250,6 +250,7 @@ ORDER = [
     "Look",
     "Style",
     "Legend",
+    "Export",
 ]
 COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""

@@ -57,7 +57,7 @@ FIELD_NAMES = {
     "name": "Name",
     "width_mm": "Width (mm)",
     "height_mm": "Height (mm)",
-    "dpi": "Resolution (dpi)",
+    "dpi": "PNG resolution (dpi)",
     "unit_format": "Units in labels",
     "stylesheet": "Style sheet",
     "font_size": "Font size (pt)",
