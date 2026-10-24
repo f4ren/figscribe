@@ -137,6 +137,15 @@ def test_empty_text_clears_an_optional_field(panel: PropertyPanel, document) -> 
     assert _artist(document).label == "data"
 
 
+def test_a_color_matplotlib_does_not_know_is_reported(
+    panel: PropertyPanel, document
+) -> None:
+    document.select(_artist(document).id)
+    _type(panel, ("color",), "blu")
+    assert "'blu' is not a color" in panel.error
+    assert _artist(document).color is None
+
+
 def test_literals_are_a_choice(panel: PropertyPanel, document) -> None:
     document.select(_axes(document).id)
     combo = panel.editors[("legend", "location")].widget

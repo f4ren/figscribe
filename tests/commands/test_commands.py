@@ -20,6 +20,7 @@ from figscribe.model import (
     AxisSpec,
     ColumnRef,
     Figure,
+    Legend,
     LinePlot,
     Project,
     dumps,
@@ -151,6 +152,38 @@ def test_invalid_value_is_refused_and_changes_nothing(project: Project) -> None:
 def test_strict_types_are_kept(project: Project) -> None:
     with pytest.raises(CommandError):
         SetField(project.figures[0].id, ("dpi",), "300").apply(project)
+
+
+def test_a_style_string_matplotlib_refuses_is_refused(project: Project) -> None:
+    _, top, _, data, _, _ = _ids(project)
+    source = project.sources[0].id
+    history = History(project)
+    before = dumps(project)
+    with pytest.raises(CommandError, match="'blu' is not a color"):
+        history.push(SetField(data, ("color",), "blu"))
+    with pytest.raises(CommandError, match="'top' is not a legend location"):
+        history.push(SetField(top, ("legend",), Legend(location="top")))
+    line = LinePlot(
+        x=ColumnRef(source=source, column="t"),
+        y=ColumnRef(source=source, column="U"),
+        marker="q",
+    )
+    with pytest.raises(CommandError, match="'q' is not a marker"):
+        history.push(InsertItem(top, "artists", line))
+    assert dumps(project) == before
+
+
+def test_a_bad_style_from_the_file_does_not_block_other_changes(
+    project: Project,
+) -> None:
+    _, top, _, data, _, _ = _ids(project)
+    source = project.sources[0].id
+    project.figures[0].axes[0].artists[0].color = "blu"  # as loaded
+    line = LinePlot(
+        x=ColumnRef(source=source, column="t"), y=ColumnRef(source=source, column="U")
+    )
+    History(project).push(InsertItem(top, "artists", line))
+    History(project).push(SetField(data, ("label",), "renamed"))
 
 
 def test_failing_macro_rolls_back_its_earlier_steps(project: Project) -> None:

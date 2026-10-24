@@ -121,6 +121,31 @@ def test_bin_edges_must_increase(project: Project) -> None:
     assert "increase strictly" in issues[0].message
 
 
+def test_a_style_string_from_the_file_is_reported(project: Project) -> None:
+    project.figures[0].axes[0].artists[0].color = "blu"
+    project.figures[0].axes[0].legend.location = "top"
+
+    issues = {i.location: i.message for i in validate_references(project)}
+    assert "'blu' is not a color" in issues["figures[0].axes[0].artists[0].color"]
+    assert "legend location" in issues["figures[0].axes[0].legend.location"]
+
+
+def test_columns_of_unequal_length_are_reported_given_the_data(
+    project: Project,
+) -> None:
+    import numpy as np
+
+    lengths = {"t": 41, "U": 40, "dU": 41}
+
+    def data(ref):
+        return np.zeros(lengths[ref.column])
+
+    assert validate_references(project) == []  # without data, lengths are unknown
+    issues = validate_references(project, data)
+    assert [i.location for i in issues] == ["figures[0].axes[0].artists[0]"]
+    assert "y (U) has 40 values, x (t) has 41" in issues[0].message
+
+
 def test_issue_renders_readably(project: Project) -> None:
     project.figures[0].axes[0].artists[0].x = ColumnRef(source="nope", column="t")
 
