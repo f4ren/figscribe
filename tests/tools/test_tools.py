@@ -134,6 +134,26 @@ def test_set_field_is_strict(tools, workspace) -> None:
     assert workspace.project.figures[0].dpi == 150.0
 
 
+def test_a_changed_data_file_can_be_taken_as_it_is_now(
+    tools, workspace, example: Path
+) -> None:
+    from figscribe.io import sha256_of
+
+    csv = example.parent / "scan.csv"
+    csv.write_text(csv.read_text(encoding="utf-8") + "10.25,0.01,0.04\n", "utf-8")
+    problems = tools.call("get_project", {})["problems"]
+    assert any("scan.csv has changed" in problem for problem in problems)
+
+    source = workspace.project.sources[0].id
+    result = tools.call("use_new_data_version", {"source_id": source})
+    assert workspace.project.sources[0].sha256 == sha256_of(csv)
+    assert workspace.project.sources[0].rows == 42
+    assert result["undo_step"] == "Use the new version of scan.csv"
+    assert result["problems"] == []
+    with pytest.raises(ToolError, match="has not changed"):
+        tools.call("use_new_data_version", {"source_id": source})
+
+
 @pytest.mark.parametrize(
     ("object_id", "path", "message"),
     [
