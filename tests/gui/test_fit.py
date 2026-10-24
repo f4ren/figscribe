@@ -90,7 +90,8 @@ def test_start_values_can_be_changed(dialog: FitDialog) -> None:
     dialog.start["mu"].setText("lots")
     dialog.start["mu"].editingFinished.emit()
     assert "start value of mu" in dialog.error.text() and not _ok(dialog)
-    dialog.start["mu"].setText("4.5")
+    assert "'lots'" in dialog.error.text()
+    dialog.start["mu"].setText("4,5")
     dialog.start["mu"].editingFinished.emit()
     assert _ok(dialog) and dialog.fit().initial_values["mu"] == 4.5
     dialog.start["mu"].setText("0")

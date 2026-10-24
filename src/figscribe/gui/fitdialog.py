@@ -34,6 +34,7 @@ from figscribe.fit import (
 )
 from figscribe.gui import theme
 from figscribe.gui.names import artist_name, with_error
+from figscribe.gui.numbers import number
 from figscribe.gui.properties import GREEK
 from figscribe.gui.widgets import label
 from figscribe.model import ErrorbarPlot, ExpressionFit, FitCurve, PredefinedFit
@@ -245,9 +246,9 @@ class FitDialog(QDialog):
         values = {}
         for name, line in self.start.items():
             try:
-                values[name] = float(line.text().replace(",", "."))
-            except ValueError:
-                raise FitError(f"the start value of {name} is not a number") from None
+                values[name] = number(line.text())
+            except ValueError as exc:
+                raise FitError(f"the start value of {name}: {exc}") from None
         return values
 
     # --- fitting --------------------------------------------------------------

@@ -52,6 +52,7 @@ from figscribe.gui.names import (
     size_text,
     with_error,
 )
+from figscribe.gui.numbers import number, numbers, whole
 from figscribe.gui.widgets import Section, label
 from figscribe.io.errors import DataError
 from figscribe.model import (
@@ -934,42 +935,27 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     return editor
 
 
-def _float(text: str) -> float:
-    try:
-        return float(text)
-    except ValueError:
-        raise ValueError(f"{text!r} is not a number") from None
-
-
-def _int(text: str) -> int:
-    try:
-        return int(text)
-    except ValueError:
-        raise ValueError(f"{text!r} is not a whole number") from None
-
-
-def _floats(text: str) -> list[float]:
-    return [_float(part.strip()) for part in text.split(",")]
+SEPARATED = "separated by commas, or by semicolons with decimal commas"
 
 
 def _pair(text: str) -> tuple[float, float]:
-    values = _floats(text)
+    values = numbers(text)
     if len(values) != 2:
-        raise ValueError(f"needs two numbers separated by a comma, got {len(values)}")
+        raise ValueError(f"needs two numbers {SEPARATED}, got {len(values)}")
     return values[0], values[1]
 
 
 def _bins(text: str) -> int | list[float]:
-    """A number of bins ("20") or their edges ("0, 1, 2.5")."""
-    if "," not in text:
-        return _int(text)
-    return _floats(text)
+    """A number of bins ("20") or their edges ("0, 1, 2.5" or "0; 1; 2,5")."""
+    if "," not in text and ";" not in text:
+        return whole(text)
+    return numbers(text)
 
 
 def _quad(text: str) -> tuple[float, float, float, float]:
-    values = _floats(text)
+    values = numbers(text)
     if len(values) != 4:
-        raise ValueError(f"needs four numbers separated by commas, got {len(values)}")
+        raise ValueError(f"needs four numbers {SEPARATED}, got {len(values)}")
     return values[0], values[1], values[2], values[3]
 
 
@@ -979,12 +965,12 @@ def _join(values) -> str:
 
 _TEXT: dict[str, tuple[Callable[[str], Any], Callable[[Any], str]]] = {
     "text": (str, str),
-    "int": (_int, str),
-    "float": (_float, repr),
+    "int": (whole, str),
+    "float": (number, repr),
     "pair": (_pair, _join),
     "quad": (_quad, _join),
     "bins": (_bins, lambda v: str(v) if isinstance(v, int) else _join(v)),
-    "floats": (_floats, _join),
+    "floats": (numbers, _join),
     "strings": (lambda t: [part.strip() for part in t.split(",")], _join),
 }
 
