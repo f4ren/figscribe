@@ -134,6 +134,45 @@ def test_set_field_is_strict(tools, workspace) -> None:
     assert workspace.project.figures[0].dpi == 150.0
 
 
+def test_a_tick_step_that_would_freeze_the_figure_is_refused(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    before = dumps(workspace.project)
+    # The data's t runs from 0 to 10, so every 0.001 means thousands of ticks.
+    with pytest.raises(ToolError, match="at most 50"):
+        tools.call(
+            "set_field",
+            {"object_id": axes, "path": ["x", "major_step"], "value": 0.001},
+        )
+    step = {"op": "set_field", "object_id": axes, "path": ["x", "major_step"]}
+    wide = {"op": "set_field", "object_id": axes, "path": ["x", "limits"]}
+    with pytest.raises(ToolError, match="at most 50"):
+        tools.call(
+            "apply_changes",
+            {
+                "description": "Ticks",
+                "operations": [{**step, "value": 1}, {**wide, "value": [0, 10_000]}],
+            },
+        )
+    assert dumps(workspace.project) == before
+    tools.call(
+        "set_field", {"object_id": axes, "path": ["x", "major_step"], "value": 2}
+    )
+    assert workspace.project.figures[0].axes[0].x.major_step == 2.0
+
+
+def test_a_tick_problem_from_the_file_does_not_block_other_changes(
+    tools, workspace
+) -> None:
+    from figscribe.model import AxisSpec
+
+    axes = workspace.project.figures[0].axes[0]
+    axes.x = AxisSpec(limits=(0.0, 10_000.0), major_step=1.0)  # as loaded
+    result = tools.call(
+        "set_field", {"object_id": axes.id, "path": ["y", "label"], "value": "U"}
+    )
+    assert any("major ticks" in problem for problem in result["problems"])
+
+
 @pytest.mark.parametrize(
     ("object_id", "path", "message"),
     [
