@@ -412,7 +412,9 @@ class _Writer:
             kwargs["converters"] = (
                 f"lambda field: float(field.replace({_str(source.decimal)}, '.'))"
             )
-        if _has_bom(location):
+        if source.encoding != "utf-8-sig":
+            kwargs["encoding"] = _str(source.encoding)
+        elif _has_bom(location):
             kwargs["encoding"] = '"utf-8-sig"'
         table = self.arrays.get((source.id, None))
         if table is not None:

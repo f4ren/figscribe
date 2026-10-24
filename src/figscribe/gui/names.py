@@ -112,9 +112,18 @@ FIELD_NAMES = {
     "header_row": "Header line (first = 0)",
     "skip_rows": "Lines skipped",
     "comment": "Comment mark",
+    "encoding": "Text encoding",
     "dataset": "Dataset",
     "array": "Array",
 }
+
+
+ENCODINGS = [
+    ("UTF-8", "utf-8-sig"),
+    ("Windows (cp1252)", "cp1252"),
+    ("Latin-1 (ISO 8859-1)", "latin-1"),
+]
+"""The text encodings of CSV files, as offered for choice."""
 
 
 def field_name(name: str) -> str:

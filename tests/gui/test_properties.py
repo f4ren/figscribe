@@ -285,6 +285,17 @@ def test_specs_cover_the_model(cls, fields) -> None:
         assert spec_for(name, field.annotation) is not None, f"{cls.__name__}.{name}"
 
 
+def test_a_source_offers_its_text_encoding(panel: PropertyPanel, document) -> None:
+    document.select(document.project.sources[0].id)
+    editor = panel.editors[("encoding",)]
+    combo = editor.widget
+    texts = [combo.itemText(i) for i in range(combo.count())]
+    assert texts == ["UTF-8", "Windows (cp1252)", "Latin-1 (ISO 8859-1)"]
+    assert "cp1252" in combo.toolTip()
+    combo.activated.emit(1)
+    assert document.project.sources[0].encoding == "cp1252"
+
+
 def test_font_tick_and_grid_settings_have_names(panel: PropertyPanel, document) -> None:
     document.select(_figure(document).id)
     assert ("font_size",) in panel.editors

@@ -15,6 +15,11 @@ from figscribe.model.base import Identified, StrictModel
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
+CsvEncoding = Literal["utf-8-sig", "cp1252", "latin-1"]
+"""Text encodings of CSV files, in the order they are tried on import:
+UTF-8 (with or without the byte order mark Excel puts in front), what Windows
+programs write, and Latin-1, which reads any bytes."""
+
 
 class CsvSource(Identified):
     format: Literal["csv"] = "csv"
@@ -31,6 +36,7 @@ class CsvSource(Identified):
     Without a header, lines skipped at the top of the file."""
     comment: str | None = "#"
     """Lines starting with this are skipped; counted lines above include them."""
+    encoding: CsvEncoding = "utf-8-sig"
     columns: list[str] = Field(default_factory=list)
     """Column names discovered on import, cached for the GUI."""
     row_count: int | None = Field(None, ge=0)

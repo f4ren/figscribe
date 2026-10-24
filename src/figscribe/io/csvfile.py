@@ -10,15 +10,14 @@ from __future__ import annotations
 import csv
 import io
 from pathlib import Path
+from typing import get_args
 
 import numpy as np
 
 from figscribe.io.errors import DataError
 from figscribe.io.files import sha256_of, stored_path
 from figscribe.model import CsvSource
-
-ENCODING = "utf-8-sig"
-"""UTF-8, tolerating the byte order mark that Excel puts in front."""
+from figscribe.model.data import CsvEncoding
 
 
 def csv_source(
@@ -30,6 +29,7 @@ def csv_source(
     header_row: int | None = 0,
     skip_rows: int = 0,
     comment: str | None = "#",
+    encoding: CsvEncoding = "utf-8-sig",
 ) -> CsvSource:
     """Describe a CSV file for the model: hash it and read its column names.
 
@@ -40,7 +40,7 @@ def csv_source(
     if decimal == delimiter:
         raise DataError(f"decimal separator {decimal!r} is also the delimiter")
     path = Path(path)
-    text = path.read_bytes().decode(ENCODING)
+    text = decode(path.read_bytes(), encoding, str(path))
     columns = [] if header_row is None else _header(text, delimiter, header_row, path)
     first = (0 if header_row is None else header_row + 1) + skip_rows
     return CsvSource(
@@ -51,13 +51,37 @@ def csv_source(
         header_row=header_row,
         skip_rows=skip_rows,
         comment=comment,
+        encoding=encoding,
         columns=columns,
         row_count=_data_rows(text.splitlines()[first:], comment),
     )
 
 
-def read_csv(source: CsvSource, text: str, name: str) -> np.ndarray:
-    """Parse the file contents `text` into a 2-D array, one column per field.
+def detect_encoding(raw: bytes) -> CsvEncoding:
+    """The first encoding that reads all of `raw`; Latin-1 reads anything."""
+    *tried, last = get_args(CsvEncoding)
+    for encoding in tried:
+        try:
+            raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        return encoding
+    return last
+
+
+def decode(raw: bytes, encoding: str, name: str) -> str:
+    """The file contents `raw` as text; `name` only appears in the error."""
+    try:
+        return raw.decode(encoding)
+    except UnicodeDecodeError as exc:
+        raise DataError(
+            f"{name} is not {encoding} text (byte {exc.start + 1}); choose the "
+            "file's text encoding, often cp1252 for files from Windows programs"
+        ) from exc
+
+
+def read_csv(source: CsvSource, raw: bytes, name: str) -> np.ndarray:
+    """Parse the file contents `raw` into a 2-D array, one column per field.
 
     `name` only appears in error messages.
     """
@@ -76,7 +100,7 @@ def read_csv(source: CsvSource, text: str, name: str) -> np.ndarray:
         converters = lambda field: float(field.replace(decimal, "."))  # noqa: E731
     try:
         table = np.loadtxt(
-            io.StringIO(text),
+            io.StringIO(decode(raw, source.encoding, name)),
             delimiter=source.delimiter,
             skiprows=first_data_line,
             comments=source.comment,

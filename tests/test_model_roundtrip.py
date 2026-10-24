@@ -33,6 +33,11 @@ def test_roundtrip_is_idempotent(project: Project) -> None:
     assert dumps(loads(once)) == once
 
 
+def test_roundtrip_keeps_the_encoding_of_a_source(project: Project) -> None:
+    project.sources[0].encoding = "cp1252"
+    assert loads(dumps(project)).sources[0].encoding == "cp1252"
+
+
 def test_roundtrip_restores_concrete_artist_types(project: Project) -> None:
     axes = loads(dumps(project)).figures[0].axes
     assert [type(a) for a in axes[0].artists] == [ErrorbarPlot, FitCurve]

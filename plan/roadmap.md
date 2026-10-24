@@ -126,6 +126,15 @@ detects it (UTF-8 if it decodes, else cp1252, else Latin-1) and shows it as an
 option; the code generator passes `encoding=` to `np.loadtxt`. Any decode error
 becomes a `DataError` that names the file and suggests the encoding option.
 
+**Done** (2026-10-24, decision 0007): `CsvSource.encoding` is one of
+`utf-8-sig`, `cp1252`, `latin-1`, detected in that order and chosen in the
+import dialog (a chip says when it is not UTF-8) and the property panel.
+*Follow-up:* for a UTF-8 file without byte order mark the script still writes
+no `encoding=`, and NumPy 2 then uses the system's encoding: on Windows,
+cp1252, which cannot decode some UTF-8 bytes (e.g. `0x81` in "Á"), so the
+script may fail there on a header with such letters. Write `encoding="utf-8"`
+whenever the file is not plain ASCII.
+
 ### B4 Raw library errors reach the user (verified) — S
 
 *Repro:* x and y columns of different length give Matplotlib's "x and y must
