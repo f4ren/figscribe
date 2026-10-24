@@ -935,3 +935,65 @@ divisions, and a range in kHz in Hz.
 
 - Better names in the generated form only: would keep pairs like `limits`
   and the divisions-versus-ticks confusion, which need a different input.
+
+---
+
+## 0027 — A limit on tick counts
+
+**Date:** 2026-10-24
+**Status:** accepted
+
+### Context
+
+A tick step that is small for the range, such as every 1 from 0 to 10 000,
+makes Matplotlib place every one of those ticks: it only warns about counts
+above `Locator.MAXTICKS`. Each tick costs about 3 ms per redraw (minor ticks
+about 1.4 ms), and the automatic minor ticks multiply the count by five, so
+that example took minutes. The preview redraws on every change, so the window
+froze, and a project file with such a step could not be opened usefully.
+
+### Decision
+
+- **At most 50 major and 250 minor ticks per axis**, counted within the range
+  the axis shows (`render/ticks.py`, `too_many_ticks`). 50 ticks on a 175 mm
+  double-column axis are 3.5 mm apart, closer than tick numbers fit; 250 minor
+  ticks are 0.7 mm apart, beyond which they merge into a grey band. Together
+  they cost about half a second per axis. Only the step and the divisions set
+  in the model are counted: Matplotlib's own choices stay few, and explicit
+  tick values are taken as given.
+- **The renderer falls back to automatic ticks** for whatever exceeds the
+  limit: first the step, then the divisions (`ticks_that_fit`). This needs the
+  range, and an automatic range is only known once the data are drawn, so the
+  step and minor ticks are now set after all panels are drawn. With a style
+  that rounds automatic ranges to the ticks (`axes.autolimit_mode:
+  round_numbers`, e.g. `classic`), the range is worked out again afterwards,
+  as the script does when it draws.
+- **The code generator leaves out the same settings.** For an automatic range
+  it draws the figure to learn the range (`tick_ranges`), only when an axis
+  has a step or divisions and no fixed range, and only when it has the data.
+  `figscribe script` and the assistant's script tool now pass the data; when
+  the data cannot be read, the command line writes the script without them,
+  steps included as set.
+- **Where the change is made, it is refused**: the axis form shows the reason
+  and keeps what was typed; the assistant tools refuse a change that would add
+  such a problem, with the reason, and change nothing. A problem already in
+  the project does not block other changes.
+- **`validate_references` reports it** for a fixed range. It has no data, so
+  an automatic range is not checked there; the renderer falls back anyway.
+
+### Consequences
+
+- A project file with a too small step opens and draws at normal speed; the
+  problem list says why its ticks are automatic.
+- The script and the preview agree, except at the edge of the limit under a
+  `round_numbers` style, where the range the code generator reads after
+  drawing can be one step wider than the one the renderer counted over.
+
+### Alternatives
+
+- **Limit the model fields** (e.g. `minor_divisions <= 20`): cannot express a
+  limit that depends on the range, and would refuse to load older files.
+- **Only refuse in the GUI**: a loaded file or an assistant edit would still
+  freeze the window.
+- **Count major ticks only**, as first planned: the default minor ticks alone
+  made the repro five times slower than the major ones.

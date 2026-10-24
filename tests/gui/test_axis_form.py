@@ -145,6 +145,7 @@ def test_a_tick_step_that_gives_too_many_ticks_is_refused(panel, document) -> No
 
     _enter(form.low, "0")
     _enter(form.high, "10000")
+    _choose(form.major, "step")  # the form shows the model again after a change
     _enter(form.major_value, "500")
     assert _axes(document).x.major_step == 500
     _enter(form.high, "1000000")  # the step stays, so the range is refused

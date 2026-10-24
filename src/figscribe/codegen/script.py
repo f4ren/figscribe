@@ -42,7 +42,13 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
 )
-from figscribe.render.figure import COORDS, CURVE_POINTS, MM_PER_INCH, DataProvider
+from figscribe.render.figure import (
+    COORDS,
+    CURVE_POINTS,
+    MM_PER_INCH,
+    DataProvider,
+    tick_ranges,
+)
 from figscribe.render.labels import axis_label, unit_shown
 from figscribe.render.layout import (
     creation_order,
@@ -55,6 +61,7 @@ from figscribe.render.ticks import (
     scaling,
     silent_minor_labels,
     tick_style,
+    ticks_that_fit,
 )
 
 WIDTH = 88
@@ -143,6 +150,7 @@ class _Writer:
         self.arrays = self._name_arrays()
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
+        self.axis_specs = self._ticks_that_fit()
 
     # --- naming -----------------------------------------------------------------
 
@@ -326,11 +334,24 @@ class _Writer:
                 self.emit(*(f"        {entry}," for entry in entries))
                 self.emit("    }", ")")
 
+    def _ticks_that_fit(self) -> dict[tuple[str, str], AxisSpec]:
+        """Every axis by (Axes.id, field), without a tick step or divisions the
+        renderer leaves out because they would give too many ticks."""
+        ranges = tick_ranges(self.figure, self.data)
+        return {
+            (axes.id, field): (
+                ticks_that_fit(spec, ranges[axes.id, field])
+                if (axes.id, field) in ranges
+                else spec
+            )
+            for axes in self.figure.axes
+            for field in ("x", "y", "y_right")
+            if (spec := getattr(axes, field)) is not None
+        }
+
     def _locators(self) -> list[str]:
         """The tick locators and formatters the script needs to import."""
-        specs = [
-            s for a in self.figure.axes for s in (a.x, a.y, a.y_right) if s is not None
-        ]
+        specs = list(self.axis_specs.values())
         needed = []
         if any(minor_ticks(s)[0] == "parts" for s in specs):
             needed.append("AutoMinorLocator")
@@ -586,13 +607,13 @@ class _Writer:
         if axes.title is not None:
             size = {"fontsize": _num(axes.title_size)} if axes.title_size else {}
             self.call(f"{ax}.set_title", _str(axes.title), **size)
-        self._axis(ax, "x", axes.x)
-        self._axis(ax, "y", axes.y)
+        self._axis(ax, "x", self.axis_specs[(axes.id, "x")])
+        self._axis(ax, "y", self.axis_specs[(axes.id, "y")])
         right = None
         if axes.y_right is not None:
             right = f"{ax}_right"
             self.emit(f"{right} = {ax}.twinx()")
-            self._axis(right, "y", axes.y_right)
+            self._axis(right, "y", self.axis_specs[(axes.id, "y_right")])
         if axes.grid:
             kwargs = {}
             if axes.grid_which != "major":
