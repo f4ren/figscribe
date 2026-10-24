@@ -76,7 +76,8 @@ script.
 
 **Data**
 - CSV files with automatic detection of delimiter, decimal comma, header and
-  unit rows; NumPy `.npy` and `.npz` files (read without pickles, so a data
+  unit rows, and of the text encoding (UTF-8, or cp1252 and Latin-1 as older
+  Windows programs write them); NumPy `.npy` and `.npz` files (read without pickles, so a data
   file cannot run code).
 - Each data file is recorded with its SHA-256. If it changes later,
   figscribe says so instead of silently plotting different data.

@@ -44,6 +44,7 @@ from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
 from figscribe.gui.names import (
+    ENCODINGS,
     KIND_NAMES,
     artist_name,
     field_name,
@@ -276,6 +277,8 @@ TIPS = {
     "zorder": "Plots with a higher number are drawn on top.",
     "alpha": "1 is opaque, 0 invisible.",
     "axis": "Which y axis the plot is drawn against.",
+    "encoding": "How the file's letters are stored. Files from Windows programs "
+    "are often cp1252; choose it if names like µA come out wrong.",
 }
 """Explanations shown when the mouse rests on a field."""
 
@@ -786,6 +789,7 @@ CHOICES = {
     ],
 }
 CHOICES["unit_format"] = UNIT_FORMATS
+CHOICES["encoding"] = ENCODINGS
 CHOICES["tick_direction"] = [
     ("outward", "out"),
     ("inward", "in"),

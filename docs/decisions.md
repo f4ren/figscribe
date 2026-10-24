@@ -387,6 +387,16 @@ class would have to be kept in step with every field added to the model.
   selected plot, or the figure's first axes.
 - **Columns without names are offered by number**; the file is read once to
   count them.
+- **The text encoding is part of the source** (`CsvSource.encoding`, added
+  2026-10-24): UTF-8 (with or without Excel's byte order mark), cp1252 or
+  Latin-1. The dialog takes the first that decodes the whole file, in that
+  order, and offers the others. The two differ only in bytes 0x80–0x9F,
+  where cp1252 has €, quotes and dashes and Latin-1 control characters;
+  cp1252 comes first because Windows lab software writes it. A guesser such
+  as `chardet` was not added: a dependency for three candidates. The script
+  passes `encoding=` to `np.loadtxt` for anything but UTF-8. A file that does
+  not decode gives a `DataError` naming the file and the option. No schema
+  version bump: the field has a default, and no released file predates it.
 
 ---
 
