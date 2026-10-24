@@ -24,10 +24,13 @@ programs write, and Latin-1, which reads any bytes."""
 class CsvSource(Identified):
     format: Literal["csv"] = "csv"
     path: str = Field(min_length=1)
+    """Where the file is: relative to the project's folder when it lies below it."""
     sha256: Sha256
+    """SHA-256 of the file when it was imported; a changed file is refused."""
     delimiter: str | None = ","
     """None splits on any run of whitespace, as in many .dat files."""
     decimal: str = Field(".", min_length=1, max_length=1)
+    """The decimal mark of the numbers: "." or ","."""
     header_row: int | None = Field(0, ge=0)
     """Line number (from 0) of the column names; lines above it are skipped.
     None means no header, and columns are addressed by index."""
@@ -37,6 +40,8 @@ class CsvSource(Identified):
     comment: str | None = "#"
     """Lines starting with this are skipped; counted lines above include them."""
     encoding: CsvEncoding = "utf-8-sig"
+    """How the file's text is stored: UTF-8, or cp1252 and Latin-1 as older Windows
+    programs write it."""
     columns: list[str] = Field(default_factory=list)
     """Column names discovered on import, cached for the GUI."""
     row_count: int | None = Field(None, ge=0)
@@ -47,10 +52,13 @@ class CsvSource(Identified):
 class Hdf5Source(Identified):
     format: Literal["hdf5"] = "hdf5"
     path: str = Field(min_length=1)
+    """Where the file is: relative to the project's folder when it lies below it."""
     sha256: Sha256
+    """SHA-256 of the file when it was imported; a changed file is refused."""
     dataset: str = Field(min_length=1)
     """Path of the dataset inside the file, e.g. "/run3/voltage"."""
     columns: list[str] = Field(default_factory=list)
+    """Column names discovered on import."""
     row_count: int | None = Field(None, ge=0)
     """Rows of data when the file was imported, to tell what changed; None in
     projects from before it was recorded."""
@@ -58,11 +66,15 @@ class Hdf5Source(Identified):
 
 class NumpySource(Identified):
     format: Literal["npy", "npz"] = "npy"
+    """"npy" for a single array, "npz" for an archive of several."""
     path: str = Field(min_length=1)
+    """Where the file is: relative to the project's folder when it lies below it."""
     sha256: Sha256
+    """SHA-256 of the file when it was imported; a changed file is refused."""
     array: str | None = None
     """Array name inside an .npz archive; None for a plain .npy file."""
     columns: list[str] = Field(default_factory=list)
+    """Column names, if known; a NumPy array has none of its own."""
     row_count: int | None = Field(None, ge=0)
     """Rows of data when the file was imported, to tell what changed; None in
     projects from before it was recorded."""
@@ -80,11 +92,13 @@ class ColumnRef(StrictModel):
     source: str = Field(min_length=1)
     """DataSource.id."""
     column: str | int
+    """Column name, or its number from 0 for files without names."""
 
 
 class ArrayRef(StrictModel):
     """A 2-D array within a data source, for images and color meshes."""
 
     source: str = Field(min_length=1)
+    """DataSource.id."""
     key: str | None = None
     """Dataset or array name; None means the source's default array."""

@@ -14,22 +14,38 @@ class GridLayout(StrictModel):
     """Panel grid. Axes place themselves in it by row, col and span."""
 
     rows: int = Field(1, ge=1)
+    """Number of grid rows."""
     cols: int = Field(1, ge=1)
+    """Number of grid columns."""
     share_x: Literal["none", "col", "all"] = "none"
+    """"col" joins the x axes of panels in the same column, "all" of every panel;
+    tick numbers then show only at the bottom."""
     share_y: Literal["none", "row", "all"] = "none"
+    """"row" joins the y axes of panels in the same row, "all" of every panel; tick
+    numbers then show only at the left."""
     width_ratios: list[float] | None = None
+    """Relative widths of the columns, one number each; None makes them equal."""
     height_ratios: list[float] | None = None
+    """Relative heights of the rows, one number each; None makes them equal."""
     constrained_layout: bool = True
+    """Whether Matplotlib places the panels so that labels do not overlap."""
     hspace: float | None = Field(None, ge=0.0)
+    """Gap between rows as a fraction of the average panel height; None lets
+    Matplotlib choose."""
     wspace: float | None = Field(None, ge=0.0)
+    """Gap between columns as a fraction of the average panel width; None lets
+    Matplotlib choose."""
 
 
 class Figure(Identified):
     name: str = "Figure 1"
+    """Shown in figscribe and used for the names of exported files."""
     width_mm: float = Field(85.0, gt=0.0)
     """85 mm is a typical single journal column, 175 mm a double one."""
     height_mm: float = Field(60.0, gt=0.0)
+    """Height of the whole figure in mm, as printed."""
     dpi: float = Field(300.0, gt=0.0)
+    """Resolution of PNG exports in dots per inch; PDF and SVG are vector graphics."""
     unit_format: Literal["parentheses", "slash", "brackets"] = "parentheses"
     """How axis labels carry their unit: "U (V)", "U / V" (ISO 80000) or "U [V]".
 
@@ -47,4 +63,6 @@ class Figure(Identified):
     """Tick marks also on the top and right edge of every panel, as many
     physics journals have them; the numbers stay bottom and left."""
     layout: GridLayout = Field(default_factory=GridLayout)
+    """The grid the panels are placed in."""
     axes: list[Axes] = Field(default_factory=list)
+    """The panels, in the grid or as insets."""

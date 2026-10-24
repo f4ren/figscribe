@@ -47,3 +47,4 @@ class Identified(StrictModel):
     """A model object that other objects can refer to by id."""
 
     id: str = Field(default_factory=new_id, min_length=1)
+    """Unique within the project; other objects refer to it."""

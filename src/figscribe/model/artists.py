@@ -27,8 +27,11 @@ class ArtistBase(Identified):
     label: str | None = None
     """Legend entry; None means the artist is not listed."""
     visible: bool = True
+    """False hides the plot but keeps it in the project."""
     zorder: float = 2.0
+    """Drawing order: plots with a higher number are drawn on top."""
     alpha: float = Field(1.0, ge=0.0, le=1.0)
+    """Opacity from 0 (invisible) to 1 (opaque)."""
     axis: Literal["left", "right"] = "left"
     """Which y-axis to draw against."""
 
@@ -36,50 +39,78 @@ class ArtistBase(Identified):
 class LinePlot(ArtistBase):
     kind: Literal["line"] = "line"
     x: ColumnRef
+    """Column of x values."""
     y: ColumnRef
+    """Column of y values."""
     color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
     linestyle: str = "-"
+    """"-", "--", "-.", ":", or "none" for markers only."""
     linewidth: float = Field(1.5, gt=0.0)
+    """Line width in pt."""
     marker: str | None = None
+    """A Matplotlib marker such as "o", "s" or "^"; None draws none."""
     markersize: float = Field(4.0, gt=0.0)
+    """Marker size in pt."""
 
 
 class ScatterPlot(ArtistBase):
     kind: Literal["scatter"] = "scatter"
     x: ColumnRef
+    """Column of x values."""
     y: ColumnRef
+    """Column of y values."""
     color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
     marker: str = "o"
+    """A Matplotlib marker such as "o", "s" or "^"."""
     size: float = Field(20.0, gt=0.0)
+    """Marker area in pt², as Matplotlib's scatter takes it."""
     edgecolor: Color | None = None
+    """Color of the marker outlines; None follows the style."""
 
 
 class ErrorbarPlot(ArtistBase):
     kind: Literal["errorbar"] = "errorbar"
     x: ColumnRef
+    """Column of x values."""
     y: ColumnRef
+    """Column of y values."""
     xerr: ColumnRef | None = None
+    """Column of x errors, drawn as ± around each point; None draws none."""
     yerr: ColumnRef | None = None
+    """Column of y errors, drawn as ± around each point; None draws none."""
     color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
     linestyle: str = "none"
+    """"none" draws only the points; "-" also joins them."""
     marker: str = "o"
+    """A Matplotlib marker such as "o", "s" or "^"."""
     markersize: float = Field(4.0, gt=0.0)
+    """Marker size in pt."""
     capsize: float = Field(2.0, ge=0.0)
+    """Length of the caps at the ends of the error bars in pt; 0 for none."""
     elinewidth: float = Field(1.0, gt=0.0)
+    """Line width of the error bars in pt."""
 
 
 class Histogram(ArtistBase):
     kind: Literal["histogram"] = "histogram"
     values: ColumnRef
+    """Column whose values are counted into bins."""
     bins: Annotated[int, Field(ge=1)] | list[float] = 20
     """A bin count, or explicit bin edges."""
     density: bool = False
+    """True scales the bars to an area of 1; False shows counts."""
     histtype: Literal["bar", "step", "stepfilled"] = "bar"
+    """"bar" fills each bin, "step" draws the outline, "stepfilled" a filled outline."""
     color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
 
 
 class Colorbar(StrictModel):
     visible: bool = True
+    """False hides the color bar but keeps its settings."""
     label: str | None = None
     """LaTeX allowed."""
 
@@ -87,10 +118,15 @@ class Colorbar(StrictModel):
 class ImagePlot(ArtistBase):
     kind: Literal["image"] = "image"
     data: ArrayRef
+    """The 2-D array drawn, one pixel per value."""
     cmap: str = "viridis"
+    """Name of a Matplotlib color map, e.g. viridis, magma or gray."""
     norm: Literal["linear", "log"] = "linear"
+    """"log" spaces the colors logarithmically, for data over several decades."""
     vmin: float | None = None
+    """Value at the bottom of the color map; None uses the data's smallest."""
     vmax: float | None = None
+    """Value at the top of the color map; None uses the data's largest."""
     extent: tuple[float, float, float, float] | None = None
     """(left, right, bottom, top) in data coordinates; None lets Matplotlib pick."""
     origin: Literal["upper", "lower"] = "upper"
@@ -98,24 +134,33 @@ class ImagePlot(ArtistBase):
     aspect: Literal["auto", "equal"] = "auto"
     """"auto" fills the panel; "equal" keeps square pixels."""
     colorbar: Colorbar | None = None
+    """A color bar beside the panel; None draws none."""
 
 
 class ColorMesh(ArtistBase):
     kind: Literal["colormesh"] = "colormesh"
     c: ArrayRef
+    """The 2-D array of cell values."""
     x: ColumnRef | None = None
+    """Cell coordinates along x; None means index coordinates."""
     y: ColumnRef | None = None
     """Cell coordinates; None means index coordinates."""
     cmap: str = "viridis"
+    """Name of a Matplotlib color map, e.g. viridis, magma or gray."""
     norm: Literal["linear", "log"] = "linear"
+    """"log" spaces the colors logarithmically, for data over several decades."""
     vmin: float | None = None
+    """Value at the bottom of the color map; None uses the data's smallest."""
     vmax: float | None = None
+    """Value at the top of the color map; None uses the data's largest."""
     colorbar: Colorbar | None = None
+    """A color bar beside the panel; None draws none."""
 
 
 class PredefinedFit(StrictModel):
     kind: Literal["predefined"] = "predefined"
     name: Literal["linear", "polynomial", "gaussian", "lorentzian", "exponential"]
+    """The function fitted; a polynomial also needs its degree."""
     degree: int | None = Field(None, ge=1)
     """Only for "polynomial"."""
 
@@ -125,6 +170,7 @@ class ExpressionFit(StrictModel):
     expression: str = Field(min_length=1)
     """A user-supplied expression in x and the named parameters."""
     parameters: list[str] = Field(min_length=1)
+    """Names of the parameters in the expression, in the order the fit reports them."""
 
 
 FitModel = Annotated[PredefinedFit | ExpressionFit, Field(discriminator="kind")]
@@ -138,7 +184,10 @@ class FitResult(StrictModel):
     uncertainties: dict[str, AnyFloat]
     """1-sigma, from the covariance matrix; inf when it cannot be estimated."""
     reduced_chi_square: AnyFloat | None = None
+    """χ² per degree of freedom; None when the plot has no y errors to weigh the fit
+    by."""
     converged: bool = True
+    """False when curve_fit gave up; the parameters are then the start values."""
 
 
 class FitCurve(ArtistBase):
@@ -146,11 +195,17 @@ class FitCurve(ArtistBase):
     target: str = Field(min_length=1)
     """Artist.id of the line, scatter or errorbar plot this fit was run against."""
     model: FitModel
+    """The function fitted."""
     initial_values: dict[str, float] = Field(default_factory=dict)
+    """Start values by parameter name; missing ones are guessed from the data."""
     result: FitResult | None = None
+    """The outcome of the last fit; None before the first."""
     color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
     linestyle: str = "-"
+    """"-", "--", "-." or ":"."""
     linewidth: float = Field(1.5, gt=0.0)
+    """Line width in pt."""
 
 
 class ResidualPlot(ArtistBase):
@@ -166,9 +221,13 @@ class ResidualPlot(ArtistBase):
     target: str = Field(min_length=1)
     """FitCurve.id whose residuals to draw."""
     color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
     marker: str = "o"
+    """A Matplotlib marker such as "o", "s" or "^"."""
     markersize: float = Field(4.0, gt=0.0)
+    """Marker size in pt."""
     linestyle: str = "none"
+    """"none" draws only the points; "-" also joins them."""
 
 
 class Annotation(ArtistBase):
@@ -176,11 +235,15 @@ class Annotation(ArtistBase):
     text: str
     """LaTeX allowed."""
     position: tuple[float, float]
+    """Where the text sits, in the coordinates `coords` names."""
     coords: Literal["data", "axes"] = "data"
+    """"data" for data coordinates, "axes" for fractions of the panel from 0 to 1."""
     arrow_to: tuple[float, float] | None = None
     """Arrow tip in the same coordinate system; None means no arrow."""
     fontsize: float | None = Field(None, gt=0.0)
+    """Font size in pt; None follows the figure."""
     color: Color | None = None
+    """Color of the text and the arrow; None follows the style."""
 
 
 Artist = Annotated[
