@@ -84,6 +84,7 @@ def test_a_chat_error_fails_the_case() -> None:
 def test_the_command_runs_against_a_local_server(tmp_path, capsys) -> None:
     """`figscribe bench` against an OpenAI-compatible server that turns the
     grid on and is done."""
+    pytest.importorskip("openai")
     panel = bench.example_workspace().project.figures[0].axes[0].id
     arguments = {"object_id": panel, "path": ["grid"], "value": True}
     tool_call = {

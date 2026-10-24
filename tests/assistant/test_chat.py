@@ -168,6 +168,7 @@ def test_pause_turn_continues(document: Document) -> None:
 def test_an_openai_compatible_server_runs_the_tools(document: Document) -> None:
     """A local server as LM Studio or Ollama would answer: the tool call
     streamed in pieces, then text."""
+    pytest.importorskip("openai")
     figure = document.figure
     arguments = json.dumps({"object_id": figure.id, "path": ["name"], "value": "B"})
     first = sse(
@@ -234,6 +235,8 @@ def test_a_preview_goes_to_a_seeing_model_as_the_users_image() -> None:
 
 
 def test_openai_errors_are_explained() -> None:
+    pytest.importorskip("openai")
+
     def refuse(method, path, body):
         if path.endswith("/models"):
             return json_reply(
@@ -258,6 +261,7 @@ def test_openai_errors_are_explained() -> None:
 
 def test_the_claude_client_reports_a_refused_key(monkeypatch) -> None:
     """The SDK path, against a local server that refuses every request."""
+    pytest.importorskip("anthropic")
 
     def refuse(method, path, body):
         error = {"type": "authentication_error", "message": "invalid x-api-key"}
