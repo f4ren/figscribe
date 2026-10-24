@@ -108,6 +108,9 @@ script.
   label in plain terms: *major ticks every 50*, *4 minor ticks between
   them*; with values shown in kHz you type the range in kHz too. Hovering
   over a field explains it.
+- Colors come from the figure's color cycle, the colors used lately, or
+  *Same as…* another plot; a plot's context menu brings it to the front or
+  sends it to the back.
 - Numbers can be typed with a decimal comma (`1,5`), a minus copied from a
   PDF (`−3`) and spaces between thousands (`10 000`); lists of them are then
   separated by semicolons (`0; 0,5; 1`).
