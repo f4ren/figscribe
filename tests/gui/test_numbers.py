@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 import pytest
+
 from figscribe.gui.numbers import number, numbers, whole
 
 
@@ -26,7 +27,8 @@ def test_numbers_as_people_type_them(text: str, value: float) -> None:
 
 
 @pytest.mark.parametrize(
-    "text", ["inf", "-inf", "nan", "1e400", "1,000.5", "1,2,3", "abc", ""]
+    "text",
+    ["inf", "-inf", "nan", "1e400", "1,000.5", "1,2,3", "abc", "", "0.5 1"],
 )
 def test_what_is_no_usable_number_is_refused_as_typed(text: str) -> None:
     with pytest.raises(ValueError, match=re.escape(repr(text))):

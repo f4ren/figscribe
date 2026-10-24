@@ -104,7 +104,9 @@ writes them as `null`, which the strict loader then rejects, so a saved project
 could not be reopened. They are realistic, not exotic: `curve_fit` reports `inf`
 uncertainties when the covariance cannot be estimated. The cost is that project
 files are not strict RFC 8259 JSON when they contain such values; Python's
-`json` module and pydantic both read them.
+`json` module and pydantic both read them. Only fit results may hold them
+(`AnyFloat`, since 2026-10-24); every other float refuses them
+(`allow_inf_nan=False`), so an infinite width or range cannot get in.
 
 ### Alternatives considered
 
@@ -347,6 +349,15 @@ class would have to be kept in step with every field added to the model.
   a `ColumnRef` a choice of the sources' columns, and the fields `color` and
   `edgecolor` text plus a color picker. Text, not spin boxes, for numbers:
   scientific values such as `1e-9` and exact decimals edit without rounding.
+- **Numbers are read as people type them** (`gui/numbers.py`, since
+  2026-10-24, also in the axis form and the fit dialog): a comma is a decimal
+  mark, the minus sign − from text copied out of a PDF is a minus, and spaces
+  group thousands, but only before three digits, so that "0.5 1" is refused
+  instead of read as 0.51. A comma never groups thousands: "1,500" would mean
+  1.5 or 1500 depending on the reader. Lists are separated by ";" when one is
+  typed, so their numbers can have decimal commas, else by ",". Infinite
+  values are refused; no field the GUI edits means them. Messages quote what
+  was typed.
 - **Each edit is one `SetField`.** Constraints live on the model only; a
   refused value shows pydantic's message above the form and the editor shows
   the model's value again. An unchanged value pushes nothing.

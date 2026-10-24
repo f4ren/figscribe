@@ -141,6 +141,14 @@ use `;` as the separator when the decimal mark is a comma. Also check whether
 pydantic accepts `inf` for `gt=0` fields (`Figure(width_mm=inf)`) and close it
 in the model.
 
+**Done** (2026-10-24, decisions 0001 and 0006): `gui/numbers.py` reads every
+number typed in the property panel, the axis form and the fit dialog. The
+model refuses non-finite numbers except in fit results. *Learned:* pydantic
+did accept `inf` for `gt=0` fields, and `nan` for any float. Spaces group
+thousands only before three digits: otherwise "0.5 1", a list missing its
+comma, would be read as 0.51. No field the GUI edits means an infinite value,
+so the planned exception for such fields was not needed.
+
 ### B6 Optional parts break the test run without their extras (verified) — S
 
 *Repro:* without the `mcp` extra, `tests/assistant/test_mcp.py` aborts the whole

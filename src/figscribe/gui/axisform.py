@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.commands import CommandError, Macro, SetField
+from figscribe.gui.numbers import number, numbers
 from figscribe.gui.widgets import label
 from figscribe.model import AxisSpec
 from figscribe.render.labels import unit_shown
@@ -296,7 +297,7 @@ class AxisForm:
             if self.major.currentData() == "step":
                 self._set(ticks=None, tick_labels=None, major_step=self._parsed(text))
             else:
-                values = [self._parsed(part) for part in text.split(",")]
+                values = [value * self._factor() for value in numbers(text)]
                 self._set(ticks=values, major_step=None)
         except ValueError as exc:
             self.panel.report(str(exc))
@@ -323,7 +324,7 @@ class AxisForm:
             elif shown:
                 value = self._parsed(text)
             else:
-                value = _float(text)
+                value = number(text)
         except ValueError as exc:
             self.panel.report(str(exc))
             return
@@ -343,7 +344,7 @@ class AxisForm:
 
     def _parsed(self, text: str) -> float:
         """A number typed in the shown unit, in data units."""
-        return _float(text) * self._factor()
+        return number(text) * self._factor()
 
     # --- widgets ------------------------------------------------------------------
 
@@ -412,13 +413,6 @@ def _text(edit: QLineEdit, value: str | None) -> None:
 
 def _number_text(value: float | None) -> str | None:
     return None if value is None else f"{value:g}"
-
-
-def _float(text: str) -> float:
-    try:
-        return float(text.replace(",", ".") if text.count(",") == 1 else text)
-    except ValueError:
-        raise ValueError(f"{text!r} is not a number") from None
 
 
 def axis_summary(spec: AxisSpec) -> str:
