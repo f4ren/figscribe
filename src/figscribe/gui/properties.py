@@ -12,6 +12,7 @@ and the editor shows the model's value again. Field constraints such as
 from __future__ import annotations
 
 import math
+import pathlib
 import types
 import typing
 from collections.abc import Callable
@@ -19,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Any, Literal
 
+import matplotlib.style
 from pydantic import BaseModel
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor
@@ -26,6 +28,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -427,6 +430,8 @@ class PropertyPanel(QScrollArea):
         self.setMinimumWidth(300)
         self.pick_color: Callable[[str | None], str | None] = self._pick_color
         """Asks for a color; replaced in tests."""
+        self.choose_file: Callable[[str, str], pathlib.Path | None] = self._choose_file
+        """Asks for a file, by dialog title and name pattern; replaced in tests."""
         self.editors: dict[Path, Editor] = {}
         self.sections: dict[str, Section] = {}
         self._shown: tuple | None = None
@@ -763,6 +768,10 @@ class PropertyPanel(QScrollArea):
             return None
         return getattr(obj, axis[1]) if axis else obj
 
+    def _choose_file(self, title: str, pattern: str) -> pathlib.Path | None:
+        chosen, _ = QFileDialog.getOpenFileName(self, title, "", pattern)
+        return pathlib.Path(chosen) if chosen else None
+
     def _pick_color(self, current: str | None) -> str | None:
         start = QColor(theme.plot_color(current, 0))
         color = QColorDialog.getColor(start, self, "Color")
@@ -915,6 +924,7 @@ CHOICES["tick_direction"] = [
     ("both ways", "inout"),
 ]
 NONE_TEXT = {
+    "stylesheet": "Matplotlib's default",
     "tick_direction": "style default",
     "prefix": "as in the data",
     "marker": "No marker",
@@ -994,6 +1004,47 @@ class ColorEditor(TextEditor):
             self.commit(color)
 
 
+class StyleEditor(ChoiceEditor):
+    """Matplotlib's style sheets by name, or an .mplstyle file from disk,
+    chosen through the last entry."""
+
+    CHOOSE = "Choose file…"
+
+    def __init__(self, spec, path, panel):
+        styles = [(s, s) for s in sorted(matplotlib.style.available) if s[0] != "_"]
+        super().__init__(spec, path, panel, styles, missing="")
+        # Long names such as seaborn-v0_8-colorblind would widen the whole form.
+        policy = QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        self.widget.setSizeAdjustPolicy(policy)
+        self.widget.setMinimumContentsLength(12)
+        self.widget.addItem(self.CHOOSE)
+        self.widget.activated.disconnect()
+        self.widget.activated.connect(self._chosen)
+
+    def show(self, value: Any) -> None:
+        self.value = value
+        if value not in [v for _, v in self.choices]:
+            # A file goes above "Choose file…", shown by its name.
+            self.choices.append((pathlib.Path(value).name, value))
+            self.widget.insertItem(len(self.choices) - 1, self.choices[-1][0])
+            self.widget.setItemData(
+                len(self.choices) - 1, value, Qt.ItemDataRole.ToolTipRole
+            )
+        self.widget.blockSignals(True)
+        self.widget.setCurrentIndex([v for _, v in self.choices].index(value))
+        self.widget.blockSignals(False)
+
+    def _chosen(self, index: int) -> None:
+        if index < len(self.choices):
+            self.commit(self.choices[index][1])
+            return
+        chosen = self.panel.choose_file("Style sheet", "Style sheets (*.mplstyle)")
+        if chosen is None:
+            self.show(self.value)
+        else:
+            self.commit(str(chosen))
+
+
 class MarkerEditor(TextEditor):
     """The common markers as buttons; any Matplotlib marker as text."""
 
@@ -1039,6 +1090,8 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
+    if name == "stylesheet":
+        return StyleEditor(spec, path, panel)
     if name in CHOICES and spec.kind in ("choice", "text"):
         return ChoiceEditor(spec, path, panel, CHOICES[name])
     if spec.kind == "choice":

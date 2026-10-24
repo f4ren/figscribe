@@ -240,6 +240,34 @@ def test_the_resolution_is_an_export_setting(panel: PropertyPanel, document) -> 
     assert "PNG" in field_name("dpi")
 
 
+def test_the_style_sheet_is_chosen_from_a_list(
+    panel: PropertyPanel, document, tmp_path
+) -> None:
+    def combo():
+        return panel.editors[("stylesheet",)].widget
+
+    def texts() -> list[str]:
+        return [combo().itemText(i) for i in range(combo().count())]
+
+    document.select(_figure(document).id)
+    assert texts()[0] == "Matplotlib's default" and texts()[-1] == "Choose file…"
+    combo().activated.emit(texts().index("ggplot"))
+    assert _figure(document).stylesheet == "ggplot"
+
+    style = tmp_path / "journal.mplstyle"
+    style.write_text("lines.linewidth: 1\n", encoding="utf-8")
+    panel.choose_file = lambda title, pattern: style
+    combo().activated.emit(combo().count() - 1)
+    assert _figure(document).stylesheet == str(style)
+    assert combo().currentText() == "journal.mplstyle"
+    assert texts()[-1] == "Choose file…"
+
+    panel.choose_file = lambda title, pattern: None  # cancelled
+    combo().activated.emit(combo().count() - 1)
+    assert _figure(document).stylesheet == str(style)
+    assert combo().currentText() == "journal.mplstyle"
+
+
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:
     artist = _artist(document)
     source = document.project.sources[0]
