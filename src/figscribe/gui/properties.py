@@ -281,14 +281,14 @@ PLACEHOLDERS = {
     "minor_divisions": "automatic",
     "wspace": "automatic",
     "arrow_to": "no arrow",
-    "extent": "automatic",
+    "extent": "auto",
     "position": "by location",
     "delimiter": "spaces or tabs",
     "header_row": "no names",
     "comment": "none",
     "array": "the first",
-    "width_ratios": "equal",
-    "height_ratios": "equal",
+    "width_ratios": "1",
+    "height_ratios": "1",
 }
 
 TIPS = {
@@ -1004,6 +1004,63 @@ class ColorEditor(TextEditor):
             self.commit(color)
 
 
+class FieldsEditor(Editor):
+    """Several numbers, each in a field of its own with a small label;
+    `combine` turns what is typed (None for an empty field) into the value."""
+
+    def __init__(self, spec, path, panel, labels, placeholder, combine):
+        super().__init__(spec, path, panel)
+        self.combine = combine
+        self.widget = QWidget()
+        row = QHBoxLayout(self.widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        self.lines: list[QLineEdit] = []
+        for text in labels:
+            if text:
+                row.addWidget(label(text, "caption"))
+            line = QLineEdit()
+            line.setPlaceholderText(placeholder)
+            line.editingFinished.connect(self._finish)
+            row.addWidget(line, 1)
+            self.lines.append(line)
+
+    def show(self, value: Any) -> None:
+        self.value = value
+        values = list(value) if value is not None else []
+        for i, line in enumerate(self.lines):
+            text = f"{values[i]:g}" if i < len(values) else ""
+            # What the greyed-out placeholder already says is left empty.
+            line.setText("" if text == line.placeholderText() else text)
+
+    def _finish(self) -> None:
+        texts = [line.text().strip() for line in self.lines]
+        try:
+            value = self.combine([number(t) if t else None for t in texts])
+        except ValueError as exc:
+            self.panel.report(f"{field_name(self.path[-1])}: {exc}")
+            return  # left as typed, to be completed
+        if value != self.value:
+            self.commit(value)
+
+
+def _extent(values: list[float | None]) -> tuple[float, ...] | None:
+    if all(v is None for v in values):
+        return None
+    if any(v is None for v in values):
+        raise ValueError("fill in all four, or none for an automatic extent")
+    return tuple(values)
+
+
+def _ratios(values: list[float | None]) -> list[float] | None:
+    if all(v is None for v in values):
+        return None
+    ratios = [1.0 if v is None else v for v in values]
+    if any(r <= 0 for r in ratios):
+        raise ValueError("ratios must be more than 0")
+    return ratios
+
+
 class StyleEditor(ChoiceEditor):
     """Matplotlib's style sheets by name, or an .mplstyle file from disk,
     chosen through the last entry."""
@@ -1092,6 +1149,14 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return ChoiceEditor(spec, path, panel, choices, missing="")
     if name == "stylesheet":
         return StyleEditor(spec, path, panel)
+    if name == "extent":
+        sides = ["left", "right", "bottom", "top"]
+        return FieldsEditor(spec, path, panel, sides, PLACEHOLDERS[name], _extent)
+    if name in ("width_ratios", "height_ratios"):
+        layout = _get(find(panel.document.project, panel.document.selected), path[:-1])
+        count = layout.cols if name == "width_ratios" else layout.rows
+        blank = PLACEHOLDERS[name]
+        return FieldsEditor(spec, path, panel, [""] * count, blank, _ratios)
     if name in CHOICES and spec.kind in ("choice", "text"):
         return ChoiceEditor(spec, path, panel, CHOICES[name])
     if spec.kind == "choice":
@@ -1211,7 +1276,9 @@ def _shape(obj: BaseModel) -> tuple:
         getattr(obj, name, None) is None
         for name in ("y_right", "colorbar", "inset", "result")
     )
-    return (obj.id, type(obj), parts)
+    layout = getattr(obj, "layout", None)
+    grid = (layout.rows, layout.cols) if layout is not None else None
+    return (obj.id, type(obj), parts, grid)
 
 
 def _axes_of(project, artist_id: str) -> Axes | None:

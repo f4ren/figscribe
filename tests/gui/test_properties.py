@@ -180,10 +180,6 @@ def test_pairs_and_lists_of_numbers(panel: PropertyPanel, document) -> None:
     _type(panel, ("legend", "position"), "")
     assert _axes(document).legend.position is None
 
-    document.select(_figure(document).id)
-    _type(panel, ("layout", "width_ratios"), "1, 2.5")
-    assert _figure(document).layout.width_ratios == [1.0, 2.5]
-
 
 def test_whole_numbers(panel: PropertyPanel, document) -> None:
     document.select(_figure(document).id)
@@ -266,6 +262,58 @@ def test_the_style_sheet_is_chosen_from_a_list(
     combo().activated.emit(combo().count() - 1)
     assert _figure(document).stylesheet == str(style)
     assert combo().currentText() == "journal.mplstyle"
+
+
+def _fields(panel: PropertyPanel, path) -> list:
+    from PySide6.QtWidgets import QLineEdit
+
+    return panel.editors[path].widget.findChildren(QLineEdit)
+
+
+def _enter(line, text: str) -> None:
+    line.setText(text)
+    line.editingFinished.emit()
+
+
+def test_ratios_get_one_field_per_column(panel: PropertyPanel, document) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("layout", "cols"), "3")
+    width = _fields(panel, ("layout", "width_ratios"))
+    assert len(width) == 3 and all(f.placeholderText() == "1" for f in width)
+    _enter(width[0], "2")
+    assert _figure(document).layout.width_ratios == [2.0, 1.0, 1.0]
+    _enter(_fields(panel, ("layout", "width_ratios"))[0], "")
+    assert _figure(document).layout.width_ratios is None  # all equal again
+
+
+def test_an_image_extent_has_four_labelled_fields(
+    panel: PropertyPanel, document, tmp_path
+) -> None:
+    import numpy as np
+    from PySide6.QtWidgets import QLabel
+
+    from figscribe.commands import InsertItem
+    from figscribe.io.numpyfile import numpy_source
+    from figscribe.model import ImagePlot
+    from figscribe.model.data import ArrayRef
+
+    np.save(tmp_path / "map.npy", np.zeros((4, 4)))
+    source = numpy_source(tmp_path / "map.npy", tmp_path)
+    document.push(InsertItem(None, "sources", source))
+    image = ImagePlot(data=ArrayRef(source=source.id))
+    document.push(InsertItem(_axes(document).id, "artists", image))
+    document.select(image.id)
+
+    editor = panel.editors[("extent",)].widget
+    labels = [label.text() for label in editor.findChildren(QLabel)]
+    assert labels == ["left", "right", "bottom", "top"]
+    left, right, bottom, top = _fields(panel, ("extent",))
+    _enter(left, "0")
+    assert "all four" in panel.error and _axes(document).artists[-1].extent is None
+    for line, text in zip((left, right, bottom, top), "0 10 −1 1".split(), strict=True):
+        line.setText(text)
+    _enter(top, "1")
+    assert _axes(document).artists[-1].extent == (0.0, 10.0, -1.0, 1.0)
 
 
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:
