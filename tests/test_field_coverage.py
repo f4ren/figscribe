@@ -91,11 +91,15 @@ def test_every_editor_has_a_tooltip() -> None:
 
 
 def test_every_field_that_can_be_empty_says_what_empty_means() -> None:
+    # A choice offers "empty" as an entry, and so do the marker buttons; a
+    # text field shows it greyed out while nothing is typed.
+    def told(name: str, kind: str) -> bool:
+        listed = kind in ("choice", "column", "array") or name == "marker"
+        return name in (NONE_TEXT if listed else PLACEHOLDERS)
+
     missing = [
         f"{cls.__name__}.{name}"
         for cls, name, spec in _editors()
-        if spec.optional
-        and spec.kind != "part"
-        and name not in (NONE_TEXT if spec.kind == "choice" else PLACEHOLDERS)
+        if spec.optional and spec.kind != "part" and not told(name, spec.kind)
     ]
     assert missing == []

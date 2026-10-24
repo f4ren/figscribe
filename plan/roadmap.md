@@ -248,6 +248,15 @@ ones out of the way.
 Then fill the gaps it reports. From now on a new field fails this test until it
 is wired up everywhere.
 
+**Done** (2026-10-24, decisions 0006 and 0008): `tests/test_field_coverage.py`
+over 239 fields of 28 classes. Filled: 112 docstrings, 89 tooltips, 26 names,
+14 texts for empty values. *Learned:* the assistant saw no field descriptions
+at all, since pydantic only puts docstrings into the schema with
+`use_attribute_docstrings`. Tooltips were keyed by field name and therefore
+left out of nested fields, where names collide (`label`); they now go by
+`"Class.field"` first. The "assistant description in `tools/spec.py`" became
+the field's docstring, so it lives next to the field.
+
 ### U2 Plain terms instead of model terms — M
 
 Concrete changes found in `gui/properties.py` and `gui/names.py`:
