@@ -30,6 +30,7 @@ class StrictModel(BaseModel):
         validate_default=True,
         allow_inf_nan=False,
         ser_json_inf_nan="constants",
+        use_attribute_docstrings=True,  # the assistant reads them in the schema
     )
 
 

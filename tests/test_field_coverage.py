@@ -18,6 +18,7 @@ from figscribe.gui.properties import (
     NONE_TEXT,
     PLACEHOLDERS,
     READ_ONLY,
+    SHOWN_WHEN_SET,
     SKIPPED,
     spec_for,
     tip_for,
@@ -34,7 +35,9 @@ FIELDS = [(cls, name) for cls in CLASSES for name in cls.model_fields]
 
 
 def _shown_in_the_panel(cls: type[BaseModel], name: str) -> bool:
-    return cls not in EDITED_ELSEWHERE and name not in SKIPPED | READ_ONLY.keys()
+    return cls not in EDITED_ELSEWHERE and not any(
+        name in listed for listed in (SKIPPED, READ_ONLY, SHOWN_WHEN_SET)
+    )
 
 
 def _editors():
@@ -55,7 +58,8 @@ def test_every_field_is_explained_to_the_assistant() -> None:
         properties = (SCHEMA if cls is Project else SCHEMA["$defs"][cls.__name__])[
             "properties"
         ]
-        if not properties[name].get("description"):
+        # A constant, such as a plot's kind, is explained by its value.
+        if "const" not in properties[name] and not properties[name].get("description"):
             missing.append(f"{cls.__name__}.{name}")
     assert missing == []
 
@@ -68,7 +72,12 @@ def test_every_field_has_an_editor_or_a_reason() -> None:
         and spec_for(name, cls.model_fields[name].annotation) is None
     ]
     assert missing == []
-    reasons = [*SKIPPED.values(), *READ_ONLY.values(), *EDITED_ELSEWHERE.values()]
+    reasons = [
+        *SKIPPED.values(),
+        *READ_ONLY.values(),
+        *SHOWN_WHEN_SET.values(),
+        *EDITED_ELSEWHERE.values(),
+    ]
     assert all(isinstance(r, str) and len(r) > 10 for r in reasons)
 
 
