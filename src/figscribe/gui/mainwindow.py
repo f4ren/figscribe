@@ -170,6 +170,7 @@ class MainWindow(QMainWindow):
         self.problems = Problems(self.document)
         self.properties = PropertyPanel(self.document)
         self.properties.axis_range = self.preview.axis_limits
+        self.properties.drawn_color = self.preview.drawn_color
         self.outline.add_requested.connect(self._add_plot_to)
         self.outline.import_requested.connect(lambda: self.import_csv())
         self.outline.panel_requested.connect(

@@ -20,7 +20,11 @@ import numpy as np
 from matplotlib.artist import Artist as MplArtist
 from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.collections import Collection
+from matplotlib.colors import to_hex
 from matplotlib.figure import Figure as MplFigure
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 from matplotlib.transforms import Bbox
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (
@@ -349,6 +353,19 @@ class Preview(QWidget):
         for oid, boxes in self._axis_boxes():
             if any(box.contains(x, y) for box in boxes):
                 return oid
+        return None
+
+    def drawn_color(self, oid: str) -> str | None:
+        """The color the plot `oid` is drawn in now, also when the color cycle
+        chose it; None if it is not drawn."""
+        if self._figure is None:
+            return None
+        for artist in self._figure.findobj(lambda a: a.get_gid() == oid):
+            if isinstance(artist, Line2D):
+                return to_hex(artist.get_color())
+            if isinstance(artist, Collection | Patch) and len(artist.get_facecolor()):
+                face = artist.get_facecolor()
+                return to_hex(face if isinstance(artist, Patch) else face[0])
         return None
 
     def axis_limits(self, oid: str) -> tuple[float, float] | None:

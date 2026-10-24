@@ -316,6 +316,57 @@ def test_an_image_extent_has_four_labelled_fields(
     assert _axes(document).artists[-1].extent == (0.0, 10.0, -1.0, 1.0)
 
 
+def test_colors_offer_the_whole_cycle_of_the_style(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import SetField
+
+    document.select(_artist(document).id)
+    swatches = panel.editors[("color",)].swatches
+    assert [*swatches] == [f"C{i}" for i in range(10)] + ["black"]
+    assert swatches["C3"].toolTip() == "tab:red"
+    swatches["C7"].click()
+    assert _artist(document).color == "C7"
+
+    document.push(SetField(_figure(document).id, ("stylesheet",), "ggplot"))
+    document.select(None)
+    document.select(_artist(document).id)
+    assert len(panel.editors[("color",)].swatches) == 7 + 1  # ggplot has seven
+
+
+def test_recently_used_colors_are_offered_again(panel: PropertyPanel, document) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot
+
+    data = _artist(document)
+    line = LinePlot(x=data.x, y=data.y)
+    document.push(InsertItem(_axes(document).id, "artists", line))
+    document.select(data.id)
+    _type(panel, ("color",), "#123456")
+    document.select(line.id)
+    recent = panel.editors[("color",)].recent
+    assert [*recent] == ["#123456"]
+    recent["#123456"].click()
+    assert _axes(document).artists[-1].color == "#123456"
+
+
+def test_a_color_can_be_the_same_as_another_plots(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot
+
+    data = _artist(document)
+    line = LinePlot(x=data.x, y=data.y)
+    document.push(InsertItem(_axes(document).id, "artists", line))
+    panel.drawn_color = lambda oid: "#abcdef" if oid == data.id else None
+    document.select(line.id)
+    menu = panel.editors[("color",)].same_as.menu()
+    assert [action.text() for action in menu.actions()] == ["measurement"]
+    menu.actions()[0].trigger()
+    assert _axes(document).artists[-1].color == "#abcdef"
+
+
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:
     artist = _artist(document)
     source = document.project.sources[0]

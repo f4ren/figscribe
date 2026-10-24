@@ -13,14 +13,17 @@ from __future__ import annotations
 
 import math
 import pathlib
+import re
 import types
 import typing
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Any, Literal
 
 import matplotlib.style
+from matplotlib.colors import TABLEAU_COLORS, to_hex
 from pydantic import BaseModel
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor
@@ -35,6 +38,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QScrollArea,
     QToolButton,
@@ -72,6 +76,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
 )
+from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
 
 SKIPPED = {
@@ -430,6 +435,10 @@ class PropertyPanel(QScrollArea):
         self.setMinimumWidth(300)
         self.pick_color: Callable[[str | None], str | None] = self._pick_color
         """Asks for a color; replaced in tests."""
+        self.recent_colors: list[str] = []
+        """Colors set lately, newest first; every color field offers them."""
+        self.drawn_color: Callable[[str], str | None] = lambda oid: None
+        """The color a plot is drawn in now; the window asks the preview."""
         self.choose_file: Callable[[str, str], pathlib.Path | None] = self._choose_file
         """Asks for a file, by dialog title and name pattern; replaced in tests."""
         self.editors: dict[Path, Editor] = {}
@@ -768,6 +777,10 @@ class PropertyPanel(QScrollArea):
             return None
         return getattr(obj, axis[1]) if axis else obj
 
+    def remember_color(self, color: str) -> None:
+        self.recent_colors = [color, *(c for c in self.recent_colors if c != color)]
+        del self.recent_colors[RECENT_COLORS:]
+
     def _choose_file(self, title: str, pattern: str) -> pathlib.Path | None:
         chosen, _ = QFileDialog.getOpenFileName(self, title, "", pattern)
         return pathlib.Path(chosen) if chosen else None
@@ -880,8 +893,10 @@ class TextEditor(Editor):
         self.commit(value)
 
 
-SWATCHES = [("C0", "Blue"), ("C1", "Orange"), ("C2", "Green"), ("C3", "Red")]
-SWATCHES.append(("black", "Black"))
+RECENT_COLORS = 5
+"""How many recently set colors the color fields offer."""
+
+SWATCHES_PER_ROW = 6
 
 MARKERS = [("o", "Circle"), ("s", "Square"), ("^", "Triangle"), ("D", "Diamond")]
 
@@ -961,8 +976,9 @@ any other Matplotlib name stays usable, it is just not offered."""
 
 
 class ColorEditor(TextEditor):
-    """A few swatches of the color cycle, any Matplotlib color as text
-    ("C0", "tab:blue", "#ff0000"), or one picked from a dialog."""
+    """The colors of the figure's color cycle, the ones used lately, the color
+    another plot is drawn in, any Matplotlib color as text ("C0", "tab:blue",
+    "#ff0000"), or one picked from a dialog."""
 
     def __init__(self, spec, path, panel):
         super().__init__(spec, path, panel, str, str)
@@ -970,38 +986,97 @@ class ColorEditor(TextEditor):
         column = QVBoxLayout(self.widget)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(6)
-        row = QHBoxLayout()
-        row.setSpacing(4)
-        self.swatches: dict[str, QToolButton] = {}
-        for value, name in SWATCHES:
-            swatch = QToolButton()
-            swatch.setObjectName("swatch")
-            swatch.setCheckable(True)
-            swatch.setToolTip(name)
-            swatch.setIcon(theme.icon("swatch", theme.plot_color(value, 0), 18))
-            swatch.setIconSize(QSize(18, 18))
-            swatch.clicked.connect(lambda _=False, v=value: self.commit(v))
-            row.addWidget(swatch)
-            self.swatches[value] = swatch
+        cycle = [(f"C{i}", c) for i, c in enumerate(_cycle(panel)[:10])]
+        self.swatches = self._swatches([*cycle, ("black", "black")])
         self.button = QToolButton()
         self.button.setObjectName("choice")
         self.button.setIcon(theme.icon("plus", theme.MUTED))
         self.button.setToolTip("Pick any color")
         self.button.clicked.connect(self._pick)
-        row.addWidget(self.button)
-        row.addStretch(1)
-        column.addLayout(row)
+        self.recent = self._swatches([(c, c) for c in panel.recent_colors])
+        buttons = [*self.swatches.values(), self.button]
+        # Six to a row keeps the form as narrow as the panel.
+        for start in range(0, len(buttons), SWATCHES_PER_ROW):
+            column.addLayout(_row_of(buttons[start : start + SWATCHES_PER_ROW]))
+        if self.recent:
+            column.addLayout(_row_of(list(self.recent.values())))
         column.addWidget(self.line)
+        self.same_as = QToolButton()
+        self.same_as.setText("Same as…")
+        self.same_as.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.same_as.setMenu(self._same_as_menu())
+        self.same_as.setEnabled(bool(self.same_as.menu().actions()))
+        column.addLayout(_row_of([self.same_as]))
 
     def show(self, value: Any) -> None:
         super().show(value)
-        for key, swatch in self.swatches.items():
+        for key, swatch in [*self.swatches.items(), *self.recent.items()]:
             swatch.setChecked(key == value)
+
+    def commit(self, value: Any) -> None:
+        if value is not None and not _CYCLE_COLOR.fullmatch(value):
+            self.panel.remember_color(value)
+        super().commit(value)
+
+    def _swatches(self, colors: list[tuple[str, str]]) -> dict[str, QToolButton]:
+        buttons: dict[str, QToolButton] = {}
+        for value, shown in colors:
+            swatch = QToolButton()
+            swatch.setObjectName("swatch")
+            swatch.setCheckable(True)
+            swatch.setToolTip(_color_name(shown))
+            swatch.setIcon(theme.icon("swatch", to_hex(shown), 18))
+            swatch.setIconSize(QSize(18, 18))
+            swatch.clicked.connect(lambda _=False, v=value: self.commit(v))
+            buttons[value] = swatch
+        return buttons
+
+    def _same_as_menu(self) -> QMenu:
+        menu = QMenu(self.widget)
+        figure = self.panel.document.figure
+        for axes in figure.axes if figure is not None else []:
+            for artist in axes.artists:
+                if artist.id != self.oid and "color" in type(artist).model_fields:
+                    menu.addAction(
+                        artist_name(artist), lambda a=artist: self._take_color(a)
+                    )
+        return menu
+
+    def _take_color(self, artist) -> None:
+        color = self.panel.drawn_color(artist.id) or artist.color
+        if color is not None:
+            self.commit(color)
 
     def _pick(self) -> None:
         color = self.panel.pick_color(self.value)
         if color is not None:
             self.commit(color)
+
+
+_CYCLE_COLOR = re.compile(r"C\d")
+"""A color of the cycle, "C0" to "C9", which follows the style sheet."""
+
+_TABLEAU_NAMES = {to_hex(v): k for k, v in TABLEAU_COLORS.items()}
+
+
+def _cycle(panel: PropertyPanel) -> list[str]:
+    """The colors of the shown figure's color cycle, under its style sheet."""
+    figure = panel.document.figure
+    with style_context(figure) if figure is not None else nullcontext():
+        return list(matplotlib.rcParams["axes.prop_cycle"].by_key().get("color", []))
+
+
+def _row_of(widgets: list[QWidget]) -> QHBoxLayout:
+    row = QHBoxLayout()
+    row.setSpacing(4)
+    for widget in widgets:
+        row.addWidget(widget)
+    row.addStretch(1)
+    return row
+
+
+def _color_name(color: str) -> str:
+    return _TABLEAU_NAMES.get(to_hex(color), color)
 
 
 class FieldsEditor(Editor):
