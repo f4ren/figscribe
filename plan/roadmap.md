@@ -431,7 +431,11 @@ so each click in the property panel waits that long. The brief asks for fluid
 interaction up to about 1e6 points, with downsampling in the preview only.
 
 *Do:*
-1. **Coalesce redraws**: changes within ~50 ms render once.
+1. **Coalesce redraws**: changes within ~50 ms render once. *Done for zoom
+   and pan* (2026-10-24, decision 0017): steps reuse the drawn figure, are
+   drawn once per event loop pass and rendered again 300 ms after the last;
+   150 → 49 ms per step on the example, 2.6 → 1.0 s with 1e5 error bars.
+   Changes from the property panel still render at once.
 2. **Render off the GUI thread**: show the previous image until the new one is
    ready; drop outdated renders.
 3. **Downsample in the preview only**: per pixel column keep min and max for

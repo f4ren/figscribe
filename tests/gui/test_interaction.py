@@ -147,12 +147,17 @@ def test_escape_resets_and_a_new_document_forgets_the_view(qtbot, preview) -> No
     assert preview.view == {}
 
 
+def _moved(qtbot, preview: Preview) -> None:
+    """Let the preview draw the moves quickly, as while the mouse still moves."""
+    qtbot.waitUntil(lambda: not preview._redraw.isActive(), timeout=5000)
+
+
 def _drawn(qtbot, preview: Preview) -> None:
-    """Let the preview draw what zooming and panning asked for."""
+    """Let the preview draw the moves as exported, once the mouse rests."""
     qtbot.waitUntil(lambda: not preview.redraw_pending, timeout=5000)
 
 
-def test_zooming_and_panning_do_not_render_the_model_again(
+def test_the_model_is_rendered_once_the_moves_stop(
     qtbot, preview: Preview, monkeypatch
 ) -> None:
     from figscribe.gui import preview as module
@@ -165,8 +170,10 @@ def test_zooming_and_panning_do_not_render_the_model_again(
     figure = preview._figure
     preview.zoom(_centre(preview, _axes(preview)), 1.5)
     preview.pan(_axes(preview).get_gid(), 30, 10)
-    _drawn(qtbot, preview)
+    _moved(qtbot, preview)
     assert renders == [] and preview._figure is figure
+    _drawn(qtbot, preview)
+    assert renders == [1]
 
 
 def test_quick_moves_are_drawn_once(qtbot, preview: Preview, monkeypatch) -> None:
@@ -178,18 +185,33 @@ def test_quick_moves_are_drawn_once(qtbot, preview: Preview, monkeypatch) -> Non
     gid = _axes(preview).get_gid()
     for _ in range(5):
         preview.pan(gid, 10, 0)
-    _drawn(qtbot, preview)
+    _moved(qtbot, preview)
     assert len(draws) == 1
-    assert preview.view[gid][0] != preview.document.figure.axes[0].x.limits
 
 
-def test_the_quick_view_looks_exactly_like_a_full_render(qtbot, preview) -> None:
-    preview.zoom(_centre(preview, _axes(preview)), 1.7)
-    preview.pan(_axes(preview).get_gid(), -25, 15)
-    _drawn(qtbot, preview)
-    quick = preview._image.copy()
-    preview.refresh()
-    assert preview._image == quick
+def test_the_view_at_rest_looks_exactly_like_the_export(qtbot, tmp_path) -> None:
+    # A color bar moves by a few pixels when Matplotlib lays a figure out
+    # twice, so only rendering again matches the export.
+    import numpy as np
+
+    from figscribe.io.numpyfile import numpy_source
+    from figscribe.model import Axes, Colorbar, Figure, ImagePlot, Project, dumps
+    from figscribe.model.data import ArrayRef
+
+    np.save(tmp_path / "map.npy", np.arange(400.0).reshape(20, 20))
+    source = numpy_source(tmp_path / "map.npy", tmp_path)
+    image = ImagePlot(data=ArrayRef(source=source.id), colorbar=Colorbar())
+    project = Project(sources=[source], figures=[Figure(axes=[Axes(artists=[image])])])
+    (tmp_path / "map.figscribe").write_text(dumps(project), encoding="utf-8")
+    view = Preview(Document.open(tmp_path / "map.figscribe"))
+    qtbot.addWidget(view)
+    view.resize(900, 700)
+    view.zoom(_centre(view, view._figure.axes[0]), 1.7)
+    view.pan(view._figure.axes[0].get_gid(), -25, 15)
+    _drawn(qtbot, view)
+    at_rest = view._image.copy()
+    view.refresh()
+    assert view._image == at_rest
 
 
 def test_zooming_far_out_keeps_the_tick_limit(qtbot, preview) -> None:

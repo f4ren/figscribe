@@ -22,7 +22,7 @@ from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure as MplFigure
 from matplotlib.transforms import Bbox
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -48,6 +48,7 @@ from figscribe.gui.errors import explain
 from figscribe.gui.names import size_text
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
+from figscribe.render.ticks import ticks_that_fit
 
 MARGIN = 28
 """Logical pixels kept free around the figure."""
@@ -63,6 +64,10 @@ ZOOM_STEP = 1.25
 AXIS_STRIP = 8.0
 """Pixels along a panel's edge that count as its axis when clicked."""
 """Zoom factor of one wheel step."""
+
+SETTLE_MS = 300
+"""Quiet time after the last zoom or pan step before the view is rendered
+again exactly; shorter, and a slow mouse waits for renders between steps."""
 
 Limits = tuple[tuple[float, float], tuple[float, float]]
 
@@ -108,6 +113,16 @@ class Preview(QWidget):
         self._origin = QPointF()
         self.error: str | None = None
         """Why the figure could not be drawn, shown instead of it."""
+        self._ranges: dict[tuple[str, str], tuple[float, float]] = {}
+        """The range of each axis, by (gid, "x" | "y"), when last drawn."""
+        self._redraw = QTimer(self)
+        self._redraw.setSingleShot(True)
+        self._redraw.setInterval(0)  # once the moves waiting now are applied
+        self._redraw.timeout.connect(self._draw_view)
+        self._settle = QTimer(self)
+        self._settle.setSingleShot(True)
+        self._settle.setInterval(SETTLE_MS)
+        self._settle.timeout.connect(self.refresh)
         self.set_document(document)
 
     def set_document(self, document: Document) -> None:
@@ -121,6 +136,8 @@ class Preview(QWidget):
 
     def refresh(self) -> None:
         """Render the current figure again, at a resolution that fits."""
+        self._redraw.stop()
+        self._settle.stop()
         self._figure, self._image, self.error = None, None, None
         model = self.document.figure
         if model is None:
@@ -146,26 +163,71 @@ class Preview(QWidget):
         )
         return max(fit, 10.0)
 
+    @property
+    def redraw_pending(self) -> bool:
+        """Whether a zoomed or panned view still waits to be drawn as exported."""
+        return self._redraw.isActive() or self._settle.isActive()
+
     def _draw(self, model) -> tuple[MplFigure, QImage]:
-        fig = render(model, self.document.data)
+        fig = render(model, self.document.data, view=self.view)
         known = {ax.get_gid() for ax in _all_axes(fig)}
         self.view = {oid: lim for oid, lim in self.view.items() if oid in known}
-        for ax in _all_axes(fig):
-            if ax.get_gid() in self.view:
-                xlim, ylim = self.view[ax.get_gid()]
-                ax.set_xlim(xlim)
-                ax.set_ylim(ylim)
         fig.set_dpi(self.preview_dpi())
+        return fig, self._paint(fig, model)
+
+    def _draw_view(self) -> None:
+        """Show the zoomed or panned view quickly on the figure drawn already,
+        with the panels where they are; once the moves stop, render it again.
+
+        Drawn twice, Matplotlib's layout moves a figure with a color bar by a
+        few pixels, so only a new render looks exactly like the export. A tick
+        step that no longer fits the new range, or fits again, needs one too.
+        """
+        model = self.document.figure
+        if self._figure is None or model is None or not self._ticks_hold(model):
+            self.refresh()
+            return
+        self._figure.set_layout_engine("none")  # half the time of a draw
+        self._image = self._paint(self._figure, model)
+        self.update()
+        self._settle.start()
+
+    def _ticks_hold(self, model) -> bool:
+        for axes in model.axes:
+            for gid, name, spec in (
+                (axes.id, "x", axes.x),
+                (axes.id, "y", axes.y),
+                (f"{axes.id}{RIGHT}", "y", axes.y_right),
+            ):
+                if spec is None or (
+                    spec.major_step is None and spec.minor_divisions is None
+                ):
+                    continue
+                drawn = self._ranges.get((gid, name))
+                ax = self._axes(gid)
+                if drawn is None or ax is None:
+                    return False
+                now = ax.get_xlim() if name == "x" else ax.get_ylim()
+                if ticks_that_fit(spec, drawn) != ticks_that_fit(spec, now):
+                    return False
+        return True
+
+    def _paint(self, fig: MplFigure, model) -> QImage:
         canvas = FigureCanvasAgg(fig)
         with style_context(model):
             canvas.draw()
+        self._ranges = {
+            (ax.get_gid(), name): ax.get_xlim() if name == "x" else ax.get_ylim()
+            for ax in _all_axes(fig)
+            for name in ("x", "y")
+        }
         buffer = np.asarray(canvas.buffer_rgba())
         height, width, _ = buffer.shape
         image = QImage(
             buffer.tobytes(), width, height, 4 * width, QImage.Format.Format_RGBA8888
         )
         image.setDevicePixelRatio(self.devicePixelRatioF())
-        return fig, image
+        return image
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         super().resizeEvent(event)
@@ -409,7 +471,9 @@ class Preview(QWidget):
         """Back to the limits in the model, as exported."""
         if self.view:
             self.view = {}
-            self._view_changed()
+            self.refresh()  # the model's ranges may be automatic: render them
+            self.view_changed.emit()
+            self._place_view_bar()
 
     def adopt_view(self) -> None:
         """Write the zoomed or panned view into the model as axis ranges."""
@@ -454,10 +518,11 @@ class Preview(QWidget):
         inverse = ax.transData.inverted()
         (x0, y0), (x1, y1) = inverse.transform([(xs[0], ys[0]), (xs[1], ys[1])])
         self.view[ax.get_gid()] = ((float(x0), float(x1)), (float(y0), float(y1)))
-        self._view_changed()
-
-    def _view_changed(self) -> None:
-        self.refresh()
+        # At once on the drawn figure, so that the next move starts from here;
+        # drawing it waits until the moves already queued are applied too.
+        ax.set_xlim(x0, x1)
+        ax.set_ylim(y0, y1)
+        self._redraw.start()
         self.view_changed.emit()
         self._place_view_bar()
 

@@ -62,15 +62,19 @@ DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
 files is not our job."""
 
 MM_PER_INCH = 25.4
+
+View = Mapping[str, tuple[tuple[float, float], tuple[float, float]]]
+"""Ranges (x, y) by the gid of a Matplotlib axes."""
 RIGHT = "#right"
 """Appended to an axes id to name the Matplotlib axes of its right y axis."""
 
 
-def render(figure: Figure, data: DataProvider) -> MplFigure:
+def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplFigure:
     """Build the Matplotlib figure for `figure`.
 
     Every drawn artist gets its model id as gid, so the GUI can map a click on
-    a Matplotlib artist back to the model object.
+    a Matplotlib artist back to the model object. `view` shows some axes, by
+    gid, at other ranges than the model's, as the preview does while zoomed.
     """
     with style_context(figure):
         fig = MplFigure(
@@ -115,6 +119,11 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
         # the range to the ticks, so there it is worked out again with the new
         # ones, as the script does when it draws. Elsewhere it must not be:
         # done early, it gives empty panels another range than drawing does.
+        for ax, _, _ in ticked:
+            if view and ax.get_gid() in view:
+                xlim, ylim = view[ax.get_gid()]
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
         rounded = matplotlib.rcParams["axes.autolimit_mode"] == "round_numbers"
         for ax, name, spec in ticked:
             interval = ax.get_xlim() if name == "x" else ax.get_ylim()
