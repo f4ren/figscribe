@@ -449,6 +449,15 @@ def test_the_tick_limit_applies_to_an_automatic_range(data) -> None:
     assert not isinstance(fig.axes[0].xaxis.get_major_locator(), MultipleLocator)
 
 
+def test_a_view_is_shown_and_its_ticks_fit_it(data) -> None:
+    # Every 0.01 fits the panel's range of 0 to 0.4, not the view of 0 to 10.
+    axes = Axes(x=AxisSpec(limits=(0.0, 0.4), major_step=0.01))
+    fig = render(Figure(axes=[axes]), data, view={axes.id: ((0.0, 10.0), (0.0, 1.0))})
+    ax = fig.axes[0]
+    assert ax.get_xlim() == (0.0, 10.0)
+    assert not isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+
+
 def test_too_many_minor_ticks_keep_the_major_step(data) -> None:
     # 41 major ticks are fine; ten parts between each give 400 minor ticks.
     axes = Axes(x=AxisSpec(limits=(0.0, 40.0), major_step=1.0, minor_divisions=10))

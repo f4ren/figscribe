@@ -145,3 +145,58 @@ def test_escape_resets_and_a_new_document_forgets_the_view(qtbot, preview) -> No
     preview.zoom(_centre(preview, _axes(preview)), 2.0)
     preview.set_document(Document())
     assert preview.view == {}
+
+
+def _drawn(qtbot, preview: Preview) -> None:
+    """Let the preview draw what zooming and panning asked for."""
+    qtbot.waitUntil(lambda: not preview.redraw_pending, timeout=5000)
+
+
+def test_zooming_and_panning_do_not_render_the_model_again(
+    qtbot, preview: Preview, monkeypatch
+) -> None:
+    from figscribe.gui import preview as module
+
+    renders = []
+    real = module.render
+    monkeypatch.setattr(
+        module, "render", lambda *a, **k: renders.append(1) or real(*a, **k)
+    )
+    figure = preview._figure
+    preview.zoom(_centre(preview, _axes(preview)), 1.5)
+    preview.pan(_axes(preview).get_gid(), 30, 10)
+    _drawn(qtbot, preview)
+    assert renders == [] and preview._figure is figure
+
+
+def test_quick_moves_are_drawn_once(qtbot, preview: Preview, monkeypatch) -> None:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    draws = []
+    real = FigureCanvasAgg.draw
+    monkeypatch.setattr(FigureCanvasAgg, "draw", lambda c: draws.append(1) or real(c))
+    gid = _axes(preview).get_gid()
+    for _ in range(5):
+        preview.pan(gid, 10, 0)
+    _drawn(qtbot, preview)
+    assert len(draws) == 1
+    assert preview.view[gid][0] != preview.document.figure.axes[0].x.limits
+
+
+def test_the_quick_view_looks_exactly_like_a_full_render(qtbot, preview) -> None:
+    preview.zoom(_centre(preview, _axes(preview)), 1.7)
+    preview.pan(_axes(preview).get_gid(), -25, 15)
+    _drawn(qtbot, preview)
+    quick = preview._image.copy()
+    preview.refresh()
+    assert preview._image == quick
+
+
+def test_zooming_far_out_keeps_the_tick_limit(qtbot, preview) -> None:
+    from matplotlib.ticker import MultipleLocator
+
+    axes = preview.document.figure.axes[0]
+    preview.document.push(SetField(axes.id, ("x", "major_step"), 0.25))
+    preview.zoom(_centre(preview, _axes(preview)), 0.01, axis="x")  # 100 times out
+    _drawn(qtbot, preview)
+    assert not isinstance(_axes(preview).xaxis.get_major_locator(), MultipleLocator)
