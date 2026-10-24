@@ -11,6 +11,7 @@ and the editor shows the model's value again. Field constraints such as
 
 from __future__ import annotations
 
+import math
 import types
 import typing
 from collections.abc import Callable
@@ -333,7 +334,7 @@ TIPS = {
     "linewidth": "Line width in pt.",
     "marker": "The symbol drawn at each data point.",
     "markersize": "Size of the markers in pt.",
-    "size": "Area of the markers in pt².",
+    "size": "Size of the markers in pt.",
     "capsize": "Length of the caps at the ends of the error bars in pt; 0 for none.",
     "elinewidth": "Line width of the error bars in pt.",
     "values": "The column whose values are counted.",
@@ -1061,6 +1062,12 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     return editor
 
 
+def _area(size: float) -> float:
+    if size <= 0:
+        raise ValueError(f"{size:g} is not a marker size; it must be more than 0")
+    return size * size
+
+
 def _counted_from_one(value: int) -> int:
     if value < 1:
         raise ValueError(
@@ -1073,10 +1080,12 @@ SHOWN: dict[str, tuple[Callable[[Any], Any], Callable[[Any], Any]]] = {
     "row": (lambda value: value + 1, _counted_from_one),
     "col": (lambda value: value + 1, _counted_from_one),
     "header_row": (lambda value: value + 1, _counted_from_one),
+    "size": (lambda area: round(math.sqrt(area), 6), _area),
 }
 """Fields shown in other numbers than the model keeps them, with the
 conversions to the screen and back: rows, columns and lines are counted
-from 1 on screen and from 0 in the model."""
+from 1 on screen and from 0 in the model; points keep their marker area in
+pt², as Matplotlib's scatter takes it, and show its size in pt like lines."""
 
 
 def _on_screen(parse, format_, to_screen, from_screen):

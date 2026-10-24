@@ -211,6 +211,25 @@ def test_rows_columns_and_lines_are_counted_from_one(
     assert panel.editors[("header_row",)].line.text() == "2"  # the model's line 1
 
 
+def test_points_take_their_marker_size_in_pt_like_lines(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.gui.names import field_name
+    from figscribe.model import ScatterPlot
+
+    line = _artist(document)
+    points = ScatterPlot(x=line.x, y=line.y, size=20.0)  # Matplotlib's area, pt²
+    document.push(InsertItem(_axes(document).id, "artists", points))
+    document.select(points.id)
+    assert field_name("size") == field_name("markersize") == "Marker size (pt)"
+    assert panel.editors[("size",)].line.text() == "4.472136"
+    _type(panel, ("size",), "5")
+    assert _axes(document).artists[-1].size == 25.0
+    _type(panel, ("size",), "-5")
+    assert "-5" in panel.error and _axes(document).artists[-1].size == 25.0
+
+
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:
     artist = _artist(document)
     source = document.project.sources[0]

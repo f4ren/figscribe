@@ -36,7 +36,7 @@ FIELD_NAMES = {
     "linewidth": "Line width (pt)",
     "marker": "Marker",
     "markersize": "Marker size (pt)",
-    "size": "Marker area (pt²)",
+    "size": "Marker size (pt)",
     "capsize": "Cap size (pt)",
     "elinewidth": "Error bar width (pt)",
     "histtype": "Style",
