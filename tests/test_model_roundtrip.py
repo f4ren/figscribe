@@ -86,6 +86,14 @@ def test_figure_size_must_be_positive() -> None:
             Figure(**{field: 0.0})
 
 
+@pytest.mark.parametrize("value", [math.inf, math.nan])
+def test_sizes_and_ranges_must_be_finite(value: float) -> None:
+    with pytest.raises(ValidationError):
+        Figure(width_mm=value)
+    with pytest.raises(ValidationError):
+        Axes(x={"limits": (0.0, value)})
+
+
 def test_sha256_must_look_like_a_digest() -> None:
     with pytest.raises(ValidationError):
         CsvSource(path="x.csv", sha256="abc")

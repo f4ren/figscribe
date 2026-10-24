@@ -128,6 +128,15 @@ def test_text_that_is_no_number_is_reported(panel: PropertyPanel, document) -> N
     assert not document.history.can_undo
 
 
+def test_numbers_typed_with_a_decimal_comma(panel: PropertyPanel, document) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("height_mm",), "62,5")
+    assert _figure(document).height_mm == 62.5
+    _type(panel, ("height_mm",), "inf")
+    assert "'inf'" in panel.error
+    assert _figure(document).height_mm == 62.5
+
+
 def test_empty_text_clears_an_optional_field(panel: PropertyPanel, document) -> None:
     artist = _artist(document)
     document.select(artist.id)
