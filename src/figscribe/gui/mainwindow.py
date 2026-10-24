@@ -52,6 +52,7 @@ from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.databar import DataBar
 from figscribe.gui.document import Document, split_axis
+from figscribe.gui.errors import explain
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.outline import PANEL_SIDES, Outline
@@ -537,7 +538,7 @@ class MainWindow(QMainWindow):
         arrays = self.document.array_choices()
         figure = self.document.figure
         if not (columns or arrays) or figure is None:
-            self.show_error("Nothing to plot", ValueError("Import a data file first."))
+            self.show_error("Nothing to plot", "Import a data file first.")
             return
         dialog = PlotDialog(columns, self, arrays=arrays)
         if not self.run_dialog(dialog):
@@ -561,9 +562,7 @@ class MainWindow(QMainWindow):
         """Fit a model to the selected plot (or the only one) and add it."""
         target = self._fit_target()
         if target is None:
-            self.show_error(
-                "Nothing to fit", ValueError("Select the plot to fit, then try again.")
-            )
+            self.show_error("Nothing to fit", "Select the plot to fit, then try again.")
             return
         figure = self.document.figure
         axes = next(a for a in figure.axes if target in a.artists)
@@ -594,7 +593,7 @@ class MainWindow(QMainWindow):
             return
         target = oid if oid is not None else self._target_axes(figure)
         if target is None:
-            self.show_error("No panel", ValueError("Add a panel or a plot first."))
+            self.show_error("No panel", "Add a panel or a plot first.")
             return
         text = self.ask_text("Add note", "Text (LaTeX allowed, e.g. $\\mu$):")
         if not text:
@@ -733,8 +732,10 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
             self.data_bar.rebuild()
 
-    def show_error(self, title: str, error: Exception) -> None:
-        QMessageBox.warning(self, title, str(error))
+    def show_error(self, title: str, error: Exception | str) -> None:
+        """Tell what went wrong: a message, or an error explained in plain words."""
+        text = error if isinstance(error, str) else explain(error)
+        QMessageBox.warning(self, title, text)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt naming
         if not self.confirm_discard():

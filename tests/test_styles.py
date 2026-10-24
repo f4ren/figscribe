@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from figscribe.model.styles import style_problem, style_problems
 
 from figscribe.model import Axes, Legend
+from figscribe.model.styles import style_problem, style_problems
 
 
 @pytest.mark.parametrize(

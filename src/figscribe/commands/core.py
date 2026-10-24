@@ -21,6 +21,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel, ValidationError
 
 from figscribe.model import Axes, Figure, Identified, Project
+from figscribe.model.styles import style_problem, style_problems
 
 ITEM_FIELDS: dict[type[BaseModel], tuple[str, ...]] = {
     Project: ("sources", "figures"),
@@ -126,6 +127,7 @@ class InsertItem:
         for oid in _ids_in(self.item):
             if oid in taken:
                 raise CommandError(f"id {oid!r} is already used in the project")
+        _refuse_styles(self.item)
         item = self.item.model_copy(deep=True)
         _assign(owner, self.field, [*items[:index], item, *items[index:]], self.field)
 
@@ -294,11 +296,23 @@ def _check_field(owner: BaseModel, name: str) -> None:
 
 
 def _assign(owner: BaseModel, name: str, value: Any, where: str) -> None:
+    if (why := style_problem(name, value)) is not None:
+        raise CommandError(why)
+    if isinstance(value, BaseModel):
+        _refuse_styles(value)
     try:
         setattr(owner, name, value)
     except ValidationError as exc:
         reason = "; ".join(e["msg"] for e in exc.errors())
         raise CommandError(f"cannot set {where}: {reason}") from exc
+
+
+def _refuse_styles(obj: BaseModel) -> None:
+    """Refuse an object with a style string Matplotlib would not draw; only
+    this object, so that one already in the project blocks nothing else."""
+    problems = style_problems(obj)
+    if problems:
+        raise CommandError(problems[0][1])
 
 
 def noun(obj: BaseModel) -> str:

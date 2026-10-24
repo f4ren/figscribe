@@ -26,6 +26,7 @@ from figscribe.assistant.chat import Chat, ChatError, Model, Provider, make_mode
 from figscribe.gui import theme
 from figscribe.gui.assistantdialog import AssistantDialog
 from figscribe.gui.document import Document
+from figscribe.gui.errors import explain
 from figscribe.gui.widgets import label
 from figscribe.tools import Toolbox
 
@@ -47,7 +48,7 @@ class _Turn(QThread):
         except ChatError as exc:
             self.failed.emit(str(exc))
         except Exception as exc:  # never take the window down
-            self.failed.emit(f"Unexpected error: {exc}")
+            self.failed.emit(explain(exc))
         else:
             self.done.emit(response)
 
