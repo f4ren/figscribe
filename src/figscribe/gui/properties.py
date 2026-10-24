@@ -306,8 +306,8 @@ TIPS = {
     "grid_which": "Grid lines at the numbered ticks, the minor ticks, or both.",
     "grid_color": "Color of the grid lines, e.g. dimgray or #696969; empty "
     "keeps the style's light gray.",
-    "row": "Grid row of the panel, from the top, starting at 0.",
-    "col": "Grid column of the panel, from the left, starting at 0.",
+    "row": "Grid row of the panel, counted from 1 at the top.",
+    "col": "Grid column of the panel, counted from 1 at the left.",
     "rowspan": "How many grid rows the panel covers.",
     "colspan": "How many grid columns the panel covers.",
     "label": "Entry in the legend; empty keeps the plot out of it.",
@@ -385,7 +385,7 @@ TIPS = {
     "lets Matplotlib choose.",
     "delimiter": "What separates the values in a line; empty means spaces or tabs.",
     "decimal": "Whether the numbers are written 1.5 or 1,5.",
-    "header_row": "The line with the column names, counted from 0; empty for a file "
+    "header_row": "The line with the column names, counted from 1; empty for a file "
     "without names.",
     "skip_rows": "Lines between the names and the numbers, such as a line of units.",
     "comment": "Lines starting with this are ignored; empty for none.",
@@ -1051,12 +1051,42 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         editor = MarkerEditor(spec, path, panel)
     else:
         parse, format_ = _TEXT[spec.kind]
+        if name in SHOWN:
+            parse, format_ = _on_screen(parse, format_, *SHOWN[name])
         editor = TextEditor(spec, path, panel, parse, format_)
     if spec.optional:
         nested = len(path) > 1  # e.g. an axis label, which no legend shows
         placeholder = "none" if nested and name == "label" else PLACEHOLDERS.get(name)
         editor.line.setPlaceholderText(placeholder or "none")
     return editor
+
+
+def _counted_from_one(value: int) -> int:
+    if value < 1:
+        raise ValueError(
+            f"{value} is too small: rows, columns and lines are counted from 1"
+        )
+    return value - 1
+
+
+SHOWN: dict[str, tuple[Callable[[Any], Any], Callable[[Any], Any]]] = {
+    "row": (lambda value: value + 1, _counted_from_one),
+    "col": (lambda value: value + 1, _counted_from_one),
+    "header_row": (lambda value: value + 1, _counted_from_one),
+}
+"""Fields shown in other numbers than the model keeps them, with the
+conversions to the screen and back: rows, columns and lines are counted
+from 1 on screen and from 0 in the model."""
+
+
+def _on_screen(parse, format_, to_screen, from_screen):
+    def parse_shown(text: str) -> Any:
+        return from_screen(parse(text))
+
+    def format_shown(value: Any) -> str:
+        return format_(to_screen(value))
+
+    return parse_shown, format_shown
 
 
 SEPARATED = "separated by commas, or by semicolons with decimal commas"

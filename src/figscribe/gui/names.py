@@ -109,7 +109,7 @@ FIELD_NAMES = {
     "row_count": "Rows of data",
     "delimiter": "Separator",
     "decimal": "Decimal mark",
-    "header_row": "Header line (first = 0)",
+    "header_row": "Header line",
     "skip_rows": "Lines skipped",
     "comment": "Comment mark",
     "encoding": "Text encoding",

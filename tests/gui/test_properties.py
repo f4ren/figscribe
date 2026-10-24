@@ -193,6 +193,24 @@ def test_whole_numbers(panel: PropertyPanel, document) -> None:
     assert "whole number" in panel.error
 
 
+def test_rows_columns_and_lines_are_counted_from_one(
+    panel: PropertyPanel, document
+) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("layout", "rows"), "2")
+    document.select(_axes(document).id)
+    assert panel.editors[("row",)].line.text() == "1"  # the model's row 0
+    _type(panel, ("row",), "2")
+    assert _axes(document).row == 1
+    _type(panel, ("row",), "0")
+    assert "counted from 1" in panel.error
+    assert _axes(document).row == 1
+
+    source = document.project.sources[0]
+    document.select(source.id)
+    assert panel.editors[("header_row",)].line.text() == "2"  # the model's line 1
+
+
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:
     artist = _artist(document)
     source = document.project.sources[0]
