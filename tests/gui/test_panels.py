@@ -75,7 +75,7 @@ def test_an_inset_from_the_context_menu(window: MainWindow) -> None:
 def test_deleting_from_the_context_menu(window: MainWindow) -> None:
     plot = window.document.figure.axes[0].artists[0]
     menu = window.outline.context_menu(plot.id)
-    assert _menu_texts(menu) == ["Hide", "Delete"]
+    assert _menu_texts(menu) == ["Hide", "Bring to front", "Send to back", "Delete"]
     menu.actions()[0].trigger()
     assert window.document.figure.axes[0].artists[0].visible is False
     window.outline.context_menu(plot.id).actions()[-1].trigger()
@@ -88,6 +88,30 @@ def test_deleting_from_the_context_menu(window: MainWindow) -> None:
     assert _menu_texts(figure_menu) == ["Add a panel"]
     figure_menu.actions()[0].trigger()
     assert len(window.document.figure.axes) == 1
+
+
+def test_plots_are_brought_to_front_and_sent_back(window: MainWindow) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot
+
+    axes = window.document.figure.axes[0]
+    data = axes.artists[0]
+    line = LinePlot(x=data.x, y=data.y)
+    window.document.push(InsertItem(axes.id, "artists", line))
+
+    def action(oid: str, text: str):
+        menu = window.outline.context_menu(oid)
+        return next(a for a in menu.actions() if a.text() == text)
+
+    assert not action(data.id, "Send to back").isEnabled()  # equal order: drawn first
+    action(data.id, "Bring to front").trigger()
+    artists = window.document.figure.axes[0].artists
+    assert artists[0].zorder > artists[1].zorder
+    assert window.document.history.undo_text == "Bring to front"
+    assert not action(data.id, "Bring to front").isEnabled()
+    action(data.id, "Send to back").trigger()
+    artists = window.document.figure.axes[0].artists
+    assert artists[0].zorder < artists[1].zorder
 
 
 def test_the_position_is_a_section_of_its_own(qtbot, window: MainWindow) -> None:
