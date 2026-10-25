@@ -10,6 +10,8 @@ code. Start here:
 - **Why things are as they are:** [`docs/decisions.md`](docs/decisions.md).
   Read the entries for the area you touch before changing it.
 - **The vision and non-goals:** [`plan/project-brief.md`](plan/project-brief.md).
+- **How the GUI is tested:** [`docs/testing.md`](docs/testing.md), and the
+  manual checklist there for changes that are seen.
 
 ## Architecture in one paragraph
 

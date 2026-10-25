@@ -42,5 +42,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
       - name: Install
         run: python -m pip install -e ".[dev]"
+      # The slow tests operate every field and action of the GUI; once is
+      # enough, on one platform, to keep the other jobs short.
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q ${{ (matrix.os != 'ubuntu-latest' || matrix.python-version != '3.13') && '-m "not slow"' || '' }}
