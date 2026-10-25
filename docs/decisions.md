@@ -733,6 +733,16 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   whose legend settings it has.
 - A press selects only on release without movement, so a drag never changes
   the selection.
+- **Zooming and panning reuse the drawn figure** (since 2026-10-24): each
+  step sets the new range on it at once and draws it with the panels where
+  they are, merged with the steps queued behind it into one draw; 300 ms
+  after the last step the view is rendered again from the model. Measured on
+  the example: 150 ms per step before, 49 ms now. Rendering at rest is needed
+  because Matplotlib's layout moves a figure with a color bar by a few pixels
+  when it lays it out a second time, so only a new render matches the export;
+  a test checks that. A tick step that no longer fits the new range, or fits
+  again, renders at once. `render()` takes the view, so ticks are fitted to
+  the range shown, not the model's.
 
 ## 0018 — The Python code drawer
 
