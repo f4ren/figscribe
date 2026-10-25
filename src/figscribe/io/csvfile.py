@@ -109,6 +109,8 @@ def read_csv(source: CsvSource, raw: bytes, name: str) -> np.ndarray:
         )
     except ValueError as exc:
         raise DataError(f"cannot read {name}: {exc}") from exc
+    if table.size == 0:  # NumPy then gives one column of nothing
+        raise DataError(f"{Path(name).name} has no rows of data")
     return table
 
 

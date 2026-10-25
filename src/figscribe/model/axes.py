@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from figscribe.model.artists import Artist
 from figscribe.model.base import Identified, StrictModel
@@ -20,7 +20,8 @@ class AxisSpec(StrictModel):
     scale: Literal["linear", "log", "symlog"] = "linear"
     """"linear", "log", or "symlog" (linear around zero, log beyond)."""
     limits: tuple[float, float] | None = None
-    """None means autoscale. Adopting the current zoom writes a fixed pair here."""
+    """None means autoscale. Adopting the current zoom writes a fixed pair here;
+    the first end may be the higher one, which turns the axis around."""
     ticks: list[float] | None = None
     """Values of the major ticks; None lets Matplotlib or `major_step` place them."""
     tick_labels: list[str] | None = None
@@ -43,6 +44,13 @@ class AxisSpec(StrictModel):
     """Shows the values with an SI prefix: "k" draws 225000 Hz as 225 and the
     unit as kHz. The data, limits, ticks and steps stay in the data's unit;
     None shows the values as they are."""
+
+    @field_validator("limits")
+    @classmethod
+    def _two_ends(cls, limits):
+        if limits is not None and limits[0] == limits[1]:
+            raise ValueError("a range needs two different ends")
+        return limits
 
 
 class Legend(StrictModel):

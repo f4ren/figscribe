@@ -29,6 +29,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     GridLayout,
+    Histogram,
     Legend,
     LinePlot,
     PredefinedFit,
@@ -140,6 +141,19 @@ def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     script = _assert_same(project, tmp_path)
     assert "bounds=" in script and "c is held at 0" in script
+
+
+def test_a_histogram_of_one_value(tmp_path: Path) -> None:
+    """np.loadtxt gives one row of one column as a number, not an array."""
+    (tmp_path / "one.csv").write_text("x,y\n1.0,2.0\n", encoding="utf-8")
+    source = csv_source(tmp_path / "one.csv", tmp_path, header_row=0, skip_rows=0)
+    values = ColumnRef(source=source.id, column="y")
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=72, axes=[Axes(artists=[Histogram(values=values)])])],
+    )
+    _assert_same(project, tmp_path)
 
 
 def test_many_settings(tmp_path: Path) -> None:

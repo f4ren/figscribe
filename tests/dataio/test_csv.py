@@ -209,3 +209,12 @@ def test_each_file_is_read_once(tmp_path: Path, monkeypatch) -> None:
 
     (tmp_path / "s.csv").unlink()
     assert list(data(ColumnRef(source=source.id, column="U"))) == [1.0]
+
+
+def test_a_file_without_rows_of_data_says_so(tmp_path: Path) -> None:
+    """Not "column 'y' is out of range: has 1 columns", which NumPy's empty
+    result made it say."""
+    write(tmp_path / "s.csv", "x,y,dy\n")
+    source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
+    with pytest.raises(DataError, match="s.csv has no rows of data"):
+        _load(tmp_path, source, "y")

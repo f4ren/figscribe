@@ -434,6 +434,8 @@ class _Writer:
             return
         if len(refs) == 1:
             kwargs["usecols"] = str(indices[0])
+            if self._single_row(refs, source):
+                kwargs["ndmin"] = "1"  # one value is still an array
             self.call(f"{refs[0][1]} = np.loadtxt", path, **kwargs)
             return
         if indices != list(range(len(source.columns))) or not source.columns:

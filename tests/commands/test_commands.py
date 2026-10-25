@@ -433,3 +433,10 @@ def test_default_descriptions_are_readable(project: Project) -> None:
     move = MoveItem(figure, "axes", top, 1)
     move.apply(project)
     assert move.description == "Move axes"
+
+
+def test_a_range_needs_two_different_ends(project: Project) -> None:
+    _, top, *_ = _ids(project)
+    with pytest.raises(CommandError, match="two different ends"):
+        History(project).push(SetField(top, ("y", "limits"), (5.0, 5.0)))
+    History(project).push(SetField(top, ("y", "limits"), (5.0, 1.0)))  # reversed

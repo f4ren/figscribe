@@ -241,3 +241,27 @@ def test_data_refs_are_found_on_every_artist_type(project: Project) -> None:
         f"{prefix}[2].x",
         f"{prefix}[2].y",
     ]
+
+
+def _given(values: dict):
+    import numpy as np
+
+    return lambda ref: np.asarray(values[ref.column], dtype=float)
+
+
+def test_a_column_without_values_to_draw_is_reported(project: Project) -> None:
+    nan = float("nan")
+    data = _given({"t": [0.0, 1.0, 2.0], "U": [nan, nan, nan], "dU": [0.1] * 3})
+    issues = validate_references(project, data)
+    assert any("y (U) has no values to draw" in i.message for i in issues)
+
+
+def test_values_a_log_axis_cannot_show_are_reported(project: Project) -> None:
+    project.figures[0].axes[0].y.scale = "log"
+    data = _given(
+        {"t": [0.0, 1.0, 2.0, 3.0], "U": [-1.0, 0.0, 1.0, 2.0], "dU": [0.1] * 4}
+    )
+    issues = validate_references(project, data)
+    assert any("2 of 4 values of y (U) are zero or below" in i.message for i in issues)
+    project.figures[0].axes[0].y.scale = "linear"
+    assert not validate_references(project, data)
