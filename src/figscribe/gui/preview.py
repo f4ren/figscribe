@@ -7,10 +7,10 @@ only the resolution is chosen to fit the widget, and Agg draws it the same
 way `export` writes a PNG. Clicks are mapped back through Matplotlib's own
 hit testing, so selection works on exactly what is drawn.
 
-The wheel zooms and dragging pans a panel; over an axis' numbers or label
-the wheel zooms that axis alone. That view lives only here, until "Use as
-axis range" writes it into the model. Dragging a legend moves it, one undo
-step on release.
+The wheel zooms and dragging pans a panel; in an axis' frame, as drawn
+around it when selected, they zoom and pan that axis alone. That view lives
+only here, until "Use as axis range" writes it into the model. Dragging a
+legend moves it, one undo step on release.
 """
 
 from __future__ import annotations
@@ -62,9 +62,12 @@ CAPTION = 30
 DRAG_THRESHOLD = 4
 """Logical pixels the mouse moves before a press becomes a drag."""
 ZOOM_STEP = 1.25
+"""Zoom factor of one wheel step."""
 AXIS_STRIP = 8.0
 """Pixels along a panel's edge that count as its axis when clicked."""
-"""Zoom factor of one wheel step."""
+FRAME_MARGIN = 3
+"""Logical pixels between a selected object and the frame drawn around it;
+in an axis' frame the wheel and dragging act on that axis."""
 
 SETTLE_MS = 300
 """Quiet time after the last zoom or pan step before the view is rendered
@@ -81,6 +84,8 @@ class _Press:
     last: QPointF
     axes_id: str | None = None
     """The panel under the press, which a drag pans."""
+    axis: str = "both"
+    """"x" or "y" when the press is in an axis' frame: a drag pans only it."""
     legend: object = None
     """The Matplotlib legend under the press, which a drag moves."""
     note: object = None
@@ -416,16 +421,19 @@ class Preview(QWidget):
                 for a in (ax, *_children(ax))
                 if a.get_gid() == oid and a.get_visible()
             ]
+        frame = self._frame(boxes)
+        if frame is None:
+            return None
+        return QRectF(
+            self._to_widget(frame.x0, frame.y1), self._to_widget(frame.x1, frame.y0)
+        )
+
+    def _frame(self, boxes) -> Bbox | None:
+        """The outline drawn around `boxes` when selected, in display units."""
         boxes = [b for b in boxes if np.all(np.isfinite(b.extents)) and b.width >= 0]
         if not boxes:
             return None
-        x0 = min(b.x0 for b in boxes)
-        x1 = max(b.x1 for b in boxes)
-        y0 = min(b.y0 for b in boxes)
-        y1 = max(b.y1 for b in boxes)
-        top_left = self._to_widget(x0, y1)
-        bottom_right = self._to_widget(x1, y0)
-        return QRectF(top_left, bottom_right).adjusted(-3, -3, 3, 3)
+        return Bbox.union(boxes).padded(FRAME_MARGIN * self.devicePixelRatioF())
 
     # --- zoom, pan and the legend ---------------------------------------------
 
@@ -461,9 +469,19 @@ class Preview(QWidget):
         self._set_view(ax, xs, ys)
 
     def _axis_under(self, point: QPointF):
-        """(Matplotlib axes, "x" or "y") of the axis whose numbers or label are
-        under `point`; (None, "both") if none."""
-        oid = self.axis_at(point)
+        """(Matplotlib axes, "x" or "y") of the axis whose frame, as drawn
+        around it when selected, is under `point`; (None, "both") if none."""
+        if self._figure is None:
+            return None, "both"
+        x, y = self._to_display(point)
+        oid = next(
+            (
+                oid
+                for oid, boxes in self._axis_boxes()
+                if (frame := self._frame(boxes)) is not None and frame.contains(x, y)
+            ),
+            None,
+        )
         if oid is None:
             return None, "both"
         axes_id, field = split_axis(oid)
@@ -471,12 +489,16 @@ class Preview(QWidget):
             return self._axes(axes_id + RIGHT), "y"
         return self._axes(axes_id), field
 
-    def pan(self, axes_id: str, dx: float, dy: float) -> None:
+    def pan(self, axes_id: str, dx: float, dy: float, axis: str = "both") -> None:
         """Move the view of panel `axes_id` with the mouse by (dx, dy) logical
-        pixels: the data follows the cursor."""
+        pixels: the data follows the cursor; `axis` limits it to "x" or "y"."""
         ax = self._axes(axes_id)
         if ax is None:
             return
+        if axis == "x":
+            dy = 0
+        elif axis == "y":
+            dx = 0
         ratio = self.devicePixelRatioF()
         box = ax.bbox
         dx, dy = dx * ratio, -dy * ratio  # display y grows upwards
@@ -578,12 +600,15 @@ class Preview(QWidget):
         if self._figure is None:
             self.document.select(None)
             return
-        ax = self.axes_at(point)
+        ax, axis = self.axes_at(point), "both"
+        if ax is None:
+            ax, axis = self._axis_under(point)
         legend = self._legend_at(point)
         self._press = _Press(
             point,
             point,
             axes_id=ax.get_gid() if ax is not None else None,
+            axis=axis,
             legend=legend,
             note=self._note_at(point) if legend is None else None,
         )
@@ -600,7 +625,7 @@ class Preview(QWidget):
             press.dragging = True
         if press.moving is None and press.axes_id is not None:
             delta = point - press.last
-            self.pan(press.axes_id, delta.x(), delta.y())
+            self.pan(press.axes_id, delta.x(), delta.y(), press.axis)
         press.last = point
         self.update()
 
