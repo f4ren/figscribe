@@ -41,9 +41,10 @@ note the platform, the screen scaling and the theme in the pull request.
    in each state (off, on, hovered, focused, disabled).
 3. **Edit by hand**: change a color, a marker, the axis range and the title
    in the panel; each shows at once and undoes with Ctrl+Z (Cmd+Z on macOS).
-4. **Zoom and pan**: scroll in the preview, and over an axis' numbers, which
-   zooms that axis alone; drag, then adopt the view as the range; drag the
-   legend. It feels fluid, and the view settles sharp.
+4. **Zoom and pan**: scroll and drag in the preview, and in an axis' frame
+   (the outline of the selected axis), which zooms and pans that axis alone;
+   adopt the view as the range; drag the legend. It feels fluid, and the view
+   settles sharp.
 5. **Import**: import a CSV with a semicolon and decimal commas, and one in
    cp1252 with µ in the header. The dialog proposes the right reading.
 6. **Fit**: add a Gaussian fit with residuals; the result shows in the panel.

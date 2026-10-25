@@ -448,9 +448,10 @@ Concrete changes found in `gui/properties.py` and `gui/names.py`:
 - Drag the corners of an inset to resize it and the gap between grid panels
   to change the ratios (one undo step on release, like the legend).
 - Right-click a plot: *Style like…*, *Bring to front*, *Fit…*, *Hide*.
-- **Done** (2026-10-25, asked for by the user): the wheel over an axis'
-  numbers or label zooms that axis alone. Over the panel, Shift with the
-  wheel still zooms x only and Ctrl or Alt y only.
+- **Done** (2026-10-25, asked for by the user): in an axis' frame, the one
+  drawn around it when selected, the wheel zooms and dragging pans that axis
+  alone. Over the panel, Shift with the wheel still zooms x only and Ctrl or
+  Alt y only. Clicking in the frame's gaps still selects nothing.
 
 ### U5 Missing everyday actions — S each
 
