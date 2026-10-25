@@ -38,7 +38,12 @@ from figscribe.commands import (
 from figscribe.commands.core import ITEM_FIELDS, walk
 from figscribe.fit import FitError, add_fit, refit
 from figscribe.io import DataError
-from figscribe.io.refresh import source_state, use_new_version
+from figscribe.io.refresh import (
+    read_differently,
+    reading_options,
+    source_state,
+    use_new_version,
+)
 from figscribe.model import (
     Axes,
     DataSource,
@@ -170,8 +175,21 @@ class Toolbox:
     def tool_set_field(
         self, object_id: str | None, path: list[str], value: Any
     ) -> dict[str, Any]:
-        command = _set_field(self.workspace.project, object_id, path, value)
+        command = self._set_field(self.workspace.project, object_id, path, value)
         return self._push(command, {})
+
+    def _set_field(
+        self, project: Project, object_id: str | None, path: list[str], value: Any
+    ) -> Command:
+        command = _set_field(project, object_id, path, value)
+        if len(path) == 1 and path[0] in reading_options(find(project, object_id)):
+            try:  # the file is read that way at once, with its new columns
+                return read_differently(
+                    project, object_id, path[0], command.value, self.workspace.base_dir
+                )
+            except DataError as exc:
+                raise ToolError(str(exc)) from exc
+        return command
 
     def tool_insert(
         self,
@@ -273,7 +291,7 @@ class Toolbox:
     ) -> tuple[Command, str | None]:
         op = operation.pop("op", None)
         builders = {
-            "set_field": lambda **a: (_set_field(project, **a), None),
+            "set_field": lambda **a: (self._set_field(project, **a), None),
             "insert": lambda **a: _insert(project, **a),
             "remove": lambda **a: (_remove(project, **a), None),
             "move": lambda **a: (_move(project, **a), None),
