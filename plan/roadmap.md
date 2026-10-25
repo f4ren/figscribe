@@ -364,6 +364,10 @@ the project. It found:
    (part of B7) and for every pull request that changes what is seen.
    **Done** (2026-10-25): `docs/testing.md`, with what the automatic tests
    cover and eleven steps by hand.
+   Found by hand the same day: check boxes were hard to see, a 1.45:1 edge
+   from the Fusion style on white. They have their own look now (14 px, a
+   4.3:1 edge, accent and a check mark when on, hover and focus), and the
+   checklist asks for every control in each state.
 
 *Done when:* items 1 to 5 above have failing tests and fixes; the field test
 and the action test run in CI; `docs/testing.md` exists; how-to rule 10 holds.
