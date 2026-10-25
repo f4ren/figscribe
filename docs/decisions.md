@@ -393,6 +393,21 @@ class would have to be kept in step with every field added to the model.
   relative path needs the project's directory, which does not exist before
   the first save. Once saved, newly imported files below the project's
   directory are stored relative to it.
+- **A data file that changed or moved is fixed from a bar above the preview**
+  (added 2026-10-24), one row per file: *Use the new version* hashes it again
+  and reads its columns and rows the way it is read now; *Locate file…* does
+  the same from where a missing file went, stored relative to the project
+  when below it; *Show what changed* compares rows and columns. Each is one
+  undo step. A version that does not parse is refused before anything
+  changes. The document hashes a file again only when its size or time stamp
+  changed, so the check runs after every edit and when the window comes to
+  the front. Plots of columns the new version lacks are listed in the bar and
+  in the problem list (`validate_references` checks named columns against
+  `columns`); the change is made anyway, since it can be undone and the plots
+  can be pointed at other columns. The number of data rows is recorded on
+  import (`row_count`) so that a change can be told in rows; projects from
+  before have none. The assistant gets *Use the new version* as a tool, not
+  *Locate*: it must not point a source at other files on the machine.
 - **Adding the first plot to a figure without axes adds the axes too**, in the
   same undo step. Later plots go into the selected axes, the axes of the
   selected plot, or the figure's first axes.

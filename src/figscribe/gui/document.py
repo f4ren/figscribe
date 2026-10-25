@@ -15,6 +15,8 @@ from PySide6.QtCore import QObject, Signal
 from figscribe import __version__
 from figscribe.commands import Command, CommandError, History, find
 from figscribe.io import load_data
+from figscribe.io.files import resolve_path
+from figscribe.io.refresh import source_state
 from figscribe.model import ArrayRef, ColumnRef, Figure, Project, dumps, loads
 from figscribe.render import DataProvider
 from figscribe.tools.workspace import array_choices, column_choices
@@ -105,6 +107,29 @@ class Document(QObject):
             self._data_sources = [s.model_copy(deep=True) for s in self.project.sources]
         return self._data
 
+    def data_states(self) -> dict[str, str]:
+        """ "changed" or "missing" for each source whose file is not as imported.
+
+        A file is hashed again only when its size or time stamp changed, so
+        asking after every edit costs a look at each file, not reading it.
+        """
+        states = {}
+        for source in self.project.sources:
+            try:
+                stat = resolve_path(source.path, self.base_dir).stat()
+                seen = (source.path, source.sha256, stat.st_size, stat.st_mtime_ns)
+            except OSError:
+                seen = (source.path, source.sha256, None, None)
+            known = self._states.get(source.id)
+            if known is None or known[0] != seen:
+                known = self._states[source.id] = (
+                    seen,
+                    source_state(source, self.base_dir),
+                )
+            if known[1] != "ok":
+                states[source.id] = known[1]
+        return states
+
     def column_choices(self) -> list[tuple[str, ColumnRef]]:
         """Every column of every source, labelled for a choice box."""
         return column_choices(self.project, self.data)
@@ -147,6 +172,8 @@ class Document(QObject):
         self.history = History(project)
         self._data: DataProvider | None = None
         self._data_sources: list | None = None
+        self._states: dict[str, tuple[tuple, str]] = {}
+        """Per source: what its file looked like, and its state then."""
         self._selected: str | None = None
         self.allow_preview = False
         """Whether tools may return an image of the figure; it shows the data."""

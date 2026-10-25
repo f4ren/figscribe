@@ -106,6 +106,7 @@ FIELD_NAMES = {
     "colorbar": "Color bar",
     "path": "File",
     "sha256": "Fingerprint",
+    "row_count": "Rows of data",
     "delimiter": "Separator",
     "decimal": "Decimal mark",
     "header_row": "Header line (first = 0)",

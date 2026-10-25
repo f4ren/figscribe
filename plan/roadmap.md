@@ -105,6 +105,16 @@ same action. Record the decision (changes 0007).
 
 *Done when:* GUI tests cover changed, missing, and changed-with-lost-columns.
 
+**Done** (2026-10-24, decision 0007): `io/refresh.py` builds the commands,
+`gui/databar.py` is the bar, `use_new_data_version` the tool. Sources record
+`row_count` on import. *Learned:* `rows` as the field name collided with
+`GridLayout.rows` in the property panel, which matches read-only fields by
+name. Qt does not show widgets added to an already visible one, so the bar's
+rows appeared empty in a shown window while tests of a hidden one passed;
+the tests now show the window and only count visible labels and buttons.
+*Follow-up:* the preview's own message still says "Cannot draw the figure";
+it could point at the bar instead.
+
 ### B3 Text files from older instruments fail to import (verified) — S
 
 *Repro:* a CSV in cp1252/Latin-1 with `µ` in the header: `csv_source` raises a

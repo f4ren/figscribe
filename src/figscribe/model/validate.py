@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import pairwise
+from pathlib import Path
 
 from figscribe.model.artists import (
     ArtistBase,
@@ -28,7 +29,7 @@ from figscribe.model.artists import (
     ScatterPlot,
 )
 from figscribe.model.axes import Axes
-from figscribe.model.data import ArrayRef, ColumnRef, CsvSource
+from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource
 from figscribe.model.figure import Figure
 from figscribe.model.project import Project
 
@@ -54,6 +55,7 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
     """Return every cross-object problem in `project`, empty list if sound."""
     issues: list[ReferenceIssue] = []
     source_ids = {s.id for s in project.sources}
+    sources = {s.id: s for s in project.sources}
 
     _check_unique_ids(project, issues)
 
@@ -104,6 +106,17 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                                 f"{tpath}.{field}",
                                 artist.id,
                                 f"references unknown data source {ref!r}",
+                            )
+                        )
+                for field, column in _columns(artist):
+                    source = sources.get(column.source)
+                    if source is not None and _lacks(source, column):
+                        issues.append(
+                            ReferenceIssue(
+                                f"{tpath}.{field}",
+                                artist.id,
+                                f"uses the column {column.column!r}, which "
+                                f"{Path(source.path).name} does not have",
                             )
                         )
 
@@ -158,6 +171,38 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                         )
 
     return issues
+
+
+def missing_columns(project: Project) -> list[tuple[ArtistBase, str, ColumnRef]]:
+    """(plot, field, reference) for every column a plot uses by name that its
+    data file does not have, e.g. after the file changed."""
+    sources = {s.id: s for s in project.sources}
+    return [
+        (artist, field, column)
+        for figure in project.figures
+        for axes in figure.axes
+        for artist in axes.artists
+        for field, column in _columns(artist)
+        if column.source in sources and _lacks(sources[column.source], column)
+    ]
+
+
+def _columns(artist: ArtistBase) -> list[tuple[str, ColumnRef]]:
+    return [
+        (name, value)
+        for name in type(artist).model_fields
+        if isinstance(value := getattr(artist, name), ColumnRef)
+    ]
+
+
+def _lacks(source: DataSource, column: ColumnRef) -> bool:
+    """Whether `column` names a column the source's file does not have; files
+    without column names are addressed by number and not checked here."""
+    return (
+        isinstance(column.column, str)
+        and bool(source.columns)
+        and column.column not in source.columns
+    )
 
 
 def _data_refs(artist: ArtistBase) -> list[tuple[str, str]]:

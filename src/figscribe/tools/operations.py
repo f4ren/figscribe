@@ -38,6 +38,7 @@ from figscribe.commands import (
 from figscribe.commands.core import ITEM_FIELDS, walk
 from figscribe.fit import FitError, add_fit, refit
 from figscribe.io import DataError
+from figscribe.io.refresh import source_state, use_new_version
 from figscribe.model import (
     Axes,
     DataSource,
@@ -53,7 +54,7 @@ from figscribe.render.figure import style_context, tick_ranges
 from figscribe.render.ticks import too_many_ticks
 from figscribe.tools.workspace import Workspace, column_choices
 
-PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns"})
+PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns", "row_count"})
 """Set by importing a file in figscribe; a tool must not point a source
 elsewhere on the machine. How a file is read (delimiter, header...) may change."""
 
@@ -242,6 +243,21 @@ class Toolbox:
         info["ids"] = ids
         return info
 
+    def tool_use_new_data_version(self, source_id: str) -> dict[str, Any]:
+        source = find(self.workspace.project, source_id)
+        if not _is_source(source):
+            raise ToolError(f"{source_id!r} is not a data source")
+        name = Path(source.path).name
+        state = source_state(source, self.workspace.base_dir)
+        if state == "ok":
+            raise ToolError(f"{name} has not changed since it was imported")
+        if state == "missing":
+            raise ToolError(f"{name} is missing; only the user can locate it")
+        command = use_new_version(
+            self.workspace.project, source_id, self.workspace.base_dir
+        )
+        return self._push(command, {})
+
     def tool_undo(self) -> dict[str, Any]:
         history = self.workspace.history
         if not history.can_undo:
@@ -311,7 +327,18 @@ class Toolbox:
         return problems
 
     def _problems(self) -> list[str]:
-        return [str(issue) for issue in validate_references(self.workspace.project)]
+        problems = [str(issue) for issue in validate_references(self.workspace.project)]
+        for source in self.workspace.project.sources:
+            name = Path(source.path).name
+            state = source_state(source, self.workspace.base_dir)
+            if state == "changed":
+                problems.append(
+                    f"{name} has changed since it was imported; "
+                    "use_new_data_version takes it as it is now"
+                )
+            elif state == "missing":
+                problems.append(f"{name} is missing; the user can locate it")
+        return problems
 
 
 # --- building commands ---------------------------------------------------------

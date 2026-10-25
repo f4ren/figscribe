@@ -104,6 +104,7 @@ QListWidget#problems {{
     background: {WARN_SOFT}; border: 0; border-top: 1px solid #EAD9BC; color: {INK};
 }}
 QListWidget#problems::item {{ padding: 6px 10px; }}
+QWidget#dataBar {{ background: {WARN_SOFT}; border-bottom: 1px solid #EAD9BC; }}
 
 QLineEdit, QComboBox, QSpinBox {{
     background: {SURFACE}; border: 1px solid {CONTROL_BORDER}; border-radius: 6px;

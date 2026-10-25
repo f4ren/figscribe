@@ -82,7 +82,7 @@ SKIPPED = {
 """Fields with no editor here: identity, item lists (edited in the outline),
 and values that need a dedicated editor (fits, histogram bins)."""
 
-READ_ONLY = {"path", "sha256", "target", "parent"}
+READ_ONLY = {"path", "sha256", "row_count", "target", "parent"}
 """Shown, but changed only through their own actions (re-import, refit)."""
 
 COLOR_FIELDS = {"color", "edgecolor", "grid_color"}
@@ -1024,6 +1024,8 @@ def _section_name(name: str) -> str:
 def _read_only_text(name: str, value: Any, document: Document) -> str:
     if name == "sha256":
         return f"{value[:12]}…"
+    if name == "row_count" and value is None:
+        return "not recorded"  # imported before figscribe counted rows
     if name == "parent":
         for figure in document.project.figures:
             for axes in figure.axes:

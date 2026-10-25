@@ -243,6 +243,20 @@ TOOLS: list[ToolSpec] = [
         changes_project=True,
     ),
     ToolSpec(
+        "use_new_data_version",
+        "Take a data file that changed since it was imported as it is now: "
+        "figscribe hashes it again and reads its columns and rows, keeping how "
+        "it is read. Only for a file get_project lists as changed; plots of "
+        "columns the new version lacks come back as problems.",
+        {
+            "type": "object",
+            "properties": {"source_id": {"type": "string"}},
+            "required": ["source_id"],
+            "additionalProperties": False,
+        },
+        changes_project=True,
+    ),
+    ToolSpec(
         "undo",
         "Undo the most recent change in figscribe, whoever made it. Use it to "
         "take back a change of yours that turned out wrong.",
