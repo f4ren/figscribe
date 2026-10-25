@@ -52,6 +52,17 @@ reproduction is given so a session can turn it into a failing test first.
    migration with a stored example file of the old version (see `_migrate` in
    `model/project.py`), unless the new field has a default and no released file
    predates it — say which in the pull request.
+10. **Every GUI element is tested the way a person uses it.** A pull request
+    that adds or changes a widget, dialog or action covers it in the field
+    test or an operation test of task B8, and goes through the manual
+    checklist in `docs/testing.md` if it changes what is seen. Tests click
+    (`click()`, `activated`, `editingFinished`, `QTest` mouse events); they do
+    not call `setChecked()` or `setCurrentIndex()` alone, which skips the code
+    a real click runs.
+11. **Others work on the same plan.** Before starting a task, look for a
+    branch or pull request that already works on it (`git fetch`,
+    `gh pr list`), and open a draft pull request as soon as the branch is
+    pushed, so the next session sees it.
 
 Sizes: **S** is up to half a day, **M** a day or two, **L** more; split an L
 into pull requests that each leave `develop` working.
@@ -227,6 +238,69 @@ they find.
 6. **Code generator**: every project in `examples/` and every bench case
    through the equivalence test (some bench cases may not be covered yet).
 
+### B8 Every GUI element is tested the way a person uses it (verified) — M
+
+*Now:* GUI tests set widgets directly (`setChecked`, `setCurrentIndex`), so
+code that only a real click runs is never tested. On 2026-10-25 a probe
+operated each of the 56 editors of the property panel on the example project
+like a user (click a box, pick an entry, type and press Enter) and checked:
+the model changes, the figure still draws, the image changes, undo restores
+the project. It found:
+
+1. **Crash** (verified): clicking "Right y axis" on a panel kills the
+   application with a segmentation fault, on `develop` too. The click adds an
+   optional part, `PropertyPanel.rebuild` builds a new form, and `setWidget()`
+   deletes the old one, with the box whose click Qt is still handling. "Color
+   bar" goes the same way. Fix: `takeWidget()` and `deleteLater()` the old form,
+   as `gui/databar.py` does. Look for the same pattern elsewhere (forms that
+   rebuild from a signal of one of their own widgets).
+2. **Values that break the figure are accepted** (verified): resolution `2`
+   dpi (FreeType: "invalid ppem value"), style sheet `2` (unknown style), row
+   or column `2` in a 1 × 1 grid (GridSpec IndexError). The command takes them
+   and the preview shows the error afterwards. Refuse them in the command with
+   a plain message, as B4 does for colors; give `dpi` a sensible lower bound.
+3. **Format fields of a data source** (verified): a separator, decimal mark or
+   comment mark that makes the file unreadable is taken, and the figure
+   breaks. Read the file with the new setting first and refuse it with the
+   reason, as B2's "Use the new version" does.
+4. **Settings without effect, without a hint** (verified): while "Grid lines"
+   is off, the grid's axes, tick choice and color do nothing; "Grid lines at:
+   minor ticks" shows nothing while the axis has its minor ticks switched off.
+   Disable such fields or say why they do nothing (relates to U2).
+5. **Missing API key** (verified, by hand): "Load models" in the assistant
+   settings with Claude and no key anywhere prints a traceback to the terminal
+   and shows nothing in the dialog. The Anthropic SDK raises a `TypeError`
+   ("Could not resolve authentication method") before any request, which
+   `_Translate` in `assistant/chat.py` does not map. Say "No valid API key …"
+   as for an invalid one. Check sending a chat message without a key too.
+
+*Do*, so that a GUI change is tested again on every pull request:
+
+1. **A field test**, the probe as a pytest module: one test per editor of the
+   property panel and per field of the axis form, over a fixture project that
+   has every kind of object (each plot type, a 2 × 2 grid, an inset, a right
+   axis, a color bar, a fit, a note, CSV and NumPy sources). It operates the
+   editor like a user and checks: no crash, the model changes, undo restores,
+   the figure draws, the image changes. Since the panel is generated from the
+   model, a new field is in the test without anyone adding it. Fields that
+   rightly change nothing visible in the fixture are listed with the reason,
+   as U1 lists fields without an editor; that list shows the settings of item
+   4. A crash takes the test run down: run each editor in a subprocess, or
+   accept that a crash fails CI and say so.
+2. **Operation tests for what is not generated**: axis form, import, plot,
+   fit and assistant dialogs, the outline's context menus, the data bar, the
+   preview's zoom, pan and legend drag. Plus one test that triggers every
+   `QAction` of the main window once on the fixture project: no exception, no
+   raw message. A new action or dialog missing from the list fails the test,
+   like U1.
+3. **A manual checklist** in `docs/testing.md`, about 15 minutes, for what a
+   test cannot judge: the result looks right; real mouse and trackpad on macOS
+   and Windows; high DPI; dark mode; small window. Run before every release
+   (part of B7) and for every pull request that changes what is seen.
+
+*Done when:* items 1 to 5 above have failing tests and fixes; the field test
+and the action test run in CI; `docs/testing.md` exists; how-to rule 10 holds.
+
 ---
 
 ## Phase 1 — The settings: complete, tidy, easy to find
@@ -378,6 +452,34 @@ In order of demand:
 4. **Frame**: hide the top/right spines; offset spines.
 5. `[decide]` **Date and time** axes for logged data.
 6. `[later]` Broken axes.
+7. `[decide]` **Which side an axis is on.** Matplotlib has four cases, and
+   figscribe covers two:
+
+   | Case | Matplotlib | figscribe |
+   |---|---|---|
+   | Tick marks on all sides, numbers only on one | `tick_params(top=True, right=True)` | `Figure.ticks_all_sides`, per figure |
+   | The same axis, with numbers and label, on the other side | `yaxis.tick_right()`, `set_label_position("right")` | missing |
+   | The same numbers on both sides | `tick_params(labelright=True)` | missing |
+   | A second axis with its own scale and data | `twinx()` / `twiny()` | `Axes.y_right`; none on top |
+
+   Proposal: keep placement and a second axis apart. `AxisSpec` gets `side`:
+   `"left"`, `"right"` or `"both"` for y, `"bottom"`, `"top"` or `"both"` for
+   x, set per panel, since in a grid with `share_y` the right column often
+   wants its labels on the right. `y_right` stays the second axis with its own
+   scale. While a panel has one, the right side is its: the command and
+   `validate_references` refuse `side="right"` or `"both"` for y with a plain
+   message, as B4 does. In the axis form a choice "Side: left / right / both",
+   apart from the box "Second y axis with its own scale", whose tooltip says
+   the difference. Nothing like it exists in the code yet (checked
+   2026-10-25: no field, no `tick_right` or `set_label_position` in the
+   renderer or the code generator). Questions:
+   1. Are left/right/both enough, or also "label left, numbers right"?
+      Proposed: enough; the split is rare.
+   2. A second, independent x axis on top (`x_top`, `twiny`) along with it,
+      like `y_right`? Not the same as item 3, which converts the bottom axis
+      (`secondary_xaxis`); decide whether both are wanted.
+   3. Adding a second y axis while `side="right"` is set: refuse and explain,
+      or move the side back to the left? Proposed: refuse and explain.
 
 ### F6 Several files as one series — M
 
@@ -538,6 +640,7 @@ answer in `docs/decisions.md` when the task is started.
 | U2 | Marker size: change the model field for points to a size in pt (schema bump), or convert only in the panel? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
+| F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F10 | Scale/offset per column, smoothing, peak finding: in scope or not? |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
