@@ -27,8 +27,9 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.gui import theme
+from figscribe.gui.names import ENCODINGS
 from figscribe.gui.widgets import label
-from figscribe.io.csvfile import ENCODING, csv_source, read_csv
+from figscribe.io.csvfile import csv_source, detect_encoding, read_csv
 from figscribe.io.errors import DataError
 from figscribe.model import CsvSource
 from figscribe.suggest import Suggestion, error_columns, suggest, units_line
@@ -114,7 +115,9 @@ class ImportDialog(QDialog):
         self.path = Path(path)
         self.base_dir = base_dir
         self.setWindowTitle(f"Add {self.path.name}")
-        self._text = self.path.read_bytes().decode(ENCODING, errors="replace")
+        self._raw = self.path.read_bytes()
+        encoding = detect_encoding(self._raw)
+        self._text = self._raw.decode(encoding)
         self._source: CsvSource | None = None
         self.units: list[str] | None = None
         """One unit per column, from a line of units below the header."""
@@ -137,6 +140,10 @@ class ImportDialog(QDialog):
         self.comment = QLineEdit()
         self.comment.setPlaceholderText("none")
         self.comment.setMaxLength(3)
+        self.encoding = QComboBox()
+        for text, value in ENCODINGS:
+            self.encoding.addItem(text, value)
+        self.encoding.setCurrentIndex(self.encoding.findData(encoding))
 
         header = QWidget()
         row = QHBoxLayout(header)
@@ -153,6 +160,7 @@ class ImportDialog(QDialog):
         form.addRow("Header", header)
         form.addRow("Lines skipped after it", self.skip_rows)
         form.addRow("Comments start with", self.comment)
+        form.addRow("Text encoding", self.encoding)
         self.settings.hide()
 
         self.chips = QHBoxLayout()
@@ -201,6 +209,7 @@ class ImportDialog(QDialog):
             widget.valueChanged.connect(self.update_preview)
         self.has_header.toggled.connect(self.update_preview)
         self.comment.textChanged.connect(self.update_preview)
+        self.encoding.currentIndexChanged.connect(self._set_encoding)
         self.update_preview()
 
     def _layout(self, form: QFormLayout) -> None:
@@ -276,7 +285,13 @@ class ImportDialog(QDialog):
             else None,
             "skip_rows": self.skip_rows.value(),
             "comment": self.comment.text() or None,
+            "encoding": self.encoding.currentData(),
         }
+
+    def _set_encoding(self) -> None:
+        # Undecodable bytes become � for the units line; the preview reports them.
+        self._text = self._raw.decode(self.encoding.currentData(), errors="replace")
+        self.update_preview()
 
     def source(self) -> CsvSource | None:
         """The file as the model will record it; None while it does not parse."""
@@ -329,7 +344,7 @@ class ImportDialog(QDialog):
             )
             if self.base_dir is None:
                 source = source.model_copy(update={"path": str(self.path.resolve())})
-            table = read_csv(source, self._text, self.path.name)
+            table = read_csv(source, self._raw, self.path.name)
         except (DataError, ValueError) as exc:
             self.error.setText(str(exc))
             self.table.clear()
@@ -427,6 +442,8 @@ class ImportDialog(QDialog):
                 texts.append(f"{options['skip_rows']} lines skipped")
         if options["comment"]:
             texts.append(f"{options['comment']} comments")
+        if options["encoding"] != "utf-8-sig":
+            texts.append(f"{self.encoding.currentText()} text")
         for text in texts:
             chip = QToolButton()
             chip.setObjectName("pill")

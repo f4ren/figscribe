@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from figscribe.io.csvfile import ENCODING, read_csv
+from figscribe.io.csvfile import read_csv
 from figscribe.io.errors import DataChangedError, DataError
 from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import read_numpy
@@ -73,7 +73,7 @@ def _load(source: DataSource, base_dir: str | Path, key: str | None) -> np.ndarr
         raise DataChangedError(f"{path} has changed since it was imported")
     if isinstance(source, NumpySource):
         return read_numpy(source, raw, str(path), key)
-    return read_csv(source, raw.decode(ENCODING), str(path))
+    return read_csv(source, raw, str(path))
 
 
 def _column_index(source: DataSource, column: str | int, width: int) -> int:

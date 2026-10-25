@@ -269,6 +269,23 @@ def test_font_size_with_a_style_sheet(tmp_path: Path) -> None:
     _assert_same(project, tmp_path)
 
 
+def test_a_windows_file_keeps_its_encoding(tmp_path: Path) -> None:
+    text = "t;I (µA)\n0;1,5\n1;2,5\n2;2\n"
+    (tmp_path / "old.csv").write_bytes(text.encode("cp1252"))
+    source = csv_source(
+        tmp_path / "old.csv", tmp_path, delimiter=";", decimal=",", encoding="cp1252"
+    )
+    ref = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    axes = Axes(artists=[LinePlot(x=ref["t"], y=ref["I (µA)"])])
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[axes])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert 'encoding="cp1252"' in script
+
+
 def test_histograms_and_notes(tmp_path: Path) -> None:
     from figscribe.model import Annotation, Histogram
 
