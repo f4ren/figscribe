@@ -99,12 +99,12 @@ def test_delete_removes_a_selected_axes(window: MainWindow) -> None:
 
 
 def test_problems_appear_and_select_their_object(window: MainWindow) -> None:
-    axes = window.document.project.figures[0].axes[0]
-    window.document.push(SetField(axes.id, ("row",), 3))  # outside the 1x1 grid
+    figure = window.document.project.figures[0]  # two ratios for one column
+    window.document.push(SetField(figure.id, ("layout", "width_ratios"), [1.0, 2.0]))
     assert window.problems.count() == 1
     item = window.problems.item(0)
     window.problems.itemClicked.emit(item)
-    assert window.document.selected == axes.id
+    assert window.document.selected == figure.id
 
 
 def test_new_asks_before_discarding_changes(window: MainWindow) -> None:

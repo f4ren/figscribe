@@ -79,6 +79,8 @@ def validate_references(
     for fi, figure in enumerate(project.figures):
         fpath = f"figures[{fi}]"
         _check_grid(figure, fpath, issues)
+        for field, why in style_problems(figure):
+            issues.append(ReferenceIssue(f"{fpath}.{field}", figure.id, why))
 
         fit_ids = {
             a.id
@@ -315,17 +317,31 @@ def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None
 
     in_grid = {a.id for a in figure.axes if a.inset is None}
     for ai, axes in enumerate(figure.axes):
-        if axes.inset is not None:
-            if axes.inset.parent not in in_grid:
-                issues.append(
-                    ReferenceIssue(
-                        f"{path}.axes[{ai}].inset.parent",
-                        axes.id,
-                        f"sits in {axes.inset.parent!r}, which is not a panel "
-                        "in this figure's grid",
-                    )
+        if axes.inset is not None and axes.inset.parent not in in_grid:
+            issues.append(
+                ReferenceIssue(
+                    f"{path}.axes[{ai}].inset.parent",
+                    axes.id,
+                    f"sits in {axes.inset.parent!r}, which is not a panel "
+                    "in this figure's grid",
                 )
-            continue
+            )
+    _check_spans(figure, path, issues)
+
+
+def outside_the_grid(project: Project) -> list[ReferenceIssue]:
+    """Panels that reach beyond their figure's grid, which cannot be drawn."""
+    issues: list[ReferenceIssue] = []
+    for fi, figure in enumerate(project.figures):
+        _check_spans(figure, f"figures[{fi}]", issues)
+    return issues
+
+
+def _check_spans(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None:
+    layout = figure.layout
+    for ai, axes in enumerate(figure.axes):
+        if axes.inset is not None:
+            continue  # an inset is placed by its bounds
         if axes.row + axes.rowspan > layout.rows:
             issues.append(
                 ReferenceIssue(

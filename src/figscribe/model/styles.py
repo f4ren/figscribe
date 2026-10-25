@@ -1,5 +1,5 @@
-"""Style strings Matplotlib accepts: colors, markers, line styles, color maps
-and legend locations.
+"""Style strings Matplotlib accepts: colors, markers, line styles, color maps,
+legend locations and style sheets.
 
 The model keeps them as plain strings, since Matplotlib accepts many forms.
 The commands check them when they are set, so that a bad one is refused in
@@ -20,6 +20,7 @@ KINDS = {
     "linestyle": "line style",
     "cmap": "color map",
     "location": "legend location",
+    "stylesheet": "style sheet",
 }
 """Style fields of the model, by name, and what they hold."""
 
@@ -29,6 +30,8 @@ EXAMPLES = {
     "line style": "use -, --, -., : or none",
     "color map": "use for example viridis, magma or gray",
     "legend location": "use for example best, upper right or lower left",
+    "style sheet": "use a name such as classic or ggplot, or the path of an "
+    ".mplstyle file",
 }
 
 
@@ -67,6 +70,13 @@ def _accepted(kind: str, value: str) -> bool:
         from matplotlib.legend import Legend
 
         return value in Legend.codes
+    if kind == "style sheet":
+        # A file is looked for when the figure is drawn, next to the project.
+        if value.lower().endswith(".mplstyle"):
+            return True
+        import matplotlib.style
+
+        return value in matplotlib.style.available
     from matplotlib.lines import Line2D
 
     keyword = "marker" if kind == "marker" else "linestyle"

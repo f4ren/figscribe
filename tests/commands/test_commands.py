@@ -187,11 +187,11 @@ def test_a_change_that_puts_a_panel_outside_the_grid_is_refused(
     figure, top, bottom, *_ = _ids(project)  # a 2 x 1 grid, one panel per row
     history = History(project)
     before = dumps(project)
-    with pytest.raises(CommandError, match="spans rows 2-2, but the grid has 2"):
+    with pytest.raises(CommandError, match="outside the grid of 2 rows and 1 col"):
         history.push(SetField(bottom, ("row",), 2))
-    with pytest.raises(CommandError, match="spans columns 1-1, but the grid has 1"):
+    with pytest.raises(CommandError, match="outside the grid of 2 rows"):
         history.push(SetField(top, ("col",), 1))
-    with pytest.raises(CommandError, match="spans rows 1-1, but the grid has 1"):
+    with pytest.raises(CommandError, match="outside the grid of 1 row and 1 column"):
         history.push(SetField(figure, ("layout", "rows"), 1))
     assert dumps(project) == before and not history.can_undo
     # A macro is judged as a whole: grow the grid, then move the panel there.

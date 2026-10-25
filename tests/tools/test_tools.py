@@ -128,7 +128,7 @@ def test_set_field_is_strict(tools, workspace) -> None:
     figure, *_ = _ids(workspace)
     with pytest.raises(ToolError, match="valid number"):
         tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": "300"})
-    with pytest.raises(ToolError, match="greater than 0"):
+    with pytest.raises(ToolError, match="greater than or equal to 72"):
         tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": -1})
     tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": 150})
     assert workspace.project.figures[0].dpi == 150.0
@@ -192,9 +192,18 @@ def test_set_field_refuses_bad_addresses(
 
 
 def test_problems_are_reported_after_a_change(tools, workspace) -> None:
-    _, axes, _, _ = _ids(workspace)
-    result = tools.call("set_field", {"object_id": axes, "path": ["row"], "value": 4})
+    figure, *_ = _ids(workspace)
+    path = ["layout", "width_ratios"]  # two ratios for one column
+    result = tools.call(
+        "set_field", {"object_id": figure, "path": path, "value": [1.0, 2.0]}
+    )
     assert result["problems"] and "grid" in result["problems"][0]
+
+
+def test_a_panel_outside_the_grid_is_refused(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    with pytest.raises(ToolError, match="outside the grid"):
+        tools.call("set_field", {"object_id": axes, "path": ["row"], "value": 4})
 
 
 # --- insert, remove, move ------------------------------------------------------
