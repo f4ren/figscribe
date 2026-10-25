@@ -135,6 +135,15 @@ def run_fit(
     )
 
 
+def in_range(x, fit_range: tuple[float, float] | None) -> np.ndarray:
+    """Which points a fit over `fit_range` uses; all of them for None."""
+    x = np.asarray(x, dtype=float)
+    if fit_range is None:
+        return np.ones(x.shape, dtype=bool)
+    low, high = fit_range
+    return (x >= low) & (x <= high)
+
+
 def within(
     values: Mapping[str, float],
     bounds: Mapping[str, tuple[float | None, float | None]],

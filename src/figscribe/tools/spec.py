@@ -64,6 +64,14 @@ _FIT_FIELDS = {
         "description": "Parameters held at their start value instead of fitted; "
         "give that value in initial_values",
     },
+    "fit_range": {
+        "type": ["array", "null"],
+        "items": {"type": "number"},
+        "minItems": 2,
+        "maxItems": 2,
+        "description": "[lower, upper] of x: only the points within are fitted; "
+        "omitted fits all",
+    },
     "bounds": {
         "type": "object",
         "additionalProperties": {

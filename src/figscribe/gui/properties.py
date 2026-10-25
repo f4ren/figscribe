@@ -82,6 +82,7 @@ SKIPPED = {
     "columns": "read from the file on import and listed in the outline",
     "model": "chosen in the fit dialog",
     "initial_values": "set in the fit dialog",
+    "fit_range": "set in the fit dialog, since the fit is run again",
     "fixed": "set in the fit dialog, beside the start values",
     "parameter_bounds": "set in the fit dialog, beside the start values",
     "result": "computed by the fit and shown in the fit dialog",
@@ -290,6 +291,8 @@ PLACEHOLDERS = {
 }
 
 TIPS = {
+    "extend_curve": "Draw the fitted curve across all the data, not only over the "
+    "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",
     "width_mm": "Width of the whole figure as printed; 85 mm is a typical "
     "single journal column, 175 mm a double one.",

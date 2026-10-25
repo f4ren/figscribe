@@ -1,7 +1,7 @@
 """The fit dialog: pick a model, see the result at once, add it to the figure.
 
-Every change of model, start value, held parameter or bound fits again right
-away, on the data of the target plot, without touching the project; only
+Every change of model, start value, held parameter, bound or fit range fits
+again right away, on the data of the target plot, without touching the project; only
 "Add fit" pushes the FitCurve (and its residual panel) as one undo step.
 """
 
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from figscribe.fit import (
     FitError,
     free_names,
+    in_range,
     initial_guess,
     parameter_names,
     run_fit,
@@ -95,6 +96,12 @@ class FitDialog(QDialog):
         self.formula = label("", "value")
         self.label = QLineEdit()
         self.label.setPlaceholderText("not in the legend")
+        self.range_low, self.range_high = _bound("all"), _bound("all")
+        for end in (self.range_low, self.range_high):
+            end.setToolTip("Only the points with x in this range are fitted.")
+            end.editingFinished.connect(self._range_changed)
+        self.extend = QCheckBox("Draw the curve across all the data")
+        self.extend.setToolTip("Otherwise the curve spans only the fit range.")
         self.residuals = QCheckBox("Show the residuals in a panel below")
         self.residuals.setChecked(residuals_default)
         self.error = label("", "error")
@@ -129,7 +136,9 @@ class FitDialog(QDialog):
         top.setContentsMargins(24, 20, 24, 16)
         top.setSpacing(4)
         top.addWidget(label(f"Fit {artist_name(self.target)}", "dialogTitle"))
-        top.addWidget(label(f"{len(self.x)} points · {weighting}", "caption"))
+        self._weighting = weighting
+        self.points = label(f"{len(self.x)} points · {weighting}", "caption")
+        top.addWidget(self.points)
 
         choices = QVBoxLayout()
         choices.setSpacing(6)
@@ -154,6 +163,13 @@ class FitDialog(QDialog):
         self._details.addRow(_caption("Formula"), self.formula)
         self._details.addRow(_caption("Degree"), self.degree)
         self._details.addRow(_caption("Formula in x"), self.expression)
+        span = QHBoxLayout()
+        span.setSpacing(8)
+        span.addWidget(self.range_low, 1)
+        span.addWidget(label("to", "caption"))
+        span.addWidget(self.range_high, 1)
+        span.addWidget(self.extend)
+        self._details.addRow(_caption("Fit x from"), span)
         self._start_form.setHorizontalSpacing(12)
         card = QFrame()
         card.setObjectName("card")
@@ -206,6 +222,10 @@ class FitDialog(QDialog):
         self.residuals.hide()  # its residuals, if any, stay as they are
         self.label.setText(fit.label or "")
         self.label.setModified(True)  # not replaced by the model's name
+        if fit.fit_range is not None:
+            self.range_low.setText(f"{fit.fit_range[0]:.6g}")
+            self.range_high.setText(f"{fit.fit_range[1]:.6g}")
+        self.extend.setChecked(fit.extend_curve)
         if isinstance(fit.model, ExpressionFit):
             self.expression.setText(fit.model.expression)
             key = "expression"
@@ -270,7 +290,8 @@ class FitDialog(QDialog):
             return
         if key != "expression":
             self.formula.setText(source_of(model)[0])
-        self._guessed = initial_guess(model, self.x, self.y)
+        x, y, _ = self._used()
+        self._guessed = initial_guess(model, x, y)
         self._fill_start(names)
         self.refit()
 
@@ -304,6 +325,46 @@ class FitDialog(QDialog):
     def _guess_again(self) -> None:
         for name, line in self.start.items():
             line.setText(f"{self._guessed.get(name, 1.0):.6g}")
+        self.refit()
+
+    def fit_range(self) -> tuple[float, float] | None:
+        """The typed range of x to fit; None for all the points."""
+        texts = [self.range_low.text().strip(), self.range_high.text().strip()]
+        if not any(texts):
+            return None
+        if not all(texts):
+            raise FitError("enter both ends of the fit range, or neither")
+        try:
+            low, high = (number(text) for text in texts)
+        except ValueError as exc:
+            raise FitError(f"the fit range: {exc}") from None
+        if not low < high:
+            raise FitError("the lower end of the fit range is not below the upper")
+        return low, high
+
+    def _used(self):
+        """x, y and y errors of the points the fit uses."""
+        try:
+            used = in_range(self.x, self.fit_range())
+        except FitError:
+            used = in_range(self.x, None)
+        yerr = None if self.yerr is None else self.yerr[used]
+        return self.x[used], self.y[used], yerr
+
+    def _range_changed(self) -> None:
+        """Guess again from the points now in range, for every start value the
+        user has not typed; then fit."""
+        try:
+            model = self.model()
+        except (FitError, ValueError):
+            self.refit()
+            return
+        x, y, _ = self._used()
+        if len(x):
+            self._guessed = initial_guess(model, x, y)
+            for name, line in self.start.items():
+                if not line.isModified() and name in self._guessed:
+                    line.setText(f"{self._guessed[name]:.6g}")
         self.refit()
 
     def held(self) -> list[str]:
@@ -344,12 +405,15 @@ class FitDialog(QDialog):
         try:
             model = self.model()
             self._guesses_within(self.bounds())
+            self.fit_range()  # refused here with its own message
+            x, y, yerr = self._used()
+            self.points.setText(self._count(len(x)))
             result = run_fit(
                 model,
                 self.start_values(),
-                self.x,
-                self.y,
-                self.yerr,
+                x,
+                y,
+                yerr,
                 fixed=self.held(),
                 bounds=self.bounds(),
             )
@@ -388,9 +452,16 @@ class FitDialog(QDialog):
             initial_values=self.start_values(),
             fixed=self.held(),
             parameter_bounds=self.bounds(),
+            fit_range=self.fit_range(),
+            extend_curve=self.extend.isChecked(),
             result=self.result,
             label=self.label.text().strip() or None,
         )
+
+    def _count(self, used: int) -> str:
+        total = len(self.x)
+        points = f"{total} points" if used == total else f"{used} of {total} points"
+        return f"{points} · {self._weighting}"
 
     def _show_error(self, message: str) -> None:
         self.result = None
@@ -412,7 +483,7 @@ class FitDialog(QDialog):
         row = len(result.parameters)
         if result.reduced_chi_square is not None:
             self._result_grid.addWidget(label("χ²ᵣ", "value"), row, 0)
-            chi = f"{result.reduced_chi_square:.2f} · {len(self.x)} points"
+            chi = f"{result.reduced_chi_square:.2f} · {len(self._used()[0])} points"
             self._result_grid.addWidget(label(chi, "value"), row, 1)
         self._result_grid.setColumnStretch(1, 1)
 

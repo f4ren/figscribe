@@ -156,6 +156,23 @@ def test_a_histogram_of_one_value(tmp_path: Path) -> None:
     _assert_same(project, tmp_path)
 
 
+@pytest.mark.parametrize("extend", [False, True])
+def test_a_fit_over_part_of_the_data(tmp_path: Path, extend: bool) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(2.5, 7.5),
+        extend_curve=extend,
+    )
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "in_range = (t >= 2.5) & (t <= 7.5)" in script
+
+
 def test_many_settings(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     left = Axes(

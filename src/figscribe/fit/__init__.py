@@ -15,6 +15,7 @@ from figscribe.fit.ops import add_fit, refit, update_fit
 from figscribe.fit.run import (
     evaluate,
     free_parameters,
+    in_range,
     initial_guess,
     numpy_source,
     parameter_names,
@@ -31,6 +32,7 @@ __all__ = [
     "evaluate",
     "free_names",
     "free_parameters",
+    "in_range",
     "initial_guess",
     "numpy_source",
     "parameter_names",

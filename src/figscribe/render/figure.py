@@ -423,7 +423,8 @@ def _draw_fit(
     artists: Mapping[str, Artist],
     common: dict,
 ) -> None:
-    """The fitted model across the range of its data; nothing before a fit."""
+    """The fitted model across its fit range, where there is data, or across
+    all the data; nothing before a fit."""
     from figscribe.fit import evaluate
 
     target = _referenced(artists, fit.target, FITTABLE, "fit")
@@ -433,7 +434,12 @@ def _draw_fit(
     x = x[np.isfinite(x)]
     if x.size == 0:
         return
-    xs = np.linspace(x.min(), x.max(), CURVE_POINTS)
+    low, high = float(x.min()), float(x.max())
+    if fit.fit_range is not None and not fit.extend_curve:
+        low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
+        if not low < high:
+            return
+    xs = np.linspace(low, high, CURVE_POINTS)
     ys = evaluate(fit.model, fit.result.parameters, xs)
     ax.plot(
         xs,
@@ -452,9 +458,9 @@ def _draw_residuals(
     artists: Mapping[str, Artist],
     common: dict,
 ) -> None:
-    """Data minus fit at every data point, with the data's y errors, around a
-    dashed zero line."""
-    from figscribe.fit import evaluate
+    """Data minus fit at every fitted point, with the data's y errors, around
+    a dashed zero line."""
+    from figscribe.fit import evaluate, in_range
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
     target = _referenced(artists, fit.target, FITTABLE, "fit")
@@ -468,6 +474,10 @@ def _draw_residuals(
         if isinstance(target, ErrorbarPlot) and target.yerr is not None
         else None
     )
+    if fit.fit_range is not None:
+        used = in_range(x, fit.fit_range)
+        x, y = x[used], y[used]
+        yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
     container = ax.errorbar(
         x,
         y - evaluate(fit.model, fit.result.parameters, x),

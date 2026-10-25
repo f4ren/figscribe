@@ -492,6 +492,12 @@ covariance detected). Missing:
 1. **Fit range**: fit only x in [a, b], typed or dragged in the preview; stored
    on `FitCurve`, applied in the script with a mask. Draw the curve over the
    fit range or the full range (option).
+   **Typed: done** (2026-10-26, pulled forward at the user's request):
+   `FitCurve.fit_range` and `extend_curve`; the dialog fits only the points
+   in range ("17 of 41 points"), guesses untyped start values from them, and
+   draws the curve over the range where there is data unless told to span
+   all of it; residuals show the fitted points; the script uses a named mask
+   `in_range`. *Open:* dragging the range in the preview.
 2. **Fixed parameters and bounds** per parameter in the fit dialog (bounds go
    to `curve_fit(bounds=...)`, fixed ones become constants of the model).
    Asked for by the user (2026-10-25): a start value that is kept as it is.
@@ -522,6 +528,19 @@ Click points in the preview to exclude them from a plot or a fit (outliers,
 detector glitches). Stored as indices on the plot, shown hollow or grey,
 emitted in the script as a mask with a comment. Also a row range per plot
 ("rows 100 to 2 000"). The data file stays untouched.
+
+**Decided with the user (2026-10-26)**, pulled forward after F1.1:
+- Left-out points are stored **on the plot**, so every fit of it skips them,
+  and are drawn in **another color**, light grey by default; the color and,
+  if wanted, a marker of their own can be set.
+- **Finding outliers** in the fit dialog: points whose residual exceeds k·σ
+  (k = 3; σ the point's error bar, or a robust scatter (MAD) without one),
+  refitting until nothing changes. They are **proposed**, and only left out
+  once the user confirms; they then join the same list, with a note on how
+  they were found. Not a rule stored on the fit: a list stays the same when
+  fitted again and reads plainly in the script.
+- Order: leaving points out by hand (right-click a point in the preview),
+  then finding outliers.
 
 ### F3 Panel labels for journals — S
 

@@ -475,3 +475,36 @@ def test_a_tick_step_that_fits_is_kept(data) -> None:
     fig.canvas.draw()
     assert isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
     assert len(ax.xaxis.get_minorticklocs()) == 40 * 4  # four between each pair
+
+
+@pytest.mark.parametrize(
+    ("fit_range", "extend", "span"),
+    [
+        (None, False, (0.0, 10.0)),
+        ((2.0, 7.0), False, (2.0, 7.0)),
+        ((2.0, 7.0), True, (0.0, 10.0)),
+        ((-5.0, 4.0), False, (0.0, 4.0)),  # no curve where there is no data
+    ],
+)
+def test_a_fit_is_drawn_over_its_range(data, ref, fit_range, extend, span) -> None:
+    from figscribe.model import FitCurve, FitResult, PredefinedFit, ResidualPlot
+
+    points = ErrorbarPlot(x=ref("t"), y=ref("U"), yerr=ref("dU"))
+    fit = FitCurve(
+        target=points.id,
+        model=PredefinedFit(name="linear"),
+        fit_range=fit_range,
+        extend_curve=extend,
+        result=FitResult(parameters={"a": 0.1, "b": 0.0}, uncertainties={}),
+    )
+    residuals = ResidualPlot(target=fit.id)
+    figure = Figure(
+        layout=GridLayout(rows=2),
+        axes=[Axes(artists=[points, fit]), Axes(row=1, artists=[residuals])],
+    )
+    drawn = render(figure, data)
+    [curve] = [a for a in drawn.axes[0].lines if a.get_gid() == fit.id]
+    assert (curve.get_xdata().min(), curve.get_xdata().max()) == span
+    [shown] = [a for a in drawn.axes[1].lines if a.get_gid() == residuals.id]
+    low, high = fit_range or (0.0, 10.0)
+    assert shown.get_xdata().min() >= low and shown.get_xdata().max() <= high

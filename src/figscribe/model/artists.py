@@ -205,6 +205,10 @@ class FitCurve(ArtistBase):
     )
     """(lower, upper) by parameter name, None for an open end; a fitted value
     stays within them."""
+    fit_range: tuple[float, float] | None = None
+    """(lower, upper) of x: only the points within it are fitted; None fits all."""
+    extend_curve: bool = False
+    """Draw the fitted curve across all the data, not only the fit range."""
     result: FitResult | None = None
     """The outcome of the last fit; None before the first."""
     color: Color | None = None
@@ -213,6 +217,13 @@ class FitCurve(ArtistBase):
     """"-", "--", "-." or ":"."""
     linewidth: float = Field(1.5, gt=0.0)
     """Line width in pt."""
+
+    @field_validator("fit_range")
+    @classmethod
+    def _ordered(cls, fit_range):
+        if fit_range is not None and not fit_range[0] < fit_range[1]:
+            raise ValueError("the lower end of the fit range is not below the upper")
+        return fit_range
 
     @field_validator("parameter_bounds")
     @classmethod

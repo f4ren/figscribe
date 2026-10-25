@@ -225,6 +225,7 @@ class Toolbox:
         residuals: bool = False,
         fixed: list[str] | None = None,
         bounds: dict[str, tuple[float | None, float | None]] | None = None,
+        fit_range: tuple[float, float] | None = None,
     ) -> dict[str, Any]:
         command, fit_id = _fit(
             self.workspace.project,
@@ -236,6 +237,7 @@ class Toolbox:
             residuals,
             fixed,
             bounds,
+            fit_range,
         )
         info = self._push(command, {"id": fit_id})
         info["result"] = find(self.workspace.project, fit_id).result.model_dump()
@@ -439,6 +441,7 @@ def _fit(
     residuals: bool = False,
     fixed: list[str] | None = None,
     bounds: dict[str, tuple[float | None, float | None]] | None = None,
+    fit_range: tuple[float, float] | None = None,
 ) -> tuple[Macro, str]:
     """A FitCurve on `target_id`, in the target's axes, fitted at once; with
     `residuals` also their panel below, as the GUI's fit dialog makes it."""
@@ -461,6 +464,7 @@ def _fit(
         parameter_bounds=_validate(
             dict[str, tuple[float | None, float | None]], bounds or {}, "bounds"
         ),
+        fit_range=_validate(tuple[float, float] | None, fit_range, "fit_range"),
     )
     placed = add_fit(project, fit, residuals)
     staging = project.model_copy(deep=True)
