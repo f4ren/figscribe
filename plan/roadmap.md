@@ -150,6 +150,12 @@ collection; without `anthropic`/`openai`, four chat and bench tests fail.
 `pip install -e ".[dev]"`-less checkout still runs everything else. CI keeps
 installing all extras so nothing is skipped there.
 
+**Done** (2026-10-24): the three chat tests and the bench test skip without
+`openai` or `anthropic`. In `test_mcp.py` only the seven tests that use the
+`mcp` package skip; the endpoint file, the tool server and the window's
+switches are tested without it. *Learned:* the module already had an
+`importorskip("mcp")`, but below the import that failed first.
+
 ### B7 A systematic bug hunt — M, repeat before every release
 
 Each item is its own pull request; write the failing tests first and fix what
