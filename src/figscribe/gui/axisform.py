@@ -27,7 +27,7 @@ from figscribe.commands import CommandError, Macro, SetField
 from figscribe.gui.widgets import label
 from figscribe.model import AxisSpec
 from figscribe.render.labels import unit_shown
-from figscribe.render.ticks import PREFIXES
+from figscribe.render.ticks import PREFIXES, too_many_ticks
 
 if TYPE_CHECKING:
     from figscribe.gui.properties import PropertyPanel
@@ -251,6 +251,13 @@ class AxisForm:
             if getattr(self.spec, name) != value
         ]
         if not steps:
+            return
+        changed = self.spec.model_copy(update=values)
+        interval = changed.limits or self.current()
+        problem = too_many_ticks(changed, interval) if interval else None
+        if problem is not None:  # left as typed, to be corrected
+            message = problem[1]
+            self.panel.report(f"{message[0].upper()}{message[1:]}.")
             return
         title = AXIS_TITLES[self.field]
         try:

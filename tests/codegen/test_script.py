@@ -106,5 +106,22 @@ def test_the_command_line_writes_the_script(example: Path, tmp_path: Path) -> No
     assert wrong.returncode == 2 and "usage" in wrong.stderr
 
 
+def test_the_command_line_writes_the_script_without_unreadable_data(
+    example: Path, tmp_path: Path, capsys
+) -> None:
+    from figscribe.cli import _script
+    from figscribe.model import dumps
+
+    project = loads(example.read_text(encoding="utf-8"))
+    project.figures[0].axes[0].x.major_step = 2.0  # needs the data's range
+    path = tmp_path / example.name
+    path.write_text(dumps(project), encoding="utf-8")  # without its data file
+
+    assert _script([str(path)]) == 0
+    printed = capsys.readouterr()
+    assert "MultipleLocator(2)" in printed.out
+    assert "writing the script without it" in printed.err
+
+
 def _env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
