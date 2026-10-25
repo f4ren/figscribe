@@ -58,6 +58,23 @@ _FIT_FIELDS = {
         "additionalProperties": {"type": "number"},
         "description": "Start values; guessed from the data when omitted",
     },
+    "fixed": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Parameters held at their start value instead of fitted; "
+        "give that value in initial_values",
+    },
+    "bounds": {
+        "type": "object",
+        "additionalProperties": {
+            "type": "array",
+            "items": {"type": ["number", "null"]},
+            "minItems": 2,
+            "maxItems": 2,
+        },
+        "description": "[lower, upper] by parameter, null for an open end; the "
+        "fitted value stays within them",
+    },
     "residuals": {
         "type": "boolean",
         "description": "Also show the residuals in a panel below the plot, "

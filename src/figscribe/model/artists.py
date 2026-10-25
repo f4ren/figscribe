@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from figscribe.model.base import AnyFloat, Identified, StrictModel
 from figscribe.model.data import ArrayRef, ColumnRef
@@ -198,6 +198,13 @@ class FitCurve(ArtistBase):
     """The function fitted."""
     initial_values: dict[str, float] = Field(default_factory=dict)
     """Start values by parameter name; missing ones are guessed from the data."""
+    fixed: list[str] = Field(default_factory=list)
+    """Parameters held at their start value instead of fitted."""
+    parameter_bounds: dict[str, tuple[float | None, float | None]] = Field(
+        default_factory=dict
+    )
+    """(lower, upper) by parameter name, None for an open end; a fitted value
+    stays within them."""
     result: FitResult | None = None
     """The outcome of the last fit; None before the first."""
     color: Color | None = None
@@ -206,6 +213,14 @@ class FitCurve(ArtistBase):
     """"-", "--", "-." or ":"."""
     linewidth: float = Field(1.5, gt=0.0)
     """Line width in pt."""
+
+    @field_validator("parameter_bounds")
+    @classmethod
+    def _ranges(cls, bounds):
+        for name, (lower, upper) in bounds.items():
+            if lower is not None and upper is not None and not lower < upper:
+                raise ValueError(f"the lower bound of {name} is not below the upper")
+        return bounds
 
 
 class ResidualPlot(ArtistBase):

@@ -19,7 +19,7 @@ from string import ascii_lowercase
 import numpy as np
 
 from figscribe import __version__
-from figscribe.fit import numpy_source, parameter_names
+from figscribe.fit import free_parameters, numpy_source, parameter_names
 from figscribe.io.files import resolve_path
 from figscribe.model import (
     Annotation,
@@ -85,6 +85,7 @@ RESERVED = {
     "hashlib",
     "curve_fit",
     "popt",
+    "popt_free",
     "pcov",
     "perr",
     "name",
@@ -148,6 +149,8 @@ class _Writer:
         self.sources = {s.id: s for s in project.sources}
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
+        self.held: dict[str, str] = {}
+        """{fit id: name of the model with its fixed parameters held}."""
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
         self.axis_specs = self._ticks_that_fit()
@@ -242,6 +245,12 @@ class _Writer:
             taken.add(function)
             popt = "popt" if len(fits) == 1 else f"{function}_popt"
             found[fit.id] = (function, popt)
+            if fit.fixed:
+                held = f"{function}_held"
+                while held in taken:
+                    held += "_"
+                taken.add(held)
+                self.held[fit.id] = held
         return found
 
     def _name_axes(self) -> list[str]:
@@ -479,6 +488,17 @@ class _Writer:
             names = parameter_names(fit.model)
             self.emit("", f"def {function}(x, {', '.join(names)}):")
             self.emit(f"    return {numpy_source(fit.model)}", "")
+            if fit_id in self.held:
+                free = free_parameters(fit.model, fit.fixed)
+                values = {n: fit.initial_values.get(n, 1.0) for n in names}
+                held = ", ".join(f"{n} is held at {values[n]:g}" for n in fit.fixed)
+                arguments = [n if n in free else repr(float(values[n])) for n in names]
+                self.emit(
+                    "",
+                    f"# The fit varies {_and(free)}; {held}.",
+                    f"def {self.held[fit_id]}(x, {', '.join(free)}):",
+                    f"    return {function}(x, {', '.join(arguments)})",
+                )
 
     def _fits(self) -> None:
         for fit_id, (function, popt) in self.fits.items():
@@ -500,25 +520,41 @@ class _Writer:
                 )
                 x, y = f"{x}[valid]", f"{y}[valid]"
                 yerr = f"{yerr}[valid]" if yerr is not None else None
-            start = [fit.initial_values.get(n, 1.0) for n in names]
+            free = free_parameters(fit.model, fit.fixed)
+            start = [fit.initial_values.get(n, 1.0) for n in free]
             kwargs = {"p0": "[" + ", ".join(repr(float(v)) for v in start) + "]"}
+            if (bounds := _bounds(free, fit.parameter_bounds)) is not None:
+                kwargs["bounds"] = bounds
             if yerr is not None:
                 kwargs |= {"sigma": yerr, "absolute_sigma": "True"}
             pcov = "pcov" if popt == "popt" else popt.replace("popt", "pcov")
-            self.call(f"{popt}, {pcov} = curve_fit", function, x, y, **kwargs)
+            held = self.held.get(fit_id)
+            fitted = f"{popt}_free" if held else popt
+            self.call(f"{fitted}, {pcov} = curve_fit", held or function, x, y, **kwargs)
+            if held:
+                values = [
+                    f"{fitted}[{free.index(n)}]"
+                    if n in free
+                    else repr(float(fit.initial_values.get(n, 1.0)))
+                    for n in names
+                ]
+                self.emit(f"{popt} = [{', '.join(values)}]")
             result = fit.result
             if result.reduced_chi_square is not None:
                 self.emit(
                     f"# figscribe found χ²/ndf = {result.reduced_chi_square:.3g} "
                     f"for this fit."
                 )
-            labels = "[" + ", ".join(_str(n) for n in names) + "]"
+            labels = "[" + ", ".join(_str(n) for n in free) + "]"
             perr = "perr" if popt == "popt" else popt.replace("popt", "perr")
             self.emit(
                 f"{perr} = np.sqrt(np.diag({pcov}))",
-                f"for name, value, error in zip({labels}, {popt}, {perr}):",
+                f"for name, value, error in zip({labels}, {fitted}, {perr}):",
                 '    print(f"{name} = {value:.6g} ± {error:.2g}")',
             )
+            for name in fit.fixed:
+                value = fit.initial_values.get(name, 1.0)
+                self.emit(f"print({_str(f'{name} = {value:.6g} (held)')})")
 
     def _finite(self, fit: FitCurve) -> bool | None:
         """Whether all data of the fit is finite; None if unknown."""
@@ -901,6 +937,23 @@ def _common(artist, default_zorder: float) -> dict[str, str]:
 def _some(**values) -> dict[str, str]:
     """Only the given values that are set, as code."""
     return {k: _str(v) for k, v in values.items() if v is not None}
+
+
+def _and(names: list[str]) -> str:
+    """ "a, mu and sigma"."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _bounds(free: list[str], bounds) -> str | None:
+    """curve_fit's bounds for the free parameters, or None if there are none."""
+    pairs = [bounds.get(n, (None, None)) for n in free]
+    if all(low is None and high is None for low, high in pairs):
+        return None
+    lows = ", ".join("-np.inf" if low is None else repr(float(low)) for low, _ in pairs)
+    highs = ", ".join(
+        "np.inf" if high is None else repr(float(high)) for _, high in pairs
+    )
+    return f"([{lows}], [{highs}])"
 
 
 def _describe(artist) -> str:

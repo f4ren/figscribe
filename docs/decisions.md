@@ -1121,3 +1121,44 @@ about a third, and the layout settings could then no longer be tested.
 **Fewer objects in the test project**: the point of the project is to have
 every kind. **Running the slow tests nightly** instead of per pull request:
 a problem would then reach `develop` before anyone sees it.
+
+---
+
+## 0029 — Fit parameters held fixed or kept within bounds
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+A fit could only vary every parameter of its model. Scientists hold some at
+a known value (a background, a line width from the instrument) and keep
+others physical (a width above zero), and the generated script has to give
+the same result.
+
+### Decision
+
+- **`FitCurve.fixed`** lists parameters held at their start value, and
+  **`FitCurve.parameter_bounds`** gives others a (lower, upper) range with
+  None for an open end. Not `bounds`: the property panel lists fields by name,
+  and an inset already has `bounds`.
+- **A held parameter is not fitted at all**: curve_fit sees a function of
+  the free parameters only. Its uncertainty is 0, it is shown as "held", and
+  it does not count as a degree of freedom in χ²ᵣ. The script defines that
+  function by name (`gaussian_held`), with a comment saying what is held.
+- **Bounds go to `curve_fit(bounds=...)`**, which then uses its bounded
+  method ("trf") instead of Levenberg–Marquardt; without bounds nothing
+  changes, so existing fits give the same numbers.
+- **A start value outside its bounds is refused** if the user gave it, and
+  moved in if it was guessed from the data: the user never saw that guess.
+  So are every parameter held, a lower bound not below the upper, and names
+  the model does not have; `validate_references` reports such names in a
+  project file.
+
+### Alternatives considered
+
+**Equal lower and upper bounds for a held parameter**: curve_fit refuses
+them, and nearly equal ones distort the covariance. **A held parameter as a
+literal in the model's expression**: the script would no longer show the
+model as it is named, and freeing the parameter again would need a new
+expression.

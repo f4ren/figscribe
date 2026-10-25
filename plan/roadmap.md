@@ -64,6 +64,13 @@ reproduction is given so a session can turn it into a failing test first.
     `gh pr list`), and open a draft pull request as soon as the branch is
     pushed, so the next session sees it.
 
+**Pulled forward** at the user's request (2026-10-25): F1.2 (held
+parameters and bounds) now, since it touches nothing U2 changes; F8 (several
+figures) right after U2 is merged and before U3 and U4, because it turns
+"the first figure" into "the current one" in eight modules, and the GUI work
+of U3 and U4 would otherwise be built on the old assumption. Nobody starts U3
+or U4 while F8 is open.
+
 Sizes: **S** is up to half a day, **M** a day or two, **L** more; split an L
 into pull requests that each leave `develop` working.
 
@@ -478,6 +485,15 @@ covariance detected). Missing:
 2. **Fixed parameters and bounds** per parameter in the fit dialog (bounds go
    to `curve_fit(bounds=...)`, fixed ones become constants of the model).
    Asked for by the user (2026-10-25): a start value that is kept as it is.
+   **Done** (2026-10-25, decision 0029): `FitCurve.fixed` and
+   `parameter_bounds`, in the fit dialog ("held", and a range per parameter),
+   the assistant's fit tool, the script and the panel's result card.
+   *Learned:* the field could not be called `bounds`, which an inset already
+   has, since the panel's lists go by field name. A guessed start value
+   outside a bound the user set is moved in; a typed one is refused.
+   *Follow-up:* an existing fit's start values, held parameters and bounds
+   can only be changed by the assistant; the panel needs a way into the fit
+   dialog for a fit that is already there.
 3. **Show the result in the figure**: a text box (a note bound to the fit)
    with chosen parameters as `value ± error unit`, rounded to two significant
    digits of the error as `names.with_error` already does; updates on refit.

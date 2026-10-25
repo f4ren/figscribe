@@ -82,6 +82,8 @@ SKIPPED = {
     "columns": "read from the file on import and listed in the outline",
     "model": "chosen in the fit dialog",
     "initial_values": "set in the fit dialog",
+    "fixed": "set in the fit dialog, beside the start values",
+    "parameter_bounds": "set in the fit dialog, beside the start values",
     "result": "computed by the fit and shown in the fit dialog",
 }
 """Fields with no editor here, and why."""
@@ -737,7 +739,10 @@ class PropertyPanel(QScrollArea):
             for row, (name, value) in enumerate(result.parameters.items()):
                 error = result.uncertainties.get(name)
                 grid.addWidget(label(GREEK.get(name, name), "value"), row, 0)
-                grid.addWidget(label(with_error(value, error), "value"), row, 1)
+                shown = f"{value:.6g} (held)" if name in fit.fixed else None
+                grid.addWidget(
+                    label(shown or with_error(value, error), "value"), row, 1
+                )
             row = len(result.parameters)
             if result.reduced_chi_square is not None:
                 grid.addWidget(label("χ²ᵣ", "value"), row, 0)

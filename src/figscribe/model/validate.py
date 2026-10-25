@@ -158,6 +158,7 @@ def validate_references(
                                 f"artist but a {target.kind!r}",
                             )
                         )
+                    _check_fit_parameters(artist, tpath, issues)
 
                 if isinstance(artist, ResidualPlot) and artist.target not in fit_ids:
                     issues.append(
@@ -297,6 +298,39 @@ def _see(
         )
     else:
         seen[oid] = location
+
+
+def _check_fit_parameters(
+    fit: FitCurve, path: str, issues: list[ReferenceIssue]
+) -> None:
+    """Fixed and bounded parameters must be the model's."""
+    if not fit.fixed and not fit.parameter_bounds:
+        return
+    # Imported here: the fit package needs SciPy, which reading a model must not.
+    from figscribe.fit import FitError, parameter_names
+
+    try:
+        names = parameter_names(fit.model)
+    except (FitError, ValueError):
+        return  # an expression that does not compile is reported when fitted
+    for name in fit.fixed:
+        if name not in names:
+            issues.append(
+                ReferenceIssue(
+                    f"{path}.fixed",
+                    fit.id,
+                    f"holds {name!r} fixed, which the model does not have",
+                )
+            )
+    for name in fit.parameter_bounds:
+        if name not in names:
+            issues.append(
+                ReferenceIssue(
+                    f"{path}.parameter_bounds",
+                    fit.id,
+                    f"bounds {name!r}, which the model does not have",
+                )
+            )
 
 
 def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None:
