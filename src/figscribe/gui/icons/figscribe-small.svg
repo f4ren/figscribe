@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- figscribe.svg for 16 to 48 px: the whole square, the fit alone and
+       bolder, the data left out. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2F66E3"/>
+      <stop offset="1" stop-color="#1A43A8"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#ground)"/>
+  <path d="M168 747 C179 741 214 732 237 712 C260 693 283 666 306 629
+           C329 592 351 538 374 491 C397 443 420 380 443 345 C466 309 489 280 512 280
+           C535 280 558 309 581 345 C604 380 627 443 650 491 C673 538 695 592 718 629
+           C741 666 764 693 787 712 C810 732 845 741 856 747"
+        fill="none" stroke="#FFFFFF" stroke-width="88" stroke-linecap="round"/>
+</svg>

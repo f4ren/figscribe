@@ -695,6 +695,13 @@ where local models fail; write down in the README which model size is good
 enough for which request, and pick the default. New features from phases 1–3
 get bench cases.
 
+### R6 An application icon — S
+
+One drawing as SVG, from which every size is made: the window and Dock icon
+at run time, and `.icns` (macOS) and `.ico` (Windows) for the installers of
+R4.2. It should take up the accent color and the start page's mark, and stay
+legible at 16 px.
+
 ---
 
 ## Phase 5 — Later, optional

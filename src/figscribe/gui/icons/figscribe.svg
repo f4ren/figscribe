@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- The application icon: data points and the Gaussian fitted through them,
+       the start page's mark, on the accent blue of gui/theme.py. The shape
+       follows the macOS grid (824 of 1024 px). Below 64 px figscribe-small.svg
+       is used. Rebuild the packaging icons with scripts/make_icons.py. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2F66E3"/>
+      <stop offset="1" stop-color="#1A43A8"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#ground)"/>
+  <!-- axes -->
+  <path d="M210 230 V790 H814" fill="none" stroke="#FFFFFF" stroke-opacity="0.45"
+        stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the fit -->
+  <path d="M244 691 C253 687 281 680 299 665 C318 650 336 629 354 598
+           C373 568 391 523 410 483 C428 442 446 387 465 357 C483 326 502 300 520 300
+           C538 300 557 326 575 357 C594 387 612 442 630 483 C649 523 667 568 686 598
+           C704 629 722 650 741 665 C759 680 787 687 796 691"
+        fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round"/>
+  <!-- the data -->
+  <g fill="#FF9F2E" stroke="#1A43A8" stroke-width="14">
+    <circle cx="352" cy="620" r="34"/>
+    <circle cx="438" cy="396" r="34"/>
+    <circle cx="520" cy="314" r="34"/>
+    <circle cx="604" cy="434" r="34"/>
+    <circle cx="690" cy="592" r="34"/>
+  </g>
+</svg>
