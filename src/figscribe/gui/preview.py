@@ -7,9 +7,10 @@ only the resolution is chosen to fit the widget, and Agg draws it the same
 way `export` writes a PNG. Clicks are mapped back through Matplotlib's own
 hit testing, so selection works on exactly what is drawn.
 
-The wheel zooms and dragging pans a panel; that view lives only here, until
-"Use as axis range" writes it into the model. Dragging a legend moves it,
-one undo step on release.
+The wheel zooms and dragging pans a panel; over an axis' numbers or label
+the wheel zooms that axis alone. That view lives only here, until "Use as
+axis range" writes it into the model. Dragging a legend moves it, one undo
+step on release.
 """
 
 from __future__ import annotations
@@ -442,8 +443,11 @@ class Preview(QWidget):
 
     def zoom(self, point: QPointF, factor: float, axis: str = "both") -> None:
         """Zoom the panel under `point` by `factor` (> 1 zooms in), keeping
-        the spot under the cursor in place; `axis` limits it to "x" or "y"."""
+        the spot under the cursor in place; `axis` limits it to "x" or "y".
+        Over an axis' numbers or label, only that axis zooms."""
         ax = self.axes_at(point)
+        if ax is None and axis == "both":
+            ax, axis = self._axis_under(point)
         if ax is None:
             return
         x, y = self._to_display(point)
@@ -455,6 +459,17 @@ class Preview(QWidget):
         if axis == "x":
             ys = (box.y0, box.y1)
         self._set_view(ax, xs, ys)
+
+    def _axis_under(self, point: QPointF):
+        """(Matplotlib axes, "x" or "y") of the axis whose numbers or label are
+        under `point`; (None, "both") if none."""
+        oid = self.axis_at(point)
+        if oid is None:
+            return None, "both"
+        axes_id, field = split_axis(oid)
+        if field == "y_right":
+            return self._axes(axes_id + RIGHT), "y"
+        return self._axes(axes_id), field
 
     def pan(self, axes_id: str, dx: float, dy: float) -> None:
         """Move the view of panel `axes_id` with the mouse by (dx, dy) logical

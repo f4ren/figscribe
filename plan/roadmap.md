@@ -442,6 +442,9 @@ Concrete changes found in `gui/properties.py` and `gui/names.py`:
 - Drag the corners of an inset to resize it and the gap between grid panels
   to change the ratios (one undo step on release, like the legend).
 - Right-click a plot: *Style like…*, *Bring to front*, *Fit…*, *Hide*.
+- **Done** (2026-10-25, asked for by the user): the wheel over an axis'
+  numbers or label zooms that axis alone. Over the panel, Shift with the
+  wheel still zooms x only and Ctrl or Alt y only.
 
 ### U5 Missing everyday actions — S each
 
@@ -467,6 +470,7 @@ covariance detected). Missing:
    fit range or the full range (option).
 2. **Fixed parameters and bounds** per parameter in the fit dialog (bounds go
    to `curve_fit(bounds=...)`, fixed ones become constants of the model).
+   Asked for by the user (2026-10-25): a start value that is kept as it is.
 3. **Show the result in the figure**: a text box (a note bound to the fit)
    with chosen parameters as `value ± error unit`, rounded to two significant
    digits of the error as `names.with_error` already does; updates on refit.
@@ -569,7 +573,8 @@ measurement at ten temperatures". The script loads them in a loop.
 The model holds a list of figures, but the GUI and `figscribe script` only
 use the first, and there is no *Add figure*. Add, duplicate, rename, reorder
 and switch figures (tabs or the outline), *Export all*, and
-`figscribe script --figure NAME` / `--all`.
+`figscribe script --figure NAME` / `--all`. Asked for by the user
+(2026-10-25): a scientist's project typically has several plots.
 
 ### F9 Reading values off the figure — S
 
