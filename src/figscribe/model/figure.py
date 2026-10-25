@@ -44,8 +44,11 @@ class Figure(Identified):
     """85 mm is a typical single journal column, 175 mm a double one."""
     height_mm: float = Field(60.0, gt=0.0)
     """Height of the whole figure in mm, as printed."""
-    dpi: float = Field(300.0, gt=0.0)
-    """Resolution of PNG exports in dots per inch; PDF and SVG are vector graphics."""
+    dpi: float = Field(300.0, ge=72.0)
+    """Resolution of PNG exports in dots per inch; PDF and SVG are vector graphics.
+
+    At least that of a screen: much below it, text cannot be drawn at all.
+    """
     unit_format: Literal["parentheses", "slash", "brackets"] = "parentheses"
     """How axis labels carry their unit: "U (V)", "U / V" (ISO 80000) or "U [V]".
 

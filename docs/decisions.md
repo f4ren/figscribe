@@ -202,6 +202,14 @@ one.
   the way in, so the model never shares an object with its caller.
 - **`Macro` is all or nothing**: if a step fails, the steps already applied are
   reverted before the error propagates. A failed command is not recorded.
+- **The history refuses a command that puts a panel outside its grid**
+  (since 2026-10-25): `History.push` compares the panels beyond their grid
+  before and after the whole command and reverts it if one was added, so a
+  macro may grow the grid before moving a panel there, and a panel already
+  outside in a project file blocks nothing else. Matplotlib cannot draw such a
+  figure at all. Ratios that do not match the grid are only reported: changing
+  the number of rows with ratios set has no order of single edits without a
+  mismatch in between.
 - **One exception type**, `CommandError`, also for pydantic's validation
   errors, so the GUI has one thing to catch and show.
 - **User-level actions are functions building a `Macro`**, e.g.
@@ -370,7 +378,8 @@ class would have to be kept in step with every field added to the model.
   refused value shows pydantic's message above the form and the editor shows
   the model's value again. An unchanged value pushes nothing. The exception
   are style strings (colors, markers, line styles, color maps, legend
-  locations, since 2026-10-24): the model keeps them as text because
+  locations, since 2026-10-24; style sheets, since 2026-10-25, where a name
+  must be one Matplotlib has and a file must end in `.mplstyle`): the model keeps them as text because
   Matplotlib accepts many forms, and the commands ask Matplotlib whether it
   can draw them (`model/styles.py`), so the property panel, the dialogs and
   the assistant all refuse "blu" with the same plain message. A model

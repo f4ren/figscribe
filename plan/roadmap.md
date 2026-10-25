@@ -266,6 +266,17 @@ the project. It found:
    or column `2` in a 1 × 1 grid (GridSpec IndexError). The command takes them
    and the preview shows the error afterwards. Refuse them in the command with
    a plain message, as B4 does for colors; give `dpi` a sensible lower bound.
+   **Done** (2026-10-25, decisions 0003 and 0006): `dpi` is at least 72; a style sheet
+   is a name Matplotlib has or a path ending in `.mplstyle`, checked like the
+   other style strings; `History.push` refuses a command that puts a panel
+   outside its grid, judged after a whole macro. *Learned:* three tests used
+   a panel outside the grid as their example of a problem in the list; ratios
+   that do not match the grid are that example now, since they stay allowed
+   (no order of edits changes the number of rows without a mismatch on the
+   way). *Follow-up:* such ratios still make the figure undrawable; the panel
+   should adjust them when the number of rows or columns changes (after U2,
+   which gives each ratio its own field). Font sizes far below 1 pt would hit
+   the same FreeType limit as a tiny dpi; not checked yet.
 3. **Format fields of a data source** (verified): a separator, decimal mark or
    comment mark that makes the file unreadable is taken, and the figure
    breaks. Read the file with the new setting first and refuse it with the

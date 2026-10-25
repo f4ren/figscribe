@@ -267,8 +267,8 @@ def test_the_toolbar_names_the_project(window: MainWindow) -> None:
 
 def test_problems_show_only_when_there_are_some(window: MainWindow) -> None:
     assert window.problems_dock.isHidden()
-    axes = window.document.figure.axes[0]
-    window.document.push(SetField(axes.id, ("row",), 3))
+    figure = window.document.figure  # two ratios for one column
+    window.document.push(SetField(figure.id, ("layout", "width_ratios"), [1.0, 2.0]))
     assert not window.problems_dock.isHidden()
     window.document.undo()
     assert window.problems_dock.isHidden()

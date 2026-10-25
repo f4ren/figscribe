@@ -173,6 +173,49 @@ def test_a_style_string_matplotlib_refuses_is_refused(project: Project) -> None:
     assert dumps(project) == before
 
 
+def test_a_resolution_too_low_to_draw_text_is_refused(project: Project) -> None:
+    figure = project.figures[0].id
+    history = History(project)
+    with pytest.raises(CommandError, match="dpi"):
+        history.push(SetField(figure, ("dpi",), 2.0))  # FreeType cannot size text
+    history.push(SetField(figure, ("dpi",), 72.0))
+
+
+def test_a_change_that_puts_a_panel_outside_the_grid_is_refused(
+    project: Project,
+) -> None:
+    figure, top, bottom, *_ = _ids(project)  # a 2 x 1 grid, one panel per row
+    history = History(project)
+    before = dumps(project)
+    with pytest.raises(CommandError, match="outside the grid of 2 rows and 1 col"):
+        history.push(SetField(bottom, ("row",), 2))
+    with pytest.raises(CommandError, match="outside the grid of 2 rows"):
+        history.push(SetField(top, ("col",), 1))
+    with pytest.raises(CommandError, match="outside the grid of 1 row and 1 column"):
+        history.push(SetField(figure, ("layout", "rows"), 1))
+    assert dumps(project) == before and not history.can_undo
+    # A macro is judged as a whole: grow the grid, then move the panel there.
+    history.push(
+        Macro(
+            "Move down",
+            [
+                SetField(figure, ("layout", "rows"), 3),
+                SetField(figure, ("layout", "height_ratios"), None),
+                SetField(bottom, ("row",), 2),
+            ],
+        )
+    )
+    assert project.figures[0].axes[1].row == 2
+
+
+def test_a_grid_problem_from_the_file_does_not_block_other_changes(
+    project: Project,
+) -> None:
+    figure, _, bottom, *_ = _ids(project)
+    project.figures[0].axes[1].row = 5  # as loaded
+    History(project).push(SetField(figure, ("name",), "renamed"))
+
+
 def test_a_bad_style_from_the_file_does_not_block_other_changes(
     project: Project,
 ) -> None:
