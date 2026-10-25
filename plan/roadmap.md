@@ -254,6 +254,13 @@ the project. It found:
    bar" goes the same way. Fix: `takeWidget()` and `deleteLater()` the old form,
    as `gui/databar.py` does. Look for the same pattern elsewhere (forms that
    rebuild from a signal of one of their own widgets).
+   **Done** (2026-10-25): `rebuild` hides the old form and deletes it later;
+   the right axis and color bar tests click their box. *Learned:* only
+   `setWidget()` in the property panel replaced a form under its own widget;
+   the import and fit dialogs, the data bar and the start page already delete
+   later. Push buttons survive it anyway (Qt guards their click), check boxes
+   do not. The outline clears its tree from its own clicks; the operation
+   tests of item 2 below cover it.
 2. **Values that break the figure are accepted** (verified): resolution `2`
    dpi (FreeType: "invalid ppem value"), style sheet `2` (unknown style), row
    or column `2` in a 1 × 1 grid (GridSpec IndexError). The command takes them

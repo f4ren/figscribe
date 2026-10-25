@@ -485,6 +485,12 @@ class PropertyPanel(QScrollArea):
         elif obj is not None:
             self._fill(obj, layout)
         layout.addStretch(1)
+        old = self.takeWidget()
+        if old is not None:
+            # One of its editors may be what asked for this, still handling
+            # the click; setWidget() alone would delete it under Qt's feet.
+            old.hide()
+            old.deleteLater()
         self.setWidget(body)
 
     def refresh(self) -> None:
