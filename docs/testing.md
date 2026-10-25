@@ -36,7 +36,9 @@ note the platform, the screen scaling and the theme in the pull request.
 1. **Start**: open figscribe without a project. The start page shows; open
    `examples/gaussian-scan/scan.figscribe` from it.
 2. **Look**: the preview equals an exported PDF of the same figure, by eye.
-   Labels are not cut off; the property panel has no clipped text.
+   Labels are not cut off; the property panel has no clipped text. Every
+   control is easy to find at a glance: check boxes, fields, lists, buttons,
+   in each state (off, on, hovered, focused, disabled).
 3. **Edit by hand**: change a color, a marker, the axis range and the title
    in the panel; each shows at once and undoes with Ctrl+Z (Cmd+Z on macOS).
 4. **Zoom and pan**: scroll in the preview, drag, then adopt the view as the

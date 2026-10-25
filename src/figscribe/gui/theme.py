@@ -29,6 +29,10 @@ SURFACE = "#FFFFFF"
 SUBTLE = "#F1F1EC"
 BORDER = "#E3E3DE"
 CONTROL_BORDER = "#D7D7D1"
+CHECK_BORDER = "#7A7A80"
+"""The edge of a check box: 4.3:1 on white, where a control needs 3:1 (WCAG
+1.4.11) to be seen at all; the field borders can be fainter, their text and
+size show them."""
 INK = "#1C1C1E"
 MUTED = "#5F5F66"
 """Secondary text; 6:1 on white."""
@@ -115,6 +119,21 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {ACCENT}; }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
 QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: 0; }}
 QCheckBox {{ spacing: 8px; }}
+QCheckBox::indicator {{
+    width: 14px; height: 14px; border: 1px solid {CHECK_BORDER};
+    border-radius: 4px; background: {SURFACE};
+}}
+QCheckBox::indicator:hover, QCheckBox::indicator:focus {{ border-color: {ACCENT}; }}
+QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
+QCheckBox::indicator:checked:hover {{
+    background: {ACCENT_HOVER}; border-color: {ACCENT_HOVER};
+}}
+QCheckBox::indicator:disabled {{
+    border-color: {CONTROL_BORDER}; background: {SUBTLE};
+}}
+QCheckBox::indicator:checked:disabled {{
+    background: {CONTROL_BORDER}; border-color: {CONTROL_BORDER};
+}}
 
 QPushButton {{
     background: {SURFACE}; border: 1px solid {CONTROL_BORDER}; border-radius: 8px;
@@ -260,10 +279,13 @@ def apply(app: QApplication) -> None:
     ):
         palette.setColor(role, QColor(color))
     app.setPalette(palette)
-    arrow = resources.files("figscribe.gui") / "icons" / "chevron-down.svg"
+    icons = resources.files("figscribe.gui") / "icons"
+    arrow = Path(str(icons / "chevron-down.svg")).as_posix()
+    check = Path(str(icons / "check.svg")).as_posix()
     app.setStyleSheet(
         STYLE_SHEET
-        + f"QComboBox::down-arrow {{ image: url({Path(str(arrow)).as_posix()}); }}"
+        + f"QComboBox::down-arrow {{ image: url({arrow}); }}"
+        + f"QCheckBox::indicator:checked {{ image: url({check}); }}"
     )
 
 
