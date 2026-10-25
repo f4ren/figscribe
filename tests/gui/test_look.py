@@ -300,3 +300,27 @@ def test_dropping_a_project_opens_it(window: MainWindow, example: Path) -> None:
     window.new_project()
     _drop(window, example)
     assert window.document.path == example
+
+
+def _contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio of two #RRGGBB colors."""
+
+    def luminance(color: str) -> float:
+        channels = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [
+            c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+            for c in channels
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_check_boxes_can_be_seen() -> None:
+    """A control needs 3:1 against what is around it (WCAG 1.4.11); the
+    style's own check box had a 1.45:1 edge and was hard to find."""
+    for ground in (theme.SURFACE, theme.GROUND):
+        assert _contrast(theme.CHECK_BORDER, ground) >= 3
+        assert _contrast(theme.ACCENT, ground) >= 3
+    assert "QCheckBox::indicator" in theme.STYLE_SHEET
