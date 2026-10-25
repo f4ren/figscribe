@@ -151,6 +151,8 @@ class _Writer:
         self.arrays = self._name_arrays()
         self.held: dict[str, str] = {}
         """{fit id: name of the model with its fixed parameters held}."""
+        self.ranges: dict[str, str] = {}
+        """{fit id: name of the mask of the points within its fit range}."""
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
         self.axis_specs = self._ticks_that_fit()
@@ -245,6 +247,12 @@ class _Writer:
             taken.add(function)
             popt = "popt" if len(fits) == 1 else f"{function}_popt"
             found[fit.id] = (function, popt)
+            if fit.fit_range is not None:
+                mask = "in_range" if len(fits) == 1 else f"{function}_in_range"
+                while mask in taken:
+                    mask += "_"
+                taken.add(mask)
+                self.ranges[fit.id] = mask
             if fit.fixed:
                 held = f"{function}_held"
                 while held in taken:
@@ -515,13 +523,25 @@ class _Writer:
             )
             names = parameter_names(fit.model)
             arrays = [a for a in (x, y, yerr) if a is not None]
+            used = []
             if self._finite(fit) is not True:
                 self.emit(
                     "# curve_fit needs finite values.",
                     "valid = " + " & ".join(f"np.isfinite({a})" for a in arrays),
                 )
-                x, y = f"{x}[valid]", f"{y}[valid]"
-                yerr = f"{yerr}[valid]" if yerr is not None else None
+                used.append("valid")
+            if fit_id in self.ranges:
+                low, high = fit.fit_range
+                mask = self.ranges[fit_id]
+                self.emit(
+                    f"# The fit uses the points with {x} from {low:g} to {high:g}.",
+                    f"{mask} = ({x} >= {low!r}) & ({x} <= {high!r})",
+                )
+                used.append(mask)
+            if used:
+                points = " & ".join(used)
+                x, y = f"{x}[{points}]", f"{y}[{points}]"
+                yerr = f"{yerr}[{points}]" if yerr is not None else None
             free = free_parameters(fit.model, fit.fixed)
             start = [fit.initial_values.get(n, 1.0) for n in free]
             kwargs = {"p0": "[" + ", ".join(repr(float(v)) for v in start) + "]"}
@@ -863,6 +883,10 @@ class _Writer:
         else:
             low = f"{x}[np.isfinite({x})].min()"
             high = f"{x}[np.isfinite({x})].max()"
+        if fit.fit_range is not None and not fit.extend_curve:
+            # Over the fit range, where there is data.
+            low = f"max({fit.fit_range[0]!r}, {low})"
+            high = f"min({fit.fit_range[1]!r}, {high})"
         self.emit(f"{xs} = np.linspace({low}, {high}, {CURVE_POINTS})")
         kwargs = _some(color=fit.color) | {
             "linestyle": _str(fit.linestyle),
@@ -886,6 +910,11 @@ class _Writer:
         kwargs = {}
         if isinstance(target, ErrorbarPlot) and target.yerr is not None:
             kwargs["yerr"] = self.column(target.yerr)
+        if fit.id in self.ranges:  # only the fitted points
+            mask = self.ranges[fit.id]
+            x, y = f"{x}[{mask}]", f"{y}[{mask}]"
+            if "yerr" in kwargs:
+                kwargs["yerr"] = f"{kwargs['yerr']}[{mask}]"
         kwargs |= _some(color=residuals.color) | {
             "marker": _str(residuals.marker),
             "markersize": _num(residuals.markersize),

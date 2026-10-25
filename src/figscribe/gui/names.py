@@ -139,6 +139,8 @@ FIELD_NAMES = {
     "initial_values": "Start values",
     "fixed": "Held fixed",
     "parameter_bounds": "Parameter bounds",
+    "fit_range": "Fit range",
+    "extend_curve": "Curve over all the data",
     "result": "Result",
     "uncertainties": "Uncertainties (1σ)",
     "reduced_chi_square": "Reduced χ²",

@@ -1149,6 +1149,11 @@ the same result.
 - **Bounds go to `curve_fit(bounds=...)`**, which then uses its bounded
   method ("trf") instead of Levenberg–Marquardt; without bounds nothing
   changes, so existing fits give the same numbers.
+- **A fit range** (`fit_range`, added 2026-10-26) fits only the points with
+  x within it; the curve is drawn over the range where there is data, or
+  across all the data with `extend_curve`, and the residuals show the
+  fitted points only. A range is a property of the fit, not of the plot:
+  another fit of the same data may need another range.
 - **A start value outside its bounds is refused** if the user gave it, and
   moved in if it was guessed from the data: the user never saw that guess.
   So are every parameter held, a lower bound not below the upper, and names

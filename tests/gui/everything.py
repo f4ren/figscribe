@@ -113,7 +113,9 @@ def build(folder: Path) -> Path:
     project = Project(sources=[scan, grid], figures=[figure])
 
     history = History(project)
-    fit = FitCurve(target=errorbars.id, model=PredefinedFit(name="linear"))
+    fit = FitCurve(
+        target=errorbars.id, model=PredefinedFit(name="linear"), fit_range=(0.5, 3.5)
+    )
     history.push(add_fit(project, fit))
     history.push(refit(project, fit.id, load_data(project, folder)))
     project.figures[0].axes[1].artists.append(ResidualPlot(target=fit.id))

@@ -8,7 +8,13 @@ import numpy as np
 
 from figscribe.commands import CommandError, InsertItem, Macro, SetField, find
 from figscribe.fit.expression import FitError
-from figscribe.fit.run import initial_guess, parameter_names, run_fit, within
+from figscribe.fit.run import (
+    in_range,
+    initial_guess,
+    parameter_names,
+    run_fit,
+    within,
+)
 from figscribe.model import (
     Axes,
     AxisSpec,
@@ -46,6 +52,9 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
     yerr = (
         data(target.yerr) if isinstance(target, ErrorbarPlot) and target.yerr else None
     )
+    used = in_range(x, fit.fit_range)
+    x, y = np.asarray(x, dtype=float)[used], np.asarray(y, dtype=float)[used]
+    yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
 
     names = parameter_names(fit.model)
     stored = {k: v for k, v in fit.initial_values.items() if k in names}
@@ -66,7 +75,16 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
     )
 
 
-EDITABLE = ("model", "initial_values", "fixed", "parameter_bounds", "result", "label")
+EDITABLE = (
+    "model",
+    "initial_values",
+    "fixed",
+    "parameter_bounds",
+    "fit_range",
+    "extend_curve",
+    "result",
+    "label",
+)
 """What the fit dialog changes on a fit that is already there."""
 
 
