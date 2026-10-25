@@ -34,7 +34,8 @@ changes what is seen. Use a real mouse or trackpad, on the platform at hand;
 note the platform, the screen scaling and the theme in the pull request.
 
 1. **Start**: open figscribe without a project. The start page shows; open
-   `examples/gaussian-scan/scan.figscribe` from it.
+   `examples/gaussian-scan/scan.figscribe` from it. The Dock or taskbar
+   shows figscribe's icon, not Python's.
 2. **Look**: the preview equals an exported PDF of the same figure, by eye.
    Labels are not cut off; the property panel has no clipped text. Every
    control is easy to find at a glance: check boxes, fields, lists, buttons,

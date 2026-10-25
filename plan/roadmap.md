@@ -702,6 +702,11 @@ at run time, and `.icns` (macOS) and `.ico` (Windows) for the installers of
 R4.2. It should take up the accent color and the start page's mark, and stay
 legible at 16 px.
 
+**Done** (2026-10-25, decision 0029): `gui/icons/figscribe.svg` and
+`figscribe-small.svg` (up to 48 px); `theme.apply` sets the window icon;
+`packaging/make_icons.py` writes `packaging/icons/figscribe.icns`, `.ico` and
+a 1024 px PNG, which R4.2 can use as they are.
+
 ---
 
 ## Phase 5 — Later, optional

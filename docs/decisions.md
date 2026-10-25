@@ -1121,3 +1121,44 @@ about a third, and the layout settings could then no longer be tested.
 **Fewer objects in the test project**: the point of the project is to have
 every kind. **Running the slow tests nightly** instead of per pull request:
 a problem would then reach `develop` before anyone sees it.
+
+## 0029 — The application icon
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+figscribe had no icon: the window showed the platform's default and the macOS
+Dock Python's rocket. The installers of roadmap task R4.2 will need `.icns`
+for macOS and `.ico` for Windows.
+
+### Decision
+
+- **The start page's mark grown into an icon**: data points and the Gaussian
+  fitted through them, white and orange on the accent blue, with faint axes.
+  It says what figscribe is for, a scientific figure with a fit, and needs no
+  letters.
+- **Two SVG drawings in `gui/icons`, every size made from them.** The full one
+  follows the macOS grid (824 of 1024 px with a margin). Up to 48 px
+  `figscribe-small.svg` is used instead: the whole square and the curve
+  alone, since the points and axes blur into the curve at that size.
+- **`theme.apply` sets the window icon**, rendered once per size from 16 to
+  1024 px, so the Dock and taskbar show it also when figscribe runs from a
+  Python environment rather than an installer.
+- **`packaging/make_icons.py` writes `.icns`, `.ico` and a 1024 px PNG** to
+  `packaging/icons`, with Qt's SVG renderer and Pillow, which Matplotlib
+  already depends on; no new dependency. The files are committed so R4.2 can
+  use them as they are; the script is rerun after a change to the drawing.
+  The `.icns` uses the full drawing at every size, as macOS icons keep their
+  margin even in lists; the `.ico` uses the small one up to 48 px, as the
+  window icon does. Pillow writes no 16 and 32 px entries without Retina
+  scale into `.icns`; macOS scales them from 32 and 64 px.
+
+### Alternatives considered
+
+**Letters ("fs") or a pen** for the "scribe": less telling than a plot, and
+letters need a font in the drawing. **One drawing for every size**: at 16 px
+the margin and the points leave a blue speck. **Making the platform files at
+release time only**: the installers would then depend on Qt being able to
+render in CI before anyone has seen the result.
