@@ -205,8 +205,20 @@ def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> 
     assert _artist(document).y == ColumnRef(source=source.id, column="dU")
 
     optional = panel.editors[("xerr",)].widget
-    assert optional.itemText(0) == "(none)"
+    assert optional.itemText(0) == "no x errors"
     assert optional.currentIndex() == 0
+
+
+def test_nested_fields_explain_themselves_in_their_own_words(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.gui.properties import tip_for
+    from figscribe.model import Colorbar, LinePlot
+
+    document.select(_axes(document).id)
+    location = panel.editors[("legend", "location")].widget
+    assert "upper right" in location.toolTip()
+    assert tip_for(Colorbar, "label") != tip_for(LinePlot, "label")
 
 
 def test_a_dangling_column_is_shown_as_missing(panel: PropertyPanel, document) -> None:

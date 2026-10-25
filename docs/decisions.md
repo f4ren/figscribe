@@ -380,9 +380,19 @@ class would have to be kept in step with every field added to the model.
 - **Some fields are deliberately left out**: ids, kinds, item lists (edited in
   the outline), `y_right` (not rendered yet), and fit models, start values,
   results and histogram bins, which get dedicated editors with their features.
-  `path`, `sha256` and a fit's `target` are shown read-only. A test checks
-  that every other field of the model has an editor, so a new field cannot be
-  forgotten silently.
+  `path`, `sha256` and a fit's `target` are shown read-only. Each of these
+  lists says why per field (`SKIPPED`, `READ_ONLY`, `SHOWN_WHEN_SET`), and
+  `EDITED_ELSEWHERE` names the classes edited in a place of their own (the
+  axis form, the fit dialog, the column choices).
+- **No field is forgotten** (since 2026-10-24, `tests/test_field_coverage.py`):
+  every field of every model class has a plain name, a docstring the
+  assistant reads in the JSON schema (`use_attribute_docstrings`; a constant
+  such as a plot's kind is explained by its value), and either an editor
+  with a tooltip and, if it can be empty, a text for empty, or one of the
+  reasons above. A new field fails the test until it is wired up everywhere.
+  Tooltips are looked up by `"Class.field"` before the field name, because a
+  name can mean different things (a plot's `label` is its legend entry, a
+  color bar's the text beside it), and nested fields get them too.
 - **Editors are bound to their object.** An editor torn down by a selection
   change can still report its last input; it is ignored instead of being
   applied to the newly selected object. Undo and redo refresh the values in
@@ -457,7 +467,8 @@ should not need an API key or carry the cost of one.
 ### Decision
 
 - **One tool layer, `figscribe.tools`, independent of Qt and of any LLM
-  provider.** It reads the project (`get_project`, `get_schema`,
+  provider.** It reads the project (`get_project`, `get_schema`, whose fields
+  carry their docstrings as descriptions,
   `list_columns`, `render_preview`) and changes it only through commands
   (`set_field`, `insert`, `remove`, `move`, `fit`, `undo`), each one undo step;
   `apply_changes` runs several operations as one step, all or nothing.

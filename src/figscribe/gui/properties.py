@@ -61,29 +61,56 @@ from figscribe.model import (
     AxisSpec,
     Colorbar,
     ColumnRef,
+    ExpressionFit,
     Figure,
     FitCurve,
+    FitResult,
+    PredefinedFit,
+    Project,
 )
 from figscribe.render.ticks import PREFIXES
 
 SKIPPED = {
-    "id",
-    "kind",
-    "format",
-    "sources",
-    "figures",
-    "axes",
-    "artists",
-    "columns",
-    "model",
-    "initial_values",
-    "result",
+    "id": "an identity, never edited",
+    "kind": "fixed by the type of plot",
+    "format": "fixed by the type of data file",
+    "sources": "data files are added and removed in the outline",
+    "figures": "figures are listed in the outline",
+    "axes": "panels are added, moved and removed in the outline and the preview",
+    "artists": "plots are added, moved and removed in the outline",
+    "columns": "read from the file on import and listed in the outline",
+    "model": "chosen in the fit dialog",
+    "initial_values": "set in the fit dialog",
+    "result": "computed by the fit and shown in the fit dialog",
 }
-"""Fields with no editor here: identity, item lists (edited in the outline),
-and values that need a dedicated editor (fits, histogram bins)."""
+"""Fields with no editor here, and why."""
 
-READ_ONLY = {"path", "sha256", "row_count", "target", "parent"}
-"""Shown, but changed only through their own actions (re-import, refit)."""
+READ_ONLY = {
+    "path": "set by importing the file or locating it again",
+    "sha256": "the file's fingerprint, taken on import",
+    "row_count": "counted on import",
+    "target": "the plot a fit or its residuals belong to, set when added",
+    "parent": "the panel an inset sits in, set when it is added",
+}
+"""Shown, but changed only through their own actions, and which."""
+
+SHOWN_WHEN_SET = {
+    "inset": "made by adding a panel as an inset; its bounds are shown then",
+}
+"""Optional parts with no switch here, shown as a group once they exist."""
+
+EDITED_ELSEWHERE: dict[type[BaseModel], str] = {
+    Project: "never selected: figscribe writes its versions and date, and "
+    "its data files and figures are edited in the outline",
+    AxisSpec: "the axis form, opened by clicking an axis",
+    ColumnRef: "a choice of the data's columns",
+    ArrayRef: "a choice of the data files",
+    PredefinedFit: "the fit dialog",
+    ExpressionFit: "the fit dialog",
+    FitResult: "the fit dialog, which shows the result",
+}
+"""Model classes whose fields the generated forms never show, and where they
+are edited instead."""
 
 COLOR_FIELDS = {"color", "edgecolor", "grid_color"}
 
@@ -248,6 +275,15 @@ PLACEHOLDERS = {
     "major_step": "automatic",
     "minor_divisions": "automatic",
     "wspace": "automatic",
+    "arrow_to": "no arrow",
+    "extent": "automatic",
+    "position": "by location",
+    "delimiter": "spaces or tabs",
+    "header_row": "no names",
+    "comment": "none",
+    "array": "the first",
+    "width_ratios": "equal",
+    "height_ratios": "equal",
 }
 
 TIPS = {
@@ -280,8 +316,89 @@ TIPS = {
     "axis": "Which y axis the plot is drawn against.",
     "encoding": "How the file's letters are stored. Files from Windows programs "
     "are often cp1252; choose it if names like µA come out wrong.",
+    "Colorbar.label": "Text beside the color bar; LaTeX between $ signs.",
+    "visible": "Whether it is drawn; hidden, it keeps its settings.",
+    "x": "The column plotted along x.",
+    "y": "The column plotted along y.",
+    "ColorMesh.x": "Column of the cell positions along x; empty numbers the cells.",
+    "ColorMesh.y": "Column of the cell positions along y; empty numbers the cells.",
+    "xerr": "The column of x errors, drawn as bars of ± that size; empty for none.",
+    "yerr": "The column of y errors, drawn as bars of ± that size; empty for none.",
+    "color": "A name such as blue or tab:orange, or a code such as #1f77b4; empty "
+    "takes the next color of the cycle.",
+    "Annotation.color": "Color of the text and the arrow; empty follows the style.",
+    "edgecolor": "Color of the marker outlines; empty follows the style.",
+    "linestyle": "How the line is drawn: solid, dashed, dash-dotted, dotted, or none "
+    "for points only.",
+    "linewidth": "Line width in pt.",
+    "marker": "The symbol drawn at each data point.",
+    "markersize": "Size of the markers in pt.",
+    "size": "Area of the markers in pt².",
+    "capsize": "Length of the caps at the ends of the error bars in pt; 0 for none.",
+    "elinewidth": "Line width of the error bars in pt.",
+    "values": "The column whose values are counted.",
+    "bins": "A number of bins of equal width, or their edges, e.g. 0, 1, 2.5.",
+    "density": "Scale the bars to a total area of 1, to compare data sets of different"
+    " size.",
+    "histtype": "Filled bars, only their outline, or a filled outline.",
+    "c": "The 2-D data whose values are shown as colors.",
+    "data": "The 2-D data shown as an image, one pixel per value.",
+    "cmap": "The colors the values are shown in, from lowest to highest.",
+    "norm": "Linear spaces the colors evenly; logarithmic suits values over several "
+    "decades.",
+    "vmin": "The value shown in the lowest color; empty uses the smallest.",
+    "vmax": "The value shown in the highest color; empty uses the largest.",
+    "extent": "Where the image's edges lie in data coordinates: left, right, bottom, "
+    "top. Empty numbers the pixels.",
+    "origin": "Draw the first row of the data at the top, as in the file, or at the "
+    "bottom, as on a y axis.",
+    "aspect": "Fill the panel, or keep the pixels square.",
+    "text": "The note's text; LaTeX between $ signs, e.g. $\\mu$.",
+    "Annotation.position": "Where the note sits: x and y in the coordinates chosen "
+    "below.",
+    "coords": "Data coordinates, or fractions of the panel from 0 to 1.",
+    "arrow_to": "Where an arrow from the note points, in the same coordinates; empty "
+    "for no arrow.",
+    "fontsize": "Font size in pt; empty follows the figure.",
+    "location": "Where the legend goes, e.g. best, upper right, lower left.",
+    "Legend.position": "Where the legend's lower left corner sits, as fractions of the"
+    " panel; set by dragging the legend. Empty uses the location.",
+    "frame": "A box around the legend.",
+    "ncols": "How many columns the legend's entries are arranged in.",
+    "bounds": "Where the inset sits in its panel, as fractions: left, bottom, width, "
+    "height.",
+    "rows": "Rows of the panel grid.",
+    "cols": "Columns of the panel grid.",
+    "share_x": "Join the x axes of panels: one range for all, numbers only on the "
+    "bottom row.",
+    "share_y": "Join the y axes of panels: one range for all, numbers only in the left"
+    " column.",
+    "width_ratios": "How wide the columns are relative to each other, e.g. 2, 1; empty"
+    " makes them equal.",
+    "height_ratios": "How tall the rows are relative to each other, e.g. 3, 1; empty "
+    "makes them equal.",
+    "constrained_layout": "Let Matplotlib space the panels so that their labels do not"
+    " overlap.",
+    "hspace": "Space between rows, as a fraction of the average panel height; empty "
+    "lets Matplotlib choose.",
+    "wspace": "Space between columns, as a fraction of the average panel width; empty "
+    "lets Matplotlib choose.",
+    "delimiter": "What separates the values in a line; empty means spaces or tabs.",
+    "decimal": "Whether the numbers are written 1.5 or 1,5.",
+    "header_row": "The line with the column names, counted from 0; empty for a file "
+    "without names.",
+    "skip_rows": "Lines between the names and the numbers, such as a line of units.",
+    "comment": "Lines starting with this are ignored; empty for none.",
+    "dataset": "Where the data lies inside the HDF5 file, e.g. /run3/voltage.",
+    "array": "Which array of the .npz archive to plot.",
 }
-"""Explanations shown when the mouse rests on a field."""
+"""Explanations shown when the mouse rests on a field, by field name, or by
+"Class.field" where the same name means something else there."""
+
+
+def tip_for(owner: type[BaseModel], name: str) -> str | None:
+    return TIPS.get(f"{owner.__name__}.{name}", TIPS.get(name))
+
 
 GREEK = {
     "alpha": "α",
@@ -481,8 +598,8 @@ class PropertyPanel(QScrollArea):
         for name, field in type(obj).model_fields.items():
             if name in SKIPPED:
                 continue
-            if name == "inset":
-                if inset:
+            if name in SHOWN_WHEN_SET:
+                if getattr(obj, name) is not None:
                     nested.append(name)
                 continue
             if (
@@ -549,11 +666,9 @@ class PropertyPanel(QScrollArea):
                 form.addRow(heading)
                 self._nested(form, getattr(model, name), (*prefix, name))
                 continue
-            self._row(form, model, (*prefix, name), top=False)
+            self._row(form, model, (*prefix, name))
 
-    def _row(
-        self, form: QFormLayout, obj: BaseModel, path: Path, top: bool = True
-    ) -> None:
+    def _row(self, form: QFormLayout, obj: BaseModel, path: Path) -> None:
         name = path[-1]
         value = getattr(obj, name)
         if name in READ_ONLY:
@@ -570,9 +685,10 @@ class PropertyPanel(QScrollArea):
         editor.show(value)
         self.editors[path] = editor
         caption = _form_label(name)
-        if top and name in TIPS:
-            caption.setToolTip(TIPS[name])
-            editor.widget.setToolTip(TIPS[name])
+        tip = tip_for(type(obj), name)
+        if tip is not None:
+            caption.setToolTip(tip)
+            editor.widget.setToolTip(tip)
         form.addRow(caption, editor.widget)
 
     def _axis_links(self, form: QFormLayout, axes: Axes) -> None:
@@ -796,7 +912,15 @@ CHOICES["tick_direction"] = [
     ("inward", "in"),
     ("both ways", "inout"),
 ]
-NONE_TEXT = {"tick_direction": "style default", "prefix": "as in the data"}
+NONE_TEXT = {
+    "tick_direction": "style default",
+    "prefix": "as in the data",
+    "marker": "No marker",
+    "xerr": "no x errors",
+    "yerr": "no y errors",
+    "x": "cell numbers",
+    "y": "cell numbers",
+}
 """What an unset optional choice means, where "(none)" would mislead."""
 SUPERSCRIPTS = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
 CHOICES["prefix"] = [
@@ -882,7 +1006,7 @@ class MarkerEditor(TextEditor):
         row.setSpacing(4)
         options = list(MARKERS)
         if spec.optional:
-            options.append((None, "No marker"))
+            options.append((None, NONE_TEXT["marker"]))
         self.buttons: dict[str | None, QToolButton] = {}
         for value, name in options:
             button = QToolButton()
