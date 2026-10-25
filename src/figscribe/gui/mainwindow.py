@@ -41,12 +41,13 @@ from figscribe.commands import (
     Macro,
     SetField,
     add_panel,
+    find,
     remove_artist,
     remove_axes,
 )
 from figscribe.commands.core import walk
 from figscribe.examples import bundled_example
-from figscribe.fit import FitError, add_fit
+from figscribe.fit import FitError, add_fit, update_fit
 from figscribe.gui import theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
@@ -170,6 +171,7 @@ class MainWindow(QMainWindow):
         self.problems = Problems(self.document)
         self.properties = PropertyPanel(self.document)
         self.properties.axis_range = self.preview.axis_limits
+        self.properties.edit_fit = self.edit_fit
         self.outline.add_requested.connect(self._add_plot_to)
         self.outline.import_requested.connect(lambda: self.import_csv())
         self.outline.panel_requested.connect(
@@ -585,6 +587,25 @@ class MainWindow(QMainWindow):
             return
         self._push(command)
         self.document.select(fit.id)
+
+    def edit_fit(self, fit_id: str) -> None:
+        """Open the fit dialog on the fit `fit_id` and take what it changes,
+        as one undo step."""
+        try:
+            fit = find(self.document.project, fit_id)
+            target = find(self.document.project, fit.target)
+            dialog = FitDialog(target, self.document.data, parent=self, fit=fit)
+        except Exception as exc:  # gone, or the data cannot be read
+            self.show_error("Cannot change the fit", exc)
+            return
+        if not self.run_dialog(dialog) or dialog.fit() is None:
+            return
+        try:
+            command = update_fit(self.document.project, fit_id, dialog.fit())
+        except FitError as exc:
+            self.show_error("Cannot change the fit", exc)
+            return
+        self._push(command)
 
     def add_note(self, oid: str | None = None) -> None:
         """Add a note in the middle of a panel; drag it in the preview."""

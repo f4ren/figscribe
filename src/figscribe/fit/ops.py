@@ -66,6 +66,26 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
     )
 
 
+EDITABLE = ("model", "initial_values", "fixed", "parameter_bounds", "result", "label")
+"""What the fit dialog changes on a fit that is already there."""
+
+
+def update_fit(project: Project, fit_id: str, changed: FitCurve) -> Macro:
+    """Give the fit `fit_id` the model, start values, held parameters, bounds,
+    result and label of `changed`, as one step."""
+    fit = _get(project, fit_id)
+    if not isinstance(fit, FitCurve):
+        raise FitError(f"{fit_id!r} is not a fit")
+    return Macro(
+        "Change the fit",
+        [
+            SetField(fit_id, (name,), getattr(changed, name))
+            for name in EDITABLE
+            if getattr(changed, name) != getattr(fit, name)
+        ],
+    )
+
+
 RESIDUAL_HEIGHT_MM = 20.0
 """How much taller a figure gets when a residual panel is added below."""
 

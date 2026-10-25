@@ -11,7 +11,7 @@ from figscribe.fit.expression import (
     compile_expression,
     free_names,
 )
-from figscribe.fit.ops import add_fit, refit
+from figscribe.fit.ops import add_fit, refit, update_fit
 from figscribe.fit.run import (
     evaluate,
     free_parameters,
@@ -37,5 +37,6 @@ __all__ = [
     "refit",
     "run_fit",
     "source_of",
+    "update_fit",
     "within",
 ]
