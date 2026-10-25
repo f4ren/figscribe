@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- figscribe.svg for 16 to 48 px: the whole square, the fit alone and
-       bolder, the data left out. -->
+  <!-- figscribe.svg for 16 to 48 px: the whole square, no axes, the curve
+       bolder and the pen larger. -->
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#2F66E3"/>
@@ -8,9 +8,17 @@
     </linearGradient>
   </defs>
   <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#ground)"/>
-  <path d="M168 747 C179 741 214 732 237 712 C260 693 283 666 306 629
-           C329 592 351 538 374 491 C397 443 420 380 443 345 C466 309 489 280 512 280
-           C535 280 558 309 581 345 C604 380 627 443 650 491 C673 538 695 592 718 629
-           C741 666 764 693 787 712 C810 732 845 741 856 747"
+  <path d="M120 764 C129 755 155 735 172 710 C189 684 207 651 224 612
+           C241 574 259 523 276 478 C293 432 311 377 328 341 C345 304 363 269 380 258
+           C397 246 415 251 432 269 C449 288 467 329 484 370 C501 410 519 466 536 511
+           C553 556 571 603 588 639 C605 675 631 711 640 726"
         fill="none" stroke="#FFFFFF" stroke-width="88" stroke-linecap="round"/>
+  <g transform="translate(640 726) rotate(45) scale(1.05)">
+    <path d="M0 0 C34 -64 84 -128 84 -200 L84 -262 H-84 L-84 -200 C-84 -128 -34 -64 0 0 Z"
+          fill="#FFA931" stroke="#1A43A8" stroke-width="16" stroke-linejoin="round"/>
+    <path d="M0 -26 V-150" stroke="#1A43A8" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="0" cy="-160" r="20" fill="#1A43A8"/>
+    <rect x="-104" y="-330" width="208" height="84" rx="20" fill="#FFFFFF"
+          stroke="#1A43A8" stroke-width="16"/>
+  </g>
 </svg>
