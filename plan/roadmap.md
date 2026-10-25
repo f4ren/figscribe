@@ -280,6 +280,12 @@ the project. It found:
    ("Could not resolve authentication method") before any request, which
    `_Translate` in `assistant/chat.py` does not map. Say "No valid API key …"
    as for an invalid one. Check sending a chat message without a key too.
+   **Done** (2026-10-25): `ClaudeModel._errors` turns that `TypeError` into
+   the message for a missing key, for listing models and for a chat message;
+   any other `TypeError` stays a bug. The test clears the `ANTHROPIC_*`
+   variables and points the home directory away, so a profile from `ant auth
+   login` on the machine does not hide the case. The OpenAI client sends
+   "not-needed" as its key and gets the server's refusal instead.
 
 *Do*, so that a GUI change is tested again on every pull request:
 

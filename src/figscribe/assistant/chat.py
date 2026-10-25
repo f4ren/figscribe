@@ -19,6 +19,7 @@ import base64
 import json
 import os
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -177,6 +178,12 @@ def tool_definitions(vision: bool = True) -> list[dict[str, Any]]:
 # --- Claude -------------------------------------------------------------------
 
 
+NO_KEY = (
+    "No valid API key. Set ANTHROPIC_API_KEY, sign in with `ant auth login`, "
+    "or enter a key in the chat."
+)
+
+
 class ClaudeModel:
     """Claude through the Anthropic API.
 
@@ -228,13 +235,12 @@ class ClaudeModel:
         with self._errors():
             return [m.id for m in self.client.models.list()]
 
+    @contextmanager
     def _errors(self):
         anthropic = self._anthropic
-        return _Translate(
+        translate = _Translate(
             {
-                anthropic.AuthenticationError: "No valid API key. Set "
-                "ANTHROPIC_API_KEY, sign in with `ant auth login`, or enter a key "
-                "in the chat.",
+                anthropic.AuthenticationError: NO_KEY,
                 anthropic.NotFoundError: f"The model {self.name!r} does not exist; "
                 "choose another in the assistant settings.",
                 anthropic.RateLimitError: "Too many requests just now; try again "
@@ -243,6 +249,15 @@ class ClaudeModel:
                 anthropic.APIStatusError: "The API refused the request: {message}",
             }
         )
+        try:
+            with translate:
+                yield
+        except TypeError as exc:
+            # Without any credentials the SDK fails when it builds the first
+            # request, before there is an API error to translate.
+            if "authentication method" not in str(exc):
+                raise
+            raise ChatError(NO_KEY) from exc
 
 
 _ANTHROPIC_STOPS = {
