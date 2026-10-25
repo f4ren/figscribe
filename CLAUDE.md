@@ -26,8 +26,8 @@ property panel and the assistant tools.
 
 ```
 pip install -e ".[dev]"                 # all extras, as CI installs them
-python -m pytest -q                     # Qt runs offscreen, set in tests/conftest.py
-python -m pytest -q -m "not slow"       # without the field test, while iterating
+python -m pytest -q -n auto --dist worksteal   # in parallel; Qt runs offscreen
+python -m pytest -q -m "not slow"       # without the GUI sweeps, while iterating
 ruff check . && ruff format --check .   # CI fails on either
 FIGSCRIBE_UPDATE_BASELINES=1 python -m pytest tests/render/test_images.py
                                         # after an intended rendering change;

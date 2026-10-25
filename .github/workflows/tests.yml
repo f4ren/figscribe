@@ -43,6 +43,6 @@ jobs:
       - name: Install
         run: python -m pip install -e ".[dev]"
       # The slow tests operate every field and action of the GUI; once is
-      # enough, on one platform, to keep the other jobs short.
+      # enough, on one platform (decision 0028).
       - name: Run tests
-        run: python -m pytest -q ${{ (matrix.os != 'ubuntu-latest' || matrix.python-version != '3.13') && '-m "not slow"' || '' }}
+        run: python -m pytest -q -n auto --dist worksteal ${{ (matrix.os != 'ubuntu-latest' || matrix.python-version != '3.13') && '-m "not slow"' || '' }}

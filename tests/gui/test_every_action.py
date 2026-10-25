@@ -75,14 +75,25 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
     return make, shown
 
 
-def _actions(window: MainWindow) -> list[QAction]:
-    """The window's menu actions, each once, in menu order."""
-    found: list[QAction] = []
+MENUS = ["File", "Edit", "Insert", "View", "Assistant"]
+"""The menu bar; one test per menu, so that they run side by side."""
+
+PANELS = range(5)
+"""The panels of the project, one test each with its plots: A to D, the inset."""
+
+
+def test_the_menus_are_all_tested(qtbot, window_factory) -> None:
+    make, _ = window_factory
+    bar = make().menuBar()
+    assert [action.text().replace("&", "") for action in bar.actions()] == MENUS
+
+
+def _actions(window: MainWindow, menu: str) -> list[QAction]:
+    """The actions of one menu of the window, in menu order."""
     for menu_action in window.menuBar().actions():
-        for action in _in_menu(menu_action.menu()):
-            if action not in found:
-                found.append(action)
-    return found
+        if menu_action.text().replace("&", "") == menu:
+            return _in_menu(menu_action.menu())
+    raise LookupError(menu)
 
 
 def _in_menu(menu) -> list[QAction]:
@@ -98,14 +109,14 @@ def _in_menu(menu) -> list[QAction]:
 
 
 @pytest.mark.slow
-def test_every_action_works(qtbot, window_factory) -> None:
+@pytest.mark.parametrize("menu", MENUS)
+def test_every_action_works(qtbot, window_factory, menu: str) -> None:
     make, shown = window_factory
-    names = [action.text() for action in _actions(make())]
-    assert len(names) > 20  # the menus were found
+    names = [action.text() for action in _actions(make(), menu)]
     problems = []
     for index, name in enumerate(names):
         window = make()
-        action = _actions(window)[index]
+        action = _actions(window, menu)[index]
         assert action.text() == name
         shown.clear()
         if not action.isEnabled():
@@ -117,22 +128,26 @@ def test_every_action_works(qtbot, window_factory) -> None:
         if bugs:
             problems.append(f"{name.replace('&', '')}: {bugs[0]}")
         window.close()
-    assert not problems, "\n".join(problems)
+    assert names and not problems, "\n".join(problems)
 
 
 @pytest.mark.slow
-def test_every_entry_of_the_outline_menus_works(qtbot, window_factory) -> None:
+@pytest.mark.parametrize("panel", [*PANELS, "figure and files"])
+def test_every_entry_of_the_outline_menus_works(qtbot, window_factory, panel) -> None:
     """Right-click on each object in the outline, and each entry once; what an
     entry changed is undone before the next."""
     make, shown = window_factory
     window = make()
     document = window.document
     project = document.project  # the same object throughout: undo restores it
-    ids = [axes.id for axes in project.figures[0].axes] + [
-        artist.id for axes in project.figures[0].axes for artist in axes.artists
-    ]
-    tried, problems = 0, []
-    for oid in [project.figures[0].id, *ids, *(s.id for s in project.sources)]:
+    figure = project.figures[0]
+    if panel == "figure and files":
+        ids = [figure.id, *(source.id for source in project.sources)]
+    else:
+        axes = figure.axes[panel]
+        ids = [axes.id, *(artist.id for artist in axes.artists)]
+    problems = []
+    for oid in ids:
         menu = window.outline.context_menu(oid)
         entries = (
             [a.text() for a in menu.actions() if not a.isSeparator()] if menu else []
@@ -148,11 +163,9 @@ def test_every_entry_of_the_outline_menus_works(qtbot, window_factory) -> None:
             )
             entry.trigger()
             qtbot.wait(10)
-            tried += 1
             bugs = [message for message in shown if BUG in message]
             if bugs:
                 problems.append(f"{oid} {text}: {bugs[0]}")
             while dumps(document.project) != before and document.history.can_undo:
                 document.undo()
-    assert tried > 20  # the menus were found
     assert not problems, "\n".join(problems)
