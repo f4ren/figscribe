@@ -240,6 +240,15 @@ def test_unshared_axes_keep_their_tick_labels(data) -> None:
     assert top.xaxis.get_tick_params()["labelbottom"]
 
 
+def test_columns_of_unequal_length_are_a_data_error(ref) -> None:
+    from figscribe.io import DataError
+
+    columns = {"t": np.arange(4.0), "U": np.arange(3.0)}
+    axes = Axes(artists=[LinePlot(x=ref("t"), y=ref("U"))])
+    with pytest.raises(DataError, match=r"y \(U\) has 3 values, x \(t\) has 4"):
+        render(Figure(axes=[axes]), lambda r: columns[r.column])
+
+
 def test_share_all_joins_every_axes(data) -> None:
     figure = Figure(
         layout=GridLayout(rows=1, cols=2, share_y="all"),

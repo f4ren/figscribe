@@ -314,6 +314,14 @@ the export.
   win over their axes; nothing in the renderer had to change.
 - **Errors while drawing are shown in the preview**, never raised: a missing or
   changed data file must not take the window down.
+- **Every error the GUI shows goes through `gui/errors.explain`** (since
+  2026-10-24): figscribe's own errors are written for the user and pass
+  unchanged, a file error gives its reason and path, a damaged project file
+  where it is damaged; anything else is called a bug, with its type and
+  message for a report. Problems figscribe can foresee are caught before
+  Matplotlib sees them, such as columns of unequal length, which the renderer
+  refuses with both names and lengths and `validate_references` reports when
+  given the data.
 - **PySide6 is a regular dependency**, not an extra: figscribe is a desktop
   application, and `pip install figscribe` gives the `figscribe` command.
 - **GUI tests run offscreen** with pytest-qt. Keyboard shortcuts are checked by
@@ -360,7 +368,15 @@ class would have to be kept in step with every field added to the model.
   was typed.
 - **Each edit is one `SetField`.** Constraints live on the model only; a
   refused value shows pydantic's message above the form and the editor shows
-  the model's value again. An unchanged value pushes nothing.
+  the model's value again. An unchanged value pushes nothing. The exception
+  are style strings (colors, markers, line styles, color maps, legend
+  locations, since 2026-10-24): the model keeps them as text because
+  Matplotlib accepts many forms, and the commands ask Matplotlib whether it
+  can draw them (`model/styles.py`), so the property panel, the dialogs and
+  the assistant all refuse "blu" with the same plain message. A model
+  validator would have made a project file with such a value impossible to
+  open and repair, and the model would depend on Matplotlib; a file's own bad
+  values are reported by `validate_references` instead.
 - **Some fields are deliberately left out**: ids, kinds, item lists (edited in
   the outline), `y_right` (not rendered yet), and fit models, start values,
   results and histogram bins, which get dedicated editors with their features.

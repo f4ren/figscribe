@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 from figscribe.commands import CommandError, Macro, SetField, find
 from figscribe.gui import theme
 from figscribe.gui.document import Document, axis_id, split_axis
+from figscribe.gui.errors import explain
 from figscribe.gui.names import size_text
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
@@ -128,7 +129,7 @@ class Preview(QWidget):
             try:
                 self._figure, self._image = self._draw(model)
             except Exception as exc:  # any failure is shown, never fatal
-                self.error = f"Cannot draw the figure\n{exc}"
+                self.error = f"Cannot draw the figure\n{explain(exc)}"
         self.update()
 
     def preview_dpi(self) -> float:

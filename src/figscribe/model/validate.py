@@ -15,6 +15,7 @@ reason: the file stays loadable.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sized
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -32,6 +33,7 @@ from figscribe.model.axes import Axes
 from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource
 from figscribe.model.figure import Figure
 from figscribe.model.project import Project
+from figscribe.model.styles import style_problems
 
 FITTABLE = (LinePlot, ScatterPlot, ErrorbarPlot)
 """Artist types a FitCurve can target: the ones with x and y columns."""
@@ -51,8 +53,13 @@ class ReferenceIssue:
         return f"{self.location}: {self.message}"
 
 
-def validate_references(project: Project) -> list[ReferenceIssue]:
-    """Return every cross-object problem in `project`, empty list if sound."""
+def validate_references(
+    project: Project, data: Callable[[ColumnRef], Sized] | None = None
+) -> list[ReferenceIssue]:
+    """Return every cross-object problem in `project`, empty list if sound.
+
+    With `data`, the columns of each plot are also checked for equal length.
+    """
     issues: list[ReferenceIssue] = []
     source_ids = {s.id for s in project.sources}
     sources = {s.id: s for s in project.sources}
@@ -85,9 +92,13 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
             _check_axis_ticks(axes, apath, issues)
 
             artists_by_id = {a.id: a for a in axes.artists}
+            for field, why in style_problems(axes):
+                issues.append(ReferenceIssue(f"{apath}.{field}", axes.id, why))
 
             for ti, artist in enumerate(axes.artists):
                 tpath = f"{apath}.artists[{ti}]"
+                for field, why in style_problems(artist):
+                    issues.append(ReferenceIssue(f"{tpath}.{field}", artist.id, why))
 
                 if artist.axis == "right" and axes.y_right is None:
                     issues.append(
@@ -98,6 +109,11 @@ def validate_references(project: Project) -> list[ReferenceIssue]:
                             "but the axes has no y_right",
                         )
                     )
+
+                if data is not None and isinstance(artist, FITTABLE):
+                    why = _unequal_or_unreadable(artist, data)
+                    if why is not None:
+                        issues.append(ReferenceIssue(tpath, artist.id, why))
 
                 for field, ref in _data_refs(artist):
                     if ref not in source_ids:
@@ -203,6 +219,37 @@ def _lacks(source: DataSource, column: ColumnRef) -> bool:
         and bool(source.columns)
         and column.column not in source.columns
     )
+
+
+def unequal_columns(
+    artist: LinePlot | ScatterPlot | ErrorbarPlot,
+    data: Callable[[ColumnRef], Sized],
+) -> str | None:
+    """Why the columns of a plot cannot be drawn together: the first that has
+    another number of values than x. None if they all match."""
+    (first, base), *others = [
+        (name, ref)
+        for name in ("x", "y", "xerr", "yerr")
+        if (ref := getattr(artist, name, None)) is not None
+    ]
+    count = len(data(base))
+    for name, ref in others:
+        if (other := len(data(ref))) != count:
+            return (
+                f"{name} ({ref.column}) has {other} values, "
+                f"{first} ({base.column}) has {count}"
+            )
+    return None
+
+
+def _unequal_or_unreadable(artist, data) -> str | None:
+    # Imported here: the data package imports the model.
+    from figscribe.io.errors import DataError
+
+    try:
+        return unequal_columns(artist, data)
+    except DataError:
+        return None  # a file that cannot be read is shown above the preview
 
 
 def _data_refs(artist: ArtistBase) -> list[tuple[str, str]]:

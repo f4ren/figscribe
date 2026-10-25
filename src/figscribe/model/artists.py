@@ -18,7 +18,8 @@ Color = str
 """A Matplotlib color spec ("C0", "#ff0000", "tab:blue", ...).
 
 Deliberately not modelled further: Matplotlib accepts many forms, and a stricter
-type here would drift away from what the renderer actually supports.
+type here would drift away from what the renderer actually supports. The
+commands ask Matplotlib instead (`model/styles.py`).
 """
 
 

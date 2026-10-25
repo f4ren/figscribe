@@ -200,6 +200,14 @@ def test_problems_are_reported_after_a_change(tools, workspace) -> None:
 # --- insert, remove, move ------------------------------------------------------
 
 
+def test_a_style_string_matplotlib_refuses_is_refused(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    with pytest.raises(ToolError, match="'blu' is not a color"):
+        tools.call(
+            "set_field", {"object_id": artist, "path": ["color"], "value": "blu"}
+        )
+
+
 def test_insert_a_plot(tools, workspace) -> None:
     _, axes, _, source = _ids(workspace)
     line = {

@@ -21,6 +21,7 @@ from matplotlib.ticker import (
     NullFormatter,
 )
 
+from figscribe.io.errors import DataError
 from figscribe.model import (
     Annotation,
     ArrayRef,
@@ -39,7 +40,7 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
 )
-from figscribe.model.validate import FITTABLE
+from figscribe.model.validate import FITTABLE, unequal_columns
 from figscribe.render.labels import axis_label
 from figscribe.render.layout import (
     creation_order,
@@ -266,6 +267,9 @@ def _draw_artist(
         "alpha": artist.alpha,
         "gid": artist.id,
     }
+    # Matplotlib would say "x and y must have same first dimension".
+    if isinstance(artist, FITTABLE) and (why := unequal_columns(artist, data)):
+        raise DataError(f"{artist.label or artist.kind}: {why}")
 
     if isinstance(artist, LinePlot):
         ax.plot(

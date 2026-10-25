@@ -26,7 +26,8 @@ class Problems(QListWidget):
 
     def rebuild(self) -> None:
         self.clear()
-        for issue in validate_references(self.document.project):
+        document = self.document
+        for issue in validate_references(document.project, document.data):
             item = QListWidgetItem(str(issue), self)
             item.setData(ID_ROLE, issue.object_id)
 

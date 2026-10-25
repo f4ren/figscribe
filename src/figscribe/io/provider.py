@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -19,7 +20,9 @@ from figscribe.model import (
     NumpySource,
     Project,
 )
-from figscribe.render import DataProvider
+
+if TYPE_CHECKING:  # the renderer raises DataError, so it imports this package
+    from figscribe.render import DataProvider
 
 
 def load_data(project: Project, base_dir: str | Path) -> DataProvider:

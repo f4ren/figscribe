@@ -327,10 +327,14 @@ class Toolbox:
         return problems
 
     def _problems(self) -> list[str]:
-        problems = [str(issue) for issue in validate_references(self.workspace.project)]
-        for source in self.workspace.project.sources:
+        workspace = self.workspace
+        problems = [
+            str(issue)
+            for issue in validate_references(workspace.project, workspace.data)
+        ]
+        for source in workspace.project.sources:
             name = Path(source.path).name
-            state = source_state(source, self.workspace.base_dir)
+            state = source_state(source, workspace.base_dir)
             if state == "changed":
                 problems.append(
                     f"{name} has changed since it was imported; "

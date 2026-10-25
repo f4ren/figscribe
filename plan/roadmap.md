@@ -154,6 +154,14 @@ bad value is in the model.
 - go through every `except Exception` in `gui/` and make sure the message shown
   is written for a scientist, not a developer.
 
+**Done** (2026-10-24, decisions 0005 and 0006): the commands check style
+strings through `model/styles.py`; `validate_references(project, data)`
+reports bad styles from a file and columns of unequal length, which the
+renderer refuses as a `DataError`; `gui/errors.explain` words every error the
+GUI shows. *Learned:* three calls used a `ValueError` only to carry a message;
+they pass text now. A broken project file reached the user as pydantic's
+"1 validation error for Project"; it now says where the file is damaged.
+
 ### B5 Numbers typed the way people type them (verified) — S
 
 *Repro:* the property panel refuses `1,5` (decimal comma) and `−3` (the
