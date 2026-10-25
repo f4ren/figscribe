@@ -27,8 +27,9 @@ class CsvSource(Identified):
     """Where the file is: relative to the project's folder when it lies below it."""
     sha256: Sha256
     """SHA-256 of the file when it was imported; a changed file is refused."""
-    delimiter: str | None = ","
-    """None splits on any run of whitespace, as in many .dat files."""
+    delimiter: str | None = Field(",", min_length=1, max_length=1)
+    """One character; None splits on any run of whitespace, as in many .dat
+    files."""
     decimal: str = Field(".", min_length=1, max_length=1)
     """The decimal mark of the numbers: "." or ","."""
     header_row: int | None = Field(0, ge=0)
