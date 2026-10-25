@@ -171,7 +171,6 @@ class MainWindow(QMainWindow):
         self.problems = Problems(self.document)
         self.properties = PropertyPanel(self.document)
         self.properties.axis_range = self.preview.axis_limits
-        self.properties.edit_fit = self.edit_fit
         self.outline.add_requested.connect(self._add_plot_to)
         self.outline.import_requested.connect(lambda: self.import_csv())
         self.outline.panel_requested.connect(
@@ -185,6 +184,7 @@ class MainWindow(QMainWindow):
         self.properties_dock = self._dock(
             "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
         )
+        self.properties.edit_fit = self.edit_fit
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
