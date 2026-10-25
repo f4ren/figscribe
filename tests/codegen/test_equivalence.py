@@ -173,6 +173,32 @@ def test_a_fit_over_part_of_the_data(tmp_path: Path, extend: bool) -> None:
     assert "in_range = (t >= 2.5) & (t <= 7.5)" in script
 
 
+def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data", left_out=[3, 20]
+    )
+    line = LinePlot(x=ref["t"], y=ref["t2"], left_out=[5], axis="left")
+    points = ScatterPlot(
+        x=ref["t"], y=ref["U"], left_out=[7], left_out_color="red", left_out_marker="x"
+    )
+    project.figures = [
+        Figure(
+            dpi=150,
+            layout=GridLayout(rows=1, cols=2),
+            axes=[
+                Axes(legend=Legend(visible=True), artists=[data]),
+                Axes(col=1, artists=[line, points]),
+            ],
+        )
+    ]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "kept[[3, 20]] = False" in script
+
+
 def test_many_settings(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     left = Axes(
