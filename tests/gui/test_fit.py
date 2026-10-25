@@ -309,3 +309,37 @@ def test_the_panel_opens_a_fit_to_change_it(window: MainWindow) -> None:
     assert window.document.history.undo_text == "Change the fit"
     window.document.undo()
     assert window.document.figure.axes[0].artists[1].fixed == ["c"]
+
+
+def test_a_fit_range_is_typed_in_the_dialog(dialog: FitDialog) -> None:
+    everything = dialog.result.parameters["mu"]
+    dialog.range_low.setText("3")
+    dialog.range_high.setText("7")
+    dialog.range_high.editingFinished.emit()
+    assert "of 41 points" in dialog.points.text()
+    assert dialog.result.parameters["mu"] != everything
+    fit = dialog.fit()
+    assert fit.fit_range == (3.0, 7.0) and not fit.extend_curve
+    dialog.extend.click()
+    assert dialog.fit().extend_curve
+    dialog.range_low.setText("8")
+    dialog.range_low.editingFinished.emit()
+    assert "lower end" in dialog.error.text() and not _ok(dialog)
+
+
+def test_a_fit_range_is_shown_when_the_fit_is_changed(
+    qtbot, document: Document
+) -> None:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(3.0, 7.0),
+        extend_curve=True,
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    assert (dialog.range_low.text(), dialog.range_high.text()) == ("3", "7")
+    assert dialog.extend.isChecked()
+    assert dialog.fit().fit_range == (3.0, 7.0)

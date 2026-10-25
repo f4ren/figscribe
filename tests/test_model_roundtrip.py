@@ -178,3 +178,14 @@ def test_a_fit_bound_must_be_a_range() -> None:
     )
     with pytest.raises(ValidationError, match="lower bound"):
         FitCurve(target="t", model=model, parameter_bounds={"a": (2.0, 1.0)})
+
+
+def test_a_fit_range_has_a_lower_and_an_upper_end() -> None:
+    from pydantic import ValidationError
+
+    from figscribe.model import FitCurve, PredefinedFit
+
+    model = PredefinedFit(name="linear")
+    assert FitCurve(target="t", model=model, fit_range=(1.0, 2.0)).fit_range
+    with pytest.raises(ValidationError, match="lower end"):
+        FitCurve(target="t", model=model, fit_range=(2.0, 1.0))

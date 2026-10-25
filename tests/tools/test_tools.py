@@ -652,3 +652,16 @@ def test_a_fit_can_hold_and_bound_parameters(tools, workspace) -> None:
     assert result["result"]["parameters"]["c"] == 0.0
     fit = find(workspace.project, result["id"])
     assert fit.fixed == ["c"] and fit.parameter_bounds == {"sigma": (0.1, None)}
+
+
+def test_a_fit_can_use_part_of_the_data(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "fit",
+        {
+            "target_id": artist,
+            "model": {"kind": "predefined", "name": "gaussian"},
+            "fit_range": [2.0, 8.0],
+        },
+    )
+    assert find(workspace.project, result["id"]).fit_range == (2.0, 8.0)
