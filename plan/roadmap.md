@@ -346,10 +346,24 @@ the project. It found:
    `QAction` of the main window once on the fixture project: no exception, no
    raw message. A new action or dialog missing from the list fails the test,
    like U1.
+   **Partly done** (2026-10-25): `tests/gui/test_every_action.py` triggers
+   every menu action of the main window (found on the window, so a new one is
+   tested without being listed) in a fresh window, and every entry of the
+   outline's context menus for every object, undoing what each changed;
+   dialogs are answered in the test, and no action may end in a message that
+   figscribe calls a bug. Both tests are `slow`; CI runs the slow tests on
+   Ubuntu with Python 3.13 only, which keeps the other jobs at their former
+   two to three minutes (the field test alone added two to four to each).
+   *Open:* about twenty places in the dialog tests (import, images, fit,
+   notes, chat) still set widgets with `setChecked` or `setCurrentText`;
+   make them click, and add the preview's zoom, pan and legend drag with
+   `QTest` mouse events.
 3. **A manual checklist** in `docs/testing.md`, about 15 minutes, for what a
    test cannot judge: the result looks right; real mouse and trackpad on macOS
    and Windows; high DPI; dark mode; small window. Run before every release
    (part of B7) and for every pull request that changes what is seen.
+   **Done** (2026-10-25): `docs/testing.md`, with what the automatic tests
+   cover and eleven steps by hand.
 
 *Done when:* items 1 to 5 above have failing tests and fixes; the field test
 and the action test run in CI; `docs/testing.md` exists; how-to rule 10 holds.
