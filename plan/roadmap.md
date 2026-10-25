@@ -491,9 +491,10 @@ covariance detected). Missing:
    *Learned:* the field could not be called `bounds`, which an inset already
    has, since the panel's lists go by field name. A guessed start value
    outside a bound the user set is moved in; a typed one is refused.
-   *Follow-up:* an existing fit's start values, held parameters and bounds
-   can only be changed by the assistant; the panel needs a way into the fit
-   dialog for a fit that is already there.
+   Changing a fit that is there: **done** the same day. "Change the fit…" on
+   the panel's result card opens the dialog on the fit as it is (model, start
+   values, held, bounds, label) and "Update fit" is one undo step
+   (`fit.update_fit`); its residuals and its look stay as they are.
 3. **Show the result in the figure**: a text box (a note bound to the fit)
    with chosen parameters as `value ± error unit`, rounded to two significant
    digits of the error as `names.with_error` already does; updates on refit.

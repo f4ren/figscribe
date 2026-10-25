@@ -256,3 +256,56 @@ def test_the_panel_shows_a_held_parameter_as_held(qtbot, document: Document) -> 
     document.select(fit.id)
     shown = [w.text() for w in panel.findChildren(QLabel)]
     assert "0 (held)" in shown
+
+
+# --- changing a fit that is there -------------------------------------------------
+
+
+def _held_fit(document: Document) -> FitCurve:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"a": 1.0, "mu": 5.0, "sigma": 1.0, "c": 0.0},
+        fixed=["c"],
+        parameter_bounds={"sigma": (0.2, None)},
+        label="peak",
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    return document.figure.axes[0].artists[1]
+
+
+def test_the_dialog_shows_a_fit_as_it_is(qtbot, document: Document) -> None:
+    fit = _held_fit(document)
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    assert dialog.model_key == "gaussian"
+    assert {n: float(line.text()) for n, line in dialog.start.items()} == {
+        "a": 1.0,
+        "mu": 5.0,
+        "sigma": 1.0,
+        "c": 0.0,
+    }
+    assert dialog.held() == ["c"] and dialog.bounds() == {"sigma": (0.2, None)}
+    assert dialog.label.text() == "peak"
+    assert dialog.residuals.isHidden()
+    ok = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    assert ok.text() == "Update fit" and _ok(dialog)
+    assert dialog.fit().id == fit.id
+
+
+def test_the_panel_opens_a_fit_to_change_it(window: MainWindow) -> None:
+    fit = _held_fit(window.document)
+    window.document.select(fit.id)
+
+    def free_c(dialog: FitDialog) -> bool:
+        dialog.fixed["c"].click()
+        return True
+
+    window.run_dialog = free_c
+    window.properties.edit_fit_button.click()
+    changed = window.document.figure.axes[0].artists[1]
+    assert changed.fixed == [] and changed.result.uncertainties["c"] > 0
+    assert window.document.history.undo_text == "Change the fit"
+    window.document.undo()
+    assert window.document.figure.axes[0].artists[1].fixed == ["c"]

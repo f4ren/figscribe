@@ -435,6 +435,8 @@ class PropertyPanel(QScrollArea):
         self.axis_form: AxisForm | None = None
         self.axis_range: Callable[[str], tuple[float, float] | None] = lambda _: None
         """The range an axis shows right now; the window asks the preview."""
+        self.edit_fit: Callable[[str], None] = lambda fit_id: None
+        """Opens the fit dialog on a fit that is there; the window does."""
         self._folded = {title: True for title in COLLAPSED}
         self.set_document(document)
 
@@ -753,10 +755,16 @@ class PropertyPanel(QScrollArea):
                 grid.addWidget(warning, row + 1, 0, 1, 2)
         grid.setColumnStretch(1, 1)
         outer.addWidget(card)
+        edit = QPushButton("Change the fit…")
+        edit.setObjectName("link")
+        edit.setToolTip("Model, start values, held parameters and bounds")
+        edit.clicked.connect(lambda: self.edit_fit(fit.id))
+        self.edit_fit_button = edit
         again = QPushButton("Fit again with the current data")
         again.setObjectName("link")
         again.clicked.connect(lambda: self.fit_again(fit.id))
         self.fit_again_button = again
+        outer.addWidget(edit, 0, Qt.AlignmentFlag.AlignLeft)
         outer.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return holder
 

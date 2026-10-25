@@ -53,9 +53,18 @@ MODELS = [
 class FitDialog(QDialog):
     """Fits a model to the plot `target`; `fit()` is the result for the model."""
 
-    def __init__(self, target, data, residuals_default: bool = False, parent=None):
+    def __init__(
+        self,
+        target,
+        data,
+        residuals_default: bool = False,
+        parent=None,
+        fit: FitCurve | None = None,
+    ):
+        """With `fit`, the dialog opens on that fit as it is, to change it."""
         super().__init__(parent)
         self.target = target
+        self.existing = fit
         self.x = data(target.x)
         self.y = data(target.y)
         self.yerr = (
@@ -103,7 +112,10 @@ class FitDialog(QDialog):
 
         self._layout()
         self.resize(820, 560)
-        self.models.button(0).setChecked(True)
+        if fit is None:
+            self.models.button(0).setChecked(True)
+        else:
+            self._show_fit(fit)
 
     # --- layout ---------------------------------------------------------------
 
@@ -186,6 +198,36 @@ class FitDialog(QDialog):
         layout.addLayout(middle, 1)
         layout.addWidget(_rule())
         layout.addLayout(bottom)
+
+    def _show_fit(self, fit: FitCurve) -> None:
+        """Fill the dialog from a fit that is there; Add becomes Update."""
+        ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        ok.setText("Update fit")
+        self.residuals.hide()  # its residuals, if any, stay as they are
+        self.label.setText(fit.label or "")
+        self.label.setModified(True)  # not replaced by the model's name
+        if isinstance(fit.model, ExpressionFit):
+            self.expression.setText(fit.model.expression)
+            key = "expression"
+        else:
+            if fit.model.degree is not None:
+                self.degree.blockSignals(True)
+                self.degree.setValue(fit.model.degree)
+                self.degree.blockSignals(False)
+            key = fit.model.name
+        self.choose(key)  # fills the start values with guesses, and fits
+        for name, line in self.start.items():
+            if name in fit.initial_values:
+                line.setText(f"{fit.initial_values[name]:.6g}")
+                line.setModified(True)  # the user's, as before
+            low, high = fit.parameter_bounds.get(name, (None, None))
+            self.lower[name].setText("" if low is None else f"{low:.6g}")
+            self.upper[name].setText("" if high is None else f"{high:.6g}")
+            box = self.fixed[name]
+            box.blockSignals(True)
+            box.setChecked(name in fit.fixed)
+            box.blockSignals(False)
+        self.refit()
 
     # --- model ----------------------------------------------------------------
 
@@ -338,7 +380,9 @@ class FitDialog(QDialog):
         """The FitCurve to add, with the start values it was fitted from."""
         if self.result is None:
             return None
+        keep = {} if self.existing is None else {"id": self.existing.id}
         return FitCurve(
+            **keep,
             target=self.target.id,
             model=self.model(),
             initial_values=self.start_values(),
