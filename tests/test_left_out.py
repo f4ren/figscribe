@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from matplotlib.colors import to_rgb
 
 from figscribe.commands import History
 from figscribe.fit import FitError, evaluate, refit, set_left_out
@@ -64,7 +65,7 @@ def test_left_out_points_are_drawn_apart_in_light_grey(plot_type) -> None:
     assert list(kept.rows) == [0, 1, 2, 3, 5, 6, 7, 8, 9]
     assert list(out.rows) == [4]
     color = out.get_color() if hasattr(out, "get_color") else out.get_facecolor()[0]
-    assert np.allclose(np.ravel(color)[:3], 0.7)  # light grey
+    assert np.allclose(to_rgb(color), 0.7)  # light grey
 
 
 def test_a_left_out_point_can_have_a_color_and_marker_of_its_own() -> None:

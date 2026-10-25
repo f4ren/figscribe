@@ -15,6 +15,7 @@ legend moves it, one undo step on release.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -37,12 +38,14 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QWidget,
 )
 
 from figscribe.commands import CommandError, Macro, SetField, find
+from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
@@ -119,6 +122,8 @@ class Preview(QWidget):
         self._origin = QPointF()
         self.error: str | None = None
         """Why the figure could not be drawn, shown instead of it."""
+        self.show_error: Callable[[str, str], None] = lambda title, message: None
+        """Tells the user why a change was refused; the window shows it."""
         self._ranges: dict[tuple[str, str], tuple[float, float]] = {}
         """The range of each axis, by (gid, "x" | "y"), when last drawn."""
         self._redraw = QTimer(self)
@@ -642,6 +647,69 @@ class Preview(QWidget):
             moved = event.position() - press.start
             self.move_note(press.note.get_gid(), moved.x(), moved.y())
         self.update()
+
+    def point_at(self, point: QPointF) -> tuple[str, int] | None:
+        """(plot id, data row) of the point drawn nearest to `point`, within
+        the pick radius, or None."""
+        if self._figure is None:
+            return None
+        x, y = self._to_display(point)
+        event = MouseEvent("button_press_event", self._figure.canvas, x, y)
+        found = []  # (distance, plot id, row)
+        for ax in _all_axes(self._figure):
+            for drawn in (*ax.lines, *ax.collections):
+                rows = getattr(drawn, "rows", None)
+                if rows is None or not drawn.get_visible():
+                    continue
+                hit, details = drawn.contains(event)
+                near = details.get("ind", [])
+                if not hit or not len(near):
+                    continue
+                if hasattr(drawn, "get_xydata"):  # a line, else a scatter
+                    places = drawn.get_transform().transform(drawn.get_xydata())
+                else:
+                    places = drawn.get_offset_transform().transform(drawn.get_offsets())
+                for index in near:
+                    distance = float(np.hypot(*(places[index] - (x, y))))
+                    found.append((distance, drawn.get_gid(), int(rows[index])))
+        if not found:
+            return None
+        _, plot_id, row = min(found)
+        return plot_id, row
+
+    def context_menu(self, point: QPointF) -> QMenu | None:
+        """What can be done with the point at `point`: leave it out of its
+        plot and the plot's fits, or take it back in."""
+        found = self.point_at(point)
+        if found is None:
+            return None
+        plot_id, row = found
+        left_out = list(find(self.document.project, plot_id).left_out)
+        menu = QMenu(self)
+        if row in left_out:
+            text, rows = (
+                f"Take row {row + 1} back in",
+                [r for r in left_out if r != row],
+            )
+        else:
+            text, rows = f"Leave out row {row + 1}", [*left_out, row]
+        menu.addAction(text, lambda: self._leave_out(plot_id, rows))
+        return menu
+
+    def _leave_out(self, plot_id: str, rows: list[int]) -> None:
+        try:
+            command = set_left_out(
+                self.document.project, plot_id, rows, self.document.data
+            )
+        except (FitError, CommandError) as exc:
+            self.show_error("Cannot leave the point out", str(exc))
+            return
+        self.document.push(command)
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        menu = self.context_menu(QPointF(event.pos()))
+        if menu is not None:
+            menu.exec(event.globalPos())
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt naming
         if event.key() == Qt.Key.Key_Escape and self.view:

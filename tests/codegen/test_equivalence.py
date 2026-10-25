@@ -196,7 +196,7 @@ def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
     add_fit(project, fit, residuals=True).apply(project)
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     script = _assert_same(project, tmp_path)
-    assert "kept[[3, 20]] = False" in script
+    assert "kept_1[[3, 20]] = False" in script
 
 
 def test_many_settings(tmp_path: Path) -> None:

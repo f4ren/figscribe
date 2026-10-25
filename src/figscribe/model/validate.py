@@ -280,6 +280,17 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
         reference = artist.data if isinstance(artist, ImagePlot) else artist.c
         shown = [("values", reference, artist.norm)]
     found = []
+    if isinstance(artist, FITTABLE) and artist.left_out:
+        try:
+            count = len(data(artist.x))
+        except DataError:
+            return []
+        for row in artist.left_out:
+            if row >= count:
+                found.append(
+                    f"row {row + 1} is left out, but the data has {count} rows"
+                )
+                break
     for name, reference, scale in shown:
         try:
             values = np.asarray(data(reference), dtype=float).ravel()

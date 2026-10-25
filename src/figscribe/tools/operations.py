@@ -36,7 +36,7 @@ from figscribe.commands import (
     remove_axes,
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
-from figscribe.fit import FitError, add_fit, refit
+from figscribe.fit import FitError, add_fit, refit, set_left_out
 from figscribe.io import DataError
 from figscribe.io.refresh import (
     read_differently,
@@ -182,6 +182,12 @@ class Toolbox:
         self, project: Project, object_id: str | None, path: list[str], value: Any
     ) -> Command:
         command = _set_field(project, object_id, path, value)
+        if path == ["left_out"]:
+            try:  # the plot's fits are fitted again without those rows
+                data = self.workspace.data
+                return set_left_out(project, object_id, list(command.value), data)
+            except FitError as exc:
+                raise ToolError(str(exc)) from exc
         if len(path) == 1 and path[0] in reading_options(find(project, object_id)):
             try:  # the file is read that way at once, with its new columns
                 return read_differently(

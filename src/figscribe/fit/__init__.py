@@ -11,12 +11,13 @@ from figscribe.fit.expression import (
     compile_expression,
     free_names,
 )
-from figscribe.fit.ops import add_fit, refit, update_fit
+from figscribe.fit.ops import add_fit, refit, set_left_out, update_fit
 from figscribe.fit.run import (
     evaluate,
     free_parameters,
     in_range,
     initial_guess,
+    kept,
     numpy_source,
     parameter_names,
     run_fit,
@@ -33,11 +34,13 @@ __all__ = [
     "free_names",
     "free_parameters",
     "in_range",
+    "kept",
     "initial_guess",
     "numpy_source",
     "parameter_names",
     "refit",
     "run_fit",
+    "set_left_out",
     "source_of",
     "update_fit",
     "within",

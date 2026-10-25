@@ -1214,3 +1214,31 @@ at 16 px. **Letters ("fs")**: need a font in the drawing and say less.
 **One drawing for every size**: at 16 px the margin leaves a blue speck. **Making the platform files at
 release time only**: the installers would then depend on Qt being able to
 render in CI before anyone has seen the result.
+
+---
+
+## 0030 — Points left out of a plot
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Outliers and detector glitches must stay out of a fit, but a paper must not
+hide that they were there, and the data file must stay as measured.
+
+### Decision
+
+- **Rows left out are stored on the plot** (`left_out`, counted from 0), so
+  every fit of it skips them; a fit range stays a property of the fit.
+- **They are drawn apart, in light grey by default**, with their error bars
+  and without a legend entry; color and marker can be set
+  (`left_out_color`, `left_out_marker`). An explicit color leaves the color
+  cycle alone, so the other plots keep their colors.
+- **Leaving out or taking back fits the plot's fits again** in the same undo
+  step, and is refused if a fit would have too few points; a row the data
+  lacks is reported by `validate_references`.
+- **The script keeps the file as it is** and names a mask, `kept`, with a
+  comment listing the rows as they are counted on screen.
+- **Outliers found automatically are proposed, not applied** (decided with
+  the user, to come): once confirmed they join the same list.

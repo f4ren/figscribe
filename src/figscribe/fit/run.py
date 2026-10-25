@@ -144,6 +144,17 @@ def in_range(x, fit_range: tuple[float, float] | None) -> np.ndarray:
     return (x >= low) & (x <= high)
 
 
+def kept(count: int, left_out: Sequence[int]) -> np.ndarray:
+    """Which of `count` rows are not left out; a FitError for a left-out row
+    the data does not have."""
+    rows = np.ones(count, dtype=bool)
+    for row in left_out:
+        if row >= count:
+            raise FitError(f"row {row + 1} is left out, but the data has {count} rows")
+        rows[row] = False
+    return rows
+
+
 def within(
     values: Mapping[str, float],
     bounds: Mapping[str, tuple[float | None, float | None]],

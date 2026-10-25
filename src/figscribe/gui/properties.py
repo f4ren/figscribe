@@ -83,6 +83,7 @@ SKIPPED = {
     "model": "chosen in the fit dialog",
     "initial_values": "set in the fit dialog",
     "fit_range": "set in the fit dialog, since the fit is run again",
+    "left_out": "points are left out by right-clicking them in the preview",
     "fixed": "set in the fit dialog, beside the start values",
     "parameter_bounds": "set in the fit dialog, beside the start values",
     "result": "computed by the fit and shown in the fit dialog",
@@ -116,7 +117,7 @@ EDITED_ELSEWHERE: dict[type[BaseModel], str] = {
 """Model classes whose fields the generated forms never show, and where they
 are edited instead."""
 
-COLOR_FIELDS = {"color", "edgecolor", "grid_color"}
+COLOR_FIELDS = {"color", "edgecolor", "grid_color", "left_out_color"}
 
 Path = tuple[str, ...]
 
@@ -258,6 +259,8 @@ COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
 
 PLACEHOLDERS = {
+    "left_out_color": "light grey",
+    "left_out_marker": "the plot's",
     "label": "not in the legend",
     "color": "automatic",
     "edgecolor": "automatic",
@@ -291,6 +294,10 @@ PLACEHOLDERS = {
 }
 
 TIPS = {
+    "left_out_color": "Color of the points left out (right-click a point in the "
+    "preview); empty draws them light grey.",
+    "left_out_marker": "Marker of the points left out, e.g. x or s; empty takes the "
+    "plot's.",
     "extend_curve": "Draw the fitted curve across all the data, not only over the "
     "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",

@@ -185,6 +185,7 @@ class MainWindow(QMainWindow):
             "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
         )
         self.properties.edit_fit = self.edit_fit
+        self.preview.show_error = self.show_error
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )

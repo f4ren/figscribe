@@ -11,6 +11,7 @@ from figscribe.fit.expression import FitError
 from figscribe.fit.run import (
     in_range,
     initial_guess,
+    kept,
     parameter_names,
     run_fit,
     within,
@@ -52,7 +53,7 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
     yerr = (
         data(target.yerr) if isinstance(target, ErrorbarPlot) and target.yerr else None
     )
-    used = in_range(x, fit.fit_range)
+    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
     x, y = np.asarray(x, dtype=float)[used], np.asarray(y, dtype=float)[used]
     yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
 
@@ -102,6 +103,40 @@ def update_fit(project: Project, fit_id: str, changed: FitCurve) -> Macro:
             if getattr(changed, name) != getattr(fit, name)
         ],
     )
+
+
+def set_left_out(
+    project: Project, plot_id: str, rows: list[int], data: DataProvider
+) -> Macro:
+    """Leave out `rows` of the plot `plot_id` (counted from 0), and fit every
+    fit of the plot again, as one step. A FitError, changing nothing, if a fit
+    cannot be run without them."""
+    plot = _get(project, plot_id)
+    if not isinstance(plot, FITTABLE):
+        raise FitError(f"{plot_id!r} is not a plot of points")
+    rows = sorted(set(rows))
+    added, back = set(rows) - set(plot.left_out), set(plot.left_out) - set(rows)
+    if len(added) == 1 and not back:
+        description = f"Leave out row {min(added) + 1}"
+    elif len(back) == 1 and not added:
+        description = f"Take row {min(back) + 1} back in"
+    else:
+        description = "Change the rows left out"
+    staging = project.model_copy(deep=True)
+    steps = [SetField(plot_id, ("left_out",), rows)]
+    steps[0].apply(staging)
+    fits = [
+        artist.id
+        for figure in staging.figures
+        for axes in figure.axes
+        for artist in axes.artists
+        if isinstance(artist, FitCurve) and artist.target == plot_id
+    ]
+    for fit_id in fits:
+        again = refit(staging, fit_id, data)
+        again.apply(staging)
+        steps += again.steps
+    return Macro(description, steps)
 
 
 RESIDUAL_HEIGHT_MM = 20.0
