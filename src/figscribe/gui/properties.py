@@ -55,6 +55,7 @@ from figscribe.gui.names import (
 from figscribe.gui.numbers import number, numbers, whole
 from figscribe.gui.widgets import Section, label
 from figscribe.io.errors import DataError
+from figscribe.io.refresh import read_differently, reading_options
 from figscribe.model import (
     ArrayRef,
     Axes,
@@ -521,7 +522,7 @@ class PropertyPanel(QScrollArea):
             if _get(obj, path) == value:
                 return
             self.document.push(self._command(obj, path, value))
-        except CommandError as exc:
+        except (CommandError, DataError) as exc:
             self.report(str(exc))
             self.refresh()
         else:
@@ -529,7 +530,12 @@ class PropertyPanel(QScrollArea):
 
     def _command(self, obj: BaseModel, path: Path, value: Any):
         """The change for one field; a right y axis comes and goes with the
-        plots drawn against it."""
+        plots drawn against it, and a data file is read again when how it is
+        read changes."""
+        if len(path) == 1 and path[0] in reading_options(obj):
+            return read_differently(
+                self.document.project, obj.id, path[0], value, self.document.base_dir
+            )
         if path == ("colorbar",):
             if value:
                 return Macro("Show a color bar", [SetField(obj.id, path, Colorbar())])

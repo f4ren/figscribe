@@ -270,6 +270,16 @@ the project. It found:
    comment mark that makes the file unreadable is taken, and the figure
    breaks. Read the file with the new setting first and refuse it with the
    reason, as B2's "Use the new version" does.
+   **Done** (2026-10-25, decision 0007): `io/refresh.read_differently` reads
+   the file with the new option and returns one undo step that also takes the
+   columns and row count it then has, or a DataError that the panel and the
+   assistant show; `reading_options` finds the options from the reader's
+   parameters, as `reread` does. A file that changed since import is not read
+   again that way, which would take its new version without saying so.
+   *Learned:* the assistant's `apply_changes` builds its steps apart from
+   `set_field`; both now go through one method. A header line that is fine
+   for the reader but renames columns leaves plots of the old names, which
+   `validate_references` reports (B2).
 4. **Settings without effect, without a hint** (verified): while "Grid lines"
    is off, the grid's axes, tick choice and color do nothing; "Grid lines at:
    minor ticks" shows nothing while the axis has its minor ticks switched off.

@@ -614,3 +614,14 @@ def test_a_reading_option_reads_the_file_or_is_refused(tools, workspace) -> None
     tools.call("set_field", {"object_id": source.id, "path": ["comment"], "value": "%"})
     assert workspace.project.sources[0].comment == "%"
     assert workspace.history.undo_text.startswith("Read ")
+
+
+def test_apply_changes_reads_the_file_as_set_field_does(tools, workspace) -> None:
+    source = workspace.project.sources[0]
+    change = {"op": "set_field", "object_id": source.id, "path": ["delimiter"]}
+    with pytest.raises(ToolError, match="cannot read"):
+        tools.call(
+            "apply_changes",
+            {"description": "Separator", "operations": [{**change, "value": "2"}]},
+        )
+    assert workspace.project.sources[0] == source

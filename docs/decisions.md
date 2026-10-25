@@ -434,6 +434,13 @@ class would have to be kept in step with every field added to the model.
   import (`row_count`) so that a change can be told in rows; projects from
   before have none. The assistant gets *Use the new version* as a tool, not
   *Locate*: it must not point a source at other files on the machine.
+- **Changing how a file is read reads it at once** (added 2026-10-25): a new
+  separator, decimal mark, header line, number of skipped lines, comment mark,
+  encoding or array, from the property panel or the assistant, is one undo
+  step that also takes the columns and rows the file then has, or is refused
+  with the reader's reason if the file cannot be read that way. A file that
+  changed since import is refused too: reading it again would take the new
+  version without the bar's question.
 - **Adding the first plot to a figure without axes adds the axes too**, in the
   same undo step. Later plots go into the selected axes, the axes of the
   selected plot, or the figure's first axes.
