@@ -294,7 +294,9 @@ the project. It found:
 4. **Settings without effect, without a hint** (verified): while "Grid lines"
    is off, the grid's axes, tick choice and color do nothing; "Grid lines at:
    minor ticks" shows nothing while the axis has its minor ticks switched off.
-   Disable such fields or say why they do nothing (relates to U2).
+   Disable such fields or say why they do nothing (relates to U2). The field
+   test adds: a color mesh's x or y alone does nothing, the renderer uses
+   them only as a pair. Do this after U2, which reworks the same panel code.
 5. **Missing API key** (verified, by hand): "Load models" in the assistant
    settings with Claude and no key anywhere prints a traceback to the terminal
    and shows nothing in the dialog. The Anthropic SDK raises a `TypeError`
@@ -321,6 +323,23 @@ the project. It found:
    as U1 lists fields without an editor; that list shows the settings of item
    4. A crash takes the test run down: run each editor in a subprocess, or
    accept that a crash fails CI and say so.
+   **Done** (2026-10-25): `tests/gui/test_every_field.py` over
+   `tests/gui/everything.py`, one test per object (17), each going through all
+   its fields and reporting every one that fails; a crash fails the run, and
+   pytest-qt fails a test on any exception in Qt's event loop. `EXPECTED`
+   lists fields whose right outcome is not a visible change, `KNOWN` the
+   problems still open with their item. Marked `slow` (about a minute): CI
+   runs it, `-m "not slow"` skips it while iterating. Fixed on the way: a
+   separator of more than one character reached NumPy, which raised a
+   `TypeError` nothing caught; `CsvSource.delimiter` is one character now.
+   *Learned:* a widget in a folded section is not visible either, so the test
+   opens every section first, or it skips them silently; a list is tried
+   entry by entry until something visible changes, since its first entries
+   are often what is drawn anyway ("outward" ticks, "stepfilled" bars).
+   *Follow-ups:* choosing a column of another length for x breaks the figure
+   until y follows, with a plain message; mark such columns in the list. A
+   figure of 2 mm collapses its panels (Matplotlib warns); give the size a
+   sensible lower bound. Width and height ratios: see item 2.
 2. **Operation tests for what is not generated**: axis form, import, plot,
    fit and assistant dialogs, the outline's context menus, the data bar, the
    preview's zoom, pan and legend drag. Plus one test that triggers every
