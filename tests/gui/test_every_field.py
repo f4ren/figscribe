@@ -185,7 +185,10 @@ def _widget(panel: PropertyPanel, field: str) -> QWidget:
     widget = panel.editors[tuple(field.split("."))].widget
     if isinstance(widget, QCheckBox | QComboBox | QLineEdit | QSpinBox):
         return widget
-    return widget.findChild(QLineEdit) or widget.findChild(QComboBox)
+    lines = widget.findChildren(QLineEdit)
+    if len(lines) > 1:
+        return widget  # a field per number, filled together
+    return lines[0] if lines else widget.findChild(QComboBox)
 
 
 def _try(document, panel, oid, field, start):
@@ -239,6 +242,8 @@ def _inputs(panel: PropertyPanel, field: str, widget: QWidget):
         for i in range(widget.count()):
             if i != current:
                 yield lambda i=i: _choose(panel, field, i)
+    elif not isinstance(widget, QLineEdit):
+        yield lambda: _fill(panel, field)
     else:
         for text in TYPED.get(_name(field), TEXTS):
             yield lambda text=text: _type(panel, field, text)
@@ -251,6 +256,14 @@ def _choose(panel: PropertyPanel, field: str, index: int) -> None:
     form = panel.axis_form
     if form is not None and field == "major" and form.major_value.isVisibleTo(panel):
         _type(panel, "major_value", TYPED["major_value"][0])  # a way, then where
+
+
+def _fill(panel: PropertyPanel, field: str) -> None:
+    """Type 1, 2, 3 ... into a field that has one box per number."""
+    lines = _widget(panel, field).findChildren(QLineEdit)
+    for number, line in enumerate(lines, start=1):
+        line.setText(str(number))
+    lines[-1].editingFinished.emit()
 
 
 def _name(field: str) -> str:
