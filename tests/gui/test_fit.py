@@ -99,6 +99,29 @@ def test_start_values_can_be_changed(dialog: FitDialog) -> None:
     assert float(dialog.start["mu"].text()) != 0
 
 
+def test_a_parameter_can_be_held_at_its_start_value(dialog: FitDialog) -> None:
+    dialog.start["sigma"].setText("0.9")
+    dialog.start["sigma"].editingFinished.emit()
+    dialog.fixed["sigma"].click()
+    assert dialog.result.parameters["sigma"] == 0.9
+    assert dialog.result.uncertainties["sigma"] == 0.0
+    fit = dialog.fit()
+    assert fit.fixed == ["sigma"] and fit.initial_values["sigma"] == 0.9
+    dialog.fixed["sigma"].click()
+    assert dialog.result.parameters["sigma"] != 0.9
+
+
+def test_a_parameter_can_be_bounded(dialog: FitDialog) -> None:
+    fitted = dialog.result.parameters["a"]
+    dialog.upper["a"].setText(f"{fitted * 0.9:.6g}")
+    dialog.upper["a"].editingFinished.emit()
+    assert dialog.result.parameters["a"] <= fitted * 0.9 * (1 + 1e-9)
+    assert dialog.fit().bounds == {"a": (None, float(f"{fitted * 0.9:.6g}"))}
+    dialog.lower["a"].setText(f"{fitted * 2:.6g}")  # above the upper: refused
+    dialog.lower["a"].editingFinished.emit()
+    assert "lower bound of a" in dialog.error.text() and not _ok(dialog)
+
+
 def test_a_typed_label_is_kept(dialog: FitDialog) -> None:
     dialog.label.setText("my fit")
     dialog.label.setModified(True)

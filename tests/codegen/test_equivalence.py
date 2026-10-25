@@ -125,6 +125,23 @@ def test_fit_and_residuals(tmp_path: Path) -> None:
     assert 'ax_a.tick_params(axis="x"' in script
 
 
+def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"c": 0.0},
+        fixed=["c"],
+        bounds={"sigma": (0.5, None)},
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "bounds=" in script and "c is held at 0" in script
+
+
 def test_many_settings(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     left = Axes(

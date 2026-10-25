@@ -165,3 +165,14 @@ def test_bin_count_must_be_positive(project: Project) -> None:
     ref = project.figures[0].axes[0].artists[0].x
     with pytest.raises(ValidationError):
         Histogram(values=ref, bins=0)
+
+
+def test_a_fit_bound_must_be_a_range() -> None:
+    from pydantic import ValidationError
+
+    from figscribe.model import FitCurve, PredefinedFit
+
+    model = PredefinedFit(name="linear")
+    FitCurve(target="t", model=model, bounds={"a": (None, 1.0), "b": (0.0, None)})
+    with pytest.raises(ValidationError, match="lower bound"):
+        FitCurve(target="t", model=model, bounds={"a": (2.0, 1.0)})

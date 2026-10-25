@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from figscribe.commands import find
 from figscribe.model import ErrorbarPlot, LinePlot, dumps, loads
 from figscribe.tools import TOOLS, ProjectWorkspace, Toolbox, ToolError
 
@@ -634,3 +635,20 @@ def test_apply_changes_reads_the_file_as_set_field_does(tools, workspace) -> Non
             {"description": "Separator", "operations": [{**change, "value": "2"}]},
         )
     assert workspace.project.sources[0] == source
+
+
+def test_a_fit_can_hold_and_bound_parameters(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "fit",
+        {
+            "target_id": artist,
+            "model": {"kind": "predefined", "name": "gaussian"},
+            "initial_values": {"c": 0.0},
+            "fixed": ["c"],
+            "bounds": {"sigma": [0.1, None]},
+        },
+    )
+    assert result["result"]["parameters"]["c"] == 0.0
+    fit = find(workspace.project, result["id"])
+    assert fit.fixed == ["c"] and fit.bounds == {"sigma": (0.1, None)}
