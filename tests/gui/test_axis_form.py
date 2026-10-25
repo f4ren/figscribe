@@ -170,6 +170,18 @@ def test_scale_choices_and_their_extra_rows(panel, document) -> None:
     assert form.minor_hint.isHidden()
 
 
+def test_numbers_typed_with_decimal_commas(panel, document) -> None:
+    axes = _axes(document)
+    document.select(axis_id(axes.id, "y"))
+    form = panel.axis_form
+    _enter(form.low, "−0,5")
+    _enter(form.high, "1,5")
+    assert _axes(document).y.limits == (-0.5, 1.5)
+    _choose(form.major, "values")
+    _enter(form.major_value, "0; 0,5; 1")
+    assert _axes(document).y.ticks == [0.0, 0.5, 1.0]
+
+
 def test_a_wrong_number_is_reported(panel, document) -> None:
     document.select(axis_id(_axes(document).id, "x"))
     _enter(panel.axis_form.label_size, "big")

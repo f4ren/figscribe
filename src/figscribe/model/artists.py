@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from figscribe.model.base import Identified, StrictModel
+from figscribe.model.base import AnyFloat, Identified, StrictModel
 from figscribe.model.data import ArrayRef, ColumnRef
 
 Color = str
@@ -132,10 +132,11 @@ FitModel = Annotated[PredefinedFit | ExpressionFit, Field(discriminator="kind")]
 class FitResult(StrictModel):
     """Outcome of a fit run, stored so that a reopened project shows it again."""
 
-    parameters: dict[str, float]
-    uncertainties: dict[str, float]
-    """1-sigma, from the covariance matrix."""
-    reduced_chi_square: float | None = None
+    parameters: dict[str, AnyFloat]
+    """Not finite when the fit diverged; `converged` is then False."""
+    uncertainties: dict[str, AnyFloat]
+    """1-sigma, from the covariance matrix; inf when it cannot be estimated."""
+    reduced_chi_square: AnyFloat | None = None
     converged: bool = True
 
 
