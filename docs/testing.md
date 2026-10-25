@@ -16,8 +16,10 @@ the GUI as a whole and need no upkeep when something is added:
   window and every entry of the outline's context menus. Dialogs are answered
   in the test; no action may end in an error that figscribe calls a bug.
 
-Both are marked `slow` (a minute or two): `pytest -m "not slow"` skips them
-while iterating, and CI runs them on one platform (Ubuntu, Python 3.13).
+Both are marked `slow`: `pytest -m "not slow"` skips them while iterating,
+and CI runs them on one platform (Ubuntu, Python 3.13). Run the whole suite
+with `-n auto --dist worksteal` (pytest-xdist, decision 0028): under a minute
+instead of two and a half.
 pytest-qt fails any test in which an exception reaches Qt's event loop.
 
 Tests operate widgets as a person does: `click()`, `activated`,

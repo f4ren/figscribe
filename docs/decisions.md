@@ -1086,3 +1086,38 @@ froze, and a project file with such a step could not be opened usefully.
   freeze the window.
 - **Count major ticks only**, as first planned: the default minor ticks alone
   made the repro five times slower than the major ones.
+
+---
+
+## 0028 — Tests run in parallel with pytest-xdist
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+The tests that operate every field and action of the GUI (roadmap task B8)
+draw the whole figure after each change: about two and a half minutes on a
+laptop, nine on a CI runner, against half a minute for everything else. Run
+on one job only, they still made every pull request wait about ten minutes.
+
+### Decision
+
+- **`pytest-xdist` is a dev dependency**, and CI runs the tests with
+  `-n auto --dist worksteal`: idle workers take tests from busy ones, which
+  matters because a few tests take far longer than the rest. Locally the
+  whole suite drops from about 2.5 minutes to under one.
+- **The slow tests are split so they can spread**: one test per object for
+  the fields, per menu for the actions, per panel for the outline's menus.
+  A list is tried for at most six other entries, as a person would.
+- **The slow tests still run on one CI job** (Ubuntu, Python 3.13); they test
+  figscribe's logic, which does not differ by platform, while crashes such as
+  that of B8.1 have their own fast tests that run everywhere.
+
+### Alternatives considered
+
+**Rendering less in the tests**, such as without the layout engine: saves
+about a third, and the layout settings could then no longer be tested.
+**Fewer objects in the test project**: the point of the project is to have
+every kind. **Running the slow tests nightly** instead of per pull request:
+a problem would then reach `develop` before anyone sees it.

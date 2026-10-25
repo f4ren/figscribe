@@ -66,6 +66,10 @@ TYPED = {
 """What is typed instead into fields where those texts would not do, tried
 in turn like the entries of a list until what is drawn changes."""
 
+CHOICES = 6
+"""How many other entries of a list are tried, as a person would before giving
+up; a list of every column of every file is long."""
+
 UNSEEN = "nothing drawn changes"
 REFUSED = "no input changed the model"
 EXPECTED = {
@@ -239,9 +243,9 @@ def _inputs(panel: PropertyPanel, field: str, widget: QWidget):
         yield lambda: widget.setValue(widget.value() + 1)
     elif isinstance(widget, QComboBox):
         current = widget.currentIndex()
-        for i in range(widget.count()):
-            if i != current:
-                yield lambda i=i: _choose(panel, field, i)
+        others = [i for i in range(widget.count()) if i != current]
+        for i in others[:CHOICES]:
+            yield lambda i=i: _choose(panel, field, i)
     elif not isinstance(widget, QLineEdit):
         yield lambda: _fill(panel, field)
     else:

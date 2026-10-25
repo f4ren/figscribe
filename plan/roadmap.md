@@ -354,6 +354,8 @@ the project. It found:
    figscribe calls a bug. Both tests are `slow`; CI runs the slow tests on
    Ubuntu with Python 3.13 only, which keeps the other jobs at their former
    two to three minutes (the field test alone added two to four to each).
+   That job then took ten minutes; since decision 0028 every job runs the
+   tests in parallel with pytest-xdist, and the sweeps are split to spread.
    *Open:* about twenty places in the dialog tests (import, images, fit,
    notes, chat) still set widgets with `setChecked` or `setCurrentText`;
    make them click, and add the preview's zoom, pan and legend drag with

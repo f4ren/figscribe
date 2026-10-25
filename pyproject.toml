@@ -44,6 +44,7 @@ dev = [
     "mcp>=2.3",
     "pytest>=8",
     "pytest-qt>=4.4",
+    "pytest-xdist>=3.6",
     "ruff>=0.15",
 ]
 
