@@ -176,7 +176,12 @@ def test_a_fit_over_part_of_the_data(tmp_path: Path, extend: bool) -> None:
 def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(
-        x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data", left_out=[3, 20]
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        left_out=[3, 20],
+        left_out_note="more than 3σ off the Gaussian fit",
     )
     line = LinePlot(x=ref["t"], y=ref["t2"], left_out=[5], axis="left")
     points = ScatterPlot(
@@ -197,6 +202,7 @@ def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     script = _assert_same(project, tmp_path)
     assert "kept_1[[3, 20]] = False" in script
+    assert "more than 3σ off the Gaussian fit" in script
 
 
 def test_many_settings(tmp_path: Path) -> None:

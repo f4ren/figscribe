@@ -343,3 +343,60 @@ def test_a_fit_range_is_shown_when_the_fit_is_changed(
     assert (dialog.range_low.text(), dialog.range_high.text()) == ("3", "7")
     assert dialog.extend.isChecked()
     assert dialog.fit().fit_range == (3.0, 7.0)
+
+
+# --- left-out points and outliers ---------------------------------------------------
+
+
+def _glitched(document: Document) -> None:
+    """Two points of the example pushed far off its peak."""
+    plot = _data(document)
+    y = document.data(plot.y)
+    y[[10, 30]] += [0.6, -0.5]  # the provider's array, as if measured so
+
+
+def test_the_dialog_skips_the_points_left_out_of_the_plot(
+    qtbot, document: Document
+) -> None:
+    document.push(SetField(_data(document).id, ("left_out",), [10, 30]))
+    dialog = FitDialog(_data(document), document.data)
+    qtbot.addWidget(dialog)
+    assert dialog.points.text().startswith("39 of 41 points")
+
+
+def test_outliers_are_proposed_and_left_out_on_confirmation(
+    qtbot, window: MainWindow
+) -> None:
+    document = window.document
+    _glitched(document)
+
+    def find_and_take(dialog: FitDialog) -> bool:
+        dialog.find_outliers.click()
+        assert "Rows 11 and 31 lie more than 3σ off" in dialog.outlier_text.text()
+        before = dialog.result.reduced_chi_square
+        dialog.leave_outliers_out.click()
+        assert dialog.result.reduced_chi_square < before
+        return True
+
+    window.run_dialog = find_and_take
+    window.fit_action.trigger()
+    plot = document.figure.axes[0].artists[0]
+    assert plot.left_out == [10, 30]
+    assert "more than 3σ off" in plot.left_out_note
+    fit = document.figure.axes[0].artists[1]
+    assert fit.result is not None
+    document.undo()  # fit and left-out rows in one step
+    assert document.figure.axes[0].artists[0].left_out == []
+    assert len(document.figure.axes[0].artists) == 1
+
+
+def test_outliers_found_but_not_confirmed_stay_in(qtbot, window: MainWindow) -> None:
+    _glitched(window.document)
+
+    def only_find(dialog: FitDialog) -> bool:
+        dialog.find_outliers.click()
+        return True
+
+    window.run_dialog = only_find
+    window.fit_action.trigger()
+    assert window.document.figure.axes[0].artists[0].left_out == []
