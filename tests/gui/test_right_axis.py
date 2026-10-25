@@ -35,7 +35,7 @@ def test_a_panel_gets_and_loses_its_right_axis(panel, document) -> None:
     document.select(axes.id)
     switch = panel.editors[("y_right",)].widget
     assert not switch.isChecked() and "y_right" not in panel.axis_links
-    switch.setChecked(True)
+    switch.click()  # as a person does: the box is replaced while it handles the click
     assert _axes(document).y_right is not None
     assert document.history.undo_text == "Add the right y axis"
     panel.axis_links["y_right"].click()
@@ -45,7 +45,7 @@ def test_a_panel_gets_and_loses_its_right_axis(panel, document) -> None:
     plot = _axes(document).artists[0]
     document.push(_right(plot))
     document.select(axes.id)
-    panel.editors[("y_right",)].widget.setChecked(False)
+    panel.editors[("y_right",)].widget.click()
     assert _axes(document).y_right is None
     assert _axes(document).artists[0].axis == "left"  # its plots came back
     document.undo()
