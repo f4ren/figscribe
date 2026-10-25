@@ -523,6 +523,8 @@ class _Writer:
                 else f"rows {', '.join(map(str, rows[:-1]))} and {rows[-1]}"
             )
             source = self.sources[plot.x.source]
+            if plot.left_out_note:
+                self.emit(f"# {_describe(plot).capitalize()}: {plot.left_out_note}")
             self.emit(
                 f"# {_describe(plot).capitalize()}: {listed} of "
                 f"{Path(source.path).name} left out; the file is unchanged.",

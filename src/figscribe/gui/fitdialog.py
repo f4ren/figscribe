@@ -7,12 +7,14 @@ again right away, on the data of the target plot, without touching the project; 
 
 from __future__ import annotations
 
+import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -29,6 +31,8 @@ from figscribe.fit import (
     free_names,
     in_range,
     initial_guess,
+    kept,
+    outliers,
     parameter_names,
     run_fit,
     source_of,
@@ -102,6 +106,28 @@ class FitDialog(QDialog):
             end.editingFinished.connect(self._range_changed)
         self.extend = QCheckBox("Draw the curve across all the data")
         self.extend.setToolTip("Otherwise the curve spans only the fit range.")
+        self.k = QDoubleSpinBox()
+        self.k.setRange(1.0, 10.0)
+        self.k.setDecimals(1)
+        self.k.setSingleStep(0.5)
+        self.k.setValue(3.0)
+        self.k.setSuffix(" σ")
+        self.k.setToolTip(
+            "How far off a point may lie, in its error bar or, "
+            "without errors, in the robust scatter of the residuals."
+        )
+        self.find_outliers = QPushButton("Find outliers")
+        self.find_outliers.clicked.connect(self._find_outliers)
+        self.outlier_text = label("", "caption")
+        self.outlier_text.setWordWrap(True)
+        self.leave_outliers_out = QPushButton("Leave them out")
+        self.leave_outliers_out.setObjectName("link")
+        self.leave_outliers_out.clicked.connect(self._toggle_outliers)
+        self.leave_outliers_out.hide()
+        self._found: list[int] = []
+        """Rows of the data found to lie off, not yet left out."""
+        self.pending: list[int] = []
+        """Rows confirmed to be left out of the plot when the fit is added."""
         self.residuals = QCheckBox("Show the residuals in a panel below")
         self.residuals.setChecked(residuals_default)
         self.error = label("", "error")
@@ -191,6 +217,17 @@ class FitDialog(QDialog):
         right.addWidget(guess, 0, Qt.AlignmentFlag.AlignLeft)
         right.addWidget(label("Result", "sectionTitle"))
         right.addWidget(card)
+        outliers = QHBoxLayout()
+        outliers.setSpacing(8)
+        outliers.addWidget(_caption("Points beyond"))
+        outliers.addWidget(self.k)
+        outliers.addWidget(self.find_outliers)
+        outliers.addStretch(1)
+        right.addLayout(outliers)
+        found = QHBoxLayout()
+        found.addWidget(self.outlier_text, 1)
+        found.addWidget(self.leave_outliers_out)
+        right.addLayout(found)
         right.addWidget(self.error)
         right.addLayout(extra)
         right.addWidget(self.residuals)
@@ -274,6 +311,7 @@ class FitDialog(QDialog):
         return PredefinedFit(name=key, degree=degree)
 
     def _model_changed(self) -> None:
+        self._forget_outliers()
         key = self.model_key
         _show_row(self._details, self.degree, key == "polynomial")
         _show_row(self._details, self.expression, key == "expression")
@@ -342,18 +380,93 @@ class FitDialog(QDialog):
             raise FitError("the lower end of the fit range is not below the upper")
         return low, high
 
-    def _used(self):
-        """x, y and y errors of the points the fit uses."""
+    def _used(self, pending: bool = True):
+        """x, y and y errors of the points the fit uses: in range, not left out
+        of the plot, and, with `pending`, not among the outliers confirmed."""
+        used = self._used_mask(pending)
+        yerr = None if self.yerr is None else self.yerr[used]
+        return self.x[used], self.y[used], yerr
+
+    def _find_outliers(self) -> None:
+        """Propose the points that lie more than k sigma off; nothing is left
+        out until the user says so."""
+        self._forget_outliers()
+        try:
+            x, y, yerr = self._used(pending=False)
+            found = outliers(
+                self.model(),
+                self.start_values(),
+                x,
+                y,
+                yerr,
+                k=self.k.value(),
+                fixed=self.held(),
+                bounds=self.bounds(),
+            )
+        except (FitError, ValueError) as exc:
+            self._show_error(str(exc))
+            return
+        rows = np.flatnonzero(self._used_mask(pending=False))[found]
+        self._found = [int(row) for row in rows]
+        k = f"{self.k.value():g}σ"
+        if not self._found:
+            self.outlier_text.setText(f"No point lies more than {k} off.")
+            return
+        shown = [row + 1 for row in self._found]
+        if len(shown) == 1:
+            text = f"Row {shown[0]} lies more than {k} off."
+        else:
+            listed = ", ".join(map(str, shown[:-1]))
+            text = f"Rows {listed} and {shown[-1]} lie more than {k} off."
+        self.outlier_text.setText(text)
+        self.leave_outliers_out.setText("Leave them out")
+        self.leave_outliers_out.show()
+
+    def _toggle_outliers(self) -> None:
+        if self.pending:
+            self.pending = []
+            self.leave_outliers_out.setText("Leave them out")
+        else:
+            self.pending = list(self._found)
+            self.leave_outliers_out.setText("Take them back")
+        self.refit()
+
+    def _forget_outliers(self) -> None:
+        """A proposal holds for the fit it was found with, not another."""
+        self._found, self.pending = [], []
+        self.outlier_text.setText("")
+        self.leave_outliers_out.hide()
+
+    def _used_mask(self, pending: bool = True) -> np.ndarray:
+        """Which rows of the data `_used` gives."""
         try:
             used = in_range(self.x, self.fit_range())
         except FitError:
             used = in_range(self.x, None)
-        yerr = None if self.yerr is None else self.yerr[used]
-        return self.x[used], self.y[used], yerr
+        left_out = [*self.target.left_out, *(self.pending if pending else [])]
+        return used & kept(len(self.x), left_out)
+
+    def left_out_rows(self) -> list[int] | None:
+        """The plot's rows to leave out with this fit; None if unchanged."""
+        if not self.pending:
+            return None
+        return sorted({*self.target.left_out, *self.pending})
+
+    def left_out_note(self) -> str:
+        shown = [row + 1 for row in self.pending]
+        rows = (
+            f"row {shown[0]}"
+            if len(shown) == 1
+            else "rows " + ", ".join(map(str, shown))
+        )
+        name = dict((k, n) for k, n, _ in MODELS)[self.model_key]
+        fit = "the fit" if self.model_key == "expression" else f"the {name} fit"
+        return f"{rows}: more than {self.k.value():g}σ off {fit}"
 
     def _range_changed(self) -> None:
         """Guess again from the points now in range, for every start value the
         user has not typed; then fit."""
+        self._forget_outliers()
         try:
             model = self.model()
         except (FitError, ValueError):

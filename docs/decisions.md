@@ -1241,4 +1241,7 @@ hide that they were there, and the data file must stay as measured.
 - **The script keeps the file as it is** and names a mask, `kept`, with a
   comment listing the rows as they are counted on screen.
 - **Outliers found automatically are proposed, not applied** (decided with
-  the user, to come): once confirmed they join the same list.
+  the user): points beyond k·σ of the fit without them, σ being the error
+  bar or 1.4826 × the median absolute deviation, fitted again until the set
+  settles. Once confirmed they join the same list, and `left_out_note` says
+  how they were found; the note is the user's to edit.

@@ -47,7 +47,7 @@ from figscribe.commands import (
 )
 from figscribe.commands.core import walk
 from figscribe.examples import bundled_example
-from figscribe.fit import FitError, add_fit, update_fit
+from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
@@ -583,6 +583,7 @@ class MainWindow(QMainWindow):
         fit = dialog.fit()
         try:
             command = add_fit(self.document.project, fit, dialog.residuals.isChecked())
+            command = self._with_outliers(command, dialog)
         except FitError as exc:
             self.show_error("Cannot fit", exc)
             return
@@ -603,10 +604,29 @@ class MainWindow(QMainWindow):
             return
         try:
             command = update_fit(self.document.project, fit_id, dialog.fit())
+            command = self._with_outliers(command, dialog)
         except FitError as exc:
             self.show_error("Cannot change the fit", exc)
             return
         self._push(command)
+
+    def _with_outliers(self, command: Macro, dialog: FitDialog) -> Macro:
+        """`command`, and the outliers the user confirmed in the dialog left
+        out of the plot, with the plot's fits fitted again: one step."""
+        rows = dialog.left_out_rows()
+        if rows is None:
+            return command
+        staging = self.document.project.model_copy(deep=True)
+        command.apply(staging)
+        plot_id = dialog.target.id
+        leave = set_left_out(staging, plot_id, rows, self.document.data)
+        note = SetField(plot_id, ("left_out_note",), dialog.left_out_note())
+        count = len(dialog.pending)
+        return Macro(
+            f"{command.description} and leave out {count} outlier"
+            + ("s" * (count != 1)),
+            [*command.steps, *leave.steps, note],
+        )
 
     def add_note(self, oid: str | None = None) -> None:
         """Add a note in the middle of a panel; drag it in the preview."""

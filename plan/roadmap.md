@@ -550,8 +550,16 @@ again in the same undo step and is refused if a fit would lack points; the
 assistant's `set_field` on `left_out` does the same. Residuals skip them
 too; the script names the mask `kept`. *Learned:* the click must pick the
 nearest point over all drawn parts, since the kept line also lies within
-the pick radius of a left-out point. *Open:* finding outliers; a row range
-per plot; the panel shows which rows are left out only in the preview.
+the pick radius of a left-out point. *Open:* a row range per plot; the
+panel shows which rows are left out only in the preview.
+
+**Finding outliers: done** (2026-10-26): "Find outliers" in the fit dialog
+proposes the points beyond k·σ (`fit.outliers`, iterated until the set
+settles); "Leave them out" shows the fit without them, and only "Add fit" or
+"Update fit" leaves them out of the plot, with the fit as one undo step and
+`left_out_note` ("rows 11, 31: more than 3σ off the Gaussian fit"), which
+the panel lets the user edit and the script prints. Also fixed: the dialog
+fitted the plot's left-out rows, which `refit` skipped.
 
 ### F3 Panel labels for journals — S
 

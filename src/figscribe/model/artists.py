@@ -60,6 +60,9 @@ class LinePlot(ArtistBase):
     left_out_marker: str | None = None
     """Marker of the left-out points; None takes the plot's (a circle for a line
     without markers)."""
+    left_out_note: str | None = None
+    """Why the rows are left out, e.g. "detector glitch"; written into the
+    script. Finding outliers fills it in."""
 
 
 class ScatterPlot(ArtistBase):
@@ -84,6 +87,9 @@ class ScatterPlot(ArtistBase):
     left_out_marker: str | None = None
     """Marker of the left-out points; None takes the plot's (a circle for a line
     without markers)."""
+    left_out_note: str | None = None
+    """Why the rows are left out, e.g. "detector glitch"; written into the
+    script. Finding outliers fills it in."""
 
 
 class ErrorbarPlot(ArtistBase):
@@ -116,6 +122,9 @@ class ErrorbarPlot(ArtistBase):
     left_out_marker: str | None = None
     """Marker of the left-out points; None takes the plot's (a circle for a line
     without markers)."""
+    left_out_note: str | None = None
+    """Why the rows are left out, e.g. "detector glitch"; written into the
+    script. Finding outliers fills it in."""
 
 
 class Histogram(ArtistBase):

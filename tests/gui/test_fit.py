@@ -13,6 +13,7 @@ from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.properties import PropertyPanel
+from figscribe.io.refresh import use_new_version
 from figscribe.model import (
     Axes,
     ExpressionFit,
@@ -349,10 +350,17 @@ def test_a_fit_range_is_shown_when_the_fit_is_changed(
 
 
 def _glitched(document: Document) -> None:
-    """Two points of the example pushed far off its peak."""
-    plot = _data(document)
-    y = document.data(plot.y)
-    y[[10, 30]] += [0.6, -0.5]  # the provider's array, as if measured so
+    """Two points of the example pushed far off its peak, in the file, which
+    is then taken as it is now."""
+    source = document.project.sources[0]
+    path = document.base_dir / source.path
+    lines = path.read_text(encoding="utf-8").splitlines()
+    first = next(i for i, line in enumerate(lines) if line[:1].isdigit())
+    for row, shift in ((10, 0.6), (30, -0.5)):
+        t, u, du = lines[first + row].split(",")
+        lines[first + row] = f"{t},{float(u) + shift:.5f},{du}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    document.push(use_new_version(document.project, source.id, document.base_dir))
 
 
 def test_the_dialog_skips_the_points_left_out_of_the_plot(

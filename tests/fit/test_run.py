@@ -308,7 +308,7 @@ def _with_glitches(yerr: bool):
     model = PredefinedFit(name="linear")
     x = np.linspace(0, 10, 41)
     rng = np.random.default_rng(RNG_SEED)
-    y = 2.0 * x + 1.0 + rng.normal(0, 0.1, x.size)
+    y = 2.0 * x + 1.0 + rng.normal(0, 0.05, x.size)  # well inside the errors
     y[[7, 30]] += [3.0, -4.0]
     return model, x, y, (np.full(x.size, 0.1) if yerr else None)
 

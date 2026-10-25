@@ -170,6 +170,60 @@ def within(
     return moved
 
 
+MAD_TO_SIGMA = 1.4826
+"""Turns a median absolute deviation into a standard deviation, for normally
+distributed residuals; unlike the standard deviation it ignores the outliers."""
+
+
+def outliers(
+    model: FitModel,
+    initial_values: Mapping[str, float],
+    x,
+    y,
+    yerr=None,
+    *,
+    k: float = 3.0,
+    fixed: Sequence[str] = (),
+    bounds: Mapping[str, tuple[float | None, float | None]] | None = None,
+    rounds: int = 10,
+) -> np.ndarray:
+    """Which points lie more than `k` sigma off the model fitted without them.
+
+    Sigma is a point's error bar or, without errors, MAD_TO_SIGMA times the
+    median absolute deviation of the residuals. The model is fitted again
+    without the points found until they no longer change, so a point can
+    also come back. A FitError if the fit itself fails.
+    """
+    x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+    yerr = None if yerr is None else np.asarray(yerr, dtype=float)
+    out = np.zeros(x.size, dtype=bool)
+    for _ in range(rounds):
+        keep = ~out
+        result = run_fit(
+            model,
+            initial_values,
+            x[keep],
+            y[keep],
+            None if yerr is None else yerr[keep],
+            fixed=fixed,
+            bounds=bounds,
+        )
+        residual = y - evaluate(model, result.parameters, x)
+        if yerr is not None:
+            scale = yerr
+        else:
+            kept = residual[keep & np.isfinite(residual)]
+            scale = MAD_TO_SIGMA * np.median(np.abs(kept - np.median(kept)))
+            if not scale > 0:
+                return out  # the model meets every point: nothing lies off
+        with np.errstate(all="ignore"):
+            found = np.isfinite(residual) & (np.abs(residual / scale) > k)
+        if np.array_equal(found, out):
+            break
+        out = found
+    return out
+
+
 def free_parameters(model: FitModel, fixed: Sequence[str]) -> list[str]:
     """The parameters curve_fit varies: the model's, less the fixed ones."""
     return _free(parameter_names(model), fixed)
