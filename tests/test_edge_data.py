@@ -37,6 +37,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
     ScatterPlot,
+    validate_references,
 )
 from figscribe.render import export
 from figscribe.render.figure import render
@@ -65,6 +66,13 @@ CASES: dict[str, dict] = {
 }
 
 KINDS = ["line", "points", "error bars", "histogram", "fit"]
+
+SAID = {
+    "only NaN": "has no values to draw",
+    "zero and below on a log axis": "are zero or below",
+    "zero and below with a log scale": "are zero or below",
+}
+"""Cases that draw, but not everything: the problem list must say what."""
 
 
 def _number(value) -> str:
@@ -115,10 +123,13 @@ def _build(folder: Path, kind: str, case: dict) -> Project:
     return project
 
 
-def _outcome(folder: Path, project: Project) -> str:
+def _outcome(folder: Path, project: Project, case: str = "") -> str:
     """Draw, export and run the script; "refused: ..." or "drawn"."""
     figure = project.figures[0]
     data = load_data(project, folder)
+    if case in SAID:
+        problems = [str(issue) for issue in validate_references(project, data)]
+        assert any(SAID[case] in p for p in problems), problems
     try:
         FigureCanvasAgg(render(figure, data)).draw()
         export(figure, data, folder / "figure.pdf")
@@ -148,7 +159,9 @@ def test_awkward_columns(tmp_path: Path, kind: str, case: str) -> None:
         project = _build(tmp_path, kind, CASES[case])
     except OWN:
         return  # refused, in words written for the user
-    _outcome(tmp_path, project)
+    if kind == "histogram" and "log" in case:
+        case = ""  # the values lie along x; the y axis counts them
+    _outcome(tmp_path, project, case)
 
 
 IMAGES: dict[str, np.ndarray] = {
@@ -177,4 +190,4 @@ def test_awkward_images(tmp_path: Path, case: str) -> None:
         )
     except OWN:
         return
-    _outcome(tmp_path, project)
+    _outcome(tmp_path, project, case)

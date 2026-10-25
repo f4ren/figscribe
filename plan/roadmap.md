@@ -228,6 +228,16 @@ they find.
    ≤ 0 on a log axis, 1e-30 and 1e30, integer columns, reversed and equal
    limits. Render, export, and run the generated script for each. Nothing may
    crash; a problem shows as a message.
+   **Done** (2026-10-26): `tests/test_edge_data.py`, 55 column cases and 7
+   images (slow; seconds on several cores). Nothing crashed; it found four
+   things, all fixed: a file without rows said "column 'y' is out of range:
+   has 1 columns" (now "has no rows of data"); the script of a histogram of
+   one value failed (`ndmin=1`); an equal range was taken and widened by
+   Matplotlib (now refused: "a range needs two different ends"); and a
+   column of only NaN, or values at or below zero on a log axis or log color
+   scale, vanished without a word (now in the problem list, given the data).
+   *Learned:* fits with fewer points than parameters, and every other case,
+   already refused or drew correctly.
 2. **Undo stress**: random sequences of commands (add, change, delete, move
    panels, fit), then undo all: the project equals the start; redo all: equals
    the end. `[decide]` whether to add `hypothesis` as a dev dependency for this
