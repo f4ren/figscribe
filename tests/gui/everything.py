@@ -64,7 +64,9 @@ def build(folder: Path) -> Path:
     def col(name: str) -> ColumnRef:
         return ColumnRef(source=scan.id, column=name)
 
-    errorbars = ErrorbarPlot(x=col("t"), y=col("U"), yerr=col("dU"), label="data")
+    errorbars = ErrorbarPlot(
+        x=col("t"), y=col("U"), yerr=col("dU"), label="data", left_out=[3]
+    )
     a = Axes(
         title="Scan",
         grid=True,
@@ -74,8 +76,8 @@ def build(folder: Path) -> Path:
         legend=Legend(visible=True),
         artists=[
             errorbars,
-            LinePlot(x=col("t"), y=col("U"), marker="x", label="line"),
-            ScatterPlot(x=col("t"), y=col("U"), label="points"),
+            LinePlot(x=col("t"), y=col("U"), marker="x", label="line", left_out=[5]),
+            ScatterPlot(x=col("t"), y=col("U"), label="points", left_out=[7]),
             LinePlot(x=col("t"), y=col("T"), axis="right", label="temperature"),
             Annotation(text="peak", position=(2.0, 5.0), arrow_to=(2.5, 6.0)),
         ],

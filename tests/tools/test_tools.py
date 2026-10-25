@@ -665,3 +665,17 @@ def test_a_fit_can_use_part_of_the_data(tools, workspace) -> None:
         },
     )
     assert find(workspace.project, result["id"]).fit_range == (2.0, 8.0)
+
+
+def test_leaving_points_out_fits_the_plot_again(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    fitted = tools.call(
+        "fit",
+        {"target_id": artist, "model": {"kind": "predefined", "name": "gaussian"}},
+    )
+    before = find(workspace.project, fitted["id"]).result
+    tools.call(
+        "set_field", {"object_id": artist, "path": ["left_out"], "value": [0, 1, 2]}
+    )
+    assert find(workspace.project, artist).left_out == [0, 1, 2]
+    assert find(workspace.project, fitted["id"]).result != before

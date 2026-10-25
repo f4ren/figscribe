@@ -45,6 +45,7 @@ from figscribe.model import (
 from figscribe.render.figure import (
     COORDS,
     CURVE_POINTS,
+    LEFT_OUT_COLOR,
     MM_PER_INCH,
     DataProvider,
     tick_ranges,
@@ -153,6 +154,8 @@ class _Writer:
         """{fit id: name of the model with its fixed parameters held}."""
         self.ranges: dict[str, str] = {}
         """{fit id: name of the mask of the points within its fit range}."""
+        self.kept = self._name_kept()
+        """{plot id: name of the mask of its rows that are not left out}."""
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
         self.axis_specs = self._ticks_that_fit()
@@ -225,6 +228,22 @@ class _Writer:
                     names[key] = name
         return names
 
+    def _name_kept(self) -> dict[str, str]:
+        plots = [
+            a
+            for a in self.artists.values()
+            if isinstance(a, LinePlot | ScatterPlot | ErrorbarPlot) and a.left_out
+        ]
+        taken = set(RESERVED) | set(self.columns.values())
+        names = {}
+        for n, plot in enumerate(plots, start=1):
+            name = "kept" if len(plots) == 1 else f"kept_{n}"
+            while name in taken:
+                name += "_"
+            taken.add(name)
+            names[plot.id] = name
+        return names
+
     def _name_fits(self) -> dict[str, tuple[str, str]]:
         """{fit id: (model function name, parameter variable)} for drawn fits."""
         fits = [
@@ -293,6 +312,7 @@ class _Writer:
         self._header()
         self._imports()
         self._data(script_dir)
+        self._left_out()
         self._fit_models()
         self._fits()
         self._figure()
@@ -489,6 +509,27 @@ class _Writer:
         values = self.data(ColumnRef(source=source.id, column=refs[0][0]))
         return len(values) == 1
 
+    def _left_out(self) -> None:
+        if not self.kept:
+            return
+        self.section("Points left out")
+        for plot_id, name in self.kept.items():
+            plot = self.artists[plot_id]
+            x = self.column(plot.x)
+            rows = [row + 1 for row in plot.left_out]
+            listed = (
+                f"row {rows[0]}"
+                if len(rows) == 1
+                else f"rows {', '.join(map(str, rows[:-1]))} and {rows[-1]}"
+            )
+            source = self.sources[plot.x.source]
+            self.emit(
+                f"# {_describe(plot).capitalize()}: {listed} of "
+                f"{Path(source.path).name} left out; the file is unchanged.",
+                f"{name} = np.ones({x}.size, dtype=bool)",
+                f"{name}[{plot.left_out}] = False",
+            )
+
     def _fit_models(self) -> None:
         if not self.fits:
             return
@@ -530,6 +571,8 @@ class _Writer:
                     "valid = " + " & ".join(f"np.isfinite({a})" for a in arrays),
                 )
                 used.append("valid")
+            if fit.target in self.kept:
+                used.append(self.kept[fit.target])
             if fit_id in self.ranges:
                 low, high = fit.fit_range
                 mask = self.ranges[fit_id]
@@ -745,41 +788,8 @@ class _Writer:
 
     def _artist(self, ax: str, artist) -> None:
         common = _common(artist, default_zorder=DEFAULT_ZORDER.get(artist.kind, 2.0))
-        if isinstance(artist, LinePlot):
-            kwargs = _some(color=artist.color)
-            kwargs |= {
-                "linestyle": _str(artist.linestyle),
-                "linewidth": _num(artist.linewidth),
-            }
-            if artist.marker is not None:
-                kwargs |= {
-                    "marker": _str(artist.marker),
-                    "markersize": _num(artist.markersize),
-                }
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.plot", x, y, **kwargs, **common)
-        elif isinstance(artist, ScatterPlot):
-            kwargs = {"s": _num(artist.size)} | _some(color=artist.color)
-            kwargs["marker"] = _str(artist.marker)
-            kwargs |= _some(edgecolors=artist.edgecolor)
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.scatter", x, y, **kwargs, **common)
-        elif isinstance(artist, ErrorbarPlot):
-            kwargs = {}
-            if artist.xerr is not None:
-                kwargs["xerr"] = self.column(artist.xerr)
-            if artist.yerr is not None:
-                kwargs["yerr"] = self.column(artist.yerr)
-            kwargs |= _some(color=artist.color)
-            kwargs |= {
-                "linestyle": _str(artist.linestyle),
-                "marker": _str(artist.marker),
-                "markersize": _num(artist.markersize),
-                "capsize": _num(artist.capsize),
-                "elinewidth": _num(artist.elinewidth),
-            }
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.errorbar", x, y, **kwargs, **common)
+        if isinstance(artist, LinePlot | ScatterPlot | ErrorbarPlot):
+            self._points(ax, artist, common)
         elif isinstance(artist, Histogram):
             values = self.column(artist.values)
             if not self._all_finite([artist.values]):
@@ -871,6 +881,61 @@ class _Writer:
             return False
         return all(bool(np.all(np.isfinite(self.data(r)))) for r in refs)
 
+    def _points(self, ax: str, artist, common: dict[str, str]) -> None:
+        """A line, scatter or error bar plot; its left-out rows apart."""
+        mask = self.kept.get(artist.id)
+        parts = [(f"[{mask}]" if mask else "", {}, common)]
+        if mask:
+            apart = {
+                "color": _str(artist.left_out_color or LEFT_OUT_COLOR),
+                "marker": _str(
+                    artist.left_out_marker or getattr(artist, "marker", None) or "o"
+                ),
+            }
+            alone = {k: v for k, v in common.items() if k != "label"}
+            parts.append((f"[~{mask}]", apart, alone))
+        for rows, style, options in parts:
+            if style:
+                self.emit("# The rows left out, apart and without a legend entry.")
+            x, y = self.column(artist.x) + rows, self.column(artist.y) + rows
+            if isinstance(artist, LinePlot):
+                kwargs = (
+                    {"color": style["color"]} if style else _some(color=artist.color)
+                )
+                kwargs["linestyle"] = '"none"' if style else _str(artist.linestyle)
+                kwargs["linewidth"] = _num(artist.linewidth)
+                marker = style.get("marker") or (
+                    _str(artist.marker) if artist.marker is not None else None
+                )
+                if marker is not None:
+                    kwargs |= {"marker": marker, "markersize": _num(artist.markersize)}
+                self.call(f"{ax}.plot", x, y, **kwargs, **options)
+            elif isinstance(artist, ScatterPlot):
+                kwargs = {"s": _num(artist.size)}
+                kwargs |= (
+                    {"color": style["color"]} if style else _some(color=artist.color)
+                )
+                kwargs["marker"] = style.get("marker") or _str(artist.marker)
+                kwargs |= _some(edgecolors=artist.edgecolor)
+                self.call(f"{ax}.scatter", x, y, **kwargs, **options)
+            else:
+                kwargs = {}
+                if artist.xerr is not None:
+                    kwargs["xerr"] = self.column(artist.xerr) + rows
+                if artist.yerr is not None:
+                    kwargs["yerr"] = self.column(artist.yerr) + rows
+                kwargs |= (
+                    {"color": style["color"]} if style else _some(color=artist.color)
+                )
+                kwargs |= {
+                    "linestyle": '"none"' if style else _str(artist.linestyle),
+                    "marker": style.get("marker") or _str(artist.marker),
+                    "markersize": _num(artist.markersize),
+                    "capsize": _num(artist.capsize),
+                    "elinewidth": _num(artist.elinewidth),
+                }
+                self.call(f"{ax}.errorbar", x, y, **kwargs, **options)
+
     def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
         if fit.id not in self.fits:
             self.emit(f"# {_describe(fit)} is not fitted yet, so it is not drawn.")
@@ -910,8 +975,13 @@ class _Writer:
         kwargs = {}
         if isinstance(target, ErrorbarPlot) and target.yerr is not None:
             kwargs["yerr"] = self.column(target.yerr)
-        if fit.id in self.ranges:  # only the fitted points
-            mask = self.ranges[fit.id]
+        masks = [
+            mask
+            for mask in (self.ranges.get(fit.id), self.kept.get(fit.target))
+            if mask is not None
+        ]
+        if masks:  # only the fitted points
+            mask = " & ".join(masks)
             x, y = f"{x}[{mask}]", f"{y}[{mask}]"
             if "yerr" in kwargs:
                 kwargs["yerr"] = f"{kwargs['yerr']}[{mask}]"

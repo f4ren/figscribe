@@ -280,45 +280,8 @@ def _draw_artist(
     if isinstance(artist, FITTABLE) and (why := unequal_columns(artist, data)):
         raise DataError(f"{artist.label or artist.kind}: {why}")
 
-    if isinstance(artist, LinePlot):
-        ax.plot(
-            data(artist.x),
-            data(artist.y),
-            color=artist.color,
-            linestyle=artist.linestyle,
-            linewidth=artist.linewidth,
-            marker=artist.marker,
-            markersize=artist.markersize,
-            **common,
-        )
-    elif isinstance(artist, ScatterPlot):
-        ax.scatter(
-            data(artist.x),
-            data(artist.y),
-            s=artist.size,
-            color=artist.color,
-            marker=artist.marker,
-            edgecolors=artist.edgecolor,
-            **common,
-        )
-    elif isinstance(artist, ErrorbarPlot):
-        container = ax.errorbar(
-            data(artist.x),
-            data(artist.y),
-            xerr=data(artist.xerr) if artist.xerr is not None else None,
-            yerr=data(artist.yerr) if artist.yerr is not None else None,
-            color=artist.color,
-            linestyle=artist.linestyle,
-            marker=artist.marker,
-            markersize=artist.markersize,
-            capsize=artist.capsize,
-            elinewidth=artist.elinewidth,
-            **common,
-        )
-        # A container has no gid of its own; tag every part so a click on a cap
-        # or a bar maps back to the artist as well.
-        for part in container.get_children():
-            part.set_gid(artist.id)
+    if isinstance(artist, FITTABLE):
+        _draw_points(artist, ax, data, common)
     elif isinstance(artist, Histogram):
         values = np.asarray(data(artist.values), dtype=float)
         # np.histogram cannot place NaN or inf; they are left out, like in a fit.
@@ -344,6 +307,78 @@ def _draw_artist(
         raise NotImplementedError(
             f"rendering {artist.kind!r} artists is not implemented yet"
         )
+
+
+LEFT_OUT_COLOR = "0.7"
+"""Light grey: left-out points stay visible, but stand back."""
+
+
+def _draw_points(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
+    """A line, scatter or error bar plot: the kept points as styled, then the
+    left-out ones apart in their own color, without a legend entry. Each
+    drawn part carries `rows`, the data rows it shows, for clicks."""
+    from figscribe.fit import FitError, kept
+
+    columns = {
+        name: np.asarray(data(ref), dtype=float)
+        for name in ("x", "y", "xerr", "yerr")
+        if (ref := getattr(artist, name, None)) is not None
+    }
+    count = len(columns["x"])
+    try:
+        shown = kept(count, artist.left_out)
+    except FitError as exc:
+        raise DataError(f"{artist.label or artist.kind}: {exc}") from None
+    parts = [(shown, {}, common)]
+    if artist.left_out:
+        apart = {
+            "color": artist.left_out_color or LEFT_OUT_COLOR,
+            "marker": artist.left_out_marker or getattr(artist, "marker", None) or "o",
+        }
+        parts.append((~shown, apart, {**common, "label": "_nolegend_"}))
+    for rows, style, options in parts:
+        values = {name: column[rows] for name, column in columns.items()}
+        if isinstance(artist, LinePlot):
+            drawn = ax.plot(
+                values["x"],
+                values["y"],
+                color=style.get("color", artist.color),
+                linestyle="none" if style else artist.linestyle,
+                linewidth=artist.linewidth,
+                marker=style.get("marker", artist.marker),
+                markersize=artist.markersize,
+                **options,
+            )[0]
+        elif isinstance(artist, ScatterPlot):
+            drawn = ax.scatter(
+                values["x"],
+                values["y"],
+                s=artist.size,
+                color=style.get("color", artist.color),
+                marker=style.get("marker", artist.marker),
+                edgecolors=artist.edgecolor,
+                **options,
+            )
+        else:
+            container = ax.errorbar(
+                values["x"],
+                values["y"],
+                xerr=values.get("xerr"),
+                yerr=values.get("yerr"),
+                color=style.get("color", artist.color),
+                linestyle="none" if style else artist.linestyle,
+                marker=style.get("marker", artist.marker),
+                markersize=artist.markersize,
+                capsize=artist.capsize,
+                elinewidth=artist.elinewidth,
+                **options,
+            )
+            # A container has no gid of its own; tag every part so a click on
+            # a cap or a bar maps back to the artist as well.
+            for part in container.get_children():
+                part.set_gid(artist.id)
+            drawn = container.lines[0]
+        drawn.rows = np.flatnonzero(rows)
 
 
 COORDS = {"data": "data", "axes": "axes fraction"}
@@ -460,7 +495,7 @@ def _draw_residuals(
 ) -> None:
     """Data minus fit at every fitted point, with the data's y errors, around
     a dashed zero line."""
-    from figscribe.fit import evaluate, in_range
+    from figscribe.fit import evaluate, in_range, kept
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
     target = _referenced(artists, fit.target, FITTABLE, "fit")
@@ -474,8 +509,8 @@ def _draw_residuals(
         if isinstance(target, ErrorbarPlot) and target.yerr is not None
         else None
     )
-    if fit.fit_range is not None:
-        used = in_range(x, fit.fit_range)
+    if fit.fit_range is not None or target.left_out:
+        used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
         x, y = x[used], y[used]
         yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
     container = ax.errorbar(

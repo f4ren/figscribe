@@ -52,6 +52,14 @@ class LinePlot(ArtistBase):
     """A Matplotlib marker such as "o", "s" or "^"; None draws none."""
     markersize: float = Field(4.0, gt=0.0)
     """Marker size in pt."""
+    left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
+    """Rows of the data, counted from 0, drawn apart and skipped by every fit of
+    this plot; the data file stays as it is."""
+    left_out_color: Color | None = None
+    """Color of the left-out points; None draws them light grey."""
+    left_out_marker: str | None = None
+    """Marker of the left-out points; None takes the plot's (a circle for a line
+    without markers)."""
 
 
 class ScatterPlot(ArtistBase):
@@ -68,6 +76,14 @@ class ScatterPlot(ArtistBase):
     """Marker area in pt², as Matplotlib's scatter takes it."""
     edgecolor: Color | None = None
     """Color of the marker outlines; None follows the style."""
+    left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
+    """Rows of the data, counted from 0, drawn apart and skipped by every fit of
+    this plot; the data file stays as it is."""
+    left_out_color: Color | None = None
+    """Color of the left-out points; None draws them light grey."""
+    left_out_marker: str | None = None
+    """Marker of the left-out points; None takes the plot's (a circle for a line
+    without markers)."""
 
 
 class ErrorbarPlot(ArtistBase):
@@ -92,6 +108,14 @@ class ErrorbarPlot(ArtistBase):
     """Length of the caps at the ends of the error bars in pt; 0 for none."""
     elinewidth: float = Field(1.0, gt=0.0)
     """Line width of the error bars in pt."""
+    left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
+    """Rows of the data, counted from 0, drawn apart and skipped by every fit of
+    this plot; the data file stays as it is."""
+    left_out_color: Color | None = None
+    """Color of the left-out points; None draws them light grey."""
+    left_out_marker: str | None = None
+    """Marker of the left-out points; None takes the plot's (a circle for a line
+    without markers)."""
 
 
 class Histogram(ArtistBase):

@@ -542,6 +542,17 @@ emitted in the script as a mask with a comment. Also a row range per plot
 - Order: leaving points out by hand (right-click a point in the preview),
   then finding outliers.
 
+**By hand: done** (2026-10-26): `left_out`, `left_out_color` and
+`left_out_marker` on line, scatter and error bar plots; right-click a point
+in the preview, "Leave out row 13" or "Take row 13 back in" (rows counted
+from 1 on screen, from 0 in the model), which fits every fit of the plot
+again in the same undo step and is refused if a fit would lack points; the
+assistant's `set_field` on `left_out` does the same. Residuals skip them
+too; the script names the mask `kept`. *Learned:* the click must pick the
+nearest point over all drawn parts, since the kept line also lies within
+the pick radius of a left-out point. *Open:* finding outliers; a row range
+per plot; the panel shows which rows are left out only in the preview.
+
 ### F3 Panel labels for journals — S
 
 (a), (b), (c) on each panel, automatically in reading order: style `(a)`,
