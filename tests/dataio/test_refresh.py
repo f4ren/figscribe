@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from figscribe.commands import History
+from figscribe.commands import CommandError, History
 from figscribe.io import DataError, csv_source, sha256_of
 from figscribe.io.numpyfile import numpy_source
 from figscribe.io.refresh import (
@@ -156,3 +156,10 @@ def test_a_changed_file_is_not_read_differently(tmp_path: Path) -> None:
     (tmp_path / "scan.csv").write_bytes((SCAN + "2;3,5;0,1\n").encode())
     with pytest.raises(DataError, match="has changed since it was imported"):
         read_differently(project, project.sources[0].id, "header_row", 2, tmp_path)
+
+
+def test_a_separator_is_one_character(tmp_path: Path) -> None:
+    """NumPy takes no other, and said so with a TypeError nothing caught."""
+    project = _project(tmp_path)
+    with pytest.raises(CommandError, match="delimiter"):
+        read_differently(project, project.sources[0].id, "delimiter", ";;", tmp_path)
