@@ -103,7 +103,7 @@ def test_refit_holds_fixed_parameters_and_keeps_bounds(project: Project, data) -
     fit = _fit(project)
     fit.initial_values = {"sigma": 0.7}
     fit.fixed = ["sigma"]
-    fit.bounds = {"a": (None, 2.0)}
+    fit.parameter_bounds = {"a": (None, 2.0)}
     History(project).push(refit(project, fit.id, data))
     result = _fit(project).result
     assert result.parameters["sigma"] == 0.7

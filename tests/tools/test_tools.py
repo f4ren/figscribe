@@ -651,4 +651,4 @@ def test_a_fit_can_hold_and_bound_parameters(tools, workspace) -> None:
     )
     assert result["result"]["parameters"]["c"] == 0.0
     fit = find(workspace.project, result["id"])
-    assert fit.fixed == ["c"] and fit.bounds == {"sigma": (0.1, None)}
+    assert fit.fixed == ["c"] and fit.parameter_bounds == {"sigma": (0.1, None)}

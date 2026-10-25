@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QDialogButtonBox
+from PySide6.QtWidgets import QDialogButtonBox, QLabel
 
 from figscribe.commands import InsertItem, SetField
-from figscribe.fit import FitError, add_fit
+from figscribe.fit import FitError, add_fit, refit
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
@@ -116,7 +116,7 @@ def test_a_parameter_can_be_bounded(dialog: FitDialog) -> None:
     dialog.upper["a"].setText(f"{fitted * 0.9:.6g}")
     dialog.upper["a"].editingFinished.emit()
     assert dialog.result.parameters["a"] <= fitted * 0.9 * (1 + 1e-9)
-    assert dialog.fit().bounds == {"a": (None, float(f"{fitted * 0.9:.6g}"))}
+    assert dialog.fit().parameter_bounds == {"a": (None, float(f"{fitted * 0.9:.6g}"))}
     dialog.lower["a"].setText(f"{fitted * 2:.6g}")  # above the upper: refused
     dialog.lower["a"].editingFinished.emit()
     assert "lower bound of a" in dialog.error.text() and not _ok(dialog)
@@ -225,3 +225,34 @@ def test_fitting_again_after_a_change(qtbot, document: Document) -> None:
     panel.fit_again_button.click()
     assert document.figure.axes[0].artists[1].result is not None
     assert document.history.undo_text == "Fit linear"
+
+
+def test_a_guess_moves_into_a_bound_but_a_typed_start_does_not(
+    dialog: FitDialog,
+) -> None:
+    dialog.lower["sigma"].setText("5")
+    dialog.lower["sigma"].editingFinished.emit()
+    assert float(dialog.start["sigma"].text()) == 5  # the guess, moved in
+    assert _ok(dialog)
+    dialog.start["c"].setText("9")
+    dialog.start["c"].setModified(True)  # as typed by the user
+    dialog.upper["c"].setText("1")
+    dialog.upper["c"].editingFinished.emit()
+    assert "start value of c, 9, lies outside" in dialog.error.text()
+    assert not _ok(dialog)
+
+
+def test_the_panel_shows_a_held_parameter_as_held(qtbot, document: Document) -> None:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"c": 0.0},
+        fixed=["c"],
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(fit.id)
+    shown = [w.text() for w in panel.findChildren(QLabel)]
+    assert "0 (held)" in shown

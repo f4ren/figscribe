@@ -134,7 +134,7 @@ def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
         model=PredefinedFit(name="gaussian"),
         initial_values={"c": 0.0},
         fixed=["c"],
-        bounds={"sigma": (0.5, None)},
+        parameter_bounds={"sigma": (0.5, None)},
     )
     add_fit(project, fit).apply(project)
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)

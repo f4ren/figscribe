@@ -14,11 +14,13 @@ from figscribe.fit.expression import (
 from figscribe.fit.ops import add_fit, refit
 from figscribe.fit.run import (
     evaluate,
+    free_parameters,
     initial_guess,
     numpy_source,
     parameter_names,
     run_fit,
     source_of,
+    within,
 )
 
 __all__ = [
@@ -28,10 +30,12 @@ __all__ = [
     "compile_expression",
     "evaluate",
     "free_names",
+    "free_parameters",
     "initial_guess",
     "numpy_source",
     "parameter_names",
     "refit",
     "run_fit",
     "source_of",
+    "within",
 ]

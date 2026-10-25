@@ -48,7 +48,7 @@ def test_fixed_or_bounded_parameters_the_model_lacks_are_reported(
 ) -> None:
     fit = project.figures[0].axes[0].artists[1]
     fit.fixed = ["k"]
-    fit.bounds = {"sigma": (0.0, None), "q": (0.0, 1.0)}
+    fit.parameter_bounds = {"sigma": (0.0, None), "q": (0.0, 1.0)}
 
     messages = [i.message for i in validate_references(project)]
     assert any("holds 'k' fixed" in m for m in messages)

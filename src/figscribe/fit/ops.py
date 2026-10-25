@@ -8,7 +8,7 @@ import numpy as np
 
 from figscribe.commands import CommandError, InsertItem, Macro, SetField, find
 from figscribe.fit.expression import FitError
-from figscribe.fit.run import initial_guess, parameter_names, run_fit
+from figscribe.fit.run import initial_guess, parameter_names, run_fit, within
 from figscribe.model import (
     Axes,
     AxisSpec,
@@ -49,8 +49,12 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
 
     names = parameter_names(fit.model)
     stored = {k: v for k, v in fit.initial_values.items() if k in names}
-    p0 = {**initial_guess(fit.model, x, y), **stored}
-    result = run_fit(fit.model, p0, x, y, yerr)
+    # A guess may fall outside a bound the user set; a stored value may not.
+    guessed = within(initial_guess(fit.model, x, y), fit.parameter_bounds)
+    p0 = {**guessed, **stored}
+    result = run_fit(
+        fit.model, p0, x, y, yerr, fixed=fit.fixed, bounds=fit.parameter_bounds
+    )
 
     label = "expression" if isinstance(fit.model, ExpressionFit) else fit.model.name
     return Macro(

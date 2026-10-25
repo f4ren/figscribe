@@ -137,6 +137,8 @@ FIELD_NAMES = {
     "expression": "Formula",
     "parameters": "Parameters",
     "initial_values": "Start values",
+    "fixed": "Held fixed",
+    "parameter_bounds": "Parameter bounds",
     "result": "Result",
     "uncertainties": "Uncertainties (1σ)",
     "reduced_chi_square": "Reduced χ²",
