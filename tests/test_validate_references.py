@@ -43,6 +43,19 @@ def test_fit_target_outside_its_axes_is_reported(project: Project) -> None:
     assert [i.location for i in issues] == ["figures[0].axes[0].artists[1].target"]
 
 
+def test_fixed_or_bounded_parameters_the_model_lacks_are_reported(
+    project: Project,
+) -> None:
+    fit = project.figures[0].axes[0].artists[1]
+    fit.fixed = ["k"]
+    fit.parameter_bounds = {"sigma": (0.0, None), "q": (0.0, 1.0)}
+
+    messages = [i.message for i in validate_references(project)]
+    assert any("holds 'k' fixed" in m for m in messages)
+    assert any("bounds 'q'" in m for m in messages)
+    assert not any("'sigma'" in m for m in messages)
+
+
 def test_residual_target_must_be_a_fit(project: Project) -> None:
     residuals = project.figures[0].axes[1].artists[0]
     assert isinstance(residuals, ResidualPlot)

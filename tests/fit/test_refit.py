@@ -97,3 +97,31 @@ def test_refit_refuses_a_target_without_data(project: Project, data) -> None:
     _fit(project).target = note.id
     with pytest.raises(FitError, match="annotation"):
         refit(project, _fit(project).id, data)
+
+
+def test_refit_holds_fixed_parameters_and_keeps_bounds(project: Project, data) -> None:
+    fit = _fit(project)
+    fit.initial_values = {"sigma": 0.7}
+    fit.fixed = ["sigma"]
+    fit.parameter_bounds = {"a": (None, 2.0)}
+    History(project).push(refit(project, fit.id, data))
+    result = _fit(project).result
+    assert result.parameters["sigma"] == 0.7
+    assert result.parameters["a"] <= 2.0
+
+
+def test_a_fit_is_changed_in_one_step(project: Project, data) -> None:
+    from figscribe.fit import update_fit
+
+    fit = _fit(project)
+    history = History(project)
+    history.push(refit(project, fit.id, data))
+    before = dumps(project)
+    changed = _fit(project).model_copy(
+        update={"fixed": ["c"], "parameter_bounds": {"a": (0.0, None)}, "label": "new"}
+    )
+    history.push(update_fit(project, fit.id, changed))
+    assert _fit(project).fixed == ["c"] and _fit(project).label == "new"
+    assert history.undo_text == "Change the fit"
+    history.undo()
+    assert dumps(project) == before

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 from scipy.optimize import OptimizeWarning, curve_fit
@@ -59,6 +59,8 @@ def run_fit(
     y,
     yerr=None,
     *,
+    fixed: Sequence[str] = (),
+    bounds: Mapping[str, tuple[float | None, float | None]] | None = None,
     max_evaluations: int | None = None,
 ) -> FitResult:
     """Fit `model` to the data with scipy.optimize.curve_fit.
@@ -69,52 +71,128 @@ def run_fit(
     Points with a non-finite value are dropped. A fit that does not converge
     is recorded with converged=False, not raised: the GUI shows it, and the
     start values are kept so the user can adjust them.
+
+    Parameters in `fixed` keep their start value, with uncertainty 0, and do
+    not count as degrees of freedom. `bounds` gives a parameter a (lower,
+    upper) range, None for an open end; curve_fit then uses its bounded
+    method ("trf").
     """
     f, names = _compiled(model)
-    p0 = _start_values(names, initial_values)
+    p0 = dict(zip(names, _start_values(names, initial_values), strict=True))
+    free = _free(names, fixed)
+    lower, upper = _bounds(free, p0, bounds or {})
     x, y, yerr = _data(x, y, yerr)
-    if x.size <= len(names):
+    if x.size <= len(free):
         raise FitError(
-            f"a fit with {len(names)} parameters needs more than "
-            f"{len(names)} valid points, got {x.size}"
+            f"a fit with {len(free)} parameters needs more than "
+            f"{len(free)} valid points, got {x.size}"
         )
-    if not np.all(np.isfinite(f(x, *p0))):
+    if not np.all(np.isfinite(f(x, *p0.values()))):
         raise FitError("the model is not finite at the start values for every point")
 
+    def with_fixed(x, *values):
+        return f(x, *{**p0, **dict(zip(free, values, strict=True))}.values())
+
+    bounded = any(np.isfinite(lower)) or any(np.isfinite(upper))
+    options = (
+        {"bounds": (lower, upper), "max_nfev": max_evaluations}
+        if bounded
+        else {"maxfev": max_evaluations or 0}
+    )
     with warnings.catch_warnings(), np.errstate(all="ignore"):
         # An inestimable covariance comes back as inf; that is reported below.
         warnings.simplefilter("ignore", OptimizeWarning)
         try:
             popt, pcov = curve_fit(
-                f,
+                with_fixed if len(free) < len(names) else f,
                 x,
                 y,
-                p0=p0,
+                p0=[p0[n] for n in free],
                 sigma=yerr,
                 absolute_sigma=yerr is not None,
-                maxfev=max_evaluations or 0,
+                **options,
             )
         except RuntimeError:
             return FitResult(
-                parameters=dict(zip(names, p0, strict=True)),
-                uncertainties=dict.fromkeys(names, math.inf),
+                parameters=dict(p0),
+                uncertainties={n: math.inf if n in free else 0.0 for n in names},
                 reduced_chi_square=None,
                 converged=False,
             )
 
-    variances = np.full(len(names), np.inf) if _singular(pcov) else np.diag(pcov)
+    fitted = {**p0, **dict(zip(free, map(float, popt), strict=True))}
+    variances = np.full(len(free), np.inf) if _singular(pcov) else np.diag(pcov)
+    errors = dict(zip(free, map(float, np.sqrt(variances)), strict=True))
     chi2 = None
     if yerr is not None:
-        residuals = (y - f(x, *popt)) / yerr
-        chi2 = float(np.sum(residuals**2) / (x.size - len(names)))
+        residuals = (y - f(x, *fitted.values())) / yerr
+        chi2 = float(np.sum(residuals**2) / (x.size - len(free)))
     return FitResult(
-        parameters={n: float(v) for n, v in zip(names, popt, strict=True)},
-        uncertainties={
-            n: float(np.sqrt(v)) for n, v in zip(names, variances, strict=True)
-        },
+        parameters={n: float(fitted[n]) for n in names},
+        uncertainties={n: errors.get(n, 0.0) for n in names},
         reduced_chi_square=chi2,
         converged=bool(np.all(np.isfinite(popt))),
     )
+
+
+def within(
+    values: Mapping[str, float],
+    bounds: Mapping[str, tuple[float | None, float | None]],
+) -> dict[str, float]:
+    """`values` moved into their bounds where they lie outside."""
+    moved = dict(values)
+    for name, (low, high) in bounds.items():
+        if name in moved:
+            if low is not None:
+                moved[name] = max(moved[name], low)
+            if high is not None:
+                moved[name] = min(moved[name], high)
+    return moved
+
+
+def free_parameters(model: FitModel, fixed: Sequence[str]) -> list[str]:
+    """The parameters curve_fit varies: the model's, less the fixed ones."""
+    return _free(parameter_names(model), fixed)
+
+
+def _free(names: list[str], fixed: Sequence[str]) -> list[str]:
+    _known(names, fixed)
+    free = [n for n in names if n not in fixed]
+    if not free:
+        raise FitError("every parameter is fixed; free one to fit")
+    return free
+
+
+def _bounds(
+    free: list[str],
+    start: Mapping[str, float],
+    bounds: Mapping[str, tuple[float | None, float | None]],
+) -> tuple[list[float], list[float]]:
+    """Lower and upper bounds of the free parameters, -inf and inf for none."""
+    _known(list(start), bounds)
+    lower, upper = [], []
+    for name in free:
+        low, high = bounds.get(name, (None, None))
+        low = -math.inf if low is None else float(low)
+        high = math.inf if high is None else float(high)
+        if not low < high:
+            raise FitError(f"the lower bound of {name} is not below the upper")
+        if not low <= start[name] <= high:
+            raise FitError(
+                f"the start value of {name}, {start[name]:g}, lies outside its "
+                f"bounds ({low:g} to {high:g})"
+            )
+        lower.append(low)
+        upper.append(high)
+    return lower, upper
+
+
+def _known(names: list[str], given) -> None:
+    for name in given:
+        if name not in names:
+            raise FitError(
+                f"unknown parameter {name!r}; the model has {', '.join(names)}"
+            )
 
 
 MAX_CONDITION = 1 / (100 * np.finfo(float).eps)
@@ -143,11 +221,7 @@ def _compiled(model: FitModel) -> tuple[Model, list[str]]:
 
 
 def _start_values(names: list[str], given: Mapping[str, float]) -> list[float]:
-    for name in given:
-        if name not in names:
-            raise FitError(
-                f"unknown parameter {name!r}; the model has {', '.join(names)}"
-            )
+    _known(names, given)
     values = []
     for name in names:
         if name not in given:

@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QDialogButtonBox
+from PySide6.QtWidgets import QDialogButtonBox, QLabel
 
 from figscribe.commands import InsertItem, SetField
-from figscribe.fit import FitError, add_fit
+from figscribe.fit import FitError, add_fit, refit
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
@@ -97,6 +97,29 @@ def test_start_values_can_be_changed(dialog: FitDialog) -> None:
     dialog.start["mu"].setText("0")
     dialog._guess_again()
     assert float(dialog.start["mu"].text()) != 0
+
+
+def test_a_parameter_can_be_held_at_its_start_value(dialog: FitDialog) -> None:
+    dialog.start["sigma"].setText("0.9")
+    dialog.start["sigma"].editingFinished.emit()
+    dialog.fixed["sigma"].click()
+    assert dialog.result.parameters["sigma"] == 0.9
+    assert dialog.result.uncertainties["sigma"] == 0.0
+    fit = dialog.fit()
+    assert fit.fixed == ["sigma"] and fit.initial_values["sigma"] == 0.9
+    dialog.fixed["sigma"].click()
+    assert dialog.result.parameters["sigma"] != 0.9
+
+
+def test_a_parameter_can_be_bounded(dialog: FitDialog) -> None:
+    fitted = dialog.result.parameters["a"]
+    dialog.upper["a"].setText(f"{fitted * 0.9:.6g}")
+    dialog.upper["a"].editingFinished.emit()
+    assert dialog.result.parameters["a"] <= fitted * 0.9 * (1 + 1e-9)
+    assert dialog.fit().parameter_bounds == {"a": (None, float(f"{fitted * 0.9:.6g}"))}
+    dialog.lower["a"].setText(f"{fitted * 2:.6g}")  # above the upper: refused
+    dialog.lower["a"].editingFinished.emit()
+    assert "lower bound of a" in dialog.error.text() and not _ok(dialog)
 
 
 def test_a_typed_label_is_kept(dialog: FitDialog) -> None:
@@ -202,3 +225,87 @@ def test_fitting_again_after_a_change(qtbot, document: Document) -> None:
     panel.fit_again_button.click()
     assert document.figure.axes[0].artists[1].result is not None
     assert document.history.undo_text == "Fit linear"
+
+
+def test_a_guess_moves_into_a_bound_but_a_typed_start_does_not(
+    dialog: FitDialog,
+) -> None:
+    dialog.lower["sigma"].setText("5")
+    dialog.lower["sigma"].editingFinished.emit()
+    assert float(dialog.start["sigma"].text()) == 5  # the guess, moved in
+    assert _ok(dialog)
+    dialog.start["c"].setText("9")
+    dialog.start["c"].setModified(True)  # as typed by the user
+    dialog.upper["c"].setText("1")
+    dialog.upper["c"].editingFinished.emit()
+    assert "start value of c, 9, lies outside" in dialog.error.text()
+    assert not _ok(dialog)
+
+
+def test_the_panel_shows_a_held_parameter_as_held(qtbot, document: Document) -> None:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"c": 0.0},
+        fixed=["c"],
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(fit.id)
+    shown = [w.text() for w in panel.findChildren(QLabel)]
+    assert "0 (held)" in shown
+
+
+# --- changing a fit that is there -------------------------------------------------
+
+
+def _held_fit(document: Document) -> FitCurve:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"a": 1.0, "mu": 5.0, "sigma": 1.0, "c": 0.0},
+        fixed=["c"],
+        parameter_bounds={"sigma": (0.2, None)},
+        label="peak",
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    return document.figure.axes[0].artists[1]
+
+
+def test_the_dialog_shows_a_fit_as_it_is(qtbot, document: Document) -> None:
+    fit = _held_fit(document)
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    assert dialog.model_key == "gaussian"
+    assert {n: float(line.text()) for n, line in dialog.start.items()} == {
+        "a": 1.0,
+        "mu": 5.0,
+        "sigma": 1.0,
+        "c": 0.0,
+    }
+    assert dialog.held() == ["c"] and dialog.bounds() == {"sigma": (0.2, None)}
+    assert dialog.label.text() == "peak"
+    assert dialog.residuals.isHidden()
+    ok = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    assert ok.text() == "Update fit" and _ok(dialog)
+    assert dialog.fit().id == fit.id
+
+
+def test_the_panel_opens_a_fit_to_change_it(window: MainWindow) -> None:
+    fit = _held_fit(window.document)
+    window.document.select(fit.id)
+
+    def free_c(dialog: FitDialog) -> bool:
+        dialog.fixed["c"].click()
+        return True
+
+    window.run_dialog = free_c
+    window.properties.edit_fit_button.click()
+    changed = window.document.figure.axes[0].artists[1]
+    assert changed.fixed == [] and changed.result.uncertainties["c"] > 0
+    assert window.document.history.undo_text == "Change the fit"
+    window.document.undo()
+    assert window.document.figure.axes[0].artists[1].fixed == ["c"]

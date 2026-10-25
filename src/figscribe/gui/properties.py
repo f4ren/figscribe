@@ -82,6 +82,8 @@ SKIPPED = {
     "columns": "read from the file on import and listed in the outline",
     "model": "chosen in the fit dialog",
     "initial_values": "set in the fit dialog",
+    "fixed": "set in the fit dialog, beside the start values",
+    "parameter_bounds": "set in the fit dialog, beside the start values",
     "result": "computed by the fit and shown in the fit dialog",
 }
 """Fields with no editor here, and why."""
@@ -433,6 +435,8 @@ class PropertyPanel(QScrollArea):
         self.axis_form: AxisForm | None = None
         self.axis_range: Callable[[str], tuple[float, float] | None] = lambda _: None
         """The range an axis shows right now; the window asks the preview."""
+        self.edit_fit: Callable[[str], None] = lambda fit_id: None
+        """Opens the fit dialog on a fit that is there; the window does."""
         self._folded = {title: True for title in COLLAPSED}
         self.set_document(document)
 
@@ -737,7 +741,10 @@ class PropertyPanel(QScrollArea):
             for row, (name, value) in enumerate(result.parameters.items()):
                 error = result.uncertainties.get(name)
                 grid.addWidget(label(GREEK.get(name, name), "value"), row, 0)
-                grid.addWidget(label(with_error(value, error), "value"), row, 1)
+                shown = f"{value:.6g} (held)" if name in fit.fixed else None
+                grid.addWidget(
+                    label(shown or with_error(value, error), "value"), row, 1
+                )
             row = len(result.parameters)
             if result.reduced_chi_square is not None:
                 grid.addWidget(label("χ²ᵣ", "value"), row, 0)
@@ -748,10 +755,16 @@ class PropertyPanel(QScrollArea):
                 grid.addWidget(warning, row + 1, 0, 1, 2)
         grid.setColumnStretch(1, 1)
         outer.addWidget(card)
+        edit = QPushButton("Change the fit…")
+        edit.setObjectName("link")
+        edit.setToolTip("Model, start values, held parameters and bounds")
+        edit.clicked.connect(lambda: self.edit_fit(fit.id))
+        self.edit_fit_button = edit
         again = QPushButton("Fit again with the current data")
         again.setObjectName("link")
         again.clicked.connect(lambda: self.fit_again(fit.id))
         self.fit_again_button = again
+        outer.addWidget(edit, 0, Qt.AlignmentFlag.AlignLeft)
         outer.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return holder
 

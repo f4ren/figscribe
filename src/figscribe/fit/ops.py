@@ -8,7 +8,7 @@ import numpy as np
 
 from figscribe.commands import CommandError, InsertItem, Macro, SetField, find
 from figscribe.fit.expression import FitError
-from figscribe.fit.run import initial_guess, parameter_names, run_fit
+from figscribe.fit.run import initial_guess, parameter_names, run_fit, within
 from figscribe.model import (
     Axes,
     AxisSpec,
@@ -49,8 +49,12 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
 
     names = parameter_names(fit.model)
     stored = {k: v for k, v in fit.initial_values.items() if k in names}
-    p0 = {**initial_guess(fit.model, x, y), **stored}
-    result = run_fit(fit.model, p0, x, y, yerr)
+    # A guess may fall outside a bound the user set; a stored value may not.
+    guessed = within(initial_guess(fit.model, x, y), fit.parameter_bounds)
+    p0 = {**guessed, **stored}
+    result = run_fit(
+        fit.model, p0, x, y, yerr, fixed=fit.fixed, bounds=fit.parameter_bounds
+    )
 
     label = "expression" if isinstance(fit.model, ExpressionFit) else fit.model.name
     return Macro(
@@ -58,6 +62,26 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
         [
             SetField(fit_id, ("initial_values",), p0),
             SetField(fit_id, ("result",), result),
+        ],
+    )
+
+
+EDITABLE = ("model", "initial_values", "fixed", "parameter_bounds", "result", "label")
+"""What the fit dialog changes on a fit that is already there."""
+
+
+def update_fit(project: Project, fit_id: str, changed: FitCurve) -> Macro:
+    """Give the fit `fit_id` the model, start values, held parameters, bounds,
+    result and label of `changed`, as one step."""
+    fit = _get(project, fit_id)
+    if not isinstance(fit, FitCurve):
+        raise FitError(f"{fit_id!r} is not a fit")
+    return Macro(
+        "Change the fit",
+        [
+            SetField(fit_id, (name,), getattr(changed, name))
+            for name in EDITABLE
+            if getattr(changed, name) != getattr(fit, name)
         ],
     )
 

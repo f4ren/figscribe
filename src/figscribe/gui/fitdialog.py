@@ -1,8 +1,8 @@
 """The fit dialog: pick a model, see the result at once, add it to the figure.
 
-Every change of model or start value fits again right away, on the data of
-the target plot, without touching the project; only "Add fit" pushes the
-FitCurve (and its residual panel) as one undo step.
+Every change of model, start value, held parameter or bound fits again right
+away, on the data of the target plot, without touching the project; only
+"Add fit" pushes the FitCurve (and its residual panel) as one undo step.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from figscribe.fit import (
     parameter_names,
     run_fit,
     source_of,
+    within,
 )
 from figscribe.gui import theme
 from figscribe.gui.names import artist_name, with_error
@@ -52,9 +53,18 @@ MODELS = [
 class FitDialog(QDialog):
     """Fits a model to the plot `target`; `fit()` is the result for the model."""
 
-    def __init__(self, target, data, residuals_default: bool = False, parent=None):
+    def __init__(
+        self,
+        target,
+        data,
+        residuals_default: bool = False,
+        parent=None,
+        fit: FitCurve | None = None,
+    ):
+        """With `fit`, the dialog opens on that fit as it is, to change it."""
         super().__init__(parent)
         self.target = target
+        self.existing = fit
         self.x = data(target.x)
         self.y = data(target.y)
         self.yerr = (
@@ -64,6 +74,11 @@ class FitDialog(QDialog):
         )
         self.result = None
         self.start: dict[str, QLineEdit] = {}
+        self.fixed: dict[str, QCheckBox] = {}
+        """Per parameter: held at its start value instead of fitted."""
+        self.lower: dict[str, QLineEdit] = {}
+        self.upper: dict[str, QLineEdit] = {}
+        """Per parameter: the range a fitted value stays in; empty is open."""
         self._guessed: dict[str, float] = {}
         self.setWindowTitle(f"Fit {artist_name(target)}")
 
@@ -97,7 +112,10 @@ class FitDialog(QDialog):
 
         self._layout()
         self.resize(820, 560)
-        self.models.button(0).setChecked(True)
+        if fit is None:
+            self.models.button(0).setChecked(True)
+        else:
+            self._show_fit(fit)
 
     # --- layout ---------------------------------------------------------------
 
@@ -149,7 +167,7 @@ class FitDialog(QDialog):
         right.setContentsMargins(24, 16, 24, 16)
         right.setSpacing(10)
         right.addLayout(self._details)
-        right.addWidget(label("Start values", "sectionTitle"))
+        right.addWidget(label("Start values, held parameters, bounds", "sectionTitle"))
         right.addLayout(self._start_form)
         guess = QPushButton("Guess again from the data")
         guess.setObjectName("link")
@@ -180,6 +198,36 @@ class FitDialog(QDialog):
         layout.addLayout(middle, 1)
         layout.addWidget(_rule())
         layout.addLayout(bottom)
+
+    def _show_fit(self, fit: FitCurve) -> None:
+        """Fill the dialog from a fit that is there; Add becomes Update."""
+        ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        ok.setText("Update fit")
+        self.residuals.hide()  # its residuals, if any, stay as they are
+        self.label.setText(fit.label or "")
+        self.label.setModified(True)  # not replaced by the model's name
+        if isinstance(fit.model, ExpressionFit):
+            self.expression.setText(fit.model.expression)
+            key = "expression"
+        else:
+            if fit.model.degree is not None:
+                self.degree.blockSignals(True)
+                self.degree.setValue(fit.model.degree)
+                self.degree.blockSignals(False)
+            key = fit.model.name
+        self.choose(key)  # fills the start values with guesses, and fits
+        for name, line in self.start.items():
+            if name in fit.initial_values:
+                line.setText(f"{fit.initial_values[name]:.6g}")
+                line.setModified(True)  # the user's, as before
+            low, high = fit.parameter_bounds.get(name, (None, None))
+            self.lower[name].setText("" if low is None else f"{low:.6g}")
+            self.upper[name].setText("" if high is None else f"{high:.6g}")
+            box = self.fixed[name]
+            box.blockSignals(True)
+            box.setChecked(name in fit.fixed)
+            box.blockSignals(False)
+        self.refit()
 
     # --- model ----------------------------------------------------------------
 
@@ -229,18 +277,55 @@ class FitDialog(QDialog):
     def _fill_start(self, names: list[str]) -> None:
         while self._start_form.rowCount():
             self._start_form.removeRow(0)
-        self.start = {}
+        self.start, self.fixed, self.lower, self.upper = {}, {}, {}, {}
         for name in names:
             line = QLineEdit(f"{self._guessed.get(name, 1.0):.6g}")
             line.setFont(theme.mono_font(13))
             line.editingFinished.connect(self.refit)
-            self.start[name] = line
-            self._start_form.addRow(_caption(GREEK.get(name, name)), line)
+            held = QCheckBox("held")
+            held.setToolTip("Keep this parameter at its start value; fit the rest.")
+            held.toggled.connect(self.refit)
+            lower, upper = _bound("−∞"), _bound("+∞")
+            for bound in (lower, upper):
+                bound.setToolTip("The fitted value stays within; empty is open.")
+                bound.editingFinished.connect(self.refit)
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            row.addWidget(line, 2)
+            row.addWidget(held)
+            row.addWidget(label("within", "caption"))
+            row.addWidget(lower, 1)
+            row.addWidget(label("to", "caption"))
+            row.addWidget(upper, 1)
+            self.start[name], self.fixed[name] = line, held
+            self.lower[name], self.upper[name] = lower, upper
+            self._start_form.addRow(_caption(GREEK.get(name, name)), row)
 
     def _guess_again(self) -> None:
         for name, line in self.start.items():
             line.setText(f"{self._guessed.get(name, 1.0):.6g}")
         self.refit()
+
+    def held(self) -> list[str]:
+        return [name for name, box in self.fixed.items() if box.isChecked()]
+
+    def bounds(self) -> dict[str, tuple[float | None, float | None]]:
+        """The typed bounds, for parameters that have one."""
+        found = {}
+        for name in self.start:
+            ends = []
+            for side, line in (
+                ("lower", self.lower[name]),
+                ("upper", self.upper[name]),
+            ):
+                text = line.text().strip()
+                try:
+                    ends.append(number(text) if text else None)
+                except ValueError as exc:
+                    raise FitError(f"the {side} bound of {name}: {exc}") from None
+            if ends != [None, None]:
+                found[name] = tuple(ends)
+        return found
 
     def start_values(self) -> dict[str, float]:
         values = {}
@@ -258,7 +343,16 @@ class FitDialog(QDialog):
         self.result = None
         try:
             model = self.model()
-            result = run_fit(model, self.start_values(), self.x, self.y, self.yerr)
+            self._guesses_within(self.bounds())
+            result = run_fit(
+                model,
+                self.start_values(),
+                self.x,
+                self.y,
+                self.yerr,
+                fixed=self.held(),
+                bounds=self.bounds(),
+            )
         except (FitError, ValueError) as exc:
             self._show_error(str(exc))
             return
@@ -267,14 +361,33 @@ class FitDialog(QDialog):
         self._show_result()
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
 
+    def _guesses_within(self, bounds) -> None:
+        """Move start values the user did not type into their bounds; a typed
+        one outside is the user's to change, and is refused."""
+        for name, ends in bounds.items():
+            line = self.start[name]
+            if line.isModified():
+                continue
+            try:
+                value = number(line.text())
+            except ValueError:
+                continue
+            moved = within({name: value}, {name: ends})[name]
+            if moved != value:
+                line.setText(f"{moved:.6g}")
+
     def fit(self) -> FitCurve | None:
         """The FitCurve to add, with the start values it was fitted from."""
         if self.result is None:
             return None
+        keep = {} if self.existing is None else {"id": self.existing.id}
         return FitCurve(
+            **keep,
             target=self.target.id,
             model=self.model(),
             initial_values=self.start_values(),
+            fixed=self.held(),
+            parameter_bounds=self.bounds(),
             result=self.result,
             label=self.label.text().strip() or None,
         )
@@ -292,8 +405,9 @@ class FitDialog(QDialog):
         for row, (name, value) in enumerate(result.parameters.items()):
             error = result.uncertainties.get(name)
             self._result_grid.addWidget(label(GREEK.get(name, name), "value"), row, 0)
+            shown = f"{value:.6g} (held)" if name in self.held() else None
             self._result_grid.addWidget(
-                label(with_error(value, error), "value"), row, 1
+                label(shown or with_error(value, error), "value"), row, 1
             )
         row = len(result.parameters)
         if result.reduced_chi_square is not None:
@@ -301,6 +415,13 @@ class FitDialog(QDialog):
             chi = f"{result.reduced_chi_square:.2f} · {len(self.x)} points"
             self._result_grid.addWidget(label(chi, "value"), row, 1)
         self._result_grid.setColumnStretch(1, 1)
+
+
+def _bound(placeholder: str) -> QLineEdit:
+    line = QLineEdit()
+    line.setPlaceholderText(placeholder)
+    line.setFont(theme.mono_font(13))
+    return line
 
 
 def _caption(text: str):
