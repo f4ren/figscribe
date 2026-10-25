@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
-from PySide6.QtGui import QDropEvent, QFontDatabase
+from PySide6.QtCore import QMimeData, QPointF, QSize, Qt, QUrl
+from PySide6.QtGui import QDropEvent, QFontDatabase, QIcon
 from PySide6.QtWidgets import QApplication, QLabel, QToolButton
 
 from figscribe.commands import InsertItem, SetField
@@ -72,6 +72,26 @@ def test_apply_styles_the_application(qapp: QApplication) -> None:
         assert "chevron-down.svg" in qapp.styleSheet()
     finally:
         qapp.setStyleSheet("")
+
+
+def test_apply_gives_the_application_its_icon(qapp: QApplication) -> None:
+    theme.apply(qapp)
+    try:
+        sizes = qapp.windowIcon().availableSizes()
+        assert QSize(16, 16) in sizes and QSize(512, 512) in sizes
+    finally:
+        qapp.setStyleSheet("")
+        qapp.setWindowIcon(QIcon())
+
+
+def test_small_icons_fill_their_square(qapp) -> None:
+    """Up to 48 px the drawing has no margin, so it stays legible."""
+    icon = theme.app_icon()
+    small = icon.pixmap(QSize(16, 16)).toImage()
+    large = icon.pixmap(QSize(512, 512)).toImage()
+    assert small.size() == QSize(16, 16) and large.size() == QSize(512, 512)
+    assert small.pixelColor(8, 1).alpha() == 255
+    assert large.pixelColor(256, 20).alpha() == 0
 
 
 @pytest.mark.parametrize(

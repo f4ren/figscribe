@@ -1162,3 +1162,50 @@ them, and nearly equal ones distort the covariance. **A held parameter as a
 literal in the model's expression**: the script would no longer show the
 model as it is named, and freeing the parameter again would need a new
 expression.
+
+---
+
+## 0030 — The application icon
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+figscribe had no icon: the window showed the platform's default and the macOS
+Dock Python's rocket. The installers of roadmap task R4.2 will need `.icns`
+for macOS and `.ico` for Windows.
+
+### Decision
+
+- **A pen writing a figure**: a gold nib drawing the Gaussian of the start
+  page's mark in white, on the accent blue, with faint axes. The name is
+  figure and scribe, and the icon shows both without letters: figscribe
+  writes the figure down, as a script.
+- **Two SVG drawings in `gui/icons`, every size made from them.** The full one
+  follows the macOS grid (824 of 1024 px with a margin). Up to 48 px
+  `figscribe-small.svg` is used instead: the whole square, no axes, a bolder
+  curve and a larger pen, which stays recognisable down to 32 px.
+- **`theme.apply` sets the window icon**, rendered once per size from 16 to
+  1024 px, so the Dock and taskbar show it also when figscribe runs from a
+  Python environment rather than an installer.
+- **`packaging/make_icons.py` writes `.icns`, `.ico` and a 1024 px PNG** to
+  `packaging/icons`, with Qt's SVG renderer and Pillow, which Matplotlib
+  already depends on; no new dependency. The files are committed so R4.2 can
+  use them as they are; the script is rerun after a change to the drawing.
+  The `.icns` uses the full drawing at every size, as macOS icons keep their
+  margin even in lists; the `.ico` uses the small one up to 48 px, as the
+  window icon does. Pillow writes no 16 and 32 px entries without Retina
+  scale into `.icns`; macOS scales them from 32 and 64 px.
+
+### Alternatives considered
+
+**Data points with the fit through them** (the first draft): a scientific
+figure, but nothing of the "scribe". **A speech bubble** at the plot: reads
+as a chat application and puts the assistant first, which is an extra; the
+toolbar already uses it for the chat. **A plot over lines of code**: says
+exactly what figscribe does, but looks like a document and is hard to read
+at 16 px. **Letters ("fs")**: need a font in the drawing and say less.
+**One drawing for every size**: at 16 px the margin leaves a blue speck. **Making the platform files at
+release time only**: the installers would then depend on Qt being able to
+render in CI before anyone has seen the result.

@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QFont,
     QFontDatabase,
     QIcon,
+    QImage,
     QPainter,
     QPalette,
     QPixmap,
@@ -279,6 +280,7 @@ def apply(app: QApplication) -> None:
     ):
         palette.setColor(role, QColor(color))
     app.setPalette(palette)
+    app.setWindowIcon(app_icon())
     icons = resources.files("figscribe.gui") / "icons"
     arrow = Path(str(icons / "chevron-down.svg")).as_posix()
     check = Path(str(icons / "check.svg")).as_posix()
@@ -378,6 +380,38 @@ ARTIST_ICONS = {
     "image": "image",
     "colormesh": "image",
 }
+
+
+APP_ICON_SIZES = (16, 24, 32, 48, 64, 128, 256, 512, 1024)
+SMALL_APP_ICON = 48
+"""Up to this size the icon is drawn from figscribe-small.svg: the whole
+square and the curve alone, which the full drawing is too fine for."""
+
+
+def app_icon_svg(size: int) -> Path:
+    """The drawing of the application icon for `size` pixels."""
+    name = "figscribe-small.svg" if size <= SMALL_APP_ICON else "figscribe.svg"
+    return Path(str(resources.files("figscribe.gui") / "icons" / name))
+
+
+def render_app_icon(size: int, drawing: Path | None = None) -> QImage:
+    """The application icon at `size` pixels, from `drawing` if given."""
+    image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    renderer = QSvgRenderer(str(drawing or app_icon_svg(size)))
+    renderer.render(painter, QRectF(0, 0, size, size))
+    painter.end()
+    return image
+
+
+def app_icon() -> QIcon:
+    """The window and Dock icon, one pixmap per size."""
+    result = QIcon()
+    for size in APP_ICON_SIZES:
+        result.addPixmap(QPixmap.fromImage(render_app_icon(size)))
+    return result
 
 
 def icon(name: str, color: str = INK, size: int = 16) -> QIcon:

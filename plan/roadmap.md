@@ -712,6 +712,18 @@ where local models fail; write down in the README which model size is good
 enough for which request, and pick the default. New features from phases 1–3
 get bench cases.
 
+### R6 An application icon — S
+
+One drawing as SVG, from which every size is made: the window and Dock icon
+at run time, and `.icns` (macOS) and `.ico` (Windows) for the installers of
+R4.2. It should take up the accent color and the start page's mark, and stay
+legible at 16 px.
+
+**Done** (2026-10-25, decision 0030): `gui/icons/figscribe.svg` and
+`figscribe-small.svg` (up to 48 px); `theme.apply` sets the window icon;
+`packaging/make_icons.py` writes `packaging/icons/figscribe.icns`, `.ico` and
+a 1024 px PNG, which R4.2 can use as they are.
+
 ---
 
 ## Phase 5 — Later, optional
