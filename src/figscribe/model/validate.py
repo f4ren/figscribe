@@ -21,6 +21,7 @@ from itertools import pairwise
 from pathlib import Path
 
 from figscribe.model.artists import (
+    AllanDeviationPlot,
     ArtistBase,
     ColorMesh,
     ErrorbarPlot,
@@ -314,6 +315,8 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
         reference = artist.data if isinstance(artist, ImagePlot) else artist.c
         shown = [("values", reference, artist.norm)]
     found = []
+    if isinstance(artist, AllanDeviationPlot):
+        return _allan_not_drawn(artist, data)
     if isinstance(artist, FITTABLE) and artist.left_out:
         try:
             count = len(data(artist.x))
@@ -356,6 +359,32 @@ def data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
         if isinstance(value, (ColumnRef, ArrayRef)):
             refs.append((name, value.source))
     return refs
+
+
+def _allan_not_drawn(artist: AllanDeviationPlot, data) -> list[str]:
+    """A series with gaps is not drawn; one too short has nothing to show."""
+    import numpy as np
+
+    from figscribe.io.errors import DataError
+
+    try:
+        values = np.asarray(data(artist.values), dtype=float).ravel()
+    except DataError:
+        return []
+    what = f"values ({artist.values.column})"
+    gaps = int(np.count_nonzero(~np.isfinite(values)))
+    if gaps:
+        return [
+            f"{what} has {gaps} of {values.size} entries that are not numbers; an "
+            "Allan deviation needs an unbroken series, so it is not drawn"
+        ]
+    points = values.size + (1 if artist.data_type == "frequency" else 0)
+    if points < 3:
+        return [
+            f"{what} has {values.size} values, too few for an Allan deviation "
+            f"({3 - points + values.size} at the least)"
+        ]
+    return []
 
 
 def _check_unique_ids(project: Project, issues: list[ReferenceIssue]) -> None:

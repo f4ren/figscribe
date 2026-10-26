@@ -63,7 +63,7 @@ from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
-from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
+from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog, allan_axes
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
@@ -71,6 +71,7 @@ from figscribe.gui.start import DOCS_URL, StartPage
 from figscribe.io import DataError, numpy_source
 from figscribe.io.numpyfile import array_names, read_numpy
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     ArtistBase,
@@ -582,7 +583,9 @@ class MainWindow(QMainWindow):
         """Put `artist` into `axes`, or into a new panel if None; while the
         panel is empty, name its axes after the plotted columns and units."""
         unit_of = unit_of or (lambda column: None)
-        if isinstance(artist, Histogram):
+        if isinstance(artist, AllanDeviationPlot):
+            labels = allan_axes()
+        elif isinstance(artist, Histogram):
             values = artist.values
             labels = {
                 "x": AxisSpec(label=str(values.column), unit=unit_of(values.column)),

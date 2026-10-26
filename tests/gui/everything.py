@@ -12,6 +12,7 @@ from figscribe.fit import add_fit, refit
 from figscribe.io import csv_source, load_data
 from figscribe.io.numpyfile import numpy_source
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     Axes,
@@ -95,6 +96,7 @@ def build(folder: Path) -> Path:
         legend=Legend(visible=True),
         artists=[
             Histogram(values=col("U"), label="counts"),
+            AllanDeviationPlot(values=col("U"), label="stability"),
             ReferenceLine(at=5.0, label="mean"),
             ShadedSpan(start=3.0, end=4.0, label="band"),
         ],
