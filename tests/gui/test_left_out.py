@@ -53,3 +53,22 @@ def test_a_point_is_left_out_and_taken_back_in(preview: Preview) -> None:
 
 def test_no_menu_away_from_the_points(preview: Preview) -> None:
     assert preview.context_menu(QPointF(3, 3)) is None
+
+
+def test_the_left_out_marker_is_chosen_with_buttons(qtbot, preview: Preview) -> None:
+    from figscribe.commands import SetField
+    from figscribe.gui.properties import MarkerEditor, PropertyPanel
+
+    document = preview.document
+    plot = document.figure.axes[0].artists[0]
+    document.push(SetField(plot.id, ("left_out",), [12]))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(plot.id)
+    editor = panel.editors[("left_out_marker",)]
+    assert isinstance(editor, MarkerEditor)
+    assert editor.buttons[None].toolTip() == "The plot's marker"
+    editor.buttons["s"].click()
+    assert document.figure.axes[0].artists[0].left_out_marker == "s"
+    panel.editors[("left_out_marker",)].buttons[None].click()
+    assert document.figure.axes[0].artists[0].left_out_marker is None

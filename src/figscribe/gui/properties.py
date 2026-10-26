@@ -954,6 +954,7 @@ NONE_TEXT = {
     "tick_direction": "style default",
     "prefix": "as in the data",
     "marker": "No marker",
+    "left_out_marker": "The plot's marker",
     "xerr": "no x errors",
     "yerr": "no y errors",
     "x": "cell numbers",
@@ -1044,7 +1045,7 @@ class MarkerEditor(TextEditor):
         row.setSpacing(4)
         options = list(MARKERS)
         if spec.optional:
-            options.append((None, NONE_TEXT["marker"]))
+            options.append((None, NONE_TEXT[path[-1]]))
         self.buttons: dict[str | None, QToolButton] = {}
         for value, name in options:
             button = QToolButton()
@@ -1085,7 +1086,7 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return ChoiceEditor(spec, path, panel, panel.document.array_choices())
     if spec.kind == "color":
         editor = ColorEditor(spec, path, panel)
-    elif name == "marker" and spec.kind == "text":
+    elif name in ("marker", "left_out_marker") and spec.kind == "text":
         editor = MarkerEditor(spec, path, panel)
     else:
         parse, format_ = _TEXT[spec.kind]
