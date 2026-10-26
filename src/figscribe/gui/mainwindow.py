@@ -63,6 +63,7 @@ from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
+from figscribe.gui.palette import CommandPalette, Entry, menu_entries
 from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
@@ -207,7 +208,9 @@ class MainWindow(QMainWindow):
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
         self.properties_dock = self._dock(
-            "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
+            "Properties",
+            _with_search(self.properties),
+            Qt.DockWidgetArea.RightDockWidgetArea,
         )
         self.properties.edit_fit = self.edit_fit
         self.preview.show_error = self.show_error
@@ -862,6 +865,34 @@ class MainWindow(QMainWindow):
             self._push(command)
         self.document.select(new.id)
 
+    def find_setting(self) -> None:
+        """Put the cursor in the search above the property panel."""
+        self.properties.search.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.properties.search.selectAll()
+
+    def open_palette(self) -> None:
+        """Find any menu action or setting of the selection by typing."""
+        entries = [
+            entry
+            for entry in menu_entries(self.menuBar())
+            if entry.run != self.palette_action.trigger
+        ]
+        entries += [
+            Entry(
+                caption,
+                f"Setting · {title}",
+                lambda c=caption, t=title: self._reveal_setting(c, t),
+            )
+            for caption, title, _ in self.properties.settings()
+        ]
+        palette = CommandPalette(entries, self)
+        if self.run_dialog(palette) and palette.chosen is not None:
+            palette.chosen.run()
+
+    def _reveal_setting(self, caption: str, title: str) -> None:
+        self.properties_dock.show()
+        self.properties.reveal(caption, title)
+
     def show_chat(self, on: bool) -> None:
         """Show or hide the built-in assistant under the preview."""
         self.chat.setVisible(on)
@@ -1096,6 +1127,11 @@ class MainWindow(QMainWindow):
         self.delete_action = self._action(
             edit, "&Delete", self.delete_selected, QKeySequence.StandardKey.Delete
         )
+        edit.addSeparator()
+        self._action(edit, "&Find Setting", self.find_setting, "Ctrl+F")
+        self.palette_action = self._action(
+            edit, "Find Setting or &Action…", self.open_palette, "Ctrl+K"
+        )
 
         insert = self.menuBar().addMenu("&Insert")
         self.import_action = self._action(
@@ -1254,6 +1290,22 @@ def _documents() -> Path:
     location = QStandardPaths.StandardLocation.DocumentsLocation
     folder = QStandardPaths.writableLocation(location)
     return Path(folder) if folder else Path.home()
+
+
+def _with_search(panel: PropertyPanel) -> QWidget:
+    """The property panel under its search field, which stays in place while
+    the form scrolls."""
+    holder = QWidget()
+    holder.setObjectName("sidePanel")
+    column = QVBoxLayout(holder)
+    column.setContentsMargins(0, 0, 0, 0)
+    column.setSpacing(0)
+    row = QVBoxLayout()
+    row.setContentsMargins(12, 10, 12, 6)
+    row.addWidget(panel.search)
+    column.addLayout(row)
+    column.addWidget(panel, 1)
+    return holder
 
 
 def _side_panel(widget: QWidget) -> QWidget:

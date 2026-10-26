@@ -262,6 +262,8 @@ ones, `--repeat 3` evens out variation between runs.
 | New, open, save, save as, quit | the system's usual keys (Ctrl+N, Ctrl+O, Ctrl+S, …) |
 | Undo, redo, delete the selection | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y, Del |
 | Import data | Ctrl+I |
+| Find a setting of the selection | Ctrl+F, then type |
+| Find any setting or menu action | Ctrl+K, then type and Enter |
 | Add plot, add fit | Ctrl+Shift+P, Ctrl+Shift+F |
 | Export figure, export Python script | Ctrl+E, Ctrl+Shift+E |
 | Show the Python code | Ctrl+Shift+Y |

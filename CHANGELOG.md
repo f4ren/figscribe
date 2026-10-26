@@ -13,6 +13,11 @@ release open in every later one.
 - Error bands: an error bar plot draws its y errors as a shaded band around
   the line, for dense data.
 
+**Finding things**
+- A search above the property panel (Ctrl+F) keeps the settings whose name
+  or explanation has the typed words.
+- A command palette (Ctrl+K) finds any menu action or setting by typing.
+
 **Fixed**
 - A color the panel refused no longer breaks the panel the next time it is
   built.

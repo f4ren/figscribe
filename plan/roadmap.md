@@ -504,6 +504,10 @@ in the panel alone would be wrong as soon as the size or labels change.
   outline and change color, marker size or line width for all at once (one
   undo step).
 
+**Done in part** (2026-10-26, decision 0038): the search above the property
+panel (Ctrl+F) and the command palette (Ctrl+K). *Open:* basic first, and
+settings for several objects, in a pull request of their own.
+
 ### U4 Change things where they are drawn — M
 
 - Double-click an axis label, title, legend entry or note to edit its text in
