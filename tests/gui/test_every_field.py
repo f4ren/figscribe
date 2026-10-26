@@ -102,6 +102,7 @@ start of what the test reports, and why."""
 KNOWN = {
     "ColorMesh.x": "B8 item 4: used only together with y, which says nothing",
     "ColorMesh.y": "B8 item 4: used only together with x, which says nothing",
+    "ErrorbarPlot.linewidth": "B8 item 4: no line to widen while the style is none",
 }
 """Fields with a problem that is planned to be fixed: the roadmap item."""
 

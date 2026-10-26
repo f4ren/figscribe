@@ -214,6 +214,25 @@ def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
     assert "more than 3σ off the Gaussian fit" in script
 
 
+def test_an_errorbar_line_wider_than_its_bars(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        linestyle="--",
+        linewidth=3.0,
+        elinewidth=0.5,
+        left_out=[4],
+    )
+    points = ErrorbarPlot(x=ref["t"], y=ref["t2"], yerr=ref["dU"], linewidth=3.0)
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data, points])])]
+    script = _assert_same(project, tmp_path)
+    # The line and its left-out steps; the points without a line have no width.
+    assert script.count("linewidth=3,") == 2
+    assert "elinewidth=0.5," in script
+
+
 def test_points_outside_the_fit_range_drawn_like_left_out(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(

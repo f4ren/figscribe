@@ -431,6 +431,7 @@ def _draw_part(artist, ax: MplAxes, values: dict, style: dict, options: dict):
         yerr=values.get("yerr"),
         color=style.get("color", artist.color),
         linestyle=style.get("linestyle", artist.linestyle),
+        linewidth=artist.linewidth,
         marker=style.get("marker", artist.marker),
         markersize=artist.markersize,
         capsize=artist.capsize,
