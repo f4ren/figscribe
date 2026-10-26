@@ -171,6 +171,8 @@ allow it (*Assistant > Let It See the Figure*).
   with `ant auth login`.
 - **ChatGPT**, or any server with the OpenAI chat completions API: set
   `OPENAI_API_KEY`.
+- **Google Gemini**: a key from Google AI Studio, in `GEMINI_API_KEY`. The
+  Gemini API has a free tier.
 - **A local model** in LM Studio (`http://localhost:1234/v1`), Ollama
   (`http://localhost:11434/v1`), vLLM or llama.cpp: nothing leaves your
   computer. *Load models* lists what the server offers; choose one that
@@ -191,6 +193,20 @@ claude mcp add figscribe -- figscribe mcp      # e.g. for Claude Code
 
 Then enable *Assistant > Allow MCP Access*; *Assistant > How to Connect…*
 shows the configuration for other clients.
+
+### Without paying per request
+
+- **A local model** costs nothing and keeps everything on your computer;
+  how well it works depends on its size (see below).
+- **Gemini's free tier**: a key from Google AI Studio, without billing,
+  with limits on requests per minute and per day. Outside the EU, EEA,
+  Switzerland and the UK, Google may use free-tier requests to improve its
+  products and have people read them; inside, its paid-service data terms
+  apply. Either way the model sees names, not data values.
+- **A subscription** (Claude Pro or Max, ChatGPT Plus) does not give API
+  access, and Anthropic does not allow its sign-in in other applications.
+  It can drive figscribe through MCP instead: in Claude Desktop or Claude
+  Code with your Claude plan, or in Gemini CLI with a Google account.
 
 ### Which model is good enough?
 

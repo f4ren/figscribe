@@ -1217,7 +1217,7 @@ render in CI before anyone has seen the result.
 
 ---
 
-## 0030 — Points left out of a plot
+## 0031 — Points left out of a plot
 
 **Date:** 2026-10-26
 **Status:** accepted
@@ -1251,3 +1251,49 @@ hide that they were there, and the data file must stay as measured.
   bar or 1.4826 × the median absolute deviation, fitted again until the set
   settles. Once confirmed they join the same list, and `left_out_note` says
   how they were found; the note is the user's to edit.
+
+---
+
+## 0032 — Gemini as a server by name, and its own key
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The user asked whether the assistant works with a subscription or a free
+model. A Claude or ChatGPT subscription gives no API access, and Anthropic's
+terms limit its sign-in to Claude.ai and Claude Code. Free models were
+already possible locally (LM Studio, Ollama); of the hosted APIs, Google's
+Gemini API has a free tier and an OpenAI-compatible endpoint
+(`https://generativelanguage.googleapis.com/v1beta/openai/`, still marked
+beta by Google), with tools, streaming, images and a model list.
+
+### Decision
+
+- **"Google Gemini" is offered by name** next to ChatGPT, through the
+  existing OpenAI-compatible path; no new dependency. Its models see
+  images, so choosing it ticks that box as ChatGPT does.
+- **Its key comes from `GEMINI_API_KEY`** when none is typed in, the name
+  Google's documentation uses. An `OPENAI_API_KEY` from the environment is
+  no longer sent to Google; any other server still takes it, as before.
+- **Model names lose Google's `models/` prefix** when listed, since the
+  chat endpoint is asked for the bare name.
+- **A subscription is pointed to MCP**, not built in: Claude Desktop, Claude
+  Code or Gemini CLI drive figscribe through `figscribe mcp` with the user's
+  own plan. The README says which ways cost nothing.
+- **Each user brings their own key.** Google allows only paid services in
+  applications made available to users in the EU, EEA, Switzerland and the
+  UK; figscribe calls the API with no key of its own, on the user's behalf
+  and with the user's project. For those regions Google applies its
+  paid-service data terms also to free use; elsewhere free-tier requests may
+  be used to improve its products. The README says so.
+
+### Alternatives considered
+
+**Signing in with a Claude subscription** (OAuth): against Anthropic's
+terms for third-party applications. **A separate Gemini client** with
+Google's SDK: a new dependency for what the OpenAI-compatible endpoint
+already does. **OpenRouter, Groq or Mistral by name**: they work through
+"Other server" already; naming them adds entries to keep current, for
+providers nobody has asked for yet.

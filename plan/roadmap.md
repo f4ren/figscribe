@@ -799,6 +799,11 @@ API from another application, but it can drive figscribe through MCP.
 Offer Google Gemini, whose API has a free tier, as a server by name, and say
 in the README which ways cost nothing or use a subscription.
 
+**Done** (2026-10-26, decision 0032): "Google Gemini" in the assistant's
+servers, with its key from `GEMINI_API_KEY` (an OpenAI key is no longer sent
+to it); README "Without paying per request". Decision 0030 was taken twice
+by parallel branches; the later one, points left out, is now 0031.
+
 ---
 
 ## Phase 5 — Later, optional

@@ -674,7 +674,8 @@ def main(argv: list[str]) -> int:
         prog="figscribe bench",
         description="Measure how well a model handles typical requests. Without "
         "--base-url it uses Claude (ANTHROPIC_API_KEY); with it, any server with "
-        "the OpenAI chat completions API (OPENAI_API_KEY if it needs one).",
+        "the OpenAI chat completions API (OPENAI_API_KEY if it needs one; "
+        "GEMINI_API_KEY for Gemini).",
     )
     parser.add_argument("--model", help=f"model id (Claude default: {MODEL})")
     parser.add_argument(

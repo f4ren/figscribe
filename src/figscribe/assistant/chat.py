@@ -144,10 +144,22 @@ class Provider:
 
 SERVERS = {
     "ChatGPT (OpenAI)": "https://api.openai.com/v1",
+    "Google Gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "LM Studio": "http://localhost:1234/v1",
     "Ollama": "http://localhost:11434/v1",
 }
 """OpenAI-compatible servers offered by name; any other URL works too."""
+
+SEEING_SERVERS = {SERVERS["ChatGPT (OpenAI)"], SERVERS["Google Gemini"]}
+"""Servers whose models read images; most local models do not."""
+
+KEY_VARIABLES = {SERVERS["Google Gemini"]: "GEMINI_API_KEY"}
+"""Where the key for a server comes from when none is entered; any other
+server takes OPENAI_API_KEY."""
+
+
+def key_variable(base_url: str | None) -> str:
+    return KEY_VARIABLES.get(base_url or "", "OPENAI_API_KEY")
 
 
 def make_model(provider: Provider, api_key: str | None = None) -> Model:
@@ -318,10 +330,11 @@ def _anthropic_result(result: ToolResult) -> dict:
 
 
 class OpenAIModel:
-    """Any server with the OpenAI chat completions API: ChatGPT, or a local
-    model in LM Studio, Ollama, vLLM, llama.cpp.
+    """Any server with the OpenAI chat completions API: ChatGPT, Gemini, or a
+    local model in LM Studio, Ollama, vLLM, llama.cpp.
 
-    The key is the given one, else OPENAI_API_KEY; local servers need none.
+    The key is the given one, else the server's variable (GEMINI_API_KEY for
+    Gemini, OPENAI_API_KEY for any other); local servers need none.
     """
 
     def __init__(self, provider: Provider, api_key: str | None = None):
@@ -334,7 +347,8 @@ class OpenAIModel:
         self._openai = openai
         self.provider = provider
         self.name = provider.model
-        key = api_key or os.environ.get("OPENAI_API_KEY") or "not-needed"
+        self.key_variable = key_variable(provider.base_url)
+        key = api_key or os.environ.get(self.key_variable) or "not-needed"
         self.client = openai.OpenAI(api_key=key, base_url=provider.base_url)
         self.tools = [
             {
@@ -399,7 +413,10 @@ class OpenAIModel:
 
     def list_models(self) -> list[str]:
         with self._errors():
-            return sorted(m.id for m in self.client.models.list())
+            # Gemini lists "models/gemini-2.5-flash" and is asked for the bare name.
+            return sorted(
+                m.id.removeprefix("models/") for m in self.client.models.list()
+            )
 
     def _errors(self):
         openai = self._openai
@@ -407,7 +424,7 @@ class OpenAIModel:
         return _Translate(
             {
                 openai.AuthenticationError: f"No valid API key for {where}. Set "
-                "OPENAI_API_KEY or enter a key in the chat.",
+                f"{self.key_variable} or enter a key in the chat.",
                 openai.NotFoundError: f"{where} has no model {self.name!r}; choose "
                 "one in the assistant settings (Load models).",
                 openai.RateLimitError: "Too many requests just now; try again shortly.",
