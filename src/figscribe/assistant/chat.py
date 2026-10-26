@@ -516,10 +516,22 @@ def _parse(arguments: str) -> Any:
         return arguments
 
 
+def _body_messages(exc: Exception) -> list[str]:
+    """The messages in an error's body, which openai from 3.38 no longer puts
+    into its own message when the body is a list, as Gemini's is."""
+    body = getattr(exc, "body", None)
+    found = []
+    for part in body if isinstance(body, list) else [body]:
+        error = part.get("error", part) if isinstance(part, dict) else None
+        if isinstance(error, dict) and isinstance(error.get("message"), str):
+            found.append(error["message"])
+    return found
+
+
 def _rate_limited(exc: Exception) -> str:
     """When to try again, if the server says, and why; Gemini says both in
     its text ("... per day limit exceeded on Free Tier ... retry in 21h3m4s")."""
-    text = str(getattr(exc, "message", exc))
+    text = " ".join([str(getattr(exc, "message", exc)), *_body_messages(exc)])
     wait = re.search(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", text)
     seconds = 0.0
     if wait:
@@ -563,8 +575,10 @@ class _Translate:
             if isinstance(exc, cls):
                 if callable(text):
                     raise ChatError(text(exc)) from exc
-                detail = getattr(exc, "message", str(exc))
-                raise ChatError(text.replace("{message}", str(detail))) from exc
+                detail = str(getattr(exc, "message", str(exc)))
+                more = [m for m in _body_messages(exc) if m not in detail]
+                detail = " ".join([detail, *more]) if more else detail
+                raise ChatError(text.replace("{message}", detail)) from exc
         if isinstance(exc, ValueError):  # a streamed tool input the SDK choked on
             raise ChatError(
                 f"The answer was garbled ({exc}); please ask again."
