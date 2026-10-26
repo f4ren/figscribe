@@ -80,6 +80,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
 )
+from figscribe.model.styles import style_problem
 from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
 
@@ -1156,7 +1157,12 @@ class ColorEditor(TextEditor):
             swatch.setChecked(key == value)
 
     def commit(self, value: Any) -> None:
-        if value is not None and not _CYCLE_COLOR.fullmatch(value):
+        # Only a color Matplotlib draws: a refused one would break the swatches.
+        if (
+            value is not None
+            and not _CYCLE_COLOR.fullmatch(value)
+            and style_problem("color", value) is None
+        ):
             self.panel.remember_color(value)
         super().commit(value)
 
