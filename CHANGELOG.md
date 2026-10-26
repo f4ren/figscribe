@@ -20,6 +20,11 @@ release open in every later one.
 - Settings that do nothing in the current state are greyed out, and their
   tooltip says why.
 
+**Finding things**
+- A search above the property panel (Ctrl+F) keeps the settings whose name
+  or explanation has the typed words.
+- A command palette (Ctrl+K) finds any menu action or setting by typing.
+
 **Editing where it is drawn**
 - Double-click an axis label, title, legend entry or note to edit it in
   place.
