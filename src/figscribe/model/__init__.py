@@ -7,6 +7,7 @@ other subsystems, so that the storage library behind them could be replaced.
 """
 
 from figscribe.model.artists import (
+    AllanDeviationPlot,
     Annotation,
     Artist,
     ArtistBase,
@@ -69,6 +70,7 @@ __all__ = [
     "FitResult",
     "GridLayout",
     "Hdf5Source",
+    "AllanDeviationPlot",
     "Histogram",
     "Identified",
     "ImagePlot",

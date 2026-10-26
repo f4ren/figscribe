@@ -23,6 +23,7 @@ from matplotlib.ticker import (
 
 from figscribe.io.errors import DataError
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     Artist,
@@ -327,6 +328,8 @@ def _draw_artist(
         draw(artist.start, artist.end, color=artist.color, linewidth=0, **common)
     elif isinstance(artist, ImagePlot | ColorMesh):
         _draw_2d(artist, ax, data, common)
+    elif isinstance(artist, AllanDeviationPlot):
+        _draw_allan(artist, ax, data, common)
     elif isinstance(artist, FitCurve):
         _draw_fit(artist, ax, data, artists, common)
     elif isinstance(artist, ResidualPlot):
@@ -584,6 +587,53 @@ def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
     if bar is not None and bar.visible:
         label = {"label": bar.label} if bar.label is not None else {}
         ax.figure.colorbar(mappable, ax=ax, **label).ax.set_gid(artist.id)
+
+
+def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:
+    """σ_y(τ) against τ, computed as the script computes it (figscribe.allan).
+
+    A series with gaps is not drawn; validate_references says why.
+    """
+    from figscribe.allan import (
+        averaging_factors,
+        overlapping_adev,
+        phase_of,
+        sample_interval,
+    )
+
+    values = np.asarray(data(artist.values), dtype=float)
+    if not np.all(np.isfinite(values)):
+        return
+    tau0 = artist.sample_interval
+    if artist.time is not None:
+        times = data(artist.time)
+        if len(times) != len(values):
+            raise DataError(
+                f"{artist.label or 'the Allan deviation'}: time "
+                f"({artist.time.column}) has {len(times)} values, values "
+                f"({artist.values.column}) has {len(values)}"
+            )
+        try:
+            tau0 = sample_interval(times)
+        except DataError as exc:
+            raise DataError(f"{artist.label or 'the Allan deviation'}: {exc}") from None
+    phase = phase_of(values, artist.data_type, tau0)
+    m = averaging_factors(phase.size, artist.taus)
+    adev = overlapping_adev(phase, tau0, m)
+    yerr = adev / np.sqrt(phase.size - 2 * m) if artist.error_bars else None
+    container = ax.errorbar(
+        m * tau0,
+        adev,
+        yerr=yerr,
+        color=artist.color,
+        marker=artist.marker or "none",
+        markersize=artist.markersize,
+        linestyle=artist.linestyle,
+        linewidth=artist.linewidth,
+        **common,
+    )
+    for part in container.get_children():
+        part.set_gid(artist.id)
 
 
 def colour_scaling(artist) -> dict:

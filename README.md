@@ -100,6 +100,8 @@ script.
 - Line, scatter, error bars, histograms, images and color meshes with color
   bars (linear or logarithmic), notes of one or several lines with or
   without an arrow, reference lines and shaded ranges.
+- The Allan deviation of a time series (fractional frequency or phase), on
+  log-log axes, for the stability of clocks, lasers and sensors.
 - Curve fits: linear, polynomial, Gaussian, Lorentzian, exponential, or your
   own expression such as `a*exp(-x/tau)+c`. Error bars weight the fit; the
   result shows each parameter with its 1σ uncertainty, the reduced χ² and
@@ -314,7 +316,9 @@ snapping and alignment guides, installers.
 
 Deliberately out of scope: spreadsheet-style data editing, a statistics
 suite, a scripting language of its own, and reading generated or other
-Python code back in.
+Python code back in. An analysis comes in only as a standard figure of some
+field that the script can compute in a few lines, such as the Allan
+deviation (decision 0036).
 
 ## Development
 

@@ -78,8 +78,10 @@ removes it)
 for error bars `band` (the y errors as a shaded band: {"alpha": 0.25}; null \
 draws bars)
 New plots: insert into a panel's "artists" with "kind" line, scatter, \
-errorbar, histogram or annotation; columns are {"source": id, "column": \
-name}. A line across the panel at a value: "kind" refline with "at" and \
+errorbar, histogram, allan or annotation; columns are {"source": id, "column": \
+name}. An Allan deviation ("kind" allan) takes "values" and \
+"sample_interval" in s, or a "time" column; set both axes' "scale" to \
+"log". A line across the panel at a value: "kind" refline with "at" and \
 "orientation" ("vertical" at an x value, "horizontal" at a y value); a \
 shaded range: "kind" span with "start", "end" and "orientation". New \
 panels: add_panel, then insert into the id it returns. A fit with its \

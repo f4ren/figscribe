@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe.allan import allan_axes
 from figscribe.assistant.chat import Provider
 from figscribe.assistant.toolserver import ToolServer
 from figscribe.codegen import file_stems, generate, script_name
@@ -71,6 +72,7 @@ from figscribe.gui.start import DOCS_URL, StartPage
 from figscribe.io import DataError, numpy_source
 from figscribe.io.numpyfile import array_names, read_numpy
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     ArtistBase,
@@ -582,7 +584,9 @@ class MainWindow(QMainWindow):
         """Put `artist` into `axes`, or into a new panel if None; while the
         panel is empty, name its axes after the plotted columns and units."""
         unit_of = unit_of or (lambda column: None)
-        if isinstance(artist, Histogram):
+        if isinstance(artist, AllanDeviationPlot):
+            labels = allan_axes()
+        elif isinstance(artist, Histogram):
             values = artist.values
             labels = {
                 "x": AxisSpec(label=str(values.column), unit=unit_of(values.column)),
