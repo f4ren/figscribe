@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
+import re
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -90,6 +92,9 @@ class ToolCall:
     """The parsed arguments; anything but a dict is refused as malformed."""
     raw: str = ""
     """The arguments as the model wrote them, echoed back unchanged."""
+    extra: dict | None = None
+    """What the server attached to the call and wants back unchanged, such
+    as Gemini's thought signature."""
 
 
 @dataclass
@@ -144,10 +149,22 @@ class Provider:
 
 SERVERS = {
     "ChatGPT (OpenAI)": "https://api.openai.com/v1",
+    "Google Gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "LM Studio": "http://localhost:1234/v1",
     "Ollama": "http://localhost:11434/v1",
 }
 """OpenAI-compatible servers offered by name; any other URL works too."""
+
+SEEING_SERVERS = {SERVERS["ChatGPT (OpenAI)"], SERVERS["Google Gemini"]}
+"""Servers whose models read images; most local models do not."""
+
+KEY_VARIABLES = {SERVERS["Google Gemini"]: "GEMINI_API_KEY"}
+"""Where the key for a server comes from when none is entered; any other
+server takes OPENAI_API_KEY."""
+
+
+def key_variable(base_url: str | None) -> str:
+    return KEY_VARIABLES.get(base_url or "", "OPENAI_API_KEY")
 
 
 def make_model(provider: Provider, api_key: str | None = None) -> Model:
@@ -318,10 +335,11 @@ def _anthropic_result(result: ToolResult) -> dict:
 
 
 class OpenAIModel:
-    """Any server with the OpenAI chat completions API: ChatGPT, or a local
-    model in LM Studio, Ollama, vLLM, llama.cpp.
+    """Any server with the OpenAI chat completions API: ChatGPT, Gemini, or a
+    local model in LM Studio, Ollama, vLLM, llama.cpp.
 
-    The key is the given one, else OPENAI_API_KEY; local servers need none.
+    The key is the given one, else the server's variable (GEMINI_API_KEY for
+    Gemini, OPENAI_API_KEY for any other); local servers need none.
     """
 
     def __init__(self, provider: Provider, api_key: str | None = None):
@@ -334,7 +352,8 @@ class OpenAIModel:
         self._openai = openai
         self.provider = provider
         self.name = provider.model
-        key = api_key or os.environ.get("OPENAI_API_KEY") or "not-needed"
+        self.key_variable = key_variable(provider.base_url)
+        key = api_key or os.environ.get(self.key_variable) or "not-needed"
         self.client = openai.OpenAI(api_key=key, base_url=provider.base_url)
         self.tools = [
             {
@@ -352,7 +371,7 @@ class OpenAIModel:
         if not self.name:
             raise ChatError("Choose a model in the assistant settings first.")
         text: list[str] = []
-        calls: dict[int, dict[str, str]] = {}
+        calls: dict[int, dict[str, Any]] = {}
         finish = None
         with self._errors():
             stream = self.client.chat.completions.create(
@@ -379,6 +398,9 @@ class OpenAIModel:
                     if part.function is not None:
                         call["name"] += part.function.name or ""
                         call["arguments"] += part.function.arguments or ""
+                    extra = (part.model_extra or {}).get("extra_content")
+                    if extra:
+                        call["extra"] = extra
                 finish = choice.finish_reason or finish
         tool_calls = [
             ToolCall(
@@ -386,6 +408,7 @@ class OpenAIModel:
                 c["name"],
                 _parse(c["arguments"]),
                 c["arguments"],
+                c.get("extra"),
             )
             for i, c in sorted(calls.items())
         ]
@@ -399,7 +422,10 @@ class OpenAIModel:
 
     def list_models(self) -> list[str]:
         with self._errors():
-            return sorted(m.id for m in self.client.models.list())
+            # Gemini lists "models/gemini-2.5-flash" and is asked for the bare name.
+            return sorted(
+                m.id.removeprefix("models/") for m in self.client.models.list()
+            )
 
     def _errors(self):
         openai = self._openai
@@ -407,10 +433,10 @@ class OpenAIModel:
         return _Translate(
             {
                 openai.AuthenticationError: f"No valid API key for {where}. Set "
-                "OPENAI_API_KEY or enter a key in the chat.",
+                f"{self.key_variable} or enter a key in the chat.",
                 openai.NotFoundError: f"{where} has no model {self.name!r}; choose "
                 "one in the assistant settings (Load models).",
-                openai.RateLimitError: "Too many requests just now; try again shortly.",
+                openai.RateLimitError: _rate_limited,
                 openai.APIConnectionError: f"Cannot reach {where}. Is the server "
                 "running?",
                 openai.APIStatusError: "The server refused the request: {message}",
@@ -438,6 +464,7 @@ def _openai_messages(turns: list[Turn], vision: bool) -> list[dict]:
                             "arguments": c.raw or json.dumps(c.input),
                         },
                     }
+                    | ({"extra_content": c.extra} if c.extra else {})
                     for c in turn.calls
                 ]
             messages.append(message)
@@ -476,11 +503,41 @@ def _parse(arguments: str) -> Any:
         return arguments
 
 
+def _rate_limited(exc: Exception) -> str:
+    """When to try again, if the server says, and why; Gemini says both in
+    its text ("... per day limit exceeded on Free Tier ... retry in 21h3m4s")."""
+    text = str(getattr(exc, "message", exc))
+    wait = re.search(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", text)
+    seconds = 0.0
+    if wait:
+        hours, minutes, rest = (float(part or 0) for part in wait.groups())
+        seconds = 3600 * hours + 60 * minutes + rest
+    if seconds > 5400:
+        when = f"in {math.ceil(seconds / 3600)} h"
+    elif seconds > 90:
+        when = f"in {math.ceil(seconds / 60)} min"
+    elif seconds > 0:
+        when = f"in {math.ceil(seconds)} s"
+    else:
+        when = "shortly"
+    free = "free_tier" in text or "free tier" in text.lower()
+    if free and "per day" in text:
+        return (
+            f"The free tier's daily limit for this model is used up; try again "
+            f"{when}, or choose another model."
+        )
+    reason = " The free tier allows only a few requests a minute." if free else ""
+    return f"Too many requests just now; try again {when}.{reason}"
+
+
 class _Translate:
     """Turns the SDK's errors into ChatErrors with a message for the user;
-    the first matching class wins, "{message}" is the API's own text."""
+    the first matching class wins, "{message}" is the API's own text. A
+    function instead of a text makes the message from the error."""
 
-    def __init__(self, messages: dict[type[Exception], str]):
+    def __init__(
+        self, messages: dict[type[Exception], str | Callable[[Exception], str]]
+    ):
         self.messages = messages
 
     def __enter__(self):
@@ -491,6 +548,8 @@ class _Translate:
             return False
         for cls, text in self.messages.items():
             if isinstance(exc, cls):
+                if callable(text):
+                    raise ChatError(text(exc)) from exc
                 detail = getattr(exc, "message", str(exc))
                 raise ChatError(text.replace("{message}", str(detail))) from exc
         if isinstance(exc, ValueError):  # a streamed tool input the SDK choked on

@@ -1,8 +1,9 @@
-"""Choosing the assistant's model: Claude, ChatGPT, or a local one."""
+"""Choosing the assistant's model: Claude, ChatGPT, Gemini, or a local one."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from urllib.parse import urlparse
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -20,9 +21,11 @@ from PySide6.QtWidgets import (
 from figscribe.assistant.chat import (
     CLAUDE_MODELS,
     MODEL,
+    SEEING_SERVERS,
     SERVERS,
     ChatError,
     Provider,
+    key_variable,
     list_models,
 )
 from figscribe.gui.widgets import label
@@ -156,17 +159,18 @@ class AssistantDialog(QDialog):
         url = SERVERS.get(self.server.currentText())
         if url is not None:
             self.url.setText(url)
-            # ChatGPT sees; most local models do not.
-            self.vision.setChecked(url == SERVERS["ChatGPT (OpenAI)"])
+            self.vision.setChecked(url in SEEING_SERVERS)
         self._set_models([], "")
 
     def _update(self) -> None:
         openai = self.kind.currentData() == "openai"
         for widget in self._server_rows:
             self._form.setRowVisible(widget, openai)
-        local = openai and "api.openai.com" not in self.url.text()
+        url = self.url.text().strip()
+        local = openai and urlparse(url).hostname in ("localhost", "127.0.0.1", "::1")
         self.key.setPlaceholderText(
             "not needed for a local server"
             if local
-            else "kept for this session only; else from the environment"
+            else "kept for this session only; else from "
+            + (key_variable(url) if openai else "the environment")
         )

@@ -812,6 +812,32 @@ legible at 16 px.
 `packaging/make_icons.py` writes `packaging/icons/figscribe.icns`, `.ico` and
 a 1024 px PNG, which R4.2 can use as they are.
 
+### R7 The assistant without paying per request — S
+
+Asked for by the user (2026-10-26): can a subscription (Claude Pro/Max,
+ChatGPT Plus) or a free model be used? A subscription cannot sign in to the
+API from another application, but it can drive figscribe through MCP.
+Offer Google Gemini, whose API has a free tier, as a server by name, and say
+in the README which ways cost nothing or use a subscription.
+
+**Done** (2026-10-26, decision 0032): "Google Gemini" in the assistant's
+servers, with its key from `GEMINI_API_KEY` (an OpenAI key is no longer sent
+to it); Gemini 3's thought signatures go back with its tool calls; a rate
+limit says how long to wait; README "Without paying per request". Decision
+0030 was taken twice by parallel branches; the later one, points left out,
+is now 0031.
+
+Learned against the real API (2026-10-26): the free tier allows 5 requests
+a minute and 20 a day per model (one change takes two to four);
+`gemini-2.5-flash` is "no longer available to new users";
+`gemini-3.8-flash` and `gemini-flash-latest` did not answer within a minute;
+`gemini-3.5-flash` worked and passed the one bench case run before the daily
+limit was reached.
+
+Follow-up: **wait out a rate limit** in the chat when the server says how
+long (up to a minute), with the countdown shown, instead of stopping the
+request halfway. `figscribe bench` could then run on a free tier too.
+
 ---
 
 ## Phase 5 — Later, optional
