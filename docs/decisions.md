@@ -1285,8 +1285,11 @@ beta by Google), with tools, streaming, images and a model list.
   without the signature; other servers attach nothing.
 - **A rate limit says how long to wait**, when the server tells
   ("Please retry in 30.9s" in Gemini's text; it sends no `Retry-After`
-  header), and that a free tier is the reason. The free tier allowed 5
-  requests a minute per model when tried (2026-10-26).
+  header; "retry in 21h21m28s" for a daily limit), and that a free tier is
+  the reason; for a daily limit it suggests another model, whose limit is
+  separate. The free tier allowed 5 requests a minute and 20 a day per
+  model when tried (2026-10-26): enough to try the assistant, not to work
+  with it all day.
 - **A subscription is pointed to MCP**, not built in: Claude Desktop, Claude
   Code or Gemini CLI drive figscribe through `figscribe mcp` with the user's
   own plan. The README says which ways cost nothing.

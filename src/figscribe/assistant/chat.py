@@ -504,11 +504,28 @@ def _parse(arguments: str) -> Any:
 
 
 def _rate_limited(exc: Exception) -> str:
-    """When to try again, if the server says; Gemini says it in its text."""
+    """When to try again, if the server says, and why; Gemini says both in
+    its text ("... per day limit exceeded on Free Tier ... retry in 21h3m4s")."""
     text = str(getattr(exc, "message", exc))
-    wait = re.search(r"retry in ([\d.]+)\s*s", text)
-    when = f"in {math.ceil(float(wait.group(1)))} s" if wait else "shortly"
+    wait = re.search(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", text)
+    seconds = 0.0
+    if wait:
+        hours, minutes, rest = (float(part or 0) for part in wait.groups())
+        seconds = 3600 * hours + 60 * minutes + rest
+    if seconds > 5400:
+        when = f"in {math.ceil(seconds / 3600)} h"
+    elif seconds > 90:
+        when = f"in {math.ceil(seconds / 60)} min"
+    elif seconds > 0:
+        when = f"in {math.ceil(seconds)} s"
+    else:
+        when = "shortly"
     free = "free_tier" in text or "free tier" in text.lower()
+    if free and "per day" in text:
+        return (
+            f"The free tier's daily limit for this model is used up; try again "
+            f"{when}, or choose another model."
+        )
     reason = " The free tier allows only a few requests a minute." if free else ""
     return f"Too many requests just now; try again {when}.{reason}"
 

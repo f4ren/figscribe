@@ -807,9 +807,11 @@ limit says how long to wait; README "Without paying per request". Decision
 is now 0031.
 
 Learned against the real API (2026-10-26): the free tier allows 5 requests
-a minute per model; `gemini-2.5-flash` is "no longer available to new
-users"; `gemini-3.8-flash` and `gemini-flash-latest` did not answer within
-a minute; `gemini-3.5-flash` worked.
+a minute and 20 a day per model (one change takes two to four);
+`gemini-2.5-flash` is "no longer available to new users";
+`gemini-3.8-flash` and `gemini-flash-latest` did not answer within a minute;
+`gemini-3.5-flash` worked and passed the one bench case run before the daily
+limit was reached.
 
 Follow-up: **wait out a rate limit** in the chat when the server says how
 long (up to a minute), with the countdown shown, instead of stopping the

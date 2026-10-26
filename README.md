@@ -200,9 +200,10 @@ shows the configuration for other clients.
 - **A local model** costs nothing and keeps everything on your computer;
   how well it works depends on its size (see below).
 - **Gemini's free tier**: a key from Google AI Studio, without billing.
-  It allows 5 requests a minute per model (October 2026), and one change
-  takes the assistant two to four, so a larger request may have to wait a
-  minute; figscribe says how long. Outside the EU, EEA,
+  It allows 5 requests a minute and 20 a day per model (October 2026), and
+  one change takes the assistant two to four: enough to try the assistant,
+  a handful of changes a day. figscribe says how long to wait; another
+  model has its own limit. Outside the EU, EEA,
   Switzerland and the UK, Google may use free-tier requests to improve its
   products and have people read them; inside, its paid-service data terms
   apply. Either way the model sees names, not data values.

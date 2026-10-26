@@ -310,24 +310,38 @@ def test_geminis_thought_signature_goes_back_with_its_call(document: Document) -
     assert "extra_content" not in calls[1]
 
 
-def test_a_free_tier_limit_says_how_long_to_wait() -> None:
+@pytest.mark.parametrize(
+    ("limit", "wait", "expected"),
+    [
+        (
+            "requests per minute",
+            "30.895273533s",
+            ["in 31 s", "a few requests a minute"],
+        ),
+        ("requests per day", "21h21m28.693978504s", ["in 22 h", "daily limit"]),
+        ("requests per day", "12m3.5s", ["in 13 min", "daily limit"]),
+    ],
+)
+def test_a_free_tier_limit_says_how_long_to_wait(limit, wait, expected) -> None:
+    """Gemini says it in its text, as it does on its free tier."""
     pytest.importorskip("openai")
     message = (
         "You exceeded your current quota. * Quota exceeded for metric: "
         "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
-        "limit: 5\nPlease retry in 30.895273533s."
+        f"limit: 20, description: Generate content {limit} limit exceeded on "
+        f"Free Tier.\nPlease retry in {wait}."
     )
 
-    def limit(method, path, body):
+    def refuse(method, path, body):
         return json_reply(429, [{"error": {"code": 429, "message": message}}])
 
-    with serve(limit) as (url, _):
+    with serve(refuse) as (url, _):
         model = OpenAIModel(Provider("openai", "gemini-3.5-flash", f"{url}/v1"))
         model.client = model.client.with_options(max_retries=0)
         with pytest.raises(ChatError) as error:
             model.respond(["hi"], lambda _: None)
-    assert "try again in 31 s" in str(error.value)
-    assert "free tier" in str(error.value)
+    for part in expected:
+        assert part in str(error.value)
 
 
 def test_a_refused_gemini_key_names_its_variable() -> None:
