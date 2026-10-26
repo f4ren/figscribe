@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from figscribe.commands import CommandError, SetField, find
+from figscribe.commands import CommandError, SetField, drawing_order, find, to_front
 from figscribe.gui import theme
 from figscribe.gui.document import Document, split_axis
 from figscribe.gui.figures import fill_figure_menu
@@ -119,21 +119,9 @@ class Outline(QTreeWidget):
     def set_order(self, oid: str, front: bool) -> None:
         """Draw the plot `oid` above (`front`) or below every other plot of its
         panel, as one undo step."""
-        others = [a.zorder for a in self._drawing_order(oid) if a.id != oid]
-        if not others:
-            return
-        zorder = max(others) + 1 if front else min(others) - 1
-        text = "Bring to front" if front else "Send to back"
-        self.document.push(SetField(oid, ("zorder",), float(zorder), text))
-
-    def _drawing_order(self, oid: str) -> list:
-        """The plots of the panel holding `oid`, in the order they are drawn:
-        by z-order, and as Matplotlib does on a tie, as they were added."""
-        for figure in self.document.project.figures:
-            for axes in figure.axes:
-                if any(a.id == oid for a in axes.artists):
-                    return sorted(axes.artists, key=lambda a: a.zorder)
-        return []
+        command = to_front(self.document.project, oid, front)
+        if command is not None:
+            self.document.push(command)
 
     # --- rows -----------------------------------------------------------------
 
@@ -288,7 +276,7 @@ class Outline(QTreeWidget):
                 "Hide" if obj.visible else "Show",
                 lambda: self.set_visible(oid, not obj.visible),
             )
-            drawn = self._drawing_order(oid)
+            drawn = drawing_order(self.document.project, oid)
             front = menu.addAction("Bring to front", lambda: self.set_order(oid, True))
             front.setEnabled(drawn[-1] is not obj)
             back = menu.addAction("Send to back", lambda: self.set_order(oid, False))

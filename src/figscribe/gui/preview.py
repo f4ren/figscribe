@@ -49,14 +49,23 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from figscribe.commands import CommandError, Macro, SetField, find
+from figscribe.commands import (
+    CommandError,
+    Macro,
+    SetField,
+    copy_style,
+    drawing_order,
+    find,
+    to_front,
+)
 from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.inplace import Editable, open_editor
 from figscribe.gui.markings import ENTRIES, add, marking
-from figscribe.gui.names import size_text
+from figscribe.gui.names import artist_name, size_text
+from figscribe.model.validate import FITTABLE
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
 from figscribe.render.ticks import ticks_that_fit
@@ -113,6 +122,8 @@ class _Press:
 class Preview(QWidget):
     view_changed = Signal()
     """The zoomed or panned view changed, or was dropped."""
+    fit_requested = Signal(str)
+    """Fit the plot with this id, from its menu; the window asks how."""
 
     def __init__(self, document: Document, parent: QWidget | None = None):
         super().__init__(parent)
@@ -701,10 +712,12 @@ class Preview(QWidget):
         return plot_id, row
 
     def context_menu(self, point: QPointF) -> QMenu | None:
-        """What can be done at `point`: leave the point there out of its plot
-        and the plot's fits, or take it back in; and, in a panel, add a
-        reference line or a shaded range there."""
+        """What can be done at `point`: with the plot there, style it like
+        another, change its drawing order, fit it or hide it; leave the point
+        there out of its plot and the plot's fits, or take it back in; and,
+        in a panel, add a reference line or a shaded range there."""
         menu = QMenu(self)
+        self._plot_entries(menu, point)
         found = self.point_at(point)
         if found is not None:
             plot_id, row = found
@@ -716,6 +729,8 @@ class Preview(QWidget):
                 )
             else:
                 text, rows = f"Leave out row {row + 1}", [*left_out, row]
+            if menu.actions():
+                menu.addSeparator()
             menu.addAction(text, lambda: self._leave_out(plot_id, rows))
         ax = self.axes_at(point)
         if ax is not None:
@@ -723,6 +738,53 @@ class Preview(QWidget):
                 menu.addSeparator()
             self._marking_entries(menu, ax, point)
         return menu if menu.actions() else None
+
+    def _plot_entries(self, menu: QMenu, point: QPointF) -> None:
+        """What can be done with the plot at `point`, if there is one."""
+        oid = self.object_at(point)
+        try:
+            plot = find(self.document.project, oid) if oid else None
+        except CommandError:
+            return
+        if plot is None or not hasattr(plot, "kind") or plot.kind == "annotation":
+            return
+        project = self.document.project
+        others = [
+            a
+            for axes in self.document.figure.axes
+            for a in axes.artists
+            if a.id != plot.id and copy_style(project, plot.id, a.id).steps
+        ]
+        like = menu.addMenu("Style like")
+        for other in others:
+            name = artist_name(other)
+            like.addAction(name, lambda o=other: self._style_like(plot, o))
+        like.setEnabled(bool(others))
+        drawn = drawing_order(project, plot.id)
+        front = menu.addAction(
+            "Bring to front", lambda: self._push(to_front(project, plot.id, True))
+        )
+        front.setEnabled(drawn[-1] is not plot)
+        back = menu.addAction(
+            "Send to back", lambda: self._push(to_front(project, plot.id, False))
+        )
+        back.setEnabled(drawn[0] is not plot)
+        if isinstance(plot, FITTABLE):
+            menu.addAction("Fit…", lambda: self.fit_requested.emit(plot.id))
+        menu.addAction(
+            "Hide", lambda: self._push(SetField(plot.id, ("visible",), False, "Hide"))
+        )
+
+    def _style_like(self, plot, other) -> None:
+        self._push(copy_style(self.document.project, plot.id, other.id))
+
+    def _push(self, command) -> None:
+        if command is None:
+            return
+        try:
+            self.document.push(command)
+        except CommandError as exc:
+            self.show_error("The change was refused", str(exc))
 
     def _marking_entries(self, menu: QMenu, ax, point: QPointF) -> None:
         """A line or a range at the clicked spot of the panel `ax`."""
