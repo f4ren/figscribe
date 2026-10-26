@@ -81,3 +81,28 @@ def test_markers_are_chosen_from_a_list_with_every_kind(
     assert document.figure.axes[0].artists[0].left_out_marker is None
     style = panel.editors[("left_out_linestyle",)].widget
     assert style.itemText(0) == "Like the plot"
+
+
+def test_a_custom_marker_can_be_typed(qtbot, preview: Preview) -> None:
+    from figscribe.gui.properties import PropertyPanel
+
+    document = preview.document
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(document.figure.axes[0].artists[0].id)
+
+    def choose(text: str) -> None:
+        combo = panel.editors[("marker",)].widget
+        texts = [combo.itemText(i) for i in range(combo.count())]
+        combo.activated.emit(texts.index(text))
+
+    panel.ask_marker = lambda current: "$\\alpha$"
+    choose("Custom…")
+    assert document.figure.axes[0].artists[0].marker == "$\\alpha$"
+    assert panel.editors[("marker",)].widget.currentText() == "$\\alpha$"
+    panel.ask_marker = lambda current: None  # cancelled
+    choose("Custom…")
+    assert document.figure.axes[0].artists[0].marker == "$\\alpha$"
+    panel.ask_marker = lambda current: "q"
+    choose("Custom…")
+    assert "'q' is not a marker" in panel.error

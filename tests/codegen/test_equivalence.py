@@ -214,6 +214,24 @@ def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
     assert "more than 3σ off the Gaussian fit" in script
 
 
+def test_points_outside_the_fit_range_drawn_like_left_out(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"], y=ref["U"], yerr=ref["dU"], linestyle="-", left_out=[18]
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(2.5, 7.5),
+        outside_as_left_out=True,
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "shown = kept & in_range" in script
+
+
 def test_many_settings(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     left = Axes(

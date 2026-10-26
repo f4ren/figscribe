@@ -141,6 +141,7 @@ FIELD_NAMES = {
     "parameter_bounds": "Parameter bounds",
     "fit_range": "Fit range",
     "extend_curve": "Curve over all the data",
+    "outside_as_left_out": "Points outside the range like left out",
     "left_out": "Rows left out",
     "left_out_color": "Left-out color",
     "left_out_marker": "Left-out marker",

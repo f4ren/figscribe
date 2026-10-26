@@ -106,6 +106,10 @@ class FitDialog(QDialog):
             end.editingFinished.connect(self._range_changed)
         self.extend = QCheckBox("Draw the curve across all the data")
         self.extend.setToolTip("Otherwise the curve spans only the fit range.")
+        self.outside = QCheckBox("Draw the points outside like left-out ones")
+        self.outside.setToolTip(
+            "In the left-out color and marker of the plot; they stay in the plot."
+        )
         self.k = QDoubleSpinBox()
         self.k.setRange(1.0, 10.0)
         self.k.setDecimals(1)
@@ -196,6 +200,7 @@ class FitDialog(QDialog):
         span.addWidget(self.range_high, 1)
         span.addWidget(self.extend)
         self._details.addRow(_caption("Fit x from"), span)
+        self._details.addRow(_caption(""), self.outside)
         self._start_form.setHorizontalSpacing(12)
         card = QFrame()
         card.setObjectName("card")
@@ -263,6 +268,7 @@ class FitDialog(QDialog):
             self.range_low.setText(f"{fit.fit_range[0]:.6g}")
             self.range_high.setText(f"{fit.fit_range[1]:.6g}")
         self.extend.setChecked(fit.extend_curve)
+        self.outside.setChecked(fit.outside_as_left_out)
         if isinstance(fit.model, ExpressionFit):
             self.expression.setText(fit.model.expression)
             key = "expression"
@@ -567,6 +573,7 @@ class FitDialog(QDialog):
             parameter_bounds=self.bounds(),
             fit_range=self.fit_range(),
             extend_curve=self.extend.isChecked(),
+            outside_as_left_out=self.outside.isChecked(),
             result=self.result,
             label=self.label.text().strip() or None,
         )

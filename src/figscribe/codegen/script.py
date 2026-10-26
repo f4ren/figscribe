@@ -156,6 +156,8 @@ class _Writer:
         """{fit id: name of the model with its fixed parameters held}."""
         self.ranges: dict[str, str] = {}
         """{fit id: name of the mask of the points within its fit range}."""
+        self._masks: set[str] = set()
+        """Masks defined while drawing, so that each gets a name of its own."""
         self.kept = self._name_kept()
         """{plot id: name of the mask of its rows that are not left out}."""
         self.fits = self._name_fits()
@@ -894,7 +896,7 @@ class _Writer:
             for name in ("xerr", "yerr")
             if (ref := getattr(artist, name, None)) is not None
         }
-        mask = self.kept.get(artist.id)
+        mask = self._shown(artist)
         shown = f"np.where({mask}, {y}, np.nan)" if mask else y
         self._part(ax, artist, x, shown, errors, {}, common)
         if not mask:
@@ -924,6 +926,31 @@ class _Writer:
         out = {name: f"{column}[~{mask}]" for name, column in errors.items()}
         style = {"color": color, "marker": _str(marker or "none")}
         self._part(ax, artist, f"{x}[~{mask}]", f"{y}[~{mask}]", out, style, apart)
+
+    def _shown(self, artist) -> str | None:
+        """The mask of the rows drawn as the plot draws them: not left out, and
+        inside the range of each fit that draws the others like left out.
+        Defined here when it joins several; None when all rows are."""
+        parts = [self.kept[artist.id]] if artist.id in self.kept else []
+        parts += [
+            self.ranges[fit.id]
+            for fit in self.artists.values()
+            if isinstance(fit, FitCurve)
+            and fit.target == artist.id
+            and fit.outside_as_left_out
+            and fit.id in self.ranges
+        ]
+        if len(parts) <= 1:
+            return parts[0] if parts else None
+        name = "shown"
+        while name in {*self.columns.values(), *self._masks}:
+            name += "_"
+        self._masks.add(name)
+        self.emit(
+            "# Drawn as the plot draws them: kept, and inside the fit range.",
+            f"{name} = {' & '.join(parts)}",
+        )
+        return name
 
     def _part(self, ax, artist, x, y, errors, style, options) -> None:
         """One call that draws points as the plot does, `style` over its own."""

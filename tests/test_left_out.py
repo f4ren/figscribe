@@ -160,3 +160,18 @@ def test_the_fit_of_a_plot_skips_its_left_out_points() -> None:
     History(project).push(refit(project, _fit(project).id, _data))
     result = _fit(project).result.parameters
     assert np.allclose(evaluate(PredefinedFit(name="linear"), result, T[:4]), U[:4])
+
+
+@pytest.mark.parametrize(("on", "apart"), [(True, [4, 6, 7, 8, 9]), (False, [4])])
+def test_points_outside_a_fit_range_can_look_left_out(on: bool, apart) -> None:
+    from figscribe.model import FitResult
+
+    project = _project(left_out=[4])
+    fit = _fit(project)
+    fit.fit_range = (0.0, 5.0)
+    fit.outside_as_left_out = on
+    fit.result = FitResult(parameters={"a": 2.0, "b": 1.0}, uncertainties={})
+    drawn = render(project.figures[0], _data)
+    rows = [_rows(a) for a in _drawn(drawn, _plot(project).id)]
+    assert apart in rows
+    assert _plot(project).left_out == [4]  # only drawn so, not left out

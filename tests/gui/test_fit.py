@@ -408,3 +408,14 @@ def test_outliers_found_but_not_confirmed_stay_in(qtbot, window: MainWindow) -> 
     window.run_dialog = only_find
     window.fit_action.trigger()
     assert window.document.figure.axes[0].artists[0].left_out == []
+
+
+def test_points_outside_the_range_can_be_drawn_like_left_out(
+    dialog: FitDialog,
+) -> None:
+    dialog.range_low.setText("3")
+    dialog.range_high.setText("7")
+    dialog.range_high.editingFinished.emit()
+    assert not dialog.fit().outside_as_left_out
+    dialog.outside.click()
+    assert dialog.fit().outside_as_left_out

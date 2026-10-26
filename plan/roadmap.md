@@ -567,9 +567,13 @@ buttons and a text field. A left-out point's marker is "like the plot" by
 default (`"same"`), and "no marker" means none, as for the plot. A line runs
 on through the left-out rows in their color, with `left_out_linestyle` (like
 the plot by default, "none" for a gap), instead of joining the kept points
-across them. *Follow-up after U2 is merged:* remove the old `MarkerEditor`
-and its four `MARKERS` from `gui/properties.py`, no longer used; they stay
-until then because U2 changes the lines around them.
+across them. Also asked for: a fit can draw the plot's points outside its range
+like left-out ones (`outside_as_left_out`, a switch in the fit dialog and the
+panel; only drawn so, not left out), and a marker list ends in "Custom…",
+which asks for any Matplotlib marker such as `$\alpha$`. *Follow-up after U2
+is merged:* remove the old `MarkerEditor` and its four `MARKERS` from
+`gui/properties.py`, no longer used, and move the `QInputDialog` import of
+`ask_marker` up to the others; both wait because U2 changes those lines.
 
 ### F3 Panel labels for journals — S
 
