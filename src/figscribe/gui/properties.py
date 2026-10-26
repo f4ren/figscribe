@@ -362,6 +362,8 @@ TIPS = {
     "linestyle": "How the line is drawn: solid, dashed, dash-dotted, dotted, or none "
     "for points only.",
     "linewidth": "Line width in pt.",
+    "ErrorbarPlot.linewidth": "Width of the line joining the points in pt; the "
+    "error bars have their own width.",
     "marker": "The symbol drawn at each data point.",
     "markersize": "Size of the markers in pt.",
     "size": "Size of the markers in pt.",

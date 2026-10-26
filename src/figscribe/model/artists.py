@@ -110,6 +110,9 @@ class ErrorbarPlot(ArtistBase):
     """A Matplotlib color; None takes the next color of the color cycle."""
     linestyle: str = "none"
     """"none" draws only the points; "-" also joins them."""
+    linewidth: float = Field(1.5, gt=0.0)
+    """Width of the line joining the points in pt; the error bars have their
+    own, elinewidth."""
     marker: str = "o"
     """A Matplotlib marker such as "o", "s" or "^"."""
     markersize: float = Field(4.0, gt=0.0)

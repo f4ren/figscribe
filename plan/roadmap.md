@@ -314,6 +314,8 @@ the project. It found:
    Disable such fields or say why they do nothing (relates to U2). The field
    test adds: a color mesh's x or y alone does nothing, the renderer uses
    them only as a pair. Do this after U2, which reworks the same panel code.
+   The same holds for an error bar plot's line width while its line style is
+   "none" (issue #71).
 5. **Missing API key** (verified, by hand): "Load models" in the assistant
    settings with Claude and no key anywhere prints a traceback to the terminal
    and shows nothing in the dialog. The Anthropic SDK raises a `TypeError`

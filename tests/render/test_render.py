@@ -113,6 +113,17 @@ def test_errorbar_plot(data, columns, ref) -> None:
     assert {part.get_gid() for part in container.get_children()} == {bars.id}
 
 
+def test_errorbar_line_and_bars_have_their_own_widths(data, ref) -> None:
+    bars = ErrorbarPlot(
+        x=ref("t"), y=ref("U"), yerr=ref("dU"), linestyle="-", linewidth=3.0
+    )
+    ax = render(Figure(axes=[Axes(artists=[bars])]), data).axes[0]
+    (container,) = ax.containers
+    data_line, _, (bar_lines,) = container.lines
+    assert data_line.get_linewidth() == 3.0
+    assert list(bar_lines.get_linewidths()) == [1.0]  # elinewidth, as before
+
+
 def test_unlabelled_artists_stay_out_of_the_legend(data, ref) -> None:
     axes = Axes(
         legend=Legend(visible=True),

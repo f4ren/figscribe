@@ -916,8 +916,7 @@ class _Writer:
                 for v in (x, y)
             ]
             kwargs = {"color": color, "linestyle": _str(linestyle)}
-            if isinstance(artist, LinePlot):
-                kwargs["linewidth"] = _num(artist.linewidth)
+            kwargs["linewidth"] = _num(artist.linewidth)
             self.call(f"{ax}.plot", *pieces, **kwargs, **apart)
         marker = like_the_plot(artist, "marker")
         if marker is None and not isinstance(artist, ErrorbarPlot):
@@ -973,8 +972,10 @@ class _Writer:
             self.call(f"{ax}.scatter", x, y, **kwargs, **options)
         else:
             kwargs = dict(errors) | color
+            kwargs["linestyle"] = '"none"' if style else _str(artist.linestyle)
+            if not style and artist.linestyle not in NO_LINE:
+                kwargs["linewidth"] = _num(artist.linewidth)
             kwargs |= {
-                "linestyle": '"none"' if style else _str(artist.linestyle),
                 "marker": style.get("marker") or _str(artist.marker),
                 "markersize": _num(artist.markersize),
                 "capsize": _num(artist.capsize),
