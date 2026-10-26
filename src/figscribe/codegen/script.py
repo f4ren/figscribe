@@ -731,6 +731,10 @@ class _Writer:
                 kwargs["axis"] = _str(axes.grid_axis)
             if axes.grid_color is not None:
                 kwargs["color"] = _str(axes.grid_color)
+            if axes.grid_linewidth is not None:
+                kwargs["linewidth"] = _num(axes.grid_linewidth)
+            if axes.grid_linestyle is not None:
+                kwargs["linestyle"] = _str(axes.grid_linestyle)
             self.call(f"{ax}.grid", "True", **kwargs)
         for artist in axes.artists:
             on_right = artist.axis == "right" and right is not None

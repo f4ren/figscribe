@@ -65,6 +65,17 @@ class Figure(Identified):
     ticks_all_sides: bool = False
     """Tick marks also on the top and right edge of every panel, as many
     physics journals have them; the numbers stay bottom and left."""
+    frame_width: float | None = Field(None, gt=0.0)
+    """Line width of the frame around every panel in pt; None keeps
+    Matplotlib's (or the style sheet's), which is 0.8."""
+    tick_width: float | None = Field(None, gt=0.0)
+    """Line width of the major tick marks in pt; None keeps Matplotlib's, 0.8."""
+    tick_length: float | None = Field(None, gt=0.0)
+    """Length of the major tick marks in pt; None keeps Matplotlib's, 3.5."""
+    minor_tick_width: float | None = Field(None, gt=0.0)
+    """Line width of the minor tick marks in pt; None keeps Matplotlib's, 0.6."""
+    minor_tick_length: float | None = Field(None, gt=0.0)
+    """Length of the minor tick marks in pt; None keeps Matplotlib's, 2."""
     layout: GridLayout = Field(default_factory=GridLayout)
     """The grid the panels are placed in."""
     axes: list[Axes] = Field(default_factory=list)

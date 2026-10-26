@@ -111,5 +111,10 @@ class Axes(Identified):
     """At which ticks grid lines are drawn, when `grid` is on."""
     grid_color: str | None = None
     """A Matplotlib color for the grid lines; None keeps the style's."""
+    grid_linewidth: float | None = Field(None, gt=0.0)
+    """Width of the grid lines in pt; None keeps the style's, which is 0.8."""
+    grid_linestyle: str | None = None
+    """A Matplotlib line style for the grid lines, such as ":" or "--"; None
+    keeps the style's solid line."""
     artists: list[Artist] = Field(default_factory=list)
     """The plots, fits and notes in the panel, drawn in this order."""

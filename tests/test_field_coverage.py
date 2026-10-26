@@ -14,6 +14,7 @@ from pydantic import BaseModel
 import figscribe.model
 from figscribe.gui.names import FIELD_NAMES
 from figscribe.gui.properties import (
+    CHOICES,
     EDITED_ELSEWHERE,
     NONE_TEXT,
     PLACEHOLDERS,
@@ -91,10 +92,12 @@ def test_every_editor_has_a_tooltip() -> None:
 
 
 def test_every_field_that_can_be_empty_says_what_empty_means() -> None:
-    # A choice offers "empty" as an entry, and so do the marker buttons; a
-    # text field shows it greyed out while nothing is typed.
+    # A choice offers "empty" as an entry, and so do the marker buttons and a
+    # text field offered as a list; a text field shows it greyed out while
+    # nothing is typed.
     def told(name: str, kind: str) -> bool:
         listed = kind in ("choice", "column", "array") or "marker" in name
+        listed = listed or name in CHOICES
         return name in (NONE_TEXT if listed else PLACEHOLDERS)
 
     missing = [
