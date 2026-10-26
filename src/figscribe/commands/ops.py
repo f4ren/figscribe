@@ -14,7 +14,16 @@ from figscribe.commands.core import (
     noun,
     walk,
 )
-from figscribe.model import Axes, Figure, FitCurve, Inset, Project, ResidualPlot
+from figscribe.model import (
+    Axes,
+    Figure,
+    FitCurve,
+    GridLayout,
+    Inset,
+    Project,
+    ResidualPlot,
+    new_id,
+)
 from figscribe.model.validate import data_refs
 
 Side = Literal["right", "left", "above", "below", "inset"]
@@ -64,6 +73,87 @@ def remove_source(project: Project, source_id: str) -> Macro:
     steps += [RemoveItem(axes.id, "artists", oid) for oid, axes in plots.items()]
     steps.append(RemoveItem(None, "sources", source_id))
     return Macro(f"Remove {Path(source.path).name}", steps)
+
+
+def add_figure(project: Project, after: str | None = None) -> tuple[Macro, Figure]:
+    """A new figure with one empty panel, after the figure `after` (default:
+    at the end). It takes over that figure's look, or the last one's: size,
+    fonts, ticks and panel letters, in which a project's figures agree."""
+    index = len(project.figures)
+    if after is not None:
+        index = _figure_index(project, after) + 1
+    content = {
+        "id": new_id(),
+        "name": _free_name(project, "Figure {}", index + 1),
+        "layout": GridLayout(),
+        "axes": [Axes()],
+    }
+    like = project.figures[index - 1] if project.figures else Figure()
+    figure = like.model_copy(deep=True, update=content)
+    return Macro("Add a figure", [InsertItem(None, "figures", figure, index)]), figure
+
+
+def duplicate_figure(project: Project, figure_id: str) -> tuple[Macro, Figure]:
+    """A copy of the figure, right after it, with ids of its own: its fits,
+    residuals and insets refer to its own plots and panels, its plots to the
+    same data."""
+    index = _figure_index(project, figure_id)
+    copy = project.figures[index].model_copy(deep=True)
+    renamed = {copy.id: new_id()}
+    for axes in copy.axes:
+        renamed[axes.id] = new_id()
+        for artist in axes.artists:
+            renamed[artist.id] = new_id()
+    copy.id = renamed[copy.id]
+    for axes in copy.axes:
+        axes.id = renamed[axes.id]
+        if axes.inset is not None:
+            axes.inset.parent = renamed[axes.inset.parent]
+        for artist in axes.artists:
+            artist.id = renamed[artist.id]
+            if isinstance(artist, FitCurve | ResidualPlot):
+                artist.target = renamed.get(artist.target, artist.target)
+    name = project.figures[index].name
+    first = f"{name} (copy)"
+    copy.name = (
+        first
+        if not any(f.name == first for f in project.figures)
+        else _free_name(project, f"{name} (copy {{}})", 2)
+    )
+    step = InsertItem(None, "figures", copy, index + 1)
+    return Macro(f"Duplicate {name}", [step]), copy
+
+
+def remove_figure(project: Project, figure_id: str) -> Macro:
+    """Remove a figure with its panels; a project keeps at least one."""
+    figure = project.figures[_figure_index(project, figure_id)]
+    if len(project.figures) == 1:
+        raise CommandError("a project keeps at least one figure")
+    inside = {artist.id for axes in figure.axes for artist in axes.artists}
+    panels = {axes.id for axes in figure.axes}
+    steps = [
+        step
+        for step in _remove_dependents(project, inside)
+        if step.parent not in panels  # those go with the figure
+    ]
+    steps.append(RemoveItem(None, "figures", figure_id))
+    return Macro(f"Remove {figure.name}", steps)
+
+
+def _figure_index(project: Project, figure_id: str) -> int:
+    for i, figure in enumerate(project.figures):
+        if figure.id == figure_id:
+            return i
+    raise CommandError(f"no figure with id {figure_id!r}")
+
+
+def _free_name(project: Project, pattern: str, start: int) -> str:
+    """`pattern` with the first number from `start` that no figure has."""
+    taken = {f.name for f in project.figures}
+    n = start
+    while pattern.format(n) in taken:
+        n += 1
+    return pattern.format(n)
 
 
 def add_panel(project: Project, axes_id: str, side: Side) -> tuple[Macro, Axes]:
