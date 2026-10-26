@@ -24,6 +24,10 @@ release open in every later one.
 - A search above the property panel (Ctrl+F) keeps the settings whose name
   or explanation has the typed words.
 - A command palette (Ctrl+K) finds any menu action or setting by typing.
+- The property panel shows the settings used most first; the rest are
+  under *More*.
+- Several plots chosen with Ctrl or Shift in the outline: change their
+  color, marker or line for all at once, or delete them together.
 
 **Editing where it is drawn**
 - Double-click an axis label, title, legend entry or note to edit it in

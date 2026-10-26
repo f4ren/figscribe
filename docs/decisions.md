@@ -1591,6 +1591,52 @@ results for short queries, and the words people type are the ones in the
 captions and tooltips. **The palette also listing the objects of the
 project** ("go to the residuals"): the outline already does that.
 
+## 0039 — Basic settings first, and several plots at once
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The rest of roadmap U3: a plot's "Look" had thirteen fields, a figure's
+"Style" eleven, most of them rarely changed; and a change meant for every
+plot of a panel had to be made once per plot.
+
+### Decision
+
+- **Per kind of object, the basic settings stay in their sections, the rest
+  goes to the folded "More"** (`BASIC` in `gui/properties.py`). They were
+  chosen from the assistant's benchmark, which holds the requests users
+  make most (color, marker, error bar caps, legend, size, font size, title,
+  grid), and by judgement where it has none: a plot's color, marker, line
+  and legend entry; a figure's name, size, font size and panel letters; a
+  panel's title, grid and right axis. Mostly five, as the roadmap asked,
+  fewer where there are not five worth it. Sections that say what is
+  plotted and where (data, position, the axes, the file and how it is read)
+  stay whole, and so does the PNG resolution, kept apart from the size
+  (0006). The search and the palette (0038) find what is folded away.
+- **Several plots are chosen together** in the outline with Ctrl or Shift
+  and a click; with a panel or a figure among them, only the row clicked
+  last is chosen. `Document.selection` holds them, `selected` stays the
+  last, so that everything that acts on one object goes on working.
+- **The panel shows the settings they share** (`SHARED`: color, marker,
+  marker size, edge color, line, width, caps, opacity, visible), where each
+  of the chosen plots has the field with an editor of the same kind. A value
+  they agree on is shown; otherwise the field says "several" (a partly
+  checked box, an empty line). A change sets it on all of them as one undo
+  step, "Change 2 plots". Delete removes them all, each with its fits and
+  residuals, once.
+- Check boxes in the panel commit on `clicked`, not `toggled`: a partly
+  checked box becomes checked on a click without toggling.
+
+### Alternatives considered
+
+**"More" by usage counts gathered from the user's own work**: nothing is
+recorded, and a panel that rearranges itself is harder to learn. **Several
+objects of any kind together**: what a figure and a plot share is a name at
+most. **Several selected in the preview**: a click there picks one thing;
+the outline lists everything, so it is the place to pick many.
+
 ## 0040 — Changing things where they are drawn
 
 **Date:** 2026-10-26

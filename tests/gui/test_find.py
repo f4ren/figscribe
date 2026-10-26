@@ -141,8 +141,9 @@ def test_the_palette_goes_to_a_setting(window: MainWindow, qtbot) -> None:
     window.document.select(window.document.figure.axes[0].artists[0].id)
     _search(window, qtbot, "cap")  # a search that hides the setting looked for
     palette = _palette(window, "opacity")
-    assert palette.chosen.where == "Setting · Look"
+    assert palette.chosen.where == "Setting · More"
     assert window.properties.search.text() == ""
+    assert window.properties.sections["More"].expanded  # opened to show it
     focused = QApplication.focusWidget()
     caption, _, widget = next(
         s for s in window.properties.settings() if s[0] == "Opacity"
