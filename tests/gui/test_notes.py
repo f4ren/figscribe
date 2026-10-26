@@ -90,3 +90,37 @@ def test_a_histogram_from_the_plot_dialog(window: MainWindow) -> None:
     line.setText("8")
     line.editingFinished.emit()
     assert window.document.figure.axes[0].artists[-1].bins == 8
+
+
+# --- notes of several lines -------------------------------------------------------
+
+
+def test_add_note_asks_for_several_lines(window: MainWindow, monkeypatch) -> None:
+    from PySide6.QtWidgets import QInputDialog
+
+    monkeypatch.setattr(
+        QInputDialog, "getMultiLineText", lambda *a, **k: ("first\nsecond\n", True)
+    )
+    assert window._ask_text("Add note", "Text:") == "first\nsecond"
+
+
+def test_a_note_of_two_lines_is_named_by_its_first(window: MainWindow) -> None:
+    note = _add_note(window, "y = a x + b\na = 2.0")
+    assert window.outline.item_for(note.id).text(0) == "Note: y = a x + b …"
+
+
+def test_the_panel_edits_a_note_over_several_lines(qtbot, window: MainWindow) -> None:
+    from PySide6.QtWidgets import QPlainTextEdit
+
+    note = _add_note(window)
+    box = window.properties.editors[("text",)].widget
+    assert isinstance(box, QPlainTextEdit)
+    box.setPlainText("first\nsecond")
+    qtbot.keyClick(box, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+    assert window.document.figure.axes[0].artists[-1].text == "first\nsecond"
+    box = window.properties.editors[("text",)].widget
+    box.setFocus()
+    box.setPlainText("first\nsecond\nthird")
+    box.clearFocus()  # leaving the field takes the text too
+    assert window.document.figure.axes[0].artists[-1].text == "first\nsecond\nthird"
+    assert note.id == window.document.figure.axes[0].artists[-1].id

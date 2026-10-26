@@ -411,6 +411,11 @@ def test_histograms_and_notes(tmp_path: Path) -> None:
                 label="t",
             ),
             Annotation(text="counts", position=(0.05, 0.9), coords="axes"),
+            Annotation(
+                text="$y = a x + b$\nwith $\\mu$ fitted",
+                position=(0.05, 0.6),
+                coords="axes",
+            ),
         ],
     )
     right = Axes(

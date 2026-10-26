@@ -21,10 +21,13 @@ from pathlib import Path
 
 import pytest
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QLineEdit,
+    QPlainTextEdit,
     QSpinBox,
     QToolButton,
     QWidget,
@@ -190,7 +193,9 @@ def _widget(panel: PropertyPanel, field: str) -> QWidget:
     if panel.axis_form is not None:
         return getattr(panel.axis_form, field)
     widget = panel.editors[tuple(field.split("."))].widget
-    if isinstance(widget, QCheckBox | QComboBox | QLineEdit | QSpinBox):
+    if isinstance(
+        widget, QCheckBox | QComboBox | QLineEdit | QSpinBox | QPlainTextEdit
+    ):
         return widget
     lines = widget.findChildren(QLineEdit)
     if len(lines) > 1:
@@ -244,6 +249,8 @@ def _inputs(panel: PropertyPanel, field: str, widget: QWidget):
         yield widget.click
     elif isinstance(widget, QSpinBox):
         yield lambda: widget.setValue(widget.value() + 1)
+    elif isinstance(widget, QPlainTextEdit):  # several lines: Ctrl+Enter takes them
+        yield lambda: _write(panel, field, "Probe\nand a second line")
     elif isinstance(widget, QComboBox):
         current = widget.currentIndex()
         others = [i for i in range(widget.count()) if i != current]
@@ -263,6 +270,12 @@ def _choose(panel: PropertyPanel, field: str, index: int) -> None:
     form = panel.axis_form
     if form is not None and field == "major" and form.major_value.isVisibleTo(panel):
         _type(panel, "major_value", TYPED["major_value"][0])  # a way, then where
+
+
+def _write(panel: PropertyPanel, field: str, text: str) -> None:
+    box = _widget(panel, field)
+    box.setPlainText(text)
+    QTest.keyClick(box, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
 
 
 def _fill(panel: PropertyPanel, field: str) -> None:
