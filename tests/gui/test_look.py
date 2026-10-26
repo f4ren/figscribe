@@ -241,10 +241,13 @@ def test_swatches_and_marker_buttons_commit(panel: PropertyPanel, document) -> N
     assert document.figure.axes[0].artists[0].color == "C1"
     assert panel.editors[("color",)].swatches["C1"].isChecked()
 
-    panel.editors[("marker",)].buttons["s"].click()
+    combo = panel.editors[("marker",)].widget
+    texts = [combo.itemText(i) for i in range(combo.count())]
+    combo.activated.emit(texts.index("Square"))
     assert document.figure.axes[0].artists[0].marker == "s"
-    assert panel.editors[("marker",)].buttons["s"].isChecked()
-    assert None not in panel.editors[("marker",)].buttons  # a marker is required
+    combo = panel.editors[("marker",)].widget
+    assert combo.currentText() == "Square"
+    assert "No marker" in texts  # "none": the error bars alone
 
 
 def test_line_styles_have_names(panel: PropertyPanel, document) -> None:

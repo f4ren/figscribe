@@ -6,6 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from matplotlib.colors import to_rgb
+from matplotlib.markers import MarkerStyle
 
 from figscribe.commands import History
 from figscribe.fit import FitError, evaluate, refit, set_left_out
@@ -59,13 +60,16 @@ def _drawn(figure, gid):
 
 @pytest.mark.parametrize("plot_type", [LinePlot, ScatterPlot, ErrorbarPlot])
 def test_left_out_points_are_drawn_apart_in_light_grey(plot_type) -> None:
-    project = _project(plot_type, left_out=[4])
+    project = _project(plot_type, left_out=[4], marker="o")
     drawn = render(project.figures[0], _data)
-    kept, out = (a for a in _drawn(drawn, _plot(project).id) if hasattr(a, "rows"))
-    assert list(kept.rows) == [0, 1, 2, 3, 5, 6, 7, 8, 9]
-    assert list(out.rows) == [4]
+    out = next(a for a in _drawn(drawn, _plot(project).id) if _rows(a) == [4])
     color = out.get_color() if hasattr(out, "get_color") else out.get_facecolor()[0]
     assert np.allclose(to_rgb(color), 0.7)  # light grey
+
+
+def _rows(drawn) -> list[int] | None:
+    rows = getattr(drawn, "rows", None)
+    return None if rows is None else list(rows)
 
 
 def test_a_left_out_point_can_have_a_color_and_marker_of_its_own() -> None:
@@ -73,15 +77,52 @@ def test_a_left_out_point_can_have_a_color_and_marker_of_its_own() -> None:
         LinePlot, left_out=[4], left_out_color="red", left_out_marker="x"
     )
     drawn = render(project.figures[0], _data)
-    out = next(a for a in _drawn(drawn, _plot(project).id) if list(a.rows) == [4])
+    out = next(a for a in _drawn(drawn, _plot(project).id) if _rows(a) == [4])
     assert out.get_color() == "red" and out.get_marker() == "x"
     assert out.get_linestyle() == "None"
 
 
-def test_a_line_without_markers_still_shows_its_left_out_points() -> None:
-    drawn = render(_project(LinePlot, left_out=[4]).figures[0], _data)
-    out = next(a for a in drawn.axes[0].lines if list(getattr(a, "rows", [])) == [4])
-    assert out.get_marker() not in (None, "None", "")
+def test_no_left_out_marker_means_none() -> None:
+    project = _project(ScatterPlot, left_out=[4], left_out_marker=None)
+    drawn = render(project.figures[0], _data)
+    assert not any(_rows(a) == [4] for a in _drawn(drawn, _plot(project).id))
+
+
+def test_the_left_out_marker_is_the_plots_unless_set() -> None:
+    project = _project(ScatterPlot, left_out=[4], marker="s")
+    drawn = render(project.figures[0], _data)
+    out = next(a for a in _drawn(drawn, _plot(project).id) if _rows(a) == [4])
+    square = MarkerStyle("s")
+    expected = square.get_path().transformed(square.get_transform())
+    assert np.allclose(out.get_paths()[0].vertices, expected.vertices)
+
+
+def _grey_line(drawn, plot_id):
+    return [
+        a
+        for a in drawn.axes[0].lines
+        if a.get_gid() == plot_id and _rows(a) is None and a.get_color() != "C0"
+    ]
+
+
+def test_the_line_runs_on_through_left_out_rows_in_their_color() -> None:
+    project = _project(LinePlot, left_out=[4])
+    drawn = render(project.figures[0], _data)
+    plot_id = _plot(project).id
+    kept = next(a for a in drawn.axes[0].lines if _rows(a) == list(range(10)))
+    assert np.isnan(kept.get_ydata()[4])  # a gap there, filled by the grey line
+    [grey] = _grey_line(drawn, plot_id)
+    nan = np.nan
+    np.testing.assert_array_equal(grey.get_xdata(), [3.0, 4.0, nan, 4.0, 5.0, nan])
+    assert np.allclose(to_rgb(grey.get_color()), 0.7)
+    assert grey.get_linestyle() == "-"
+
+
+@pytest.mark.parametrize(("style", "drawn_as"), [("none", None), ("--", "--")])
+def test_the_left_out_line_style_can_be_set(style, drawn_as) -> None:
+    project = _project(LinePlot, left_out=[4], left_out_linestyle=style)
+    lines = _grey_line(render(project.figures[0], _data), _plot(project).id)
+    assert [line.get_linestyle() for line in lines] == ([drawn_as] if drawn_as else [])
 
 
 def test_leaving_a_point_out_fits_again_in_the_same_step() -> None:
