@@ -13,6 +13,13 @@ release open in every later one.
 - Error bands: an error bar plot draws its y errors as a shaded band around
   the line, for dense data.
 
+**Editing where it is drawn**
+- Double-click an axis label, title, legend entry or note to edit it in
+  place.
+- Drag an inset's corner to resize it, or the gap between two panels.
+- Right-click a plot: *Style like…*, *Bring to front*, *Send to back*,
+  *Fit…*, *Hide*.
+
 **Fixed**
 - A color the panel refused no longer breaks the panel the next time it is
   built.

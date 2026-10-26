@@ -65,6 +65,16 @@ from figscribe.gui.errors import explain
 from figscribe.gui.inplace import Editable, open_editor
 from figscribe.gui.markings import ENTRIES, add, marking
 from figscribe.gui.names import artist_name, size_text
+from figscribe.gui.resize import (
+    HANDLE,
+    Corner,
+    Gap,
+    bounds,
+    corners,
+    gaps,
+    grabbed,
+    ratios,
+)
 from figscribe.model.validate import FITTABLE
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
@@ -111,6 +121,8 @@ class _Press:
     """The Matplotlib legend under the press, which a drag moves."""
     note: object = None
     """The Matplotlib annotation under the press, which a drag moves."""
+    handle: Corner | Gap | None = None
+    """An inset's corner or a gap of the grid, which a drag resizes."""
 
     @property
     def moving(self):
@@ -137,6 +149,7 @@ class Preview(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumSize(200, 150)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.setMouseTracking(True)  # the cursor shows what a drag would resize
         self._figure: MplFigure | None = None
         self._image: QImage | None = None
         self._origin = QPointF()
@@ -299,6 +312,9 @@ class Preview(QWidget):
         if box is not None:
             painter.setPen(QPen(QColor(theme.ACCENT), 1.5, Qt.PenStyle.DashLine))
             painter.drawRoundedRect(box, 3, 3)
+        press = self._press
+        if press is not None and press.handle is not None and press.dragging:
+            self._paint_resize(painter, press.handle, press.last)
         moved = self._moved_legend_rect()
         if moved is not None:
             painter.setPen(QPen(QColor(theme.ACCENT), 1.5))
@@ -639,6 +655,10 @@ class Preview(QWidget):
         if self._figure is None:
             self.document.select(None)
             return
+        handle = self.handle_at(point)
+        if handle is not None:
+            self._press = _Press(point, point, handle=handle)
+            return
         ax, axis = self.axes_at(point), "both"
         if ax is None:
             ax, axis = self._axis_under(point)
@@ -654,15 +674,16 @@ class Preview(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         press = self._press
-        if press is None:
-            return
         point = event.position()
+        if press is None:
+            self._show_handle(point)
+            return
         if not press.dragging:
             moved = point - press.start
             if abs(moved.x()) + abs(moved.y()) < DRAG_THRESHOLD:
                 return
             press.dragging = True
-        if press.moving is None and press.axes_id is not None:
+        if press.moving is None and press.handle is None and press.axes_id is not None:
             delta = point - press.last
             self.pan(press.axes_id, delta.x(), delta.y(), press.axis)
         press.last = point
@@ -674,6 +695,8 @@ class Preview(QWidget):
             return
         if not press.dragging:
             self.document.select(self.object_at(press.start))
+        elif press.handle is not None:
+            self.resize_to(press.handle, event.position())
         elif press.legend is not None:
             moved = event.position() - press.start
             self.move_legend(press.legend.get_gid(), moved.x(), moved.y())
@@ -815,6 +838,93 @@ class Preview(QWidget):
             self.show_error("Cannot leave the point out", str(exc))
             return
         self.document.push(command)
+
+    # --- resizing an inset or the grid -------------------------------------
+
+    def handle_at(self, point: QPointF) -> Corner | Gap | None:
+        """The inset corner or the gap of the grid at `point`, if any."""
+        if self._figure is None or self.document.figure is None:
+            return None
+        x, y = self._to_display(point)
+        reach = HANDLE * self.devicePixelRatioF()
+        boxes = self._boxes()
+        for corner in corners(self.document.figure, boxes):
+            cx, cy = corner.at
+            if abs(cx - x) <= reach and abs(cy - y) <= reach:
+                return corner
+        for gap in gaps(self.document.figure, boxes):
+            if grabbed(gap, x, y, reach):
+                return gap
+        return None
+
+    def resize_to(self, handle: Corner | Gap, point: QPointF) -> None:
+        """Move the corner or the gap to `point`, as one undo step."""
+        figure = self.document.figure
+        x, y = self._to_display(point)
+        if isinstance(handle, Corner):
+            inset = find(self.document.project, handle.axes_id)
+            boxes = self._boxes()
+            parent, box = boxes.get(inset.inset.parent), boxes.get(inset.id)
+            if parent is None or box is None:
+                return
+            new = bounds(parent, box, handle.corner, x, y)
+            self._push(SetField(inset.id, ("inset", "bounds"), new, "Resize the inset"))
+            return
+        columns = handle.field == "width_ratios"
+        count = figure.layout.cols if columns else figure.layout.rows
+        current = getattr(figure.layout, handle.field)
+        new = ratios(current, count, handle, x if columns else y)
+        text = "Resize the columns" if columns else "Resize the rows"
+        self._push(SetField(figure.id, ("layout", handle.field), new, text))
+
+    def _boxes(self) -> dict[str, Bbox]:
+        """The box of each panel drawn, by its id; not of its right axis."""
+        return {
+            ax.get_gid(): ax.bbox
+            for ax in _all_axes(self._figure)
+            if ax.get_gid() and not ax.get_gid().endswith(RIGHT)
+        }
+
+    def _show_handle(self, point: QPointF) -> None:
+        """A resize cursor over what a drag would resize."""
+        handle = self.handle_at(point)
+        if isinstance(handle, Corner):
+            falling = handle.corner in ("upper left", "lower right")
+            shape = (
+                Qt.CursorShape.SizeFDiagCursor
+                if falling
+                else (Qt.CursorShape.SizeBDiagCursor)
+            )
+        elif isinstance(handle, Gap):
+            shape = (
+                Qt.CursorShape.SplitHCursor
+                if handle.field == "width_ratios"
+                else Qt.CursorShape.SplitVCursor
+            )
+        else:
+            self.unsetCursor()
+            return
+        self.setCursor(shape)
+
+    def _paint_resize(self, painter: QPainter, handle, point: QPointF) -> None:
+        """Where the inset's edges or the boundary will be on release."""
+        painter.setPen(QPen(QColor(theme.ACCENT), 1.5, Qt.PenStyle.DashLine))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        if isinstance(handle, Corner):
+            box = self._boxes().get(handle.axes_id)
+            if box is None:
+                return
+            i, j = (handle.corner.endswith("right"), handle.corner.startswith("upper"))
+            fixed = self._to_widget(box.x0 if i else box.x1, box.y0 if j else box.y1)
+            painter.drawRect(QRectF(fixed, point).normalized())
+        elif handle.field == "width_ratios":
+            low, high = handle.extent
+            top, bottom = self._to_widget(0, high).y(), self._to_widget(0, low).y()
+            painter.drawLine(QPointF(point.x(), top), QPointF(point.x(), bottom))
+        else:
+            low, high = handle.extent
+            left, right = self._to_widget(low, 0).x(), self._to_widget(high, 0).x()
+            painter.drawLine(QPointF(left, point.y()), QPointF(right, point.y()))
 
     # --- texts edited where they are drawn ---------------------------------
 

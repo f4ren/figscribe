@@ -1550,3 +1550,46 @@ alone would hide the other figures' contents. **A new figure from the
 defaults**: every journal setting would have to be made again. **Moving a
 figure with each tab passed while dragging**: one undo step per tab, for one
 intended move.
+
+## 0040 — Changing things where they are drawn
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Roadmap U4: a label, a title, the size of an inset or of a column were
+changed in the property panel, away from where they are seen; the plot
+under the mouse had no menu of its own.
+
+### Decision
+
+- **A double-click edits a text in place**: an axis label, a panel's title,
+  a legend entry or a note. A field opens over it, holding what the model
+  holds, all selected: an axis label without the unit it is drawn with, a
+  note with its lines (Ctrl+Enter ends it, as in the panel). Enter or
+  leaving the field sets it as one undo step, Esc leaves it. An emptied
+  legend entry takes the plot out of the legend; an emptied note stays as it
+  was, since a note without text would vanish, and Delete does that.
+  A legend entry is mapped to its plot through the handles the legend was
+  built from, not by its text, which two plots may share.
+- **Dragging resizes**, one undo step on release like the legend and notes:
+  an inset's corner (the opposite one stays; at least a twentieth of the
+  panel each way), and the gap between two columns or rows, which shares
+  their room differently: the two keep the sum of their ratios, each at
+  least a tenth of it, rounded to two digits. The cursor shows what a drag
+  would resize; a click there still selects. The grab zone of a gap is a
+  few pixels around its middle, so that dragging the numbers of an axis
+  next to it still pans.
+- **A right-click on a plot** offers *Style like* (each other plot of the
+  figure that looks different; what both have and the target can take:
+  "no marker" of a line is not a marker for error bars), *Bring to front*,
+  *Send to back*, *Fit…* and *Hide*, before what the point under the mouse
+  and the panel offer.
+
+### Alternatives considered
+
+**Dragging an inset to move it**: a drag inside it pans it, which is used
+more. **Ratios from exact panel widths**: constrained layout puts the labels
+into the gaps, so what a column gets from a ratio is not proportional to
+it; the release shows the result at once, and a second drag corrects it.

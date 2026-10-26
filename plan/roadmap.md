@@ -516,6 +516,13 @@ in the panel alone would be wrong as soon as the size or labels change.
   alone. Over the panel, Shift with the wheel still zooms x only and Ctrl or
   Alt y only. Clicking in the frame's gaps still selects nothing.
 
+**Done** (2026-10-26, decision 0040): double-click editing of axis labels,
+titles, legend entries and notes; dragging an inset's corner and the gaps of
+the grid, one undo step on release; a right-click on a plot with *Style
+like*, *Bring to front*, *Send to back*, *Fit…* and *Hide*. *Follow-ups:* a
+title not set yet cannot be double-clicked, there is nothing drawn; a
+column's share from a drag is approximate under constrained layout.
+
 ### U5 Missing everyday actions — S each
 
 - **Duplicate** a plot, a panel, a figure (Ctrl+D).

@@ -140,6 +140,10 @@ script.
   separated by semicolons (`0; 0,5; 1`).
 - Drag the legend and notes into place. Zoom with the mouse wheel and pan by
   dragging to look closer; *Use as axis range* keeps that view.
+- Double-click an axis label, a title, a legend entry or a note to edit it
+  where it is drawn. Drag an inset's corner to resize it, or the gap between
+  two panels to share the room between them differently. Right-click a plot
+  to style it like another, bring it to the front, fit or hide it.
 - The **Python code** drawer under the figure shows the generated script,
   live, as you edit.
 
@@ -268,6 +272,7 @@ ones, `--repeat 3` evens out variation between runs.
 | Show the assistant | Ctrl+Shift+A |
 | Zoom a panel | mouse wheel; with Shift only x, with Ctrl or Alt only y |
 | Pan a panel | drag its background |
+| Edit a label, title, legend entry or note | double-click it |
 | Back to the axis ranges of the model | Esc |
 
 On macOS, Cmd takes the place of Ctrl.
