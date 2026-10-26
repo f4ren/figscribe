@@ -135,6 +135,30 @@ def test_set_field_is_strict(tools, workspace) -> None:
     assert workspace.project.figures[0].dpi == 150.0
 
 
+def test_the_assistant_letters_the_panels(tools, workspace) -> None:
+    figure, *_ = _ids(workspace)
+    schema = tools.call("get_schema", {})
+    assert "reading order" in json.dumps(schema)
+    labels = {"style": "A", "bold": True}
+    tools.call(
+        "set_field", {"object_id": figure, "path": ["panel_labels"], "value": labels}
+    )
+    tools.call(
+        "set_field",
+        {"object_id": figure, "path": ["panel_labels", "placement"], "value": "inside"},
+    )
+    shown = workspace.project.figures[0].panel_labels
+    assert (shown.style, shown.bold, shown.placement) == ("A", True, "inside")
+    assert (
+        'textcoords="offset fontsize"' in tools.call("get_python_script", {})["script"]
+    )
+    with pytest.raises(ToolError, match="panel_labels.style"):
+        tools.call(
+            "set_field",
+            {"object_id": figure, "path": ["panel_labels", "style"], "value": "i"},
+        )
+
+
 def test_a_tick_step_that_would_freeze_the_figure_is_refused(tools, workspace) -> None:
     _, axes, _, _ = _ids(workspace)
     before = dumps(workspace.project)

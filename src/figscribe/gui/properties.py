@@ -76,6 +76,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     FitResult,
+    PanelLabels,
     PredefinedFit,
     Project,
 )
@@ -143,7 +144,11 @@ class Spec:
     model: type[BaseModel] | None = None
 
 
-OPTIONAL_PARTS: dict[str, type[BaseModel]] = {"y_right": AxisSpec, "colorbar": Colorbar}
+OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
+    "y_right": AxisSpec,
+    "colorbar": Colorbar,
+    "panel_labels": PanelLabels,
+}
 """Optional nested models switched on and off with a check box; when on, their
 fields get a section of their own."""
 
@@ -223,6 +228,7 @@ SECTIONS = {
     "tick_length": "Style",
     "minor_tick_width": "Style",
     "minor_tick_length": "Style",
+    "panel_labels": "Style",
     "path": "File",
     "sha256": "File",
     "label": "Legend",
@@ -257,6 +263,7 @@ SECTION_NAMES = {
     "y": "Y axis",
     "y_right": "Right y axis",
     "colorbar": "Color bar",
+    "panel_labels": "Panel labels",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
@@ -422,6 +429,12 @@ TIPS = {
     "Legend.position": "Where the legend's lower left corner sits, as fractions of the"
     " panel; set by dragging the legend. Empty uses the location.",
     "frame": "A box around the legend.",
+    "panel_labels": "Letters on the panels, (a), (b), (c), in reading order, as "
+    "journals ask for.",
+    "PanelLabels.style": "How the letters are written.",
+    "bold": "Bold letters, as Nature and Science print them.",
+    "placement": "Above and left of each panel's top left corner, or just within it.",
+    "insets": "Give insets a letter too, right after the panel they sit in.",
     "ncols": "How many columns the legend's entries are arranged in.",
     "bounds": "Where the inset sits in its panel, as fractions: left, bottom, width, "
     "height.",
@@ -601,6 +614,12 @@ class PropertyPanel(QScrollArea):
             return read_differently(
                 self.document.project, obj.id, path[0], value, self.document.base_dir
             )
+        if path == ("panel_labels",):
+            if value:
+                return Macro(
+                    "Letter the panels", [SetField(obj.id, path, PanelLabels())]
+                )
+            return Macro("Remove the panel labels", [SetField(obj.id, path, None)])
         if path == ("colorbar",):
             if value:
                 return Macro("Show a color bar", [SetField(obj.id, path, Colorbar())])
@@ -1035,6 +1054,10 @@ CHOICES = {
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
 CHOICES["unit_format"] = UNIT_FORMATS
 CHOICES["encoding"] = ENCODINGS
+CHOICES["placement"] = [
+    ("outside the corner", "outside"),
+    ("inside the corner", "inside"),
+]
 CHOICES["tick_direction"] = [
     ("outward", "out"),
     ("inward", "in"),
@@ -1457,7 +1480,7 @@ def _shape(obj: BaseModel) -> tuple:
     """What decides the form's layout: the object, and its optional parts."""
     parts = tuple(
         getattr(obj, name, None) is None
-        for name in ("y_right", "colorbar", "inset", "result")
+        for name in ("y_right", "colorbar", "panel_labels", "inset", "result")
     )
     layout = getattr(obj, "layout", None)
     grid = (layout.rows, layout.cols) if layout is not None else None

@@ -1319,3 +1319,51 @@ Google's SDK: a new dependency for what the OpenAI-compatible endpoint
 already does. **OpenRouter, Groq or Mistral by name**: they work through
 "Other server" already; naming them adds entries to keep current, for
 providers nobody has asked for yet.
+
+---
+
+## 0033 — Panel labels
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Journals ask for a letter on each panel of a multi-panel figure, in a style
+of their own: "(a)" in physics journals, a bold "a" in Nature, a bold "A" in
+Science (roadmap F3).
+
+### Decision
+
+- **One setting per figure**, `Figure.panel_labels` (`PanelLabels`, None for
+  none), switched on with a box in the figure's *Style* section like a color
+  bar: the letters' style (`(a)`, `a)`, `a`, `A`), bold, placement, font size,
+  and whether insets get a letter. No letter of its own per panel: a figure
+  follows one journal's rule.
+- **Reading order by the cell a panel starts in**, row by row, left to right
+  (`render.labels.panel_labels`, shared by the renderer and the code
+  generator); a panel spanning two rows comes before those beside it. Insets
+  get none unless asked for, then each right after the panel it sits in.
+  After z the letters go on with aa, ab, as spreadsheet columns do.
+- **Drawn with `ax.annotate` at the panel's top left corner**, offset by half
+  the label's font size (`textcoords="offset fontsize"`, Matplotlib 3.8, the
+  version figscribe needs anyway): outside, above and left of the corner;
+  inside, just within it. The offset in font sizes keeps the look when the
+  size changes, and the constrained layout makes room for an outside label,
+  as it does for a title. The script writes them in one loop over the panels
+  and their letters.
+- **A label carries no gid**: it is not a model object, and the preview takes
+  any text with a gid for a note to drag. Clicking it selects nothing, or
+  the panel when it lies inside.
+- No schema bump: the field has a default and no released file predates it.
+
+### Alternatives considered
+
+**`ax.set_title(loc="left")`**, the other way Matplotlib's gallery shows:
+the layout handles it as well, but it only works outside, takes the title's
+size and weight from the style sheet, and would need another call inside.
+**`fig.text` at a computed position**: the position would be worked out
+before the layout places the panels, and the script would carry numbers
+nobody could read. **The letter left of the y label**, as some journals
+print it: it needs the width of the tick labels, known only after drawing;
+the placement can get a third choice if asked for.

@@ -25,6 +25,7 @@ from figscribe.model import (
     GridLayout,
     Legend,
     LinePlot,
+    PanelLabels,
     ScatterPlot,
 )
 from figscribe.render import export
@@ -104,10 +105,27 @@ def _figures(ref) -> dict[str, Figure]:
                 ),
             ],
         ),
+        "panel_labels": Figure(
+            dpi=100.0,
+            width_mm=120.0,
+            layout=GridLayout(cols=2),
+            panel_labels=PanelLabels(bold=True),
+            axes=[
+                Axes(**labelled, artists=[LinePlot(x=ref("t"), y=ref("U"))]),
+                Axes(
+                    col=1,
+                    **labelled,
+                    title="Noise",
+                    artists=[ScatterPlot(x=ref("t"), y=ref("dU"))],
+                ),
+            ],
+        ),
     }
 
 
-@pytest.mark.parametrize("name", ["line", "scatter", "errorbar", "two_panels"])
+@pytest.mark.parametrize(
+    "name", ["line", "scatter", "errorbar", "two_panels", "panel_labels"]
+)
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:
     figure = _figures(ref)[name]
     expected = BASELINE / f"{name}.png"
