@@ -60,6 +60,62 @@ def remove_artists(project: Project, artist_ids: list[str]) -> Macro:
     return Macro(f"Remove {len(artist_ids)} plots", steps)
 
 
+STYLE = (
+    "color",
+    "marker",
+    "markersize",
+    "size",
+    "edgecolor",
+    "linestyle",
+    "linewidth",
+    "capsize",
+    "elinewidth",
+    "alpha",
+)
+"""How a plot looks, as "Style like" takes it over from another."""
+
+
+def copy_style(project: Project, target_id: str, source_id: str) -> Macro:
+    """Give the plot `target_id` the look of `source_id`: each style field
+    both have, as far as the target can take the value (a line plot's "no
+    marker" is not a marker for error bars)."""
+    target, _ = _locate(project, target_id, "artists")
+    source, _ = _locate(project, source_id, "artists")
+    steps = []
+    trial = target.model_copy()
+    for name in STYLE:
+        if name not in type(target).model_fields or not hasattr(source, name):
+            continue
+        value = getattr(source, name)
+        if value == getattr(target, name):
+            continue
+        try:
+            setattr(trial, name, value)
+        except ValueError:
+            continue
+        steps.append(SetField(target_id, (name,), value))
+    label = source.label or noun(source)
+    return Macro(f"Style like {label}", steps)
+
+
+def drawing_order(project: Project, artist_id: str) -> list:
+    """The plots of the panel holding `artist_id`, in the order they are
+    drawn: by z-order, and as Matplotlib does on a tie, as they were added."""
+    _, axes = _locate(project, artist_id, "artists")
+    return sorted(axes.artists, key=lambda a: a.zorder)
+
+
+def to_front(project: Project, artist_id: str, front: bool) -> SetField | None:
+    """Draw the plot above (`front`) or below every other plot of its panel;
+    None when there is no other."""
+    others = [a.zorder for a in drawing_order(project, artist_id) if a.id != artist_id]
+    if not others:
+        return None
+    zorder = max(others) + 1 if front else min(others) - 1
+    text = "Bring to front" if front else "Send to back"
+    return SetField(artist_id, ("zorder",), float(zorder), text)
+
+
 def remove_axes(project: Project, axes_id: str) -> Macro:
     """Remove an Axes with its artists, and whatever elsewhere refers to them.
 

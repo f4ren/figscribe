@@ -29,6 +29,13 @@ release open in every later one.
 - Several plots chosen with Ctrl or Shift in the outline: change their
   color, marker or line for all at once, or delete them together.
 
+**Editing where it is drawn**
+- Double-click an axis label, title, legend entry or note to edit it in
+  place.
+- Drag an inset's corner to resize it, or the gap between two panels.
+- Right-click a plot: *Style like…*, *Bring to front*, *Send to back*,
+  *Fit…*, *Hide*.
+
 **Fixed**
 - With openai 3.38 or later, the assistant again says why Gemini refused a
   request and how long to wait at a rate limit.
