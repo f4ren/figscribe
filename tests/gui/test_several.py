@@ -67,11 +67,18 @@ def test_ctrl_click_chooses_several_plots(window: MainWindow) -> None:
     # Only what both have: a scatter plot has no line, error bars no size.
     assert set(panel.editors) >= {("color",), ("marker",), ("alpha",)}
     assert ("linewidth",) not in panel.editors and ("size",) not in panel.editors
-    _click(window, line.id, Qt.KeyboardModifier.ShiftModifier)
-    assert set(window.document.selection) == {bars.id, line.id, points.id}
     _click(window, line.id)  # a plain click chooses one again
     assert window.document.selection == [line.id]
-    assert window.properties._kicker.text() != "3 PLOTS"
+    assert window.properties._kicker.text() != "2 PLOTS"
+
+
+def test_shift_click_chooses_the_plots_between(window: MainWindow) -> None:
+    bars, line, points = _plots(window)
+    _click(window, bars.id)  # where the range starts, on every platform
+    _click(window, points.id, Qt.KeyboardModifier.ShiftModifier)
+    assert set(window.document.selection) == {bars.id, line.id, points.id}
+    assert window.document.selected == points.id
+    assert window.properties._kicker.text() == "3 PLOTS"
 
 
 def test_a_setting_changes_on_every_plot_chosen(window: MainWindow) -> None:
