@@ -530,6 +530,29 @@ def test_a_refused_color_is_not_offered_again(
     assert panel.recent_colors[0] == "0.3"
 
 
+def test_errors_are_shaded_as_a_band_and_drawn_as_bars_again(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_artist(document).id)
+    assert "Error band" not in panel.sections
+    panel.editors[("band",)].widget.click()
+    assert _artist(document).band is not None
+    assert document.history.undo_text == "Shade the errors"
+    assert "Error band" in panel.sections
+    color = panel.editors[("band", "color")]
+    assert color.line.placeholderText() == "the plot's"
+    _type(panel, ("band", "color"), "tab:red")
+    assert _artist(document).band.color == "tab:red"
+    _type(panel, ("band", "alpha"), "0.5")
+    assert _artist(document).band.alpha == 0.5
+    panel.editors[("band",)].widget.click()
+    assert _artist(document).band is None
+    assert document.history.undo_text == "Draw the errors as bars"
+    assert "Error band" not in panel.sections
+    document.history.undo()
+    assert _artist(document).band.alpha == 0.5
+
+
 def test_panel_labels_are_switched_on_and_set_up(
     panel: PropertyPanel, document: Document
 ) -> None:

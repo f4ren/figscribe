@@ -96,6 +96,16 @@ class ScatterPlot(ArtistBase):
     script. Finding outliers fills it in."""
 
 
+class ErrorBand(StrictModel):
+    """The y errors as a shaded band around the line instead of as bars, for
+    dense data where the bars would crowd each other."""
+
+    color: Color | None = None
+    """A Matplotlib color; None takes the plot's."""
+    alpha: float = Field(0.25, ge=0.0, le=1.0)
+    """Opacity of the band from 0 to 1, times the plot's own."""
+
+
 class ErrorbarPlot(ArtistBase):
     kind: Literal["errorbar"] = "errorbar"
     x: ColumnRef
@@ -121,6 +131,9 @@ class ErrorbarPlot(ArtistBase):
     """Length of the caps at the ends of the error bars in pt; 0 for none."""
     elinewidth: float = Field(1.0, gt=0.0)
     """Line width of the error bars in pt."""
+    band: ErrorBand | None = None
+    """The y errors as a shaded band instead of bars; None draws bars. x
+    errors stay bars."""
     left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
     """Rows of the data, counted from 0, drawn apart and skipped by every fit of
     this plot; the data file stays as it is."""

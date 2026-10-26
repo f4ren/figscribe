@@ -25,6 +25,7 @@ from figscribe.model import (
     Axes,
     AxisSpec,
     ColumnRef,
+    ErrorBand,
     ErrorbarPlot,
     Figure,
     FitCurve,
@@ -732,3 +733,59 @@ def test_reference_lines_and_shaded_spans(tmp_path: Path) -> None:
     assert 'ax.axhspan(0.5, 1, color="C2", linewidth=0, zorder=0.5, alpha=0.2)' in (
         script
     )
+
+
+def test_error_bands(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        linestyle="-",
+        marker="none",
+        label="data",
+        left_out=[12],
+        band=ErrorBand(),
+    )
+    shifted = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["t2"],
+        xerr=ref["dU"],
+        yerr=ref["U"],
+        color="C3",
+        alpha=0.8,
+        zorder=2.3,
+        band=ErrorBand(color="0.6", alpha=0.5),
+    )
+    project.figures = [
+        Figure(
+            dpi=150,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(legend=Legend(visible=True), artists=[data]),
+                Axes(col=1, artists=[shifted]),
+            ],
+        )
+    ]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "line, = ax_a.plot(" in script
+    assert "    where=kept,\n    color=line.get_color(),\n    alpha=0.25,\n" in script
+    assert "line, _, _ =" not in script  # the second plot has a color of its own
+    assert (
+        'ax_b.fill_between(t, t2 - U, t2 + U, color="0.6", alpha=0.4, zorder=2.2, '
+        "linewidth=0)" in script
+    )
+
+
+def test_an_error_band_beside_x_error_bars_in_the_cycle_color(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"], y=ref["U"], xerr=ref["dU"], yerr=ref["dU"], band=ErrorBand()
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    script = _assert_same(project, tmp_path)
+    assert "line, _, _ = ax.errorbar(" in script
+    assert "color=line.get_color()" in script

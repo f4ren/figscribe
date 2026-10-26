@@ -19,6 +19,7 @@ from figscribe.model import (
     Colorbar,
     ColorMesh,
     ColumnRef,
+    ErrorBand,
     ErrorbarPlot,
     Figure,
     FitCurve,
@@ -44,8 +45,8 @@ def build(folder: Path) -> Path:
 
     Panel A has a line, points, error bars with a fit, a note with an arrow
     and a right y axis with a plot on it; B a histogram, a reference line, a
-    shaded range and the residuals; C
-    an image and D a color mesh, both with color bars; E is an inset in A.
+    shaded range and the residuals; C an image and D a color mesh, both with
+    color bars; E is an inset in A, with error bars drawn as a band.
     Everything that can be switched off is on, so that its settings show.
     """
     t = np.linspace(0.0, 4.0, 21)
@@ -112,6 +113,15 @@ def build(folder: Path) -> Path:
         artists=[
             LinePlot(x=col("t"), y=col("U"), label="detail"),
             LinePlot(x=col("t"), y=col("dU"), label="error"),
+            ErrorbarPlot(
+                x=col("t"),
+                y=col("U"),
+                xerr=col("dU"),
+                yerr=col("t"),  # wide enough to be seen in the small inset
+                label="shaded",
+                left_out=[4],
+                band=ErrorBand(),
+            ),
         ],
     )
     figure = Figure(

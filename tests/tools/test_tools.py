@@ -159,6 +159,23 @@ def test_the_assistant_letters_the_panels(tools, workspace) -> None:
         )
 
 
+def test_the_assistant_shades_the_errors_as_a_band(tools, workspace) -> None:
+    _, _, plot, _ = _ids(workspace)
+    schema = json.dumps(tools.call("get_schema", {}))
+    assert "shaded band" in schema
+    tools.call("set_field", {"object_id": plot, "path": ["band"], "value": {}})
+    tools.call(
+        "set_field", {"object_id": plot, "path": ["band", "alpha"], "value": 0.4}
+    )
+    assert workspace.project.figures[0].axes[0].artists[0].band.alpha == 0.4
+    assert "fill_between" in tools.call("get_python_script", {})["script"]
+    with pytest.raises(ToolError, match="not a color"):
+        tools.call(
+            "set_field",
+            {"object_id": plot, "path": ["band", "color"], "value": "nonsense"},
+        )
+
+
 def test_a_tick_step_that_would_freeze_the_figure_is_refused(tools, workspace) -> None:
     _, axes, _, _ = _ids(workspace)
     before = dumps(workspace.project)

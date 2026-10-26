@@ -634,6 +634,15 @@ In order of demand:
    it does nothing (B8 item 4).
 2. **Error band**: a line with a shaded ±error region (`fill_between`), for
    dense data where error bars clutter.
+   **Done** (2026-10-26, decision 0035): `ErrorbarPlot.band`, a check box
+   "Error band" in the plot's "Look", draws the y errors as a band in the
+   plot's color (or its own) just behind the line, with a gap at left-out
+   rows; x errors stay bars, fits are weighted as before. A band without y
+   errors is reported in the problem list. Typing a refused color into any
+   color field no longer breaks the panel the next time it is built (the
+   color was remembered before it was checked). *Follow-ups:* the legend
+   could show the band behind the line; cap size and error bar width show
+   but do nothing while a band has no x errors beside it (B8 item 4).
 3. **Hollow markers** and marker edge width; separate error bar color and cap
    thickness; *error bar on every n-th point* for dense data.
 4. **Step plot** (drawstyle) for spectra and histograms of counts.
