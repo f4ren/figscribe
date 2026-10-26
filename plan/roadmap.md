@@ -515,6 +515,11 @@ covariance detected). Missing:
    with chosen parameters as `value ± error unit`, rounded to two significant
    digits of the error as `names.with_error` already does; updates on refit.
 4. **Export the result**: copy as text, CSV, or a LaTeX table row.
+   **As text: done** (2026-10-26, asked for by the user): the result card's
+   values can be selected, "Copy the result" copies parameters, χ²ᵣ and the
+   residuals, and the card now tells the points fitted, the residual RMS
+   and the largest residual with its row (`fit.residuals`). *Open:* CSV and
+   a LaTeX table row.
 5. **Confidence band** (1σ) around the curve from the covariance, shaded.
 6. **More models**: sine, power law, logistic, Voigt, sum of two Gaussians or
    Lorentzians, exponential with offset; templates for the custom expression.

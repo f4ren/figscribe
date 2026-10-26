@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.commands import CommandError, Macro, SetField, find
-from figscribe.fit import FitError, refit
+from figscribe.fit import FitError, refit, residuals
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
@@ -752,27 +752,26 @@ class PropertyPanel(QScrollArea):
         grid = QGridLayout(card)
         grid.setContentsMargins(12, 10, 12, 10)
         grid.setHorizontalSpacing(16)
-        result = fit.result
-        if result is None:
+        lines = _result_lines(fit, self._residuals(fit))
+        if not lines:
             grid.addWidget(label("Not fitted yet.", "hint"), 0, 0)
-        else:
-            for row, (name, value) in enumerate(result.parameters.items()):
-                error = result.uncertainties.get(name)
-                grid.addWidget(label(GREEK.get(name, name), "value"), row, 0)
-                shown = f"{value:.6g} (held)" if name in fit.fixed else None
-                grid.addWidget(
-                    label(shown or with_error(value, error), "value"), row, 1
-                )
-            row = len(result.parameters)
-            if result.reduced_chi_square is not None:
-                grid.addWidget(label("χ²ᵣ", "value"), row, 0)
-                chi = label(f"{result.reduced_chi_square:.2f}", "value")
-                grid.addWidget(chi, row, 1)
-            if not result.converged:
-                warning = label("The fit did not converge.", "error")
-                grid.addWidget(warning, row + 1, 0, 1, 2)
+        for row, (name, value) in enumerate(lines):
+            grid.addWidget(label(GREEK.get(name, name), "value"), row, 0)
+            shown = label(value, "value")
+            shown.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            grid.addWidget(shown, row, 1)
+        if fit.result is not None and not fit.result.converged:
+            warning = label("The fit did not converge.", "error")
+            grid.addWidget(warning, len(lines), 0, 1, 2)
         grid.setColumnStretch(1, 1)
         outer.addWidget(card)
+        copy = QPushButton("Copy the result")
+        copy.setObjectName("link")
+        copy.setToolTip("As text: parameters, χ²ᵣ and residuals")
+        copy.setEnabled(bool(lines))
+        copy.clicked.connect(lambda: self._copy_result(fit))
+        self.copy_result_button = copy
+        outer.addWidget(copy, 0, Qt.AlignmentFlag.AlignLeft)
         edit = QPushButton("Change the fit…")
         edit.setObjectName("link")
         edit.setToolTip("Model, start values, held parameters and bounds")
@@ -785,6 +784,26 @@ class PropertyPanel(QScrollArea):
         outer.addWidget(edit, 0, Qt.AlignmentFlag.AlignLeft)
         outer.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return holder
+
+    def _residuals(self, fit: FitCurve):
+        try:
+            return residuals(self.document.project, fit.id, self.document.data)
+        except (FitError, CommandError, DataError):
+            return None  # the data cannot be read; the preview says why
+
+    def _copy_result(self, fit: FitCurve) -> None:
+        target = find(self.document.project, fit.target)
+        name = (
+            f"{fit.model.name.capitalize()} fit"
+            if fit.model.kind == "predefined"
+            else f"Fit of {fit.model.expression}"
+        )
+        head = f"{fit.label}: " if fit.label else ""
+        lines = [f"{head}{name} to {artist_name(target)}"]
+        lines += [f"{n} = {v}" for n, v in _result_lines(fit, self._residuals(fit))]
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.clipboard().setText("\n".join(lines) + "\n")
 
     def fit_again(self, fit_id: str) -> None:
         """Run the fit again, e.g. after its data or start values changed."""
@@ -1275,3 +1294,23 @@ class MarkerList(ChoiceEditor):
 
 
 CHOICES["left_out_linestyle"] = [("Like the plot", LIKE_THE_PLOT), *LINESTYLES]
+
+
+def _result_lines(fit: FitCurve, found) -> list[tuple[str, str]]:
+    """(name, value) of a fit's result as the card shows and copies it."""
+    result = fit.result
+    if result is None:
+        return []
+    lines = []
+    for name, value in result.parameters.items():
+        held = f"{value:.6g} (held)" if name in fit.fixed else None
+        lines.append((name, held or with_error(value, result.uncertainties.get(name))))
+    if result.reduced_chi_square is not None:
+        lines.append(("χ²ᵣ", f"{result.reduced_chi_square:.2f}"))
+    if found is not None:
+        lines += [
+            ("Points fitted", f"{found.used} of {found.total}"),
+            ("Residual RMS", f"{found.rms:.3g}"),
+            ("Largest residual", f"{found.largest:.3g} (row {found.row + 1})"),
+        ]
+    return lines

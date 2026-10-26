@@ -11,7 +11,14 @@ from figscribe.fit.expression import (
     compile_expression,
     free_names,
 )
-from figscribe.fit.ops import add_fit, refit, set_left_out, update_fit
+from figscribe.fit.ops import (
+    Residuals,
+    add_fit,
+    refit,
+    residuals,
+    set_left_out,
+    update_fit,
+)
 from figscribe.fit.run import (
     evaluate,
     free_parameters,
@@ -27,6 +34,8 @@ from figscribe.fit.run import (
 )
 
 __all__ = [
+    "Residuals",
+    "residuals",
     "ExpressionError",
     "add_fit",
     "FitError",
