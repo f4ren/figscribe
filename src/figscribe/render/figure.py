@@ -42,7 +42,7 @@ from figscribe.model import (
 )
 from figscribe.model.artists import LIKE_THE_PLOT
 from figscribe.model.validate import FITTABLE, unequal_columns
-from figscribe.render.labels import axis_label
+from figscribe.render.labels import axis_label, panel_label_options, panel_labels
 from figscribe.render.layout import (
     creation_order,
     hidden_tick_labels,
@@ -138,6 +138,10 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                 ax.xaxis.set_tick_params(which="both", labelbottom=False)
             if hide_y:
                 ax.yaxis.set_tick_params(which="both", labelleft=False)
+
+        # No gid: a panel label is not a note to drag.
+        for i, text in panel_labels(figure).items():
+            axs[i].annotate(text, **panel_label_options(figure.panel_labels))
     return fig
 
 

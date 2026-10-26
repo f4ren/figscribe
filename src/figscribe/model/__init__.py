@@ -34,7 +34,7 @@ from figscribe.model.data import (
     Hdf5Source,
     NumpySource,
 )
-from figscribe.model.figure import Figure, GridLayout
+from figscribe.model.figure import Figure, GridLayout, PanelLabels
 from figscribe.model.project import (
     SCHEMA_VERSION,
     Project,
@@ -72,6 +72,7 @@ __all__ = [
     "Legend",
     "LinePlot",
     "NumpySource",
+    "PanelLabels",
     "PredefinedFit",
     "Project",
     "ReferenceIssue",

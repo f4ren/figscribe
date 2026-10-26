@@ -607,6 +607,17 @@ is merged:* remove the old `MarkerEditor` and its four `MARKERS` from
 `a)`, `a`, `A`, bold or not, position inside or outside the corner, font size.
 A setting on `Figure`; insets get none by default.
 
+**Done** (2026-10-26, decision 0033): `Figure.panel_labels`, switched on in
+the figure's *Style* section; style `(a)`, `a)`, `a` or `A`, bold, outside
+or inside the top left corner, font size, and insets on request. The script
+letters the panels in one loop. *Learned:* `ax.annotate` with
+`textcoords="offset fontsize"` keeps the gap in step with the letter's size,
+and the constrained layout makes room for it outside. *Follow-ups:* a panel
+of residuals usually shares the letter of the plot above it: a switch per
+panel to leave it out of the lettering. An inset lettered outside its corner
+sits in its parent's plot and may meet the parent's title when the inset is
+at the top.
+
 ### F4 Plot types that are missing — M each
 
 In order of demand:

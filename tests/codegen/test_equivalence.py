@@ -32,6 +32,7 @@ from figscribe.model import (
     Histogram,
     Legend,
     LinePlot,
+    PanelLabels,
     PredefinedFit,
     Project,
     ScatterPlot,
@@ -624,3 +625,43 @@ def test_a_grid_in_its_own_color(tmp_path: Path) -> None:
     project.figures = [Figure(dpi=110, axes=[axes])]
     script = _assert_same(project, tmp_path)
     assert 'ax.grid(True, color="dimgray")' in script
+
+
+def test_panel_labels_outside_with_an_inset_lettered(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    first = Axes(
+        x=AxisSpec(label="$t$", unit="s"),
+        y=AxisSpec(label="$U$", unit="V"),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [
+        Figure(
+            dpi=100,
+            width_mm=120,
+            axes=[first],
+            panel_labels=PanelLabels(style="a)", bold=True, insets=True),
+        )
+    ]
+    for side in ("right", "below", "inset"):
+        add_panel(project, first.id, side)[0].apply(project)
+    script = _assert_same(project, tmp_path)
+    assert (
+        'for ax, label in [(ax_a, "a)"), (ax_d, "b)"), (ax_b, "c)"), (ax_c, "d)")]:'
+        in script
+    )
+    assert 'textcoords="offset fontsize"' in script
+    assert 'fontweight="bold"' in script
+
+
+def test_a_panel_label_inside_one_panel(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    project.figures = [
+        Figure(
+            dpi=100,
+            axes=[Axes(artists=[LinePlot(x=ref["t"], y=ref["U"])])],
+            panel_labels=PanelLabels(style="A", placement="inside", fontsize=13),
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert "ax.annotate(\n" in script and '"A",' in script
+    assert "fontsize=13" in script and "for ax, label" not in script
