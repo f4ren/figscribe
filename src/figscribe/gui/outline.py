@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from figscribe.commands import CommandError, SetField, find
 from figscribe.gui import theme
 from figscribe.gui.document import Document, split_axis
+from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
 from figscribe.gui.widgets import FlowLayout, chip
 from figscribe.model import Axes, Figure
@@ -56,6 +57,9 @@ class Outline(QTreeWidget):
     """Add a panel beside or inside the panel with this id: (id, side)."""
     delete_requested = Signal(str)
     note_requested = Signal(str)
+    marking_requested = Signal(str, str, str)
+    """A reference line or shaded range for a panel: (panel id, kind,
+    orientation), as `markings.ENTRIES` has them."""
     """Add a note to the panel with this id."""
 
     def __init__(self, document: Document, parent: QWidget | None = None):
@@ -254,6 +258,14 @@ class Outline(QTreeWidget):
                     )
                 menu.addSeparator()
             menu.addAction("Add note…", lambda: self.note_requested.emit(oid))
+            lines = menu.addMenu("Add line or range")
+            for text, kind, orientation in ENTRIES:
+                lines.addAction(
+                    text,
+                    lambda k=kind, o=orientation: self.marking_requested.emit(
+                        oid, k, o
+                    ),
+                )
             menu.addSeparator()
             menu.addAction("Delete panel", lambda: self.delete_requested.emit(oid))
         elif isinstance(obj, Figure):

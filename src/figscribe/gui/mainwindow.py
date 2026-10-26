@@ -49,11 +49,11 @@ from figscribe.commands import (
 from figscribe.commands.core import walk
 from figscribe.examples import bundled_example
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
-from figscribe.gui import theme
+from figscribe.gui import markings, theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.databar import DataBar
-from figscribe.gui.document import Document, split_axis
+from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
@@ -181,6 +181,9 @@ class MainWindow(QMainWindow):
         )
         self.outline.delete_requested.connect(self._delete)
         self.outline.note_requested.connect(self.add_note)
+        self.outline.marking_requested.connect(
+            lambda oid, kind, orientation: self.add_marking(kind, orientation, oid)
+        )
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
@@ -650,6 +653,27 @@ class MainWindow(QMainWindow):
         self._push(InsertItem(target, "artists", note))
         self.document.select(note.id)
 
+    def add_marking(self, kind: str, orientation: str, oid: str | None = None) -> None:
+        """Add a reference line or a shaded range in the middle of what a
+        panel shows; its value is then typed in the property panel, or it is
+        placed by right-clicking the preview."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        target = oid if oid is not None else self._target_axes(figure)
+        axes = next((a for a in figure.axes if a.id == target), None)
+        if axes is None:
+            self.show_error("No panel", "Add a panel or a plot first.")
+            return
+        field = "x" if orientation == "vertical" else "y"
+        spec = getattr(axes, field)
+        shown = self.preview.axis_limits(axis_id(axes.id, field))
+        low, high = sorted(shown or spec.limits or (0.0, 1.0))
+        log = spec.scale == "log" and low > 0
+        made = markings.marking(kind, orientation, low, high, log=log)
+        self._push(markings.add(axes.id, made))
+        self.document.select(made.id)
+
     def _ask_text(self, title: str, prompt: str) -> str | None:
         """Several lines of text; None if cancelled."""
         text, ok = QInputDialog.getMultiLineText(self, title, prompt)
@@ -929,6 +953,12 @@ class MainWindow(QMainWindow):
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
         self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
+        self.marking_menu = insert.addMenu("Add &Line or Range")
+        for text, kind, orientation in markings.ENTRIES:
+            action = self.marking_menu.addAction(text)
+            action.triggered.connect(
+                lambda _=False, k=kind, o=orientation: self.add_marking(k, o)
+            )
         self.panel_menu = insert.addMenu("Add Pa&nel")
         self.panel_actions = {}
         for side, text in PANEL_SIDES:

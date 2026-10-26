@@ -52,6 +52,7 @@ def test_an_inset_from_the_context_menu(window: MainWindow) -> None:
         "Add panel below",
         "Add inset",
         "Add note…",
+        "Add line or range",
         "Delete panel",
     ]
     next(a for a in menu.actions() if a.text() == "Add inset").trigger()
@@ -70,7 +71,11 @@ def test_an_inset_from_the_context_menu(window: MainWindow) -> None:
     assert preview.object_at(QPointF(middle)) == inset.id
 
     insets_menu = window.outline.context_menu(inset.id)
-    assert _menu_texts(insets_menu) == ["Add note…", "Delete panel"]
+    assert _menu_texts(insets_menu) == [
+        "Add note…",
+        "Add line or range",
+        "Delete panel",
+    ]
 
 
 def test_deleting_from_the_context_menu(window: MainWindow) -> None:

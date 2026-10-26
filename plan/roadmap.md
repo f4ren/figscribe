@@ -623,6 +623,15 @@ at the top.
 In order of demand:
 1. **Reference lines and shaded spans**: horizontal/vertical line at a value,
    shaded x or y interval (`axhline`, `axvline`, `axvspan`), with label.
+   **Done** (2026-10-26, decision 0034): `ReferenceLine` and `ShadedSpan`,
+   vertical or horizontal, grey by default, the range light and behind the
+   data. *Insert > Add Line or Range*, the same in a panel's context menu in
+   the outline (in the middle of what the panel shows), and a right-click in
+   the preview, which puts one where it was clicked; values are rounded to a
+   hundredth of the shown range. The problem list reports one at or below
+   zero on a log axis. *Follow-ups:* drag a line or a range's edges in the
+   preview, like a note; the panel offers "y axis" for a vertical line, where
+   it does nothing (B8 item 4).
 2. **Error band**: a line with a shaded ±error region (`fill_between`), for
    dense data where error bars clutter.
 3. **Hollow markers** and marker edge width; separate error bar color and cap

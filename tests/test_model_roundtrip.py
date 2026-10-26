@@ -201,3 +201,21 @@ def test_panel_labels_roundtrip(project: Project) -> None:
         PanelLabels(style="i)")
     with pytest.raises(ValidationError):
         PanelLabels(fontsize=0.0)
+
+
+def test_reference_lines_and_spans_roundtrip(project: Project) -> None:
+    from figscribe.model import ReferenceLine, ShadedSpan
+
+    line = ReferenceLine(orientation="horizontal", at=0.5, label="threshold")
+    span = ShadedSpan(start=2.0, end=3.5, color="C1")
+    project.figures[0].axes[0].artists += [line, span]
+    back = loads(dumps(project)).figures[0].axes[0].artists
+    assert back[-2:] == [line, span]
+    assert isinstance(back[-1], ShadedSpan)
+    assert (span.alpha, span.zorder, line.linestyle) == (0.2, 0.5, "--")
+    with pytest.raises(ValidationError, match="two different ends"):
+        ShadedSpan(start=1.0, end=1.0)
+    with pytest.raises(ValidationError, match="two different ends"):
+        span.start = 3.5
+    with pytest.raises(ValidationError):
+        ReferenceLine(at=math.inf)

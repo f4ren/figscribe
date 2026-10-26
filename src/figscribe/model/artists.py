@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from figscribe.model.base import AnyFloat, Identified, StrictModel
 from figscribe.model.data import ArrayRef, ColumnRef
@@ -317,6 +317,49 @@ class Annotation(ArtistBase):
     """Color of the text and the arrow; None follows the style."""
 
 
+class ReferenceLine(ArtistBase):
+    """A line across the whole panel at one value: a threshold, a literature
+    value, the start of a pulse."""
+
+    kind: Literal["refline"] = "refline"
+    orientation: Literal["vertical", "horizontal"] = "vertical"
+    """"vertical" draws the line at an x value, "horizontal" at a y value."""
+    at: float
+    """Where the line is drawn, in the data's unit of that axis."""
+    color: Color = "gray"
+    """A Matplotlib color."""
+    linestyle: str = "--"
+    """"-", "--", "-." or ":"."""
+    linewidth: float = Field(1.0, gt=0.0)
+    """Line width in pt."""
+
+
+class ShadedSpan(ArtistBase):
+    """A shaded band across the whole panel between two values: a region of
+    interest, an excluded range, the time a field was on."""
+
+    kind: Literal["span"] = "span"
+    orientation: Literal["vertical", "horizontal"] = "vertical"
+    """"vertical" shades a range of x values, "horizontal" a range of y values."""
+    start: float
+    """One end of the range, in the data's unit of that axis."""
+    end: float
+    """The other end of the range."""
+    color: Color = "gray"
+    """A Matplotlib color."""
+    alpha: float = Field(0.2, ge=0.0, le=1.0)
+    """Opacity from 0 (invisible) to 1 (opaque); light, so the data shows through."""
+    zorder: float = 0.5
+    """Drawing order: plots with a higher number are drawn on top; below the
+    grid lines and every plot by default."""
+
+    @model_validator(mode="after")
+    def _two_ends(self):
+        if self.start == self.end:
+            raise ValueError("a range needs two different ends")
+        return self
+
+
 Artist = Annotated[
     LinePlot
     | ScatterPlot
@@ -326,6 +369,8 @@ Artist = Annotated[
     | ColorMesh
     | FitCurve
     | ResidualPlot
-    | Annotation,
+    | Annotation
+    | ReferenceLine
+    | ShadedSpan,
     Field(discriminator="kind"),
 ]

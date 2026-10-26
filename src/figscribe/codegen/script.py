@@ -39,8 +39,10 @@ from figscribe.model import (
     LinePlot,
     NumpySource,
     Project,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
 )
 from figscribe.render.figure import (
     COORDS,
@@ -77,6 +79,7 @@ DEFAULT_ZORDER = {
     "scatter": 1.0,
     "histogram": 1.0,
     "annotation": 3.0,
+    "span": 1.0,
     "image": 0.0,
     "colormesh": 1.0,
 }
@@ -841,6 +844,26 @@ class _Writer:
             self.call(f"{ax}.hist", values, **kwargs, **common)
         elif isinstance(artist, Annotation):
             self._annotation(ax, artist, common)
+        elif isinstance(artist, ReferenceLine):
+            draw = "axvline" if artist.orientation == "vertical" else "axhline"
+            self.call(
+                f"{ax}.{draw}",
+                _num(artist.at),
+                color=_str(artist.color),
+                linestyle=_str(artist.linestyle),
+                linewidth=_num(artist.linewidth),
+                **common,
+            )
+        elif isinstance(artist, ShadedSpan):
+            draw = "axvspan" if artist.orientation == "vertical" else "axhspan"
+            self.call(
+                f"{ax}.{draw}",
+                _num(artist.start),
+                _num(artist.end),
+                color=_str(artist.color),
+                linewidth="0",
+                **common,
+            )
         elif isinstance(artist, ImagePlot | ColorMesh):
             self._two_d(ax, artist, common)
         elif isinstance(artist, FitCurve):

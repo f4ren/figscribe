@@ -1367,3 +1367,52 @@ before the layout places the panels, and the script would carry numbers
 nobody could read. **The letter left of the y label**, as some journals
 print it: it needs the width of the tick labels, known only after drawing;
 the placement can get a third choice if asked for.
+
+---
+
+## 0034 — Reference lines and shaded ranges
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Measured data is often read against a value that is not in the data: a
+threshold, a literature value, the time a field was switched on, a region
+of interest (roadmap F4.1). Matplotlib has `axvline`/`axhline` and
+`axvspan`/`axhspan` for it, which span the whole panel whatever its range.
+
+### Decision
+
+- **Two artist kinds**, `ReferenceLine` (`"refline"`, at one value) and
+  `ShadedSpan` (`"span"`, between `start` and `end`), each with
+  `orientation` "vertical" (an x value or range) or "horizontal" (a y
+  value or range). Two kinds rather than one with an optional second end:
+  each has only the fields that mean something for it, and the assistant
+  writes `{"kind": "refline", "at": 5}` without guessing.
+- **Grey by default, not from the color cycle**: a reference is not data and
+  should not take the next data color. The line is dashed and 1 pt; the
+  range has an opacity of 0.2 and a drawing order of 0.5, below the grid
+  lines (1.5) and every plot, so that it stays behind the data whatever
+  order things were added in. Its edge is not drawn (`linewidth=0`): in the
+  band's own color it would show as a darker outline.
+- **Against the left or right y axis** like any plot (`axis`); a horizontal
+  line or range then uses that axis' values.
+- **Added from three places**: *Insert > Add Line or Range* and a panel's
+  context menu in the outline put one in the middle of what the panel shows
+  (a range over a fifth of it); a right-click in a panel of the preview
+  offers one at the clicked spot ("Vertical line at x = 4.2"). Values are
+  rounded to a hundredth of the shown range, or to two significant digits on
+  a log axis, where the middle and the width are taken in decades
+  (`gui/markings.py`). The exact value is then typed in the property panel.
+- **A value a log axis cannot show** (at or below zero) is a problem in the
+  list, as data at or below zero is (B7.1); it needs no data to tell.
+
+### Alternatives considered
+
+**`ax.plot` over the current range**: the line would end where the data
+ends, and a later change of range would leave it short. **Asking for the
+value in a dialog** when adding: the preview's right-click already knows
+where the user means, and the menu's middle is a start that the panel
+corrects in one field. **Dragging in the preview** is left for later, like
+the notes' dragging was added after notes.

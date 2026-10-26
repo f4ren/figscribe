@@ -21,8 +21,10 @@ from figscribe.model.artists import (
     ImagePlot,
     LinePlot,
     PredefinedFit,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
 )
 from figscribe.model.axes import Axes, AxisSpec, Inset, Legend
 from figscribe.model.base import Identified, StrictModel, new_id
@@ -76,9 +78,11 @@ __all__ = [
     "PredefinedFit",
     "Project",
     "ReferenceIssue",
+    "ReferenceLine",
     "ResidualPlot",
     "SchemaVersionError",
     "ScatterPlot",
+    "ShadedSpan",
     "StrictModel",
     "dumps",
     "loads",

@@ -603,3 +603,58 @@ def test_an_outside_panel_label_gets_room_from_the_layout(data) -> None:
     ((label,),) = _letters(fig).values()
     box = label.get_window_extent()
     assert box.x0 >= 0 and box.y1 <= fig.bbox.y1
+
+
+def test_reference_lines_span_the_panel(data, ref) -> None:
+    from figscribe.model import ReferenceLine
+
+    vertical = ReferenceLine(at=4.0, label="onset")
+    horizontal = ReferenceLine(
+        orientation="horizontal", at=0.5, color="C3", linestyle=":", linewidth=2.0
+    )
+    axes = Axes(
+        legend=Legend(visible=True),
+        artists=[LinePlot(x=ref("t"), y=ref("U")), vertical, horizontal],
+    )
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    drawn = {line.get_gid(): line for line in ax.lines}
+    v, h = drawn[vertical.id], drawn[horizontal.id]
+    assert list(v.get_xdata()) == [4.0, 4.0] and list(v.get_ydata()) == [0, 1]
+    assert list(h.get_ydata()) == [0.5, 0.5] and list(h.get_xdata()) == [0, 1]
+    assert (v.get_color(), v.get_linestyle(), v.get_linewidth()) == ("gray", "--", 1.0)
+    assert (h.get_color(), h.get_linestyle(), h.get_linewidth()) == ("C3", ":", 2.0)
+    assert [t.get_text() for t in ax.get_legend().get_texts()] == ["onset"]
+
+
+def test_shaded_spans_lie_behind_the_data(data, ref) -> None:
+    from figscribe.model import ShadedSpan
+
+    band = ShadedSpan(start=3.0, end=6.0, label="pulse")
+    across = ShadedSpan(orientation="horizontal", start=0.2, end=0.4, color="C2")
+    axes = Axes(artists=[LinePlot(x=ref("t"), y=ref("U")), band, across])
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    patches = {p.get_gid(): p for p in ax.patches}
+    shaded, flat = patches[band.id], patches[across.id]
+    assert shaded.get_zorder() == 0.5 < ax.lines[0].get_zorder()
+    assert shaded.get_alpha() == 0.2 and shaded.get_linewidth() == 0
+
+    def corners(patch):
+        return patch.get_patch_transform().transform(patch.get_path().vertices)
+
+    assert {round(x, 9) for x, _ in corners(shaded)} == {3.0, 6.0}
+    assert {round(y, 9) for _, y in corners(flat)} == {0.2, 0.4}
+
+
+def test_a_horizontal_line_goes_with_the_right_axis(data, ref) -> None:
+    from figscribe.model import ReferenceLine
+
+    line = ReferenceLine(orientation="horizontal", at=50.0, axis="right")
+    axes = Axes(
+        y_right=AxisSpec(limits=(0.0, 100.0)),
+        artists=[LinePlot(x=ref("t"), y=ref("U")), line],
+    )
+    fig = render(Figure(axes=[axes]), data)
+    right = next(ax for ax in fig.axes if ax.get_gid().endswith("#right"))
+    assert [ln.get_gid() for ln in right.lines] == [line.id]

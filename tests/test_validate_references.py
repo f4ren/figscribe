@@ -265,3 +265,18 @@ def test_values_a_log_axis_cannot_show_are_reported(project: Project) -> None:
     assert any("2 of 4 values of y (U) are zero or below" in i.message for i in issues)
     project.figures[0].axes[0].y.scale = "linear"
     assert not validate_references(project, data)
+
+
+def test_a_line_or_range_a_log_axis_cannot_show_is_a_problem() -> None:
+    from figscribe.model import ReferenceLine, ShadedSpan
+
+    shown = ReferenceLine(orientation="horizontal", at=0.1)
+    hidden = ReferenceLine(orientation="horizontal", at=0.0)
+    halfway = ShadedSpan(orientation="horizontal", start=-1.0, end=5.0)
+    across = ShadedSpan(start=-1.0, end=5.0)  # x is linear
+    axes = Axes(y=AxisSpec(scale="log"), artists=[shown, hidden, halfway, across])
+    issues = validate_references(Project(figures=[Figure(axes=[axes])]))
+    assert {i.object_id: i.message for i in issues} == {
+        hidden.id: "is at 0, which a log scale does not show",
+        halfway.id: "starts at -1, which a log scale does not show",
+    }

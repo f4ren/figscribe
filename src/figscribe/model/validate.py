@@ -28,8 +28,10 @@ from figscribe.model.artists import (
     Histogram,
     ImagePlot,
     LinePlot,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
 )
 from figscribe.model.axes import Axes
 from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource
@@ -113,6 +115,10 @@ def validate_references(
                             "but the axes has no y_right",
                         )
                     )
+
+                why = _off_the_log_scale(artist, axes)
+                if why is not None:
+                    issues.append(ReferenceIssue(tpath, artist.id, why))
 
                 if data is not None and isinstance(artist, FITTABLE):
                     why = _unequal_or_unreadable(artist, data)
@@ -258,6 +264,25 @@ def _unequal_or_unreadable(artist, data) -> str | None:
         return unequal_columns(artist, data)
     except DataError:
         return None  # a file that cannot be read is shown above the preview
+
+
+def _off_the_log_scale(artist, axes: Axes) -> str | None:
+    """Why a reference line or shaded range cannot be seen on its log axis."""
+    if not isinstance(artist, ReferenceLine | ShadedSpan):
+        return None
+    if artist.orientation == "vertical":
+        spec = axes.x
+    else:
+        right = artist.axis == "right" and axes.y_right is not None
+        spec = axes.y_right if right else axes.y
+    if spec.scale != "log":
+        return None
+    if isinstance(artist, ReferenceLine):
+        where = f"is at {artist.at:g}" if artist.at <= 0 else None
+    else:
+        low = min(artist.start, artist.end)
+        where = f"starts at {low:g}" if low <= 0 else None
+    return f"{where}, which a log scale does not show" if where else None
 
 
 def _not_drawn(artist, axes: Axes, data) -> list[str]:
