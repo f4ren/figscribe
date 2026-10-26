@@ -546,3 +546,60 @@ def test_a_fit_is_drawn_over_its_range(data, ref, fit_range, extend, span) -> No
     [shown] = [a for a in drawn.axes[1].lines if a.get_gid() == residuals.id]
     low, high = fit_range or (0.0, 10.0)
     assert shown.get_xdata().min() >= low and shown.get_xdata().max() <= high
+
+
+def _letters(fig) -> dict[str, list]:
+    """The panel labels drawn, by the gid of their axes."""
+    from matplotlib.text import Annotation as MplAnnotation
+
+    return {
+        ax.get_gid(): [t for t in ax.texts if isinstance(t, MplAnnotation)]
+        for ax in fig.findobj(lambda a: hasattr(a, "texts") and a.get_gid())
+    }
+
+
+def test_panel_labels_are_drawn_on_each_panel_but_not_on_insets(data) -> None:
+    from figscribe.model import Inset, PanelLabels
+
+    left, right = Axes(), Axes(col=1)
+    inset = Axes(inset=Inset(parent=left.id))
+    figure = Figure(layout=GridLayout(cols=2), axes=[left, right, inset])
+    assert all(texts == [] for texts in _letters(render(figure, data)).values())
+    figure.panel_labels = PanelLabels()
+    drawn = _letters(render(figure, data))
+    assert [t.get_text() for t in drawn[left.id]] == ["(a)"]
+    assert [t.get_text() for t in drawn[right.id]] == ["(b)"]
+    assert drawn[inset.id] == []
+    (label,) = drawn[left.id]
+    # Outside the top left corner, not a note: no gid, so it cannot be dragged.
+    assert label.xy == (0, 1) and label.xycoords == "axes fraction"
+    assert (label.get_ha(), label.get_va()) == ("right", "bottom")
+    assert label.get_gid() is None
+    assert label.get_fontweight() == "normal"
+
+
+def test_panel_labels_inside_bold_and_sized(data) -> None:
+    from figscribe.model import PanelLabels
+
+    figure = Figure(
+        axes=[Axes()],
+        panel_labels=PanelLabels(placement="inside", bold=True, fontsize=14.0),
+    )
+    fig = render(figure, data)
+    ((label,),) = _letters(fig).values()
+    assert (label.get_ha(), label.get_va()) == ("left", "top")
+    assert label.get_fontweight() == "bold" and label.get_fontsize() == 14.0
+    fig.draw_without_rendering()  # lays the panels out
+    box, frame = label.get_window_extent(), fig.axes[0].bbox
+    assert frame.x0 < box.x0 and box.y1 < frame.y1  # inside the corner
+
+
+def test_an_outside_panel_label_gets_room_from_the_layout(data) -> None:
+    from figscribe.model import PanelLabels
+
+    figure = Figure(axes=[Axes()], panel_labels=PanelLabels(fontsize=20.0))
+    fig = render(figure, data)
+    fig.draw_without_rendering()  # lays the panels out
+    ((label,),) = _letters(fig).values()
+    box = label.get_window_extent()
+    assert box.x0 >= 0 and box.y1 <= fig.bbox.y1

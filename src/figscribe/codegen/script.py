@@ -52,7 +52,12 @@ from figscribe.render.figure import (
     like_the_plot,
     tick_ranges,
 )
-from figscribe.render.labels import axis_label, unit_shown
+from figscribe.render.labels import (
+    axis_label,
+    panel_label_options,
+    panel_labels,
+    unit_shown,
+)
 from figscribe.render.layout import (
     creation_order,
     hidden_tick_labels,
@@ -99,6 +104,7 @@ RESERVED = {
     "mesh",
     "handles",
     "labels",
+    "label",
     "right_handles",
     "right_labels",
 }
@@ -703,6 +709,28 @@ class _Writer:
                 self.emit(
                     f'{name}.tick_params(axis="y", which="both", labelleft=False)'
                 )
+        labels = panel_labels(figure)
+        if labels:
+            self._panel_labels(labels)
+
+    def _panel_labels(self, labels: dict[int, str]) -> None:
+        options = {
+            key: _value(value)
+            for key, value in panel_label_options(self.figure.panel_labels).items()
+        }
+        if len(labels) == 1:
+            ((index, text),) = labels.items()
+            self.emit("", "# Panel label")
+            self.call(f"{self.axes_names[index]}.annotate", _str(text), **options)
+            return
+        pairs = [f"({self.axes_names[i]}, {_str(text)})" for i, text in labels.items()]
+        self.emit("", "# Panel labels, in reading order")
+        line = f"for ax, label in [{', '.join(pairs)}]:"
+        if len(line) <= WIDTH:
+            self.emit(line)
+        else:
+            self.emit("for ax, label in [", *(f"    {p}," for p in pairs), "]:")
+        self.call("ax.annotate", "label", indent="    ", **options)
 
     def _panel(self, index: int, axes: Axes) -> None:
         ax = self.axes_names[index]

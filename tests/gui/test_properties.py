@@ -515,3 +515,29 @@ def test_the_grid_color_is_a_color_field(panel: PropertyPanel, document) -> None
     assert editor.line.placeholderText() == "automatic"
     _type(panel, ("grid_color",), "#696969")
     assert _axes(document).grid_color == "#696969"
+
+
+def test_panel_labels_are_switched_on_and_set_up(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_figure(document).id)
+    assert "Panel labels" not in panel.sections
+    panel.editors[("panel_labels",)].widget.click()
+    assert _figure(document).panel_labels is not None
+    assert document.history.undo_text == "Letter the panels"
+    assert "Panel labels" in panel.sections
+    placement = panel.editors[("panel_labels", "placement")].widget
+    placement.activated.emit(placement.findText("inside the corner"))
+    assert _figure(document).panel_labels.placement == "inside"
+    style = panel.editors[("panel_labels", "style")].widget
+    style.activated.emit(style.findText("A"))
+    assert _figure(document).panel_labels.style == "A"
+    panel.editors[("panel_labels", "bold")].widget.click()
+    assert _figure(document).panel_labels.bold
+    _type(panel, ("panel_labels", "fontsize"), "12")
+    assert _figure(document).panel_labels.fontsize == 12.0
+    panel.editors[("panel_labels",)].widget.click()
+    assert _figure(document).panel_labels is None
+    assert document.history.undo_text == "Remove the panel labels"
+    document.history.undo()
+    assert _figure(document).panel_labels.style == "A"

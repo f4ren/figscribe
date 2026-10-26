@@ -189,3 +189,15 @@ def test_a_fit_range_has_a_lower_and_an_upper_end() -> None:
     assert FitCurve(target="t", model=model, fit_range=(1.0, 2.0)).fit_range
     with pytest.raises(ValidationError, match="lower end"):
         FitCurve(target="t", model=model, fit_range=(2.0, 1.0))
+
+
+def test_panel_labels_roundtrip(project: Project) -> None:
+    from figscribe.model import PanelLabels
+
+    labels = PanelLabels(style="a)", bold=True, placement="inside", fontsize=9.0)
+    project.figures[0].panel_labels = labels
+    assert loads(dumps(project)).figures[0].panel_labels == labels
+    with pytest.raises(ValidationError):
+        PanelLabels(style="i)")
+    with pytest.raises(ValidationError):
+        PanelLabels(fontsize=0.0)

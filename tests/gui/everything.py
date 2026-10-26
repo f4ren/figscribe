@@ -28,6 +28,7 @@ from figscribe.model import (
     Inset,
     Legend,
     LinePlot,
+    PanelLabels,
     PredefinedFit,
     Project,
     ResidualPlot,
@@ -110,6 +111,7 @@ def build(folder: Path) -> Path:
         width_mm=175,
         height_mm=120,
         layout=GridLayout(rows=2, cols=2),
+        panel_labels=PanelLabels(),
         axes=[a, b, c, d, e],
     )
     project = Project(sources=[scan, grid], figures=[figure])

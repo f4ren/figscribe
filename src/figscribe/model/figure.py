@@ -37,6 +37,23 @@ class GridLayout(StrictModel):
     Matplotlib choose."""
 
 
+class PanelLabels(StrictModel):
+    """Letters on the panels, (a), (b), (c), in reading order: row by row,
+    left to right, by the cell a panel starts in."""
+
+    style: Literal["(a)", "a)", "a", "A"] = "(a)"
+    """How the letters are written; after z they go on with aa, ab."""
+    bold: bool = False
+    """Bold letters, as Nature and Science print them."""
+    placement: Literal["outside", "inside"] = "outside"
+    """"outside" puts each letter above and left of its panel's top left
+    corner, "inside" just within it."""
+    fontsize: float | None = Field(None, gt=0.0)
+    """Font size in pt; None follows the figure."""
+    insets: bool = False
+    """Insets get a letter too, each right after the panel it sits in."""
+
+
 class Figure(Identified):
     name: str = "Figure 1"
     """Shown in figscribe and used for the names of exported files."""
@@ -76,6 +93,8 @@ class Figure(Identified):
     """Line width of the minor tick marks in pt; None keeps Matplotlib's, 0.6."""
     minor_tick_length: float | None = Field(None, gt=0.0)
     """Length of the minor tick marks in pt; None keeps Matplotlib's, 2."""
+    panel_labels: PanelLabels | None = None
+    """Letters on the panels, as journals ask for; None draws none."""
     layout: GridLayout = Field(default_factory=GridLayout)
     """The grid the panels are placed in."""
     axes: list[Axes] = Field(default_factory=list)
