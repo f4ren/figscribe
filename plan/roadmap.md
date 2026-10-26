@@ -317,6 +317,30 @@ the project. It found:
    them only as a pair. Do this after U2, which reworks the same panel code.
    The same holds for an error bar plot's line width while its line style is
    "none" (issue #71), and for the grid's line width and style (F5.8).
+   **Done** (2026-10-26): `gui/effect.py` holds the rules, each a set of
+   fields, what they wait for, and when they do nothing. The panel greys
+   such a field and its name out, and its tooltip starts with "Does nothing
+   while …". The rules cover:
+   - the grid's options while it is off;
+   - the legend's while it is hidden, and its location while it was dragged
+     into place;
+   - a line's width without a line, and its marker size without a marker;
+   - cap size and error bar width while no bars are drawn;
+   - the left-out style while no points are left out;
+   - a vertical reference line's y axis;
+   - a hidden color bar's label;
+   - a fit's curve and outside options without a fit range.
+
+   `tests/gui/test_without_effect.py` holds every rule to the renderer.
+   *Learned* from it: a vertical shaded range does depend on its y axis
+   (on the right axis it lies in another layer), so it has no rule. Grid
+   lines at minor ticks on axes without minor ticks are a combination, not
+   a dead field: they are a problem in the list instead. A color mesh's x
+   or y alone now does what its tooltip promised, numbering the cells along
+   the other. That brought up two raw Matplotlib errors, now said in words:
+   positions that do not fit the cells, and a single column chosen as an
+   image or a mesh. The field test's project has positions and a second
+   array for the mesh, and `KNOWN` is empty.
 5. **Missing API key** (verified, by hand): "Load models" in the assistant
    settings with Claude and no key anywhere prints a traceback to the terminal
    and shows nothing in the dialog. The Anthropic SDK raises a `TypeError`
@@ -632,8 +656,8 @@ In order of demand:
    the preview, which puts one where it was clicked; values are rounded to a
    hundredth of the shown range. The problem list reports one at or below
    zero on a log axis. *Follow-ups:* drag a line or a range's edges in the
-   preview, like a note; the panel offers "y axis" for a vertical line, where
-   it does nothing (B8 item 4).
+   preview, like a note; ~~the panel offers "y axis" for a vertical line,
+   where it does nothing~~ (greyed out since B8 item 4).
 2. **Error band**: a line with a shaded ±error region (`fill_between`), for
    dense data where error bars clutter.
    **Done** (2026-10-26, decision 0035): `ErrorbarPlot.band`, a check box
@@ -643,8 +667,9 @@ In order of demand:
    errors is reported in the problem list. Typing a refused color into any
    color field no longer breaks the panel the next time it is built (the
    color was remembered before it was checked). *Follow-ups:* the legend
-   could show the band behind the line; cap size and error bar width show
-   but do nothing while a band has no x errors beside it (B8 item 4).
+   could show the band behind the line; ~~cap size and error bar width show
+   but do nothing while a band has no x errors beside it~~ (greyed out since
+   B8 item 4).
 3. **Hollow markers** and marker edge width; separate error bar color and cap
    thickness; *error bar on every n-th point* for dense data.
 4. **Step plot** (drawstyle) for spectra and histograms of counts.

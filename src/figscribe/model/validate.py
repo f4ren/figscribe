@@ -96,6 +96,7 @@ def validate_references(
         for ai, axes in enumerate(figure.axes):
             apath = f"{fpath}.axes[{ai}]"
             _check_axis_ticks(axes, apath, issues)
+            _check_minor_grid(axes, apath, issues)
 
             artists_by_id = {a.id: a for a in axes.artists}
             for field, why in style_problems(axes):
@@ -482,6 +483,23 @@ def _check_spans(figure: Figure, path: str, issues: list[ReferenceIssue]) -> Non
                     f"but the grid has {layout.cols}",
                 )
             )
+
+
+def _check_minor_grid(axes: Axes, path: str, issues: list[ReferenceIssue]) -> None:
+    """Grid lines only at minor ticks, on axes that have none, draw nothing."""
+    if not axes.grid or axes.grid_which != "minor":
+        return
+    names = ("x", "y") if axes.grid_axis == "both" else (axes.grid_axis,)
+    if not any(getattr(axes, name).minor_ticks for name in names):
+        which = "the axes have" if len(names) == 2 else f"the {names[0]} axis has"
+        issues.append(
+            ReferenceIssue(
+                f"{path}.grid_which",
+                axes.id,
+                f"draws grid lines at minor ticks, but {which} none; switch "
+                "them on in the axis or draw the lines at the numbered ticks",
+            )
+        )
 
 
 def _check_axis_ticks(axes: Axes, path: str, issues: list[ReferenceIssue]) -> None:

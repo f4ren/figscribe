@@ -117,6 +117,11 @@ QLineEdit, QComboBox, QSpinBox {{
     selection-color: {INK};
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {ACCENT}; }}
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {{
+    background: {GROUND}; border-color: {BORDER}; color: #A0A0A6;
+}}
+QLabel:disabled, QLabel#caption:disabled {{ color: #B4B4B9; }}
+QToolButton:disabled {{ color: #A0A0A6; border-color: {BORDER}; }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
 QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: 0; }}
 QCheckBox {{ spacing: 8px; }}

@@ -605,6 +605,25 @@ def test_images_meshes_and_colour_bars(tmp_path: Path) -> None:
     assert "norm=LogNorm(vmin=0.01)" in script
 
 
+def test_a_mesh_with_cell_positions_along_x_only(tmp_path: Path) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, ColorMesh
+
+    yy, xx = np.mgrid[0:5, 0:6]
+    np.savez(tmp_path / "scan.npz", counts=xx * yy + 1.0, x=np.arange(6.0) ** 1.5)
+    counts = numpy_source(tmp_path / "scan.npz", tmp_path, array="counts")
+    x_source = numpy_source(tmp_path / "scan.npz", tmp_path, array="x")
+    mesh = ColorMesh(
+        c=ArrayRef(source=counts.id), x=ColumnRef(source=x_source.id, column=0)
+    )
+    project = Project(
+        sources=[counts, x_source],
+        figures=[Figure(dpi=100, axes=[Axes(artists=[mesh])])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert ".shape[0])" in script  # the rows numbered, as the panel says
+
+
 def test_ticks_inside_on_all_sides_with_prefixes(tmp_path: Path) -> None:
     """A spectrum as journals print it: kHz on x, a stepped y range with four
     minor ticks, ticks inside on all four sides; the right axis and an inset
