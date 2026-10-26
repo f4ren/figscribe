@@ -168,8 +168,9 @@ TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         "remove",
-        "Remove a plot, an axes or a figure. Fits on a removed plot and their "
-        "residuals go with it. One undo step.",
+        "Remove a plot, an axes, a figure or a data source. Fits on a removed "
+        "plot and their residuals go with it; a data source takes the plots "
+        "that draw from it along, and its file stays on disk. One undo step.",
         {
             "type": "object",
             "properties": {"object_id": {"type": "string"}},

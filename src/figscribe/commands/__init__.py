@@ -16,7 +16,7 @@ from figscribe.commands.core import (
     find,
 )
 from figscribe.commands.history import History
-from figscribe.commands.ops import add_panel, remove_artist, remove_axes
+from figscribe.commands.ops import add_panel, remove_artist, remove_axes, remove_source
 
 __all__ = [
     "Command",
@@ -31,4 +31,5 @@ __all__ = [
     "add_panel",
     "remove_artist",
     "remove_axes",
+    "remove_source",
 ]

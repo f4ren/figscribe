@@ -44,6 +44,7 @@ from figscribe.commands import (
     find,
     remove_artist,
     remove_axes,
+    remove_source,
 )
 from figscribe.commands.core import walk
 from figscribe.examples import bundled_example
@@ -56,6 +57,7 @@ from figscribe.gui.document import Document, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
+from figscribe.gui.names import artist_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
 from figscribe.gui.plotdialog import PlotDialog, add_plot
 from figscribe.gui.preview import Preview
@@ -746,7 +748,27 @@ class MainWindow(QMainWindow):
                 self._push(remove_artist(self.document.project, oid))
             elif isinstance(obj, Axes):
                 self._push(remove_axes(self.document.project, oid))
+            elif field == "sources":
+                self._remove_source(oid)
             return
+
+    def _remove_source(self, oid: str) -> None:
+        """Remove a data file; first ask, naming them, if plots draw from it."""
+        project = self.document.project
+        command = remove_source(project, oid)
+        going = [
+            artist_name(find(project, step.item_id))
+            for step in reversed(command.steps)
+            if step.field == "artists"
+        ]
+        name = Path(find(project, oid).path).name
+        if going and not self.ask(
+            "Remove data file",
+            f"{name} is used by: {', '.join(going)}.\n\nRemove it together with "
+            "them? The file itself stays on disk; Undo brings everything back.",
+        ):
+            return
+        self._push(command)
 
     def _push(self, command) -> None:
         try:

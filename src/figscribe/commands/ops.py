@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 
 from figscribe.commands.core import (
@@ -14,6 +15,7 @@ from figscribe.commands.core import (
     walk,
 )
 from figscribe.model import Axes, Figure, FitCurve, Inset, Project, ResidualPlot
+from figscribe.model.validate import data_refs
 
 Side = Literal["right", "left", "above", "below", "inset"]
 
@@ -47,6 +49,21 @@ def remove_axes(project: Project, axes_id: str) -> Macro:
     ]
     steps += [RemoveItem(figure.id, "axes", a.id) for a in reversed(going)]
     return Macro("Remove axes", steps)
+
+
+def remove_source(project: Project, source_id: str) -> Macro:
+    """Remove a data file from the project, with the plots that draw from it
+    and their fits and residuals. The file itself stays where it is."""
+    source, _ = _locate(project, source_id, "sources")
+    plots = {
+        artist.id: axes
+        for artist, axes, field in walk(project)
+        if field == "artists" and any(ref == source_id for _, ref in data_refs(artist))
+    }
+    steps = _remove_dependents(project, set(plots))
+    steps += [RemoveItem(axes.id, "artists", oid) for oid, axes in plots.items()]
+    steps.append(RemoveItem(None, "sources", source_id))
+    return Macro(f"Remove {Path(source.path).name}", steps)
 
 
 def add_panel(project: Project, axes_id: str, side: Side) -> tuple[Macro, Axes]:
@@ -152,5 +169,5 @@ def _locate(project: Project, oid: str, field: str) -> tuple[Any, Any]:
     for obj, parent, f in walk(project):
         if obj.id == oid and f == field:
             return obj, parent
-    kind = "artist" if field == "artists" else field
+    kind = {"artists": "artist", "sources": "data file"}.get(field, field)
     raise CommandError(f"no {kind} with id {oid!r}")

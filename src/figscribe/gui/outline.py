@@ -263,6 +263,8 @@ class Outline(QTreeWidget):
                 )
             else:
                 return None
+        elif any(source.id == oid for source in self.document.project.sources):
+            menu.addAction("Remove data file", lambda: self.delete_requested.emit(oid))
         elif hasattr(obj, "visible") and hasattr(obj, "kind"):
             menu.addAction(
                 "Hide" if obj.visible else "Show",

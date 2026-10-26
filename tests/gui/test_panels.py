@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QPointF
 
+from figscribe.commands import remove_axes
 from figscribe.gui import MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.names import panel_name
@@ -88,6 +89,38 @@ def test_deleting_from_the_context_menu(window: MainWindow) -> None:
     assert _menu_texts(figure_menu) == ["Add a panel"]
     figure_menu.actions()[0].trigger()
     assert len(window.document.figure.axes) == 1
+
+
+def test_removing_a_data_file_asks_what_goes_with_it(window: MainWindow) -> None:
+    document = window.document
+    source = document.project.sources[0]
+    asked = []
+    window.ask = lambda title, question: asked.append(question) or False
+    menu = window.outline.context_menu(source.id)
+    assert _menu_texts(menu) == ["Remove data file"]
+    menu.actions()[0].trigger()
+    assert "scan.csv" in asked[0] and "measurement" in asked[0]
+    assert document.project.sources == [source]  # "No" keeps everything
+
+    window.ask = lambda title, question: True
+    document.select(source.id)
+    assert window.delete_action.isEnabled()
+    window.delete_action.trigger()
+    assert document.project.sources == []
+    assert document.figure.axes[0].artists == []
+    assert document.selected is None
+    document.undo()
+    assert document.project.sources[0].id == source.id
+
+
+def test_an_unused_data_file_is_removed_without_asking(window: MainWindow) -> None:
+    document = window.document
+    for axes in list(document.figure.axes):
+        document.push(remove_axes(document.project, axes.id))
+    asked = []
+    window.ask = lambda title, question: asked.append(question) or True
+    window.outline.context_menu(document.project.sources[0].id).actions()[0].trigger()
+    assert document.project.sources == [] and asked == []
 
 
 def test_plots_are_brought_to_front_and_sent_back(window: MainWindow) -> None:
