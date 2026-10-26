@@ -14,6 +14,9 @@ from pydantic import Field, field_validator
 from figscribe.model.base import AnyFloat, Identified, StrictModel
 from figscribe.model.data import ArrayRef, ColumnRef
 
+LIKE_THE_PLOT = "same"
+"""For the look of left-out points: as the plot itself has it."""
+
 Color = str
 """A Matplotlib color spec ("C0", "#ff0000", "tab:blue", ...).
 
@@ -57,9 +60,11 @@ class LinePlot(ArtistBase):
     this plot; the data file stays as it is."""
     left_out_color: Color | None = None
     """Color of the left-out points; None draws them light grey."""
-    left_out_marker: str | None = None
-    """Marker of the left-out points; None takes the plot's (a circle for a line
-    without markers)."""
+    left_out_marker: str | None = LIKE_THE_PLOT
+    """Marker of the left-out points: "same" takes the plot's, None draws none."""
+    left_out_linestyle: str = LIKE_THE_PLOT
+    """How the line runs on through the left-out rows, in their color: "same"
+    as the plot's, or "-", "--", "-.", ":", or "none" for a gap."""
     left_out_note: str | None = None
     """Why the rows are left out, e.g. "detector glitch"; written into the
     script. Finding outliers fills it in."""
@@ -84,9 +89,8 @@ class ScatterPlot(ArtistBase):
     this plot; the data file stays as it is."""
     left_out_color: Color | None = None
     """Color of the left-out points; None draws them light grey."""
-    left_out_marker: str | None = None
-    """Marker of the left-out points; None takes the plot's (a circle for a line
-    without markers)."""
+    left_out_marker: str | None = LIKE_THE_PLOT
+    """Marker of the left-out points: "same" takes the plot's, None draws none."""
     left_out_note: str | None = None
     """Why the rows are left out, e.g. "detector glitch"; written into the
     script. Finding outliers fills it in."""
@@ -119,9 +123,11 @@ class ErrorbarPlot(ArtistBase):
     this plot; the data file stays as it is."""
     left_out_color: Color | None = None
     """Color of the left-out points; None draws them light grey."""
-    left_out_marker: str | None = None
-    """Marker of the left-out points; None takes the plot's (a circle for a line
-    without markers)."""
+    left_out_marker: str | None = LIKE_THE_PLOT
+    """Marker of the left-out points: "same" takes the plot's, None draws none."""
+    left_out_linestyle: str = LIKE_THE_PLOT
+    """How the line runs on through the left-out rows, in their color: "same"
+    as the plot's, or "-", "--", "-.", ":", or "none" for a gap."""
     left_out_note: str | None = None
     """Why the rows are left out, e.g. "detector glitch"; written into the
     script. Finding outliers fills it in."""

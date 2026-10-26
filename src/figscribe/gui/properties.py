@@ -43,6 +43,8 @@ from figscribe.fit import FitError, refit
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
+from figscribe.gui.markers import LIKE_THE_PLOT, marker_icon
+from figscribe.gui.markers import MARKERS as ALL_MARKERS
 from figscribe.gui.names import (
     ENCODINGS,
     KIND_NAMES,
@@ -261,7 +263,6 @@ COLLAPSED = {"More", "Layout"}
 PLACEHOLDERS = {
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
-    "left_out_marker": "the plot's",
     "label": "not in the legend",
     "color": "automatic",
     "edgecolor": "automatic",
@@ -299,8 +300,10 @@ TIPS = {
     "says it in a comment. Finding outliers in the fit dialog fills it in.",
     "left_out_color": "Color of the points left out (right-click a point in the "
     "preview); empty draws them light grey.",
-    "left_out_marker": "Marker of the points left out, e.g. x or s; empty takes the "
-    "plot's.",
+    "left_out_marker": "Marker of the points left out: like the plot's, another, or "
+    "none.",
+    "left_out_linestyle": "How the line runs on through the rows left out, in "
+    "their color: like the plot's, another style, or none for a gap.",
     "extend_curve": "Draw the fitted curve across all the data, not only over the "
     "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",
@@ -954,7 +957,7 @@ NONE_TEXT = {
     "tick_direction": "style default",
     "prefix": "as in the data",
     "marker": "No marker",
-    "left_out_marker": "The plot's marker",
+    "left_out_marker": "No marker",
     "xerr": "no x errors",
     "yerr": "no y errors",
     "x": "cell numbers",
@@ -1073,6 +1076,8 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return CheckEditor(spec, path, panel)
     if spec.kind == "part":
         return PartEditor(spec, path, panel)
+    if name in ("marker", "left_out_marker"):
+        return _marker_list(spec, path, panel)
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
@@ -1216,3 +1221,20 @@ def _describe(obj: BaseModel, document: Document) -> tuple[str, str]:
         return "Data file", PurePath(obj.path).name
     kind = getattr(obj, "kind", "")
     return KIND_NAMES.get(kind, type(obj).__name__), artist_name(obj)
+
+
+def _marker_list(spec: Spec, path: Path, panel: PropertyPanel) -> ChoiceEditor:
+    """Every Matplotlib marker, drawn, in a list. A plot's own marker may be
+    "none" (error bars alone); a left-out point's may also be the plot's."""
+    choices = [(name, value) for value, name in ALL_MARKERS]
+    if path[-1] == "left_out_marker":
+        choices.insert(0, ("Like the plot", LIKE_THE_PLOT))
+    elif not spec.optional:
+        choices.append(("No marker", "none"))
+    editor = ChoiceEditor(spec, path, panel, choices, missing="")
+    for index, (_, value) in enumerate(editor.choices):
+        editor.widget.setItemIcon(index, marker_icon(value))
+    return editor
+
+
+CHOICES["left_out_linestyle"] = [("Like the plot", LIKE_THE_PLOT), *LINESTYLES]

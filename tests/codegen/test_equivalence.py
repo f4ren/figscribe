@@ -183,7 +183,15 @@ def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
         left_out=[3, 20],
         left_out_note="more than 3σ off the Gaussian fit",
     )
-    line = LinePlot(x=ref["t"], y=ref["t2"], left_out=[5], axis="left")
+    line = LinePlot(x=ref["t"], y=ref["t2"], left_out=[5, 6, 9])
+    dashed = LinePlot(
+        x=ref["t"],
+        y=ref["U"],
+        marker="o",
+        left_out=[12],
+        left_out_linestyle="--",
+        left_out_marker=None,
+    )
     points = ScatterPlot(
         x=ref["t"], y=ref["U"], left_out=[7], left_out_color="red", left_out_marker="x"
     )
@@ -193,7 +201,7 @@ def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
             layout=GridLayout(rows=1, cols=2),
             axes=[
                 Axes(legend=Legend(visible=True), artists=[data]),
-                Axes(col=1, artists=[line, points]),
+                Axes(col=1, artists=[line, dashed, points]),
             ],
         )
     ]
@@ -202,6 +210,7 @@ def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     script = _assert_same(project, tmp_path)
     assert "kept_1[[3, 20]] = False" in script
+    assert "np.where(kept_2, t2, np.nan)" in script
     assert "more than 3σ off the Gaussian fit" in script
 
 

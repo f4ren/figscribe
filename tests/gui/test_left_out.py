@@ -55,9 +55,11 @@ def test_no_menu_away_from_the_points(preview: Preview) -> None:
     assert preview.context_menu(QPointF(3, 3)) is None
 
 
-def test_the_left_out_marker_is_chosen_with_buttons(qtbot, preview: Preview) -> None:
+def test_markers_are_chosen_from_a_list_with_every_kind(
+    qtbot, preview: Preview
+) -> None:
     from figscribe.commands import SetField
-    from figscribe.gui.properties import MarkerEditor, PropertyPanel
+    from figscribe.gui.properties import PropertyPanel
 
     document = preview.document
     plot = document.figure.axes[0].artists[0]
@@ -65,10 +67,17 @@ def test_the_left_out_marker_is_chosen_with_buttons(qtbot, preview: Preview) -> 
     panel = PropertyPanel(document)
     qtbot.addWidget(panel)
     document.select(plot.id)
-    editor = panel.editors[("left_out_marker",)]
-    assert isinstance(editor, MarkerEditor)
-    assert editor.buttons[None].toolTip() == "The plot's marker"
-    editor.buttons["s"].click()
-    assert document.figure.axes[0].artists[0].left_out_marker == "s"
-    panel.editors[("left_out_marker",)].buttons[None].click()
+    combo = panel.editors[("marker",)].widget
+    texts = [combo.itemText(i) for i in range(combo.count())]
+    assert {"Circle", "Star", "Triangle down", "Plus", "No marker"} <= set(texts)
+    assert not combo.itemIcon(texts.index("Star")).isNull()
+    out = panel.editors[("left_out_marker",)]
+    texts = [out.widget.itemText(i) for i in range(out.widget.count())]
+    assert texts[:2] == ["No marker", "Like the plot"]
+    out.widget.activated.emit(texts.index("Star"))
+    assert document.figure.axes[0].artists[0].left_out_marker == "*"
+    out = panel.editors[("left_out_marker",)]
+    out.widget.activated.emit(0)
     assert document.figure.axes[0].artists[0].left_out_marker is None
+    style = panel.editors[("left_out_linestyle",)].widget
+    assert style.itemText(0) == "Like the plot"
