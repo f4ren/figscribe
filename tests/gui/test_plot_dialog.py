@@ -13,6 +13,7 @@ from PySide6.QtTest import QTest
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     ColorMesh,
     ColumnRef,
@@ -64,6 +65,7 @@ def test_the_kinds_are_tiles_and_those_without_data_say_why(dialog) -> None:
         "Points",
         "Error bars",
         "Histogram",
+        "Allan deviation",
         "Image",
         "Color mesh",
     ]
@@ -104,6 +106,16 @@ def test_only_the_fields_that_apply_are_shown(dialog) -> None:
     assert dialog.y_caption.text() == "Values"
     histogram = dialog.artist()
     assert isinstance(histogram, Histogram) and histogram.values.column == "U"
+
+
+def test_an_allan_deviation_takes_values_and_maybe_times(dialog) -> None:
+    dialog.tiles["Allan deviation"].click()
+    assert _shown(dialog, dialog.time) and not _shown(dialog, dialog.x)
+    assert dialog.y_caption.text() == "Values"
+    _choose(dialog.time, "t")
+    plot = dialog.artist()
+    assert isinstance(plot, AllanDeviationPlot)
+    assert (plot.values.column, plot.time.column) == ("U", "t")
 
 
 def test_two_d_data_is_plotted_as_an_image_or_a_mesh(qtbot) -> None:
@@ -193,3 +205,17 @@ def test_a_plot_in_a_new_panel_is_one_step(window: MainWindow) -> None:
     assert window.document.selected == new.artists[0].id
     window.document.undo()
     assert len(window.document.figure.axes) == 1
+
+
+def test_an_allan_deviation_gets_log_log_axes_of_its_own(window) -> None:
+    def allan(dialog: PlotDialog) -> bool:
+        dialog.target.setCurrentIndex(dialog.target.findData(NEW_PANEL))
+        dialog.tiles["Allan deviation"].click()
+        return True
+
+    window.run_dialog = allan
+    window.add_plot()
+    new = window.document.figure.axes[1]
+    assert (new.x.scale, new.y.scale) == ("log", "log")
+    assert (new.x.label, new.x.unit) == (r"$\tau$", "s")
+    assert window.preview.error is None

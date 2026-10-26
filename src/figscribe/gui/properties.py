@@ -208,6 +208,10 @@ SECTIONS = {
     "xerr": "Data",
     "yerr": "Data",
     "values": "Data",
+    "time": "Data",
+    "data_type": "Data",
+    "sample_interval": "Data",
+    "taus": "Data",
     "bins": "Data",
     "c": "Data",
     "target": "Data",
@@ -429,6 +433,17 @@ TIPS = {
     "density": "Scale the bars to a total area of 1, to compare data sets of different"
     " size.",
     "histtype": "Filled bars, only their outline, or a filled outline.",
+    "AllanDeviationPlot.values": "The series, one value per sample and without "
+    "gaps: fractional frequency, or phase in s.",
+    "data_type": "Fractional frequency (without unit), or phase, the time error in s.",
+    "sample_interval": "Time between samples, τ0, in s; unused while a column of "
+    "times is chosen.",
+    "time": "The times of the samples in s, evenly spaced; their median step is "
+    "the sample interval. Empty uses the interval typed in.",
+    "taus": "Which averaging times τ = m·τ0 are shown: m = 1, 2, 4, 8 …, or "
+    "1, 2, 5, 10 …, or every m.",
+    "error_bars": "Show σ/√(N − 2m) as error bars, a simple estimate of the "
+    "uncertainty.",
     "c": "The 2-D data whose values are shown as colors.",
     "data": "The 2-D data shown as an image, one pixel per value.",
     "cmap": "The colors the values are shown in, from lowest to highest.",
@@ -1208,6 +1223,12 @@ CHOICES = {
     ],
 }
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
+CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
+CHOICES["taus"] = [
+    ("octaves: 1, 2, 4, 8 …", "octave"),
+    ("decades: 1, 2, 5, 10 …", "decade"),
+    ("every m", "all"),
+]
 CHOICES["unit_format"] = UNIT_FORMATS
 CHOICES["encoding"] = ENCODINGS
 CHOICES["placement"] = [
@@ -1222,6 +1243,7 @@ CHOICES["tick_direction"] = [
 NONE_TEXT = {
     "stylesheet": "Matplotlib's default",
     "tick_direction": "style default",
+    "time": "the sample interval below",
     "grid_linestyle": "style default",
     "prefix": "as in the data",
     "marker": "No marker",

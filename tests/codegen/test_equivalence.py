@@ -624,6 +624,57 @@ def test_a_mesh_with_cell_positions_along_x_only(tmp_path: Path) -> None:
     assert ".shape[0])" in script  # the rows numbered, as the panel says
 
 
+def test_allan_deviations_of_frequency_and_phase(tmp_path: Path) -> None:
+    from figscribe.model import AllanDeviationPlot
+
+    rng = np.random.default_rng(7)
+    y = rng.normal(scale=2e-12, size=300) + np.linspace(0.0, 1e-12, 300)
+    x = np.concatenate([[0.0], np.cumsum(y) * 0.5])[:-1]
+    gap = y.copy()
+    gap[40] = np.nan
+    rows = [
+        f"{0.5 * i!r},{float(a)!r},{float(b)!r},{float(c)!r}"
+        for i, (a, b, c) in enumerate(zip(y, x, gap, strict=True))
+    ]
+    (tmp_path / "clock.csv").write_text(
+        "t,y,x,gap\n" + "\n".join(rows) + "\n", encoding="utf-8"
+    )
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+
+    def col(name: str) -> ColumnRef:
+        return ColumnRef(source=source.id, column=name)
+
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    plots = [
+        AllanDeviationPlot(values=col("y"), sample_interval=0.5, label="frequency"),
+        AllanDeviationPlot(
+            values=col("x"),
+            data_type="phase",
+            time=col("t"),
+            taus="decade",
+            error_bars=False,
+            marker="s",
+            linestyle="--",
+            label="phase",
+        ),
+        AllanDeviationPlot(values=col("gap"), label="with a gap"),
+    ]
+    project = Project(
+        sources=[source],
+        figures=[
+            Figure(
+                dpi=120,
+                axes=[Axes(legend=Legend(visible=True), artists=plots, **log)],
+            )
+        ],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "def overlapping_adev(phase, tau0, m):" in script
+    assert "tau0_2 = np.median(np.diff(t))" in script
+    assert "has gaps, so its Allan deviation is not drawn" in script
+    assert "allantools" not in script
+
+
 def test_ticks_inside_on_all_sides_with_prefixes(tmp_path: Path) -> None:
     """A spectrum as journals print it: kHz on x, a stepped y range with four
     minor ticks, ticks inside on all four sides; the right axis and an inset
