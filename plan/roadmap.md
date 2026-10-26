@@ -17,7 +17,7 @@ asking what was meant.
   with Python 3.11 and 3.13. Decisions 0001 to 0026 are in
   [`docs/decisions.md`](../docs/decisions.md).
 - `main` is behind `develop` (last merged: PR #31). PyPI still has the 0.0.2
-  placeholder.
+  placeholder; 0.1.0 is prepared (R4).
 
 The findings below marked **(verified)** were reproduced on 2026-10-23; the
 reproduction is given so a session can turn it into a failing test first.
@@ -823,6 +823,16 @@ at export time instead of a model field (see U2).
 4. A small gallery in `examples/`: fit with residuals, 2-D map with color
    bar, histogram, multi-panel, series of spectra; each with its generated
    script, each in the codegen equivalence test.
+
+*Pulled forward* (2026-10-26, asked for by the user): 0.1.0 goes out as an
+alpha from the state of `develop`, before phases 1 to 3 are finished, so
+that others can install it with `pipx install figscribe`. Items 1 and 3 are
+done for it, without screenshots; 2 and 4 stay open for a later release.
+The version is 0.1.0, the classifier "Alpha", the release notes are in
+`CHANGELOG.md`, which each later release extends. A wheel built from this
+state installs into a fresh environment, and `figscribe script` writes a
+script from the bundled example that runs there. From now on, project files
+of a release must open in later ones (rule 9 above).
 
 ### R5 The assistant: measure models (carried over from the brief) — M
 

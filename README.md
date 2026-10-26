@@ -31,29 +31,39 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 
 ## Status
 
-**Pre-alpha.** The features below are implemented and tested on Linux,
-Windows and macOS with Python 3.11 and 3.13; file formats and behaviour may
-still change. figscribe is not on PyPI yet. Still to come: style templates,
-snapping and alignment guides, and packaged installers (see the
-[roadmap](plan/roadmap.md)).
+**Alpha.** The features below are implemented and tested on Linux, Windows
+and macOS with Python 3.11 and 3.13. Behaviour may still change; project files
+of a release keep opening in later ones. Still to come: style templates,
+snapping and alignment guides, and installers that need no Python (see the
+[roadmap](https://github.com/f4ren/figscribe/blob/main/plan/roadmap.md)). What changed in each release is in the
+[changelog](https://github.com/f4ren/figscribe/blob/main/CHANGELOG.md).
 
 ## Installation
 
-figscribe needs Python 3.11 or newer.
+figscribe needs Python 3.11 or newer. The simplest way is
+[pipx](https://pipx.pypa.io) or [uv](https://docs.astral.sh/uv/), which give
+figscribe an environment of its own and put the `figscribe` command on the
+path:
 
 ```
-git clone https://github.com/f4ren/figscribe.git
-cd figscribe
-pip install -e .
+pipx install figscribe          # or: uv tool install figscribe
+figscribe
 ```
+
+`pip install figscribe` in a virtual environment works as well. With Qt,
+Matplotlib and SciPy the installation takes about 1.5 GB.
 
 Optional parts:
 
 | Extra | For |
 |---|---|
-| `pip install -e ".[chat]"` | the built-in AI assistant (Claude, ChatGPT, local models) |
-| `pip install -e ".[mcp]"` | driving figscribe from an MCP client such as Claude Desktop |
-| `pip install -e ".[dev]"` | running the tests and the linter |
+| `pipx install "figscribe[chat]"` | the built-in AI assistant (Claude, ChatGPT, Gemini, local models) |
+| `pipx install "figscribe[mcp]"` | driving figscribe from an MCP client such as Claude Desktop |
+| `pipx install "figscribe[chat,mcp]"` | both |
+
+To add an extra later, install again with `--force`. To update:
+`pipx upgrade figscribe`. To work on figscribe itself, see
+[Development](#development).
 
 ## Getting started
 
@@ -79,6 +89,8 @@ script.
   unit rows, and of the text encoding (UTF-8, or cp1252 and Latin-1 as older
   Windows programs write them); NumPy `.npy` and `.npz` files (read without pickles, so a data
   file cannot run code).
+- A data file is removed with the plots that draw from it, in one undo step;
+  figscribe asks first and names them.
 - Each data file is recorded with its SHA-256. If it changes later,
   figscribe says so instead of silently plotting different data, shows
   what changed, and takes the new version on request, or lets you point it
@@ -86,11 +98,18 @@ script.
 
 **Plots**
 - Line, scatter, error bars, histograms, images and color meshes with color
-  bars (linear or logarithmic), notes with or without an arrow.
+  bars (linear or logarithmic), notes of one or several lines with or
+  without an arrow, reference lines and shaded ranges.
 - Curve fits: linear, polynomial, Gaussian, Lorentzian, exponential, or your
   own expression such as `a*exp(-x/tau)+c`. Error bars weight the fit; the
-  result shows each parameter with its 1σ uncertainty and the reduced χ².
-  Residuals go into their own panel below.
+  result shows each parameter with its 1σ uncertainty, the reduced χ² and
+  the residuals, and can be copied. Residuals go into their own panel below.
+- Fit only a range of x; hold a parameter at its start value or keep it
+  within bounds; change a fit that is already there.
+- Leave points out by right-clicking them, or let the fit dialog find
+  outliers and leave them out once you confirm. The data file stays as it
+  is: the points are drawn apart, in light grey or a color and marker of
+  your choice, and the script leaves out the same rows, with the reason.
 
 **Layout and style**
 - Several panels in a grid: add one to the right, left, above or below, or
@@ -99,6 +118,9 @@ script.
   axis ranges, major ticks every *n* with minor ticks between them, tick
   marks inward or outward and on all four sides, grid, LaTeX in labels
   (`$\Delta U$`), units in labels as `U (V)`, `U / V` or `U [V]`.
+- Panel letters, (a), (b), … in the style a journal asks for.
+- Line widths of the frame, the tick marks and the grid, tick lengths, and
+  a dashed or dotted grid.
 - Values shown with an SI prefix: frequencies in Hz drawn as `0 … 225` with
   the label `f (kHz)`, while the data stay in Hz.
 
@@ -191,7 +213,7 @@ figscribe is also an MCP server, for Claude Desktop, Claude Code, IDEs or
 front ends for local models:
 
 ```
-pip install -e ".[mcp]"
+pipx install "figscribe[mcp]"
 claude mcp add figscribe -- figscribe mcp      # e.g. for Claude Code
 ```
 
@@ -274,9 +296,9 @@ the renderer, and the code generator mirrors its calls, so all three show the
 same figure.
 
 Design decisions and their reasons are recorded in
-[`docs/decisions.md`](docs/decisions.md); the project brief is in
-[`plan/project-brief.md`](plan/project-brief.md) and the work list in
-[`plan/roadmap.md`](plan/roadmap.md).
+[`docs/decisions.md`](https://github.com/f4ren/figscribe/blob/main/docs/decisions.md); the project brief is in
+[`plan/project-brief.md`](https://github.com/f4ren/figscribe/blob/main/plan/project-brief.md) and the work list in
+[`plan/roadmap.md`](https://github.com/f4ren/figscribe/blob/main/plan/roadmap.md).
 
 ## Scope
 
@@ -290,8 +312,10 @@ Python code back in.
 ## Development
 
 ```
+git clone https://github.com/f4ren/figscribe.git
+cd figscribe
 pip install -e ".[dev]"
-pytest                    # all tests, the GUI ones without opening windows
+pytest -n auto            # all tests, in parallel, the GUI ones without windows
 ruff check . && ruff format --check .
 ```
 
@@ -304,4 +328,4 @@ Built with Python, PySide6 (Qt), Matplotlib, NumPy, SciPy and Pydantic.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/f4ren/figscribe/blob/main/LICENSE).
