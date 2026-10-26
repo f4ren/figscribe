@@ -1279,6 +1279,14 @@ beta by Google), with tools, streaming, images and a model list.
   no longer sent to Google; any other server still takes it, as before.
 - **Model names lose Google's `models/` prefix** when listed, since the
   chat endpoint is asked for the bare name.
+- **A tool call keeps what the server attached to it** (`extra_content`) and
+  sends it back unchanged. Gemini 3 signs the first call of a turn
+  (`extra_content.google.thought_signature`) and refuses the next round
+  without the signature; other servers attach nothing.
+- **A rate limit says how long to wait**, when the server tells
+  ("Please retry in 30.9s" in Gemini's text; it sends no `Retry-After`
+  header), and that a free tier is the reason. The free tier allowed 5
+  requests a minute per model when tried (2026-10-26).
 - **A subscription is pointed to MCP**, not built in: Claude Desktop, Claude
   Code or Gemini CLI drive figscribe through `figscribe mcp` with the user's
   own plan. The README says which ways cost nothing.

@@ -276,6 +276,60 @@ def test_gemini_takes_its_own_key_from_the_environment(monkeypatch) -> None:
     assert OpenAIModel(local).client.api_key == "sk-openai"
 
 
+def test_geminis_thought_signature_goes_back_with_its_call(document: Document) -> None:
+    """Gemini 3 refuses the next round without it: each call comes whole in
+    its own chunk, without an index, the first one signed."""
+    pytest.importorskip("openai")
+    signed = {"google": {"thought_signature": "c2lnbmVk"}}
+
+    def tool_call(uid: str, extra: dict | None = None) -> dict:
+        part = {
+            "id": uid,
+            "type": "function",
+            "function": {"name": "get_project", "arguments": "{}"},
+        }
+        return part | ({"extra_content": extra} if extra else {})
+
+    first = sse(
+        chunk({"role": "assistant", "tool_calls": [tool_call("a", signed)]}),
+        chunk({"role": "assistant", "tool_calls": [tool_call("b")]}),
+        chunk({"role": "assistant"}, "stop"),
+    )
+    answers = [first, sse(chunk({"content": "Done."}), chunk({}, "stop"))]
+
+    with serve(lambda method, path, body: answers.pop(0)) as (url, requests):
+        chat = Chat(OpenAIModel(Provider("openai", "gemini-3.5-flash", f"{url}/v1")))
+        chat.ask("what is there?")
+        while chat.handle(
+            chat.respond(lambda _: None), lambda n, a: Toolbox(document).call(n, a)
+        ):
+            pass
+    calls = requests[1][2]["messages"][2]["tool_calls"]
+    assert [c["id"] for c in calls] == ["a", "b"]
+    assert calls[0]["extra_content"] == signed
+    assert "extra_content" not in calls[1]
+
+
+def test_a_free_tier_limit_says_how_long_to_wait() -> None:
+    pytest.importorskip("openai")
+    message = (
+        "You exceeded your current quota. * Quota exceeded for metric: "
+        "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+        "limit: 5\nPlease retry in 30.895273533s."
+    )
+
+    def limit(method, path, body):
+        return json_reply(429, [{"error": {"code": 429, "message": message}}])
+
+    with serve(limit) as (url, _):
+        model = OpenAIModel(Provider("openai", "gemini-3.5-flash", f"{url}/v1"))
+        model.client = model.client.with_options(max_retries=0)
+        with pytest.raises(ChatError) as error:
+            model.respond(["hi"], lambda _: None)
+    assert "try again in 31 s" in str(error.value)
+    assert "free tier" in str(error.value)
+
+
 def test_a_refused_gemini_key_names_its_variable() -> None:
     pytest.importorskip("openai")
 

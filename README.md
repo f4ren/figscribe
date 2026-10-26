@@ -172,7 +172,8 @@ allow it (*Assistant > Let It See the Figure*).
 - **ChatGPT**, or any server with the OpenAI chat completions API: set
   `OPENAI_API_KEY`.
 - **Google Gemini**: a key from Google AI Studio, in `GEMINI_API_KEY`. The
-  Gemini API has a free tier.
+  Gemini API has a free tier. *Load models* also lists models that a new key
+  cannot use or that do not answer; `gemini-3.5-flash` works (October 2026).
 - **A local model** in LM Studio (`http://localhost:1234/v1`), Ollama
   (`http://localhost:11434/v1`), vLLM or llama.cpp: nothing leaves your
   computer. *Load models* lists what the server offers; choose one that
@@ -198,8 +199,10 @@ shows the configuration for other clients.
 
 - **A local model** costs nothing and keeps everything on your computer;
   how well it works depends on its size (see below).
-- **Gemini's free tier**: a key from Google AI Studio, without billing,
-  with limits on requests per minute and per day. Outside the EU, EEA,
+- **Gemini's free tier**: a key from Google AI Studio, without billing.
+  It allows 5 requests a minute per model (October 2026), and one change
+  takes the assistant two to four, so a larger request may have to wait a
+  minute; figscribe says how long. Outside the EU, EEA,
   Switzerland and the UK, Google may use free-tier requests to improve its
   products and have people read them; inside, its paid-service data terms
   apply. Either way the model sees names, not data values.

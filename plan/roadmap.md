@@ -801,8 +801,19 @@ in the README which ways cost nothing or use a subscription.
 
 **Done** (2026-10-26, decision 0032): "Google Gemini" in the assistant's
 servers, with its key from `GEMINI_API_KEY` (an OpenAI key is no longer sent
-to it); README "Without paying per request". Decision 0030 was taken twice
-by parallel branches; the later one, points left out, is now 0031.
+to it); Gemini 3's thought signatures go back with its tool calls; a rate
+limit says how long to wait; README "Without paying per request". Decision
+0030 was taken twice by parallel branches; the later one, points left out,
+is now 0031.
+
+Learned against the real API (2026-10-26): the free tier allows 5 requests
+a minute per model; `gemini-2.5-flash` is "no longer available to new
+users"; `gemini-3.8-flash` and `gemini-flash-latest` did not answer within
+a minute; `gemini-3.5-flash` worked.
+
+Follow-up: **wait out a rate limit** in the chat when the server says how
+long (up to a minute), with the countdown shown, instead of stopping the
+request halfway. `figscribe bench` could then run on a free tier too.
 
 ---
 

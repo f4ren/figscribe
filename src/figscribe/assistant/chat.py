@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
+import re
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -90,6 +92,9 @@ class ToolCall:
     """The parsed arguments; anything but a dict is refused as malformed."""
     raw: str = ""
     """The arguments as the model wrote them, echoed back unchanged."""
+    extra: dict | None = None
+    """What the server attached to the call and wants back unchanged, such
+    as Gemini's thought signature."""
 
 
 @dataclass
@@ -366,7 +371,7 @@ class OpenAIModel:
         if not self.name:
             raise ChatError("Choose a model in the assistant settings first.")
         text: list[str] = []
-        calls: dict[int, dict[str, str]] = {}
+        calls: dict[int, dict[str, Any]] = {}
         finish = None
         with self._errors():
             stream = self.client.chat.completions.create(
@@ -393,6 +398,9 @@ class OpenAIModel:
                     if part.function is not None:
                         call["name"] += part.function.name or ""
                         call["arguments"] += part.function.arguments or ""
+                    extra = (part.model_extra or {}).get("extra_content")
+                    if extra:
+                        call["extra"] = extra
                 finish = choice.finish_reason or finish
         tool_calls = [
             ToolCall(
@@ -400,6 +408,7 @@ class OpenAIModel:
                 c["name"],
                 _parse(c["arguments"]),
                 c["arguments"],
+                c.get("extra"),
             )
             for i, c in sorted(calls.items())
         ]
@@ -427,7 +436,7 @@ class OpenAIModel:
                 f"{self.key_variable} or enter a key in the chat.",
                 openai.NotFoundError: f"{where} has no model {self.name!r}; choose "
                 "one in the assistant settings (Load models).",
-                openai.RateLimitError: "Too many requests just now; try again shortly.",
+                openai.RateLimitError: _rate_limited,
                 openai.APIConnectionError: f"Cannot reach {where}. Is the server "
                 "running?",
                 openai.APIStatusError: "The server refused the request: {message}",
@@ -455,6 +464,7 @@ def _openai_messages(turns: list[Turn], vision: bool) -> list[dict]:
                             "arguments": c.raw or json.dumps(c.input),
                         },
                     }
+                    | ({"extra_content": c.extra} if c.extra else {})
                     for c in turn.calls
                 ]
             messages.append(message)
@@ -493,11 +503,24 @@ def _parse(arguments: str) -> Any:
         return arguments
 
 
+def _rate_limited(exc: Exception) -> str:
+    """When to try again, if the server says; Gemini says it in its text."""
+    text = str(getattr(exc, "message", exc))
+    wait = re.search(r"retry in ([\d.]+)\s*s", text)
+    when = f"in {math.ceil(float(wait.group(1)))} s" if wait else "shortly"
+    free = "free_tier" in text or "free tier" in text.lower()
+    reason = " The free tier allows only a few requests a minute." if free else ""
+    return f"Too many requests just now; try again {when}.{reason}"
+
+
 class _Translate:
     """Turns the SDK's errors into ChatErrors with a message for the user;
-    the first matching class wins, "{message}" is the API's own text."""
+    the first matching class wins, "{message}" is the API's own text. A
+    function instead of a text makes the message from the error."""
 
-    def __init__(self, messages: dict[type[Exception], str]):
+    def __init__(
+        self, messages: dict[type[Exception], str | Callable[[Exception], str]]
+    ):
         self.messages = messages
 
     def __enter__(self):
@@ -508,6 +531,8 @@ class _Translate:
             return False
         for cls, text in self.messages.items():
             if isinstance(exc, cls):
+                if callable(text):
+                    raise ChatError(text(exc)) from exc
                 detail = getattr(exc, "message", str(exc))
                 raise ChatError(text.replace("{message}", str(detail))) from exc
         if isinstance(exc, ValueError):  # a streamed tool input the SDK choked on
