@@ -123,6 +123,53 @@ def test_the_command_line_writes_the_script_without_unreadable_data(
     assert "writing the script without it" in printed.err
 
 
+def _two_figures(example: Path, tmp_path: Path) -> Path:
+    """The example with a second figure, "Fig. 2", saved next to its data."""
+    from figscribe.commands import duplicate_figure
+    from figscribe.model import dumps
+
+    folder = tmp_path / "copy"
+    shutil.copytree(example.parent, folder)
+    project = loads(example.read_text(encoding="utf-8"))
+    duplicate_figure(project, project.figures[0].id)[0].apply(project)
+    project.figures[1].name = "Fig. 2"
+    path = folder / example.name
+    path.write_text(dumps(project), encoding="utf-8")
+    return path
+
+
+def test_the_command_line_writes_a_figure_by_name(
+    example: Path, tmp_path: Path, capsys
+) -> None:
+    from figscribe.cli import _script
+
+    path = _two_figures(example, tmp_path)
+    assert _script([str(path), "--figure", "Fig. 2"]) == 0
+    assert '"""Fig. 2' in capsys.readouterr().out
+    assert _script([str(path), "--figure", "Fig. 3"]) == 1
+    error = capsys.readouterr().err
+    assert "no figure 'Fig. 3'" in error and "Scan, Fig. 2" in error
+
+
+def test_the_command_line_writes_every_figure(
+    example: Path, tmp_path: Path, capsys
+) -> None:
+    from figscribe.cli import _script
+
+    path = _two_figures(example, tmp_path)
+    out = tmp_path / "scripts"
+    assert _script([str(path), "--all", "-o", str(out)]) == 0
+    written = sorted(p.name for p in out.iterdir())
+    assert written == ["fig_2.py", "scan.py"]
+    assert 'fig.savefig(HERE / "fig_2.pdf")' in (out / "fig_2.py").read_text(
+        encoding="utf-8"
+    )
+    assert str(out / "scan.py") in capsys.readouterr().out
+    assert _script([str(path), "--all"]) == 0  # beside the project
+    assert (path.parent / "fig_2.py").exists()
+    assert _script([str(path), "--all", "--figure", "Scan"]) == 2
+
+
 def _env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
 
