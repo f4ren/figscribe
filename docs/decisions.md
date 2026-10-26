@@ -1462,3 +1462,46 @@ them only when there is a band. **Drawing the band first**: it would need
 the color before the line takes one from the cycle, which only Matplotlib's
 private API gives. **A band in the legend** (a patch behind the line, as
 `(line, patch)` handles): left for later.
+
+## 0036 — Analysis as derived plots, not a statistics suite
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The brief rules out a statistics suite, and roadmap F10 asks for every
+analysis tool to be decided on its own. The first one asked for is the
+Allan deviation, the standard figure for the stability of clocks, lasers,
+gyroscopes and other sensors. figscribe already computes two plots from
+the data: a histogram counts a column into bins, and a fit runs
+`curve_fit` in the renderer and in the script alike.
+
+### Decision
+
+An analysis belongs in figscribe when all three hold:
+
+1. It is a **standard figure** of some field, not a number or a test result.
+2. It is computed from a few columns in **a few lines of NumPy or SciPy**,
+   which the generated script writes out as a readable function, so the
+   script stays standalone and needs no new dependency.
+3. It is described as **a plot with a few settings**. The model stores what
+   is computed (columns, rates, the variant), never the result; the
+   renderer and the script compute it alike, and the pixel equivalence test
+   holds them together.
+
+The Allan deviation meets all three and becomes a plot type (roadmap
+F4.9). Hypothesis tests, ANOVA, regression tables and the like do not:
+they produce numbers rather than figures, and stay out. Smoothing, peak
+finding and scale/offset per column (F10) are judged by the same three
+points when they come up.
+
+### Alternatives considered
+
+**`allantools` as a dependency**: complete, but the script would need it
+too, and overlapping ADEV is about ten lines with `cumsum`; the tests can
+check against published reference values instead. **A general transform
+step** (any column through any function before plotting): that is the
+column-formula language the brief excludes. **Computing outside**: works
+today (import τ, σ and its error as a CSV and draw error bars on log axes),
+but the figure then no longer says how it came from the measurement.
