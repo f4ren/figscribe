@@ -248,6 +248,9 @@ class FitCurve(ArtistBase):
     """(lower, upper) of x: only the points within it are fitted; None fits all."""
     extend_curve: bool = False
     """Draw the fitted curve across all the data, not only the fit range."""
+    outside_as_left_out: bool = False
+    """Draw the plot's points outside the fit range like its left-out points;
+    they are not left out of the plot."""
     result: FitResult | None = None
     """The outcome of the last fit; None before the first."""
     color: Color | None = None

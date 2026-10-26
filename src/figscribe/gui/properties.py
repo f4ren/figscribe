@@ -296,6 +296,8 @@ PLACEHOLDERS = {
 }
 
 TIPS = {
+    "outside_as_left_out": "Draw the plot's points outside the fit range in its "
+    "left-out color and marker; they are not left out of the plot.",
     "left_out_note": "Why the rows are left out, e.g. detector glitch; the script "
     "says it in a comment. Finding outliers in the fit dialog fills it in.",
     "left_out_color": "Color of the points left out (right-click a point in the "
@@ -791,6 +793,18 @@ class PropertyPanel(QScrollArea):
         except (FitError, CommandError, DataError) as exc:
             self.report(str(exc))
 
+    def ask_marker(self, current: str | None) -> str | None:
+        """Asks for a marker of one's own; None if cancelled. Replaced in tests."""
+        from PySide6.QtWidgets import QInputDialog
+
+        text, ok = QInputDialog.getText(
+            self,
+            "Marker",
+            "Any Matplotlib marker, e.g. $\\alpha$ for a Greek letter:",
+            text=current or "",
+        )
+        return text.strip() or None if ok else None
+
     def _selected_object(self) -> BaseModel | None:
         oid = self.document.selected
         if oid is None:
@@ -1231,10 +1245,33 @@ def _marker_list(spec: Spec, path: Path, panel: PropertyPanel) -> ChoiceEditor:
         choices.insert(0, ("Like the plot", LIKE_THE_PLOT))
     elif not spec.optional:
         choices.append(("No marker", "none"))
-    editor = ChoiceEditor(spec, path, panel, choices, missing="")
+    choices.append(("Custom…", CUSTOM))
+    editor = MarkerList(spec, path, panel, choices, missing="")
     for index, (_, value) in enumerate(editor.choices):
         editor.widget.setItemIcon(index, marker_icon(value))
     return editor
+
+
+CUSTOM = object()
+"""The list entry that asks for a marker of one's own."""
+
+
+class MarkerList(ChoiceEditor):
+    """A list of markers whose last entry asks for any other."""
+
+    def show(self, value: Any) -> None:
+        self.value = value
+        super().show(value)
+
+    def commit(self, value: Any) -> None:
+        if value is not CUSTOM:
+            super().commit(value)
+            return
+        typed = self.panel.ask_marker(self.value)
+        if typed is None:
+            self.show(self.value)
+        else:
+            super().commit(typed)
 
 
 CHOICES["left_out_linestyle"] = [("Like the plot", LIKE_THE_PLOT), *LINESTYLES]

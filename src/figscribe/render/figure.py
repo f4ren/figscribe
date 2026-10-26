@@ -282,7 +282,7 @@ def _draw_artist(
         raise DataError(f"{artist.label or artist.kind}: {why}")
 
     if isinstance(artist, FITTABLE):
-        _draw_points(artist, ax, data, common)
+        _draw_points(artist, ax, data, common, artists)
     elif isinstance(artist, Histogram):
         values = np.asarray(data(artist.values), dtype=float)
         # np.histogram cannot place NaN or inf; they are left out, like in a fit.
@@ -314,7 +314,9 @@ LEFT_OUT_COLOR = "0.7"
 """Light grey: left-out points stay visible, but stand back."""
 
 
-def _draw_points(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
+def _draw_points(
+    artist, ax: MplAxes, data: DataProvider, common: dict, artists: Mapping
+) -> None:
     """A line, scatter or error bar plot. With rows left out: the kept rows as
     styled, the line broken at the left-out ones; the line running on through
     them in their color; then their markers and error bars, without a legend
@@ -332,10 +334,11 @@ def _draw_points(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
         shown = kept(count, artist.left_out)
     except FitError as exc:
         raise DataError(f"{artist.label or artist.kind}: {exc}") from None
-    if artist.left_out:
+    shown &= _inside_fits(artist, artists, columns["x"])
+    if not shown.all():
         columns["y"] = np.where(shown, columns["y"], np.nan)
     _draw_part(artist, ax, columns, {}, common).rows = np.arange(count)
-    if not artist.left_out:
+    if shown.all():
         return
     color = artist.left_out_color or LEFT_OUT_COLOR
     apart = {**common, "label": "_nolegend_"}
@@ -360,6 +363,24 @@ def _draw_points(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
     values["y"] = np.asarray(data(artist.y), dtype=float)[out]
     style = {"color": color, "marker": marker or "none", "linestyle": "none"}
     _draw_part(artist, ax, values, style, apart).rows = np.flatnonzero(out)
+
+
+def _inside_fits(artist, artists: Mapping, x: np.ndarray) -> np.ndarray:
+    """Which points lie inside the range of every fit of the plot that draws
+    the points outside like left-out ones."""
+    from figscribe.fit import in_range
+
+    inside = np.ones(x.shape, dtype=bool)
+    for fit in artists.values():
+        if (
+            isinstance(fit, FitCurve)
+            and fit.target == artist.id
+            and fit.outside_as_left_out
+            and fit.fit_range is not None
+            and fit.result is not None
+        ):
+            inside &= in_range(x, fit.fit_range)
+    return inside
 
 
 NO_LINE = (None, "none", "None", "", " ")
