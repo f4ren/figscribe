@@ -222,3 +222,10 @@ def test_zooming_far_out_keeps_the_tick_limit(qtbot, preview) -> None:
     preview.zoom(_centre(preview, _axes(preview)), 0.01, axis="x")  # 100 times out
     _drawn(qtbot, preview)
     assert not isinstance(_axes(preview).xaxis.get_major_locator(), MultipleLocator)
+
+
+def test_the_preview_tells_the_color_a_plot_is_drawn_in(preview: Preview) -> None:
+    plot = preview.document.figure.axes[0].artists[0]
+    assert plot.color is None  # the color cycle chooses it
+    assert preview.drawn_color(plot.id) == "#1f77b4"
+    assert preview.drawn_color("no such plot") is None

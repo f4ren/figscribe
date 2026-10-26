@@ -374,6 +374,17 @@ class would have to be kept in step with every field added to the model.
   typed, so their numbers can have decimal commas, else by ",". Infinite
   values are refused; no field the GUI edits means them. Messages quote what
   was typed.
+- **The panel speaks the plot's terms, the model keeps Matplotlib's**
+  (since 2026-10-24, roadmap U2). `SHOWN` lists fields shown in other numbers
+  than stored: rows, columns and header lines count from 1 on screen; a
+  scatter plot's marker area (pt², as `scatter` takes it) is shown as its
+  size in pt like a line's, so the model and the script need no change.
+  Numbers that belong together get a field each (`FieldsEditor`: an image's
+  extent as left, right, bottom, top; one ratio per grid column or row). The
+  style sheet is chosen from Matplotlib's styles or an `.mplstyle` file;
+  colors offer the figure's whole color cycle under its style sheet, the
+  colors set lately, and *Same as…* another plot's drawn color. The
+  resolution sits in an *Export* section, since only PNG uses it.
 - **Each edit is one `SetField`.** Constraints live on the model only; a
   refused value shows pydantic's message above the form and the editor shows
   the model's value again. An unchanged value pushes nothing. The exception
@@ -1217,7 +1228,7 @@ render in CI before anyone has seen the result.
 
 ---
 
-## 0030 — Points left out of a plot
+## 0031 — Points left out of a plot
 
 **Date:** 2026-10-26
 **Status:** accepted

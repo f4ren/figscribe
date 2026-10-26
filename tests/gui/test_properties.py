@@ -180,10 +180,6 @@ def test_pairs_and_lists_of_numbers(panel: PropertyPanel, document) -> None:
     _type(panel, ("legend", "position"), "")
     assert _axes(document).legend.position is None
 
-    document.select(_figure(document).id)
-    _type(panel, ("layout", "width_ratios"), "1, 2.5")
-    assert _figure(document).layout.width_ratios == [1.0, 2.5]
-
 
 def test_whole_numbers(panel: PropertyPanel, document) -> None:
     document.select(_figure(document).id)
@@ -191,6 +187,184 @@ def test_whole_numbers(panel: PropertyPanel, document) -> None:
     assert _figure(document).layout.rows == 2
     _type(panel, ("layout", "rows"), "1.5")
     assert "whole number" in panel.error
+
+
+def test_rows_columns_and_lines_are_counted_from_one(
+    panel: PropertyPanel, document
+) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("layout", "rows"), "2")
+    document.select(_axes(document).id)
+    assert panel.editors[("row",)].line.text() == "1"  # the model's row 0
+    _type(panel, ("row",), "2")
+    assert _axes(document).row == 1
+    _type(panel, ("row",), "0")
+    assert "counted from 1" in panel.error
+    assert _axes(document).row == 1
+
+    source = document.project.sources[0]
+    document.select(source.id)
+    assert panel.editors[("header_row",)].line.text() == "2"  # the model's line 1
+
+
+def test_points_take_their_marker_size_in_pt_like_lines(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.gui.names import field_name
+    from figscribe.model import ScatterPlot
+
+    line = _artist(document)
+    points = ScatterPlot(x=line.x, y=line.y, size=20.0)  # Matplotlib's area, pt²
+    document.push(InsertItem(_axes(document).id, "artists", points))
+    document.select(points.id)
+    assert field_name("size") == field_name("markersize") == "Marker size (pt)"
+    assert panel.editors[("size",)].line.text() == "4.472136"
+    _type(panel, ("size",), "5")
+    assert _axes(document).artists[-1].size == 25.0
+    _type(panel, ("size",), "-5")
+    assert "-5" in panel.error and _axes(document).artists[-1].size == 25.0
+
+
+def test_the_resolution_is_an_export_setting(panel: PropertyPanel, document) -> None:
+    from figscribe.gui.names import field_name
+
+    document.select(_figure(document).id)
+    resolution = panel.editors[("dpi",)].widget
+    assert panel.sections["Export"].isAncestorOf(resolution)
+    assert not panel.sections["Size"].isAncestorOf(resolution)
+    assert "PNG" in field_name("dpi")
+
+
+def test_the_style_sheet_is_chosen_from_a_list(
+    panel: PropertyPanel, document, tmp_path
+) -> None:
+    def combo():
+        return panel.editors[("stylesheet",)].widget
+
+    def texts() -> list[str]:
+        return [combo().itemText(i) for i in range(combo().count())]
+
+    document.select(_figure(document).id)
+    assert texts()[0] == "Matplotlib's default" and texts()[-1] == "Choose file…"
+    combo().activated.emit(texts().index("ggplot"))
+    assert _figure(document).stylesheet == "ggplot"
+
+    style = tmp_path / "journal.mplstyle"
+    style.write_text("lines.linewidth: 1\n", encoding="utf-8")
+    panel.choose_file = lambda title, pattern: style
+    combo().activated.emit(combo().count() - 1)
+    assert _figure(document).stylesheet == str(style)
+    assert combo().currentText() == "journal.mplstyle"
+    assert texts()[-1] == "Choose file…"
+
+    panel.choose_file = lambda title, pattern: None  # cancelled
+    combo().activated.emit(combo().count() - 1)
+    assert _figure(document).stylesheet == str(style)
+    assert combo().currentText() == "journal.mplstyle"
+
+
+def _fields(panel: PropertyPanel, path) -> list:
+    from PySide6.QtWidgets import QLineEdit
+
+    return panel.editors[path].widget.findChildren(QLineEdit)
+
+
+def _enter(line, text: str) -> None:
+    line.setText(text)
+    line.editingFinished.emit()
+
+
+def test_ratios_get_one_field_per_column(panel: PropertyPanel, document) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("layout", "cols"), "3")
+    width = _fields(panel, ("layout", "width_ratios"))
+    assert len(width) == 3 and all(f.placeholderText() == "1" for f in width)
+    _enter(width[0], "2")
+    assert _figure(document).layout.width_ratios == [2.0, 1.0, 1.0]
+    _enter(_fields(panel, ("layout", "width_ratios"))[0], "")
+    assert _figure(document).layout.width_ratios is None  # all equal again
+
+
+def test_an_image_extent_has_four_labelled_fields(
+    panel: PropertyPanel, document, tmp_path
+) -> None:
+    import numpy as np
+    from PySide6.QtWidgets import QLabel
+
+    from figscribe.commands import InsertItem
+    from figscribe.io.numpyfile import numpy_source
+    from figscribe.model import ImagePlot
+    from figscribe.model.data import ArrayRef
+
+    np.save(tmp_path / "map.npy", np.zeros((4, 4)))
+    source = numpy_source(tmp_path / "map.npy", tmp_path)
+    document.push(InsertItem(None, "sources", source))
+    image = ImagePlot(data=ArrayRef(source=source.id))
+    document.push(InsertItem(_axes(document).id, "artists", image))
+    document.select(image.id)
+
+    editor = panel.editors[("extent",)].widget
+    labels = [label.text() for label in editor.findChildren(QLabel)]
+    assert labels == ["left", "right", "bottom", "top"]
+    left, right, bottom, top = _fields(panel, ("extent",))
+    _enter(left, "0")
+    assert "all four" in panel.error and _axes(document).artists[-1].extent is None
+    for line, text in zip((left, right, bottom, top), "0 10 −1 1".split(), strict=True):
+        line.setText(text)
+    _enter(top, "1")
+    assert _axes(document).artists[-1].extent == (0.0, 10.0, -1.0, 1.0)
+
+
+def test_colors_offer_the_whole_cycle_of_the_style(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import SetField
+
+    document.select(_artist(document).id)
+    swatches = panel.editors[("color",)].swatches
+    assert [*swatches] == [f"C{i}" for i in range(10)] + ["black"]
+    assert swatches["C3"].toolTip() == "tab:red"
+    swatches["C7"].click()
+    assert _artist(document).color == "C7"
+
+    document.push(SetField(_figure(document).id, ("stylesheet",), "ggplot"))
+    document.select(None)
+    document.select(_artist(document).id)
+    assert len(panel.editors[("color",)].swatches) == 7 + 1  # ggplot has seven
+
+
+def test_recently_used_colors_are_offered_again(panel: PropertyPanel, document) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot
+
+    data = _artist(document)
+    line = LinePlot(x=data.x, y=data.y)
+    document.push(InsertItem(_axes(document).id, "artists", line))
+    document.select(data.id)
+    _type(panel, ("color",), "#123456")
+    document.select(line.id)
+    recent = panel.editors[("color",)].recent
+    assert [*recent] == ["#123456"]
+    recent["#123456"].click()
+    assert _axes(document).artists[-1].color == "#123456"
+
+
+def test_a_color_can_be_the_same_as_another_plots(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot
+
+    data = _artist(document)
+    line = LinePlot(x=data.x, y=data.y)
+    document.push(InsertItem(_axes(document).id, "artists", line))
+    panel.drawn_color = lambda oid: "#abcdef" if oid == data.id else None
+    document.select(line.id)
+    menu = panel.editors[("color",)].same_as.menu()
+    assert [action.text() for action in menu.actions()] == ["measurement"]
+    menu.actions()[0].trigger()
+    assert _axes(document).artists[-1].color == "#abcdef"
 
 
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:

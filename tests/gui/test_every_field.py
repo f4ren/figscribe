@@ -100,10 +100,6 @@ EXPECTED = {
 start of what the test reports, and why."""
 
 KNOWN = {
-    "GridLayout.width_ratios": "B8 item 2 follow-up: a count unlike the grid's "
-    "is taken, and the figure cannot be drawn",
-    "GridLayout.height_ratios": "B8 item 2 follow-up: a count unlike the grid's "
-    "is taken, and the figure cannot be drawn",
     "ColorMesh.x": "B8 item 4: used only together with y, which says nothing",
     "ColorMesh.y": "B8 item 4: used only together with x, which says nothing",
 }

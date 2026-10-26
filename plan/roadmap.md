@@ -445,6 +445,25 @@ Concrete changes found in `gui/properties.py` and `gui/names.py`:
 - **Colors**: four swatches today. Offer the ten of the current color cycle,
   recently used colors, and *same as …* another plot.
 
+**Done** (2026-10-24, decision 0006), except the gaps between panels, now
+U6. Marker size: the panel converts, the model keeps the area (answered).
+*Learned:* *Drawing order* was already under *More*; the context menu now
+has *Bring to front* / *Send to back*. There are no bundled styles yet, so
+the list offers Matplotlib's (R1 adds its own). Eleven swatches in one row
+made the whole form wider than the panel and clipped every field; they go
+six to a row. Inset bounds stay a typed quad until U4 makes them draggable.
+
+### U6 Gaps between panels in mm — M
+
+`hspace`/`wspace` are fractions of the average panel size, and with the
+automatic layout they come on top of the space for labels. Measured: 0.2
+gives 18 mm at 60 mm figure height and 24 mm at 120 mm; 0 still leaves
+14.5 mm for an x label. A gap in mm therefore needs model fields in mm and a
+conversion in the renderer and the code generator (Matplotlib's constrained
+layout has pads in inches, `h_pad`/`w_pad`, which may serve); a conversion
+in the panel alone would be wrong as soon as the size or labels change.
+`[decide]` the model change, with a schema bump, before building it.
+
 ### U3 Find any setting quickly — M
 
 - A **search field** on top of the property panel that filters fields by name
@@ -814,7 +833,7 @@ answer in `docs/decisions.md` when the task is started.
 | Task | Question |
 |---|---|
 | B7.2 | Add `hypothesis` as a dev dependency for property-based tests? |
-| U2 | Marker size: change the model field for points to a size in pt (schema bump), or convert only in the panel? |
+| U6 | Gaps between panels in mm: new model fields in mm (schema bump), converted by the renderer and the code generator? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |

@@ -11,13 +11,19 @@ and the editor shows the model's value again. Field constraints such as
 
 from __future__ import annotations
 
+import math
+import pathlib
+import re
 import types
 import typing
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Any, Literal
 
+import matplotlib.style
+from matplotlib.colors import TABLEAU_COLORS, to_hex
 from pydantic import BaseModel
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor
@@ -25,12 +31,14 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QScrollArea,
     QToolButton,
@@ -71,6 +79,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
 )
+from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
 
 SKIPPED = {
@@ -195,7 +204,7 @@ SECTIONS = {
     "name": "Size",
     "width_mm": "Size",
     "height_mm": "Size",
-    "dpi": "Size",
+    "dpi": "Export",
     "unit_format": "Style",
     "stylesheet": "Style",
     "title": "Panel",
@@ -256,6 +265,7 @@ ORDER = [
     "Look",
     "Style",
     "Legend",
+    "Export",
 ]
 COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
@@ -285,14 +295,14 @@ PLACEHOLDERS = {
     "minor_divisions": "automatic",
     "wspace": "automatic",
     "arrow_to": "no arrow",
-    "extent": "automatic",
+    "extent": "auto",
     "position": "by location",
     "delimiter": "spaces or tabs",
     "header_row": "no names",
     "comment": "none",
     "array": "the first",
-    "width_ratios": "equal",
-    "height_ratios": "equal",
+    "width_ratios": "1",
+    "height_ratios": "1",
 }
 
 TIPS = {
@@ -327,8 +337,8 @@ TIPS = {
     "grid_which": "Grid lines at the numbered ticks, the minor ticks, or both.",
     "grid_color": "Color of the grid lines, e.g. dimgray or #696969; empty "
     "keeps the style's light gray.",
-    "row": "Grid row of the panel, from the top, starting at 0.",
-    "col": "Grid column of the panel, from the left, starting at 0.",
+    "row": "Grid row of the panel, counted from 1 at the top.",
+    "col": "Grid column of the panel, counted from 1 at the left.",
     "rowspan": "How many grid rows the panel covers.",
     "colspan": "How many grid columns the panel covers.",
     "label": "Entry in the legend; empty keeps the plot out of it.",
@@ -354,7 +364,7 @@ TIPS = {
     "linewidth": "Line width in pt.",
     "marker": "The symbol drawn at each data point.",
     "markersize": "Size of the markers in pt.",
-    "size": "Area of the markers in pt².",
+    "size": "Size of the markers in pt.",
     "capsize": "Length of the caps at the ends of the error bars in pt; 0 for none.",
     "elinewidth": "Line width of the error bars in pt.",
     "values": "The column whose values are counted.",
@@ -406,7 +416,7 @@ TIPS = {
     "lets Matplotlib choose.",
     "delimiter": "What separates the values in a line; empty means spaces or tabs.",
     "decimal": "Whether the numbers are written 1.5 or 1,5.",
-    "header_row": "The line with the column names, counted from 0; empty for a file "
+    "header_row": "The line with the column names, counted from 1; empty for a file "
     "without names.",
     "skip_rows": "Lines between the names and the numbers, such as a line of units.",
     "comment": "Lines starting with this are ignored; empty for none.",
@@ -446,6 +456,12 @@ class PropertyPanel(QScrollArea):
         self.setMinimumWidth(300)
         self.pick_color: Callable[[str | None], str | None] = self._pick_color
         """Asks for a color; replaced in tests."""
+        self.recent_colors: list[str] = []
+        """Colors set lately, newest first; every color field offers them."""
+        self.drawn_color: Callable[[str], str | None] = lambda oid: None
+        """The color a plot is drawn in now; the window asks the preview."""
+        self.choose_file: Callable[[str, str], pathlib.Path | None] = self._choose_file
+        """Asks for a file, by dialog title and name pattern; replaced in tests."""
         self.editors: dict[Path, Editor] = {}
         self.sections: dict[str, Section] = {}
         self._shown: tuple | None = None
@@ -835,6 +851,14 @@ class PropertyPanel(QScrollArea):
             return None
         return getattr(obj, axis[1]) if axis else obj
 
+    def remember_color(self, color: str) -> None:
+        self.recent_colors = [color, *(c for c in self.recent_colors if c != color)]
+        del self.recent_colors[RECENT_COLORS:]
+
+    def _choose_file(self, title: str, pattern: str) -> pathlib.Path | None:
+        chosen, _ = QFileDialog.getOpenFileName(self, title, "", pattern)
+        return pathlib.Path(chosen) if chosen else None
+
     def _pick_color(self, current: str | None) -> str | None:
         start = QColor(theme.plot_color(current, 0))
         color = QColorDialog.getColor(start, self, "Color")
@@ -943,8 +967,10 @@ class TextEditor(Editor):
         self.commit(value)
 
 
-SWATCHES = [("C0", "Blue"), ("C1", "Orange"), ("C2", "Green"), ("C3", "Red")]
-SWATCHES.append(("black", "Black"))
+RECENT_COLORS = 5
+"""How many recently set colors the color fields offer."""
+
+SWATCHES_PER_ROW = 6
 
 MARKERS = [("o", "Circle"), ("s", "Square"), ("^", "Triangle"), ("D", "Diamond")]
 
@@ -987,6 +1013,7 @@ CHOICES["tick_direction"] = [
     ("both ways", "inout"),
 ]
 NONE_TEXT = {
+    "stylesheet": "Matplotlib's default",
     "tick_direction": "style default",
     "prefix": "as in the data",
     "marker": "No marker",
@@ -1024,8 +1051,9 @@ any other Matplotlib name stays usable, it is just not offered."""
 
 
 class ColorEditor(TextEditor):
-    """A few swatches of the color cycle, any Matplotlib color as text
-    ("C0", "tab:blue", "#ff0000"), or one picked from a dialog."""
+    """The colors of the figure's color cycle, the ones used lately, the color
+    another plot is drawn in, any Matplotlib color as text ("C0", "tab:blue",
+    "#ff0000"), or one picked from a dialog."""
 
     def __init__(self, spec, path, panel):
         super().__init__(spec, path, panel, str, str)
@@ -1033,38 +1061,195 @@ class ColorEditor(TextEditor):
         column = QVBoxLayout(self.widget)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(6)
-        row = QHBoxLayout()
-        row.setSpacing(4)
-        self.swatches: dict[str, QToolButton] = {}
-        for value, name in SWATCHES:
-            swatch = QToolButton()
-            swatch.setObjectName("swatch")
-            swatch.setCheckable(True)
-            swatch.setToolTip(name)
-            swatch.setIcon(theme.icon("swatch", theme.plot_color(value, 0), 18))
-            swatch.setIconSize(QSize(18, 18))
-            swatch.clicked.connect(lambda _=False, v=value: self.commit(v))
-            row.addWidget(swatch)
-            self.swatches[value] = swatch
+        cycle = [(f"C{i}", c) for i, c in enumerate(_cycle(panel)[:10])]
+        self.swatches = self._swatches([*cycle, ("black", "black")])
         self.button = QToolButton()
         self.button.setObjectName("choice")
         self.button.setIcon(theme.icon("plus", theme.MUTED))
         self.button.setToolTip("Pick any color")
         self.button.clicked.connect(self._pick)
-        row.addWidget(self.button)
-        row.addStretch(1)
-        column.addLayout(row)
+        self.recent = self._swatches([(c, c) for c in panel.recent_colors])
+        buttons = [*self.swatches.values(), self.button]
+        # Six to a row keeps the form as narrow as the panel.
+        for start in range(0, len(buttons), SWATCHES_PER_ROW):
+            column.addLayout(_row_of(buttons[start : start + SWATCHES_PER_ROW]))
+        if self.recent:
+            column.addLayout(_row_of(list(self.recent.values())))
         column.addWidget(self.line)
+        self.same_as = QToolButton()
+        self.same_as.setText("Same as…")
+        self.same_as.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.same_as.setMenu(self._same_as_menu())
+        self.same_as.setEnabled(bool(self.same_as.menu().actions()))
+        column.addLayout(_row_of([self.same_as]))
 
     def show(self, value: Any) -> None:
         super().show(value)
-        for key, swatch in self.swatches.items():
+        for key, swatch in [*self.swatches.items(), *self.recent.items()]:
             swatch.setChecked(key == value)
+
+    def commit(self, value: Any) -> None:
+        if value is not None and not _CYCLE_COLOR.fullmatch(value):
+            self.panel.remember_color(value)
+        super().commit(value)
+
+    def _swatches(self, colors: list[tuple[str, str]]) -> dict[str, QToolButton]:
+        buttons: dict[str, QToolButton] = {}
+        for value, shown in colors:
+            swatch = QToolButton()
+            swatch.setObjectName("swatch")
+            swatch.setCheckable(True)
+            swatch.setToolTip(_color_name(shown))
+            swatch.setIcon(theme.icon("swatch", to_hex(shown), 18))
+            swatch.setIconSize(QSize(18, 18))
+            swatch.clicked.connect(lambda _=False, v=value: self.commit(v))
+            buttons[value] = swatch
+        return buttons
+
+    def _same_as_menu(self) -> QMenu:
+        menu = QMenu(self.widget)
+        figure = self.panel.document.figure
+        for axes in figure.axes if figure is not None else []:
+            for artist in axes.artists:
+                if artist.id != self.oid and "color" in type(artist).model_fields:
+                    menu.addAction(
+                        artist_name(artist), lambda a=artist: self._take_color(a)
+                    )
+        return menu
+
+    def _take_color(self, artist) -> None:
+        color = self.panel.drawn_color(artist.id) or artist.color
+        if color is not None:
+            self.commit(color)
 
     def _pick(self) -> None:
         color = self.panel.pick_color(self.value)
         if color is not None:
             self.commit(color)
+
+
+_CYCLE_COLOR = re.compile(r"C\d")
+"""A color of the cycle, "C0" to "C9", which follows the style sheet."""
+
+_TABLEAU_NAMES = {to_hex(v): k for k, v in TABLEAU_COLORS.items()}
+
+
+def _cycle(panel: PropertyPanel) -> list[str]:
+    """The colors of the shown figure's color cycle, under its style sheet."""
+    figure = panel.document.figure
+    with style_context(figure) if figure is not None else nullcontext():
+        return list(matplotlib.rcParams["axes.prop_cycle"].by_key().get("color", []))
+
+
+def _row_of(widgets: list[QWidget]) -> QHBoxLayout:
+    row = QHBoxLayout()
+    row.setSpacing(4)
+    for widget in widgets:
+        row.addWidget(widget)
+    row.addStretch(1)
+    return row
+
+
+def _color_name(color: str) -> str:
+    return _TABLEAU_NAMES.get(to_hex(color), color)
+
+
+class FieldsEditor(Editor):
+    """Several numbers, each in a field of its own with a small label;
+    `combine` turns what is typed (None for an empty field) into the value."""
+
+    def __init__(self, spec, path, panel, labels, placeholder, combine):
+        super().__init__(spec, path, panel)
+        self.combine = combine
+        self.widget = QWidget()
+        row = QHBoxLayout(self.widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        self.lines: list[QLineEdit] = []
+        for text in labels:
+            if text:
+                row.addWidget(label(text, "caption"))
+            line = QLineEdit()
+            line.setPlaceholderText(placeholder)
+            line.editingFinished.connect(self._finish)
+            row.addWidget(line, 1)
+            self.lines.append(line)
+
+    def show(self, value: Any) -> None:
+        self.value = value
+        values = list(value) if value is not None else []
+        for i, line in enumerate(self.lines):
+            text = f"{values[i]:g}" if i < len(values) else ""
+            # What the greyed-out placeholder already says is left empty.
+            line.setText("" if text == line.placeholderText() else text)
+
+    def _finish(self) -> None:
+        texts = [line.text().strip() for line in self.lines]
+        try:
+            value = self.combine([number(t) if t else None for t in texts])
+        except ValueError as exc:
+            self.panel.report(f"{field_name(self.path[-1])}: {exc}")
+            return  # left as typed, to be completed
+        if value != self.value:
+            self.commit(value)
+
+
+def _extent(values: list[float | None]) -> tuple[float, ...] | None:
+    if all(v is None for v in values):
+        return None
+    if any(v is None for v in values):
+        raise ValueError("fill in all four, or none for an automatic extent")
+    return tuple(values)
+
+
+def _ratios(values: list[float | None]) -> list[float] | None:
+    if all(v is None for v in values):
+        return None
+    ratios = [1.0 if v is None else v for v in values]
+    if any(r <= 0 for r in ratios):
+        raise ValueError("ratios must be more than 0")
+    return ratios
+
+
+class StyleEditor(ChoiceEditor):
+    """Matplotlib's style sheets by name, or an .mplstyle file from disk,
+    chosen through the last entry."""
+
+    CHOOSE = "Choose file…"
+
+    def __init__(self, spec, path, panel):
+        styles = [(s, s) for s in sorted(matplotlib.style.available) if s[0] != "_"]
+        super().__init__(spec, path, panel, styles, missing="")
+        # Long names such as seaborn-v0_8-colorblind would widen the whole form.
+        policy = QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        self.widget.setSizeAdjustPolicy(policy)
+        self.widget.setMinimumContentsLength(12)
+        self.widget.addItem(self.CHOOSE)
+        self.widget.activated.disconnect()
+        self.widget.activated.connect(self._chosen)
+
+    def show(self, value: Any) -> None:
+        self.value = value
+        if value not in [v for _, v in self.choices]:
+            # A file goes above "Choose file…", shown by its name.
+            self.choices.append((pathlib.Path(value).name, value))
+            self.widget.insertItem(len(self.choices) - 1, self.choices[-1][0])
+            self.widget.setItemData(
+                len(self.choices) - 1, value, Qt.ItemDataRole.ToolTipRole
+            )
+        self.widget.blockSignals(True)
+        self.widget.setCurrentIndex([v for _, v in self.choices].index(value))
+        self.widget.blockSignals(False)
+
+    def _chosen(self, index: int) -> None:
+        if index < len(self.choices):
+            self.commit(self.choices[index][1])
+            return
+        chosen = self.panel.choose_file("Style sheet", "Style sheets (*.mplstyle)")
+        if chosen is None:
+            self.show(self.value)
+        else:
+            self.commit(str(chosen))
 
 
 class MarkerEditor(TextEditor):
@@ -1116,6 +1301,16 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
+    if name == "stylesheet":
+        return StyleEditor(spec, path, panel)
+    if name == "extent":
+        sides = ["left", "right", "bottom", "top"]
+        return FieldsEditor(spec, path, panel, sides, PLACEHOLDERS[name], _extent)
+    if name in ("width_ratios", "height_ratios"):
+        layout = _get(find(panel.document.project, panel.document.selected), path[:-1])
+        count = layout.cols if name == "width_ratios" else layout.rows
+        blank = PLACEHOLDERS[name]
+        return FieldsEditor(spec, path, panel, [""] * count, blank, _ratios)
     if name in CHOICES and spec.kind in ("choice", "text"):
         return ChoiceEditor(spec, path, panel, CHOICES[name])
     if spec.kind == "choice":
@@ -1130,12 +1325,50 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         editor = MarkerEditor(spec, path, panel)
     else:
         parse, format_ = _TEXT[spec.kind]
+        if name in SHOWN:
+            parse, format_ = _on_screen(parse, format_, *SHOWN[name])
         editor = TextEditor(spec, path, panel, parse, format_)
     if spec.optional:
         nested = len(path) > 1  # e.g. an axis label, which no legend shows
         placeholder = "none" if nested and name == "label" else PLACEHOLDERS.get(name)
         editor.line.setPlaceholderText(placeholder or "none")
     return editor
+
+
+def _area(size: float) -> float:
+    if size <= 0:
+        raise ValueError(f"{size:g} is not a marker size; it must be more than 0")
+    return size * size
+
+
+def _counted_from_one(value: int) -> int:
+    if value < 1:
+        raise ValueError(
+            f"{value} is too small: rows, columns and lines are counted from 1"
+        )
+    return value - 1
+
+
+SHOWN: dict[str, tuple[Callable[[Any], Any], Callable[[Any], Any]]] = {
+    "row": (lambda value: value + 1, _counted_from_one),
+    "col": (lambda value: value + 1, _counted_from_one),
+    "header_row": (lambda value: value + 1, _counted_from_one),
+    "size": (lambda area: round(math.sqrt(area), 6), _area),
+}
+"""Fields shown in other numbers than the model keeps them, with the
+conversions to the screen and back: rows, columns and lines are counted
+from 1 on screen and from 0 in the model; points keep their marker area in
+pt², as Matplotlib's scatter takes it, and show its size in pt like lines."""
+
+
+def _on_screen(parse, format_, to_screen, from_screen):
+    def parse_shown(text: str) -> Any:
+        return from_screen(parse(text))
+
+    def format_shown(value: Any) -> str:
+        return format_(to_screen(value))
+
+    return parse_shown, format_shown
 
 
 SEPARATED = "separated by commas, or by semicolons with decimal commas"
@@ -1197,7 +1430,9 @@ def _shape(obj: BaseModel) -> tuple:
         getattr(obj, name, None) is None
         for name in ("y_right", "colorbar", "inset", "result")
     )
-    return (obj.id, type(obj), parts)
+    layout = getattr(obj, "layout", None)
+    grid = (layout.rows, layout.cols) if layout is not None else None
+    return (obj.id, type(obj), parts, grid)
 
 
 def _axes_of(project, artist_id: str) -> Axes | None:
