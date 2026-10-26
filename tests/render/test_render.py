@@ -658,3 +658,72 @@ def test_a_horizontal_line_goes_with_the_right_axis(data, ref) -> None:
     fig = render(Figure(axes=[axes]), data)
     right = next(ax for ax in fig.axes if ax.get_gid().endswith("#right"))
     assert [ln.get_gid() for ln in right.lines] == [line.id]
+
+
+def test_an_error_band_takes_the_place_of_the_y_error_bars(data, columns, ref) -> None:
+    from matplotlib.colors import to_rgba
+
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(
+        x=ref("t"), y=ref("U"), yerr=ref("dU"), linestyle="-", band=ErrorBand()
+    )
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    assert not ax.containers  # without x errors, a plain line
+    (line,) = ax.lines
+    (band,) = ax.collections
+    assert line.get_gid() == band.get_gid() == plot.id
+    assert band.get_zorder() < line.get_zorder()  # behind the line
+    assert tuple(band.get_facecolor()[0]) == to_rgba(line.get_color(), 0.25)
+    (path,) = band.get_paths()
+    low, high = path.vertices[:, 1].min(), path.vertices[:, 1].max()
+    assert low == pytest.approx((columns["U"] - 0.05).min())
+    assert high == pytest.approx((columns["U"] + 0.05).max())
+    assert band.get_label() == "_nolegend_"
+
+
+def test_an_error_band_keeps_the_x_errors_as_bars(data, ref) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(
+        x=ref("t"),
+        y=ref("U"),
+        xerr=ref("dU"),
+        yerr=ref("dU"),
+        color="C3",
+        band=ErrorBand(color="0.5", alpha=0.5),
+        alpha=0.8,
+    )
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    (container,) = ax.containers
+    assert container.has_xerr and not container.has_yerr
+    (band,) = ax.collections[-1:]
+    assert band.get_alpha() == pytest.approx(0.4)  # the band's, times the plot's
+    assert tuple(band.get_facecolor()[0])[:3] == (0.5, 0.5, 0.5)
+
+
+def test_an_error_band_leaves_a_gap_at_left_out_rows(data, ref) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(
+        x=ref("t"),
+        y=ref("U"),
+        yerr=ref("dU"),
+        marker="s",
+        left_out=[5],
+        band=ErrorBand(),
+    )
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    (band,) = ax.collections
+    assert len(band.get_paths()) == 2  # before and after the left-out row
+    kept, out = ax.lines
+    assert out.get_marker() == "s" and list(out.get_xdata()) == [2.5]
+    assert not ax.containers  # the left-out point has no error bar either
+
+
+def test_an_error_band_without_y_errors_draws_nothing_more(data, ref) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(x=ref("t"), y=ref("U"), band=ErrorBand())
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    assert not ax.collections and len(ax.lines) == 1

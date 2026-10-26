@@ -128,6 +128,7 @@ OBJECTS: dict[str, Callable[[Project], str]] = {
     "line": _artist("line"),
     "points": _artist("scatter"),
     "error bars": _artist("errorbar"),
+    "error band": _artist("errorbar", 1),
     "fit": _artist("fit"),
     "residuals": _artist("residual"),
     "note": _artist("annotation"),
