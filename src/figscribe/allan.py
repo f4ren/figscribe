@@ -11,6 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from figscribe.io.errors import DataError
+from figscribe.model import AxisSpec
 
 SPACING_LIMIT = 62
 """Octaves tried for the averaging factors: 2**61, the last, is more points
@@ -64,3 +65,11 @@ def sample_interval(times) -> float:
             f"to {worst:g} s; an Allan deviation needs even sampling"
         )
     return tau0
+
+
+def allan_axes() -> dict[str, AxisSpec]:
+    """The axes an Allan deviation is read on: log-log, τ against σ_y(τ)."""
+    return {
+        "x": AxisSpec(label=r"$\tau$", unit="s", scale="log"),
+        "y": AxisSpec(label=r"$\sigma_y(\tau)$", scale="log"),
+    }

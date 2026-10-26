@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe.allan import allan_axes
 from figscribe.gui import theme
 from figscribe.gui.errors import explain
 from figscribe.gui.widgets import label, rule
@@ -372,14 +373,6 @@ def preview_image(artist: ArtistBase, data: DataProvider, scale: float) -> QImag
     image = image.copy()  # own the pixels: the canvas goes away
     image.setDevicePixelRatio(scale)
     return image
-
-
-def allan_axes() -> dict[str, AxisSpec]:
-    """The axes an Allan deviation is read on: log-log, τ against σ_y(τ)."""
-    return {
-        "x": AxisSpec(label=r"$\tau$", unit="s", scale="log"),
-        "y": AxisSpec(label=r"$\sigma_y(\tau)$", scale="log"),
-    }
 
 
 def _errors_of(columns: Sequence[tuple[str, ColumnRef]]) -> dict:
