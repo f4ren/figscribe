@@ -122,7 +122,7 @@ def validate_references(
                     for why in _not_drawn(artist, axes, data):
                         issues.append(ReferenceIssue(tpath, artist.id, why))
 
-                for field, ref in _data_refs(artist):
+                for field, ref in data_refs(artist):
                     if ref not in source_ids:
                         issues.append(
                             ReferenceIssue(
@@ -310,7 +310,7 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
     return found
 
 
-def _data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
+def data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
     """Return (field name, source id) for every data reference on `artist`.
 
     Walks the declared fields instead of listing them per artist type, so that a

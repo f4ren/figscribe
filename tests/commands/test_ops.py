@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from figscribe.commands import CommandError, History, remove_artist, remove_axes
+from figscribe.commands import (
+    CommandError,
+    History,
+    remove_artist,
+    remove_axes,
+    remove_source,
+)
 from figscribe.model import (
     Annotation,
     ColumnRef,
@@ -14,6 +20,7 @@ from figscribe.model import (
     Project,
     ResidualPlot,
     dumps,
+    new_id,
     validate_references,
 )
 
@@ -112,3 +119,40 @@ def test_unknown_or_wrong_ids_are_refused(project: Project, make) -> None:
         make(project, "nope")
     with pytest.raises(CommandError):
         make(project, project.figures[0].id)  # neither an artist nor an axes
+
+
+def test_removing_a_data_file_removes_what_it_draws(project: Project) -> None:
+    other = project.sources[0].model_copy(update={"id": new_id(), "path": "b.csv"})
+    project.sources = [*project.sources, other]
+    line = LinePlot(
+        x=ColumnRef(source=other.id, column="t"),
+        y=ColumnRef(source=other.id, column="U"),
+    )
+    bottom = project.figures[0].axes[1]
+    bottom.artists = [*bottom.artists, line]
+    history = History(project)
+    before = dumps(project)
+
+    history.push(remove_source(project, project.sources[0].id))
+
+    assert project.sources == [other]
+    assert _kinds(project) == [[], ["line"]]  # the plot, its fit and residuals
+    assert validate_references(project) == []
+    assert history.undo_text == "Remove scan.csv"
+    history.undo()
+    assert dumps(project) == before
+    assert not history.can_undo  # it was a single step
+
+
+def test_an_unused_data_file_goes_alone(project: Project) -> None:
+    unused = project.sources[0].model_copy(update={"id": new_id()})
+    project.sources = [*project.sources, unused]
+    command = remove_source(project, unused.id)
+    assert [step.field for step in command.steps] == ["sources"]
+    command.apply(project)
+    assert _kinds(project) == [["errorbar", "fit"], ["residual"]]
+
+
+def test_only_data_files_are_removed_as_such(project: Project) -> None:
+    with pytest.raises(CommandError):
+        remove_source(project, project.figures[0].id)

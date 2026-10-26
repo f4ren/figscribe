@@ -34,6 +34,7 @@ from figscribe.commands import (
     find,
     remove_artist,
     remove_axes,
+    remove_source,
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
 from figscribe.fit import FitError, add_fit, refit, set_left_out
@@ -426,7 +427,7 @@ def _remove(project: Project, object_id: str) -> Command:
             return remove_axes(project, object_id)
         if field == "figures":
             return RemoveItem(None, "figures", object_id)
-        raise ToolError("data sources cannot be removed here")
+        return remove_source(project, object_id)
     raise ToolError(f"no object with id {object_id!r}")
 
 

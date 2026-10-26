@@ -274,10 +274,14 @@ def test_remove_takes_dependents_along(tools, workspace) -> None:
     assert workspace.project.figures[0].axes[0].artists == []
 
 
-def test_sources_and_unknown_ids_are_not_removed(tools, workspace) -> None:
-    *_, source = _ids(workspace)
-    with pytest.raises(ToolError, match="cannot be removed"):
-        tools.call("remove", {"object_id": source})
+def test_a_data_file_is_removed_with_its_plots(tools, workspace) -> None:
+    *_, data, source = _ids(workspace)
+    result = tools.call("remove", {"object_id": source})
+    assert set(result["removed"]) == {source, data}
+    assert workspace.project.sources == []
+
+
+def test_unknown_ids_are_not_removed(tools) -> None:
     with pytest.raises(ToolError, match="no object"):
         tools.call("remove", {"object_id": "nope"})
 
