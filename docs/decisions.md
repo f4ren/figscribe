@@ -1679,3 +1679,68 @@ under the mouse had no menu of its own.
 more. **Ratios from exact panel widths**: constrained layout puts the labels
 into the gaps, so what a column gets from a ratio is not proportional to
 it; the release shows the result at once, and a second drag corrects it.
+
+## 0041 — Unit conversion and a range per plot
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Times are measured in s but shown in min, h or days, and often counted from
+the start of the measurement rather than from a timestamp. "Show values in"
+(decision 0025) only relabels the ticks with a power of ten: the ticks are
+still placed in the data's unit, so a factor of 3600 would put them at 0,
+5000, 10 000 s and label them 1.39, 2.78 h, and limits and steps would still
+have to be typed in s. Separately, a plot sometimes should use only part of
+its data, e.g. the stable hours of a measurement. Axis limits do not do
+that: they crop the view, while histogram bins, an Allan deviation, fits and
+autoscaling still see every row. Roadmap F10 asked whether scale and offset
+per column are in scope; F2 left a range per plot open.
+
+### Decision
+
+Asked and answered by the user: the conversion acts on the data, not on the
+labels; it can start the values at zero; the range is given in x values.
+
+- **A conversion per plot and axis**, `x_conversion` and `y_conversion`, of
+  a factor, an optional start at zero and the unit the result is in:
+  shown = (value − start) × factor, where the start is the smallest value of
+  the column (`np.nanmin`), so "hours since the start of the measurement"
+  works with timestamps and with unsorted data. Errors and error bands are
+  scaled with their axis, never shifted. The axis knows nothing of it: it
+  is an axis in h, and everything typed on it is in h, so limits, ticks,
+  steps, reference lines, notes, fit ranges and the plot's range need no
+  second unit. This fits the judgement of decision 0036: one line of NumPy
+  in the script, a setting of a plot, no formula language.
+- **Fits fit the converted data**, so their parameters are in the shown
+  units (a decay time in h), as a person who converted first would get.
+  Changing a conversion fits the plot's fits again in the same undo step,
+  as leaving a point out does, and converts the plot's range and its fits'
+  ranges along, so the same rows stay selected.
+- **A range per plot**, `x_range`, in shown x values, both ends included:
+  only those rows are drawn, fitted and counted. Rows outside are not
+  drawn at all, unlike left-out rows, which stay visible; a fit range lies
+  within it. For a histogram it is the range of the values, and the bins
+  of a bin count span it; for an Allan deviation it is the time since the
+  first sample (the time column, or i·τ0), and the part within must be
+  unbroken.
+- **The script** converts once and names the result after the column and
+  the unit: `t_h = (t - np.nanmin(t)) / 3600  # h since the start`, and
+  folds the range into the plot's mask: `kept = (t_h >= 2) & (t_h <= 10)`.
+  A factor whose inverse is a whole number is written as a division, as
+  the prefix formatter does, and renderer and script share that choice.
+
+### Alternatives considered
+
+**A factor on the axis**, like the SI prefix: every coordinate typed on the
+axis (limits, steps, lines, notes, ranges, fits) would need converting in
+the renderer, the script and the problem list, and the ticks would not be
+round. **On the column reference**, as F10 first suggested: x errors and y
+errors would each need the same factor set again, which is easy to forget.
+**A derived column on the data source** (`t_h = t / 3600`, used by any
+plot): shares a conversion between plots, but is the first step towards
+column formulas, which the brief excludes. **A row range** ("rows 100 to
+2000"): exact, but not how a figure is read; it can follow if asked for.
+**Keeping fits in the file's units** and only drawing them converted: the
+parameters would not match the axis they are read against.

@@ -615,7 +615,8 @@ again in the same undo step and is refused if a fit would lack points; the
 assistant's `set_field` on `left_out` does the same. Residuals skip them
 too; the script names the mask `kept`. *Learned:* the click must pick the
 nearest point over all drawn parts, since the kept line also lies within
-the pick radius of a left-out point. *Open:* a row range per plot; the
+the pick radius of a left-out point. *Open:* ~~a row range per plot~~
+(planned as F11, by x values); the
 panel shows which rows are left out only in the preview.
 
 **Finding outliers: done** (2026-10-26): "Find outliers" in the fit dialog
@@ -840,6 +841,9 @@ is still asked for when plotting measurements. Decide each before building:
 - **Scale and offset per plotted column** (unit conversion, baseline
   subtraction, normalise to maximum), stored on the column reference and
   written as one line in the script. Small, but touches the non-goal.
+  *Decided* (2026-10-26, decision 0041): a factor and a start at zero per
+  plot and axis, on the data, with a range per plot; planned as F11.
+  Baseline subtraction and normalising stay open.
 - **Smoothing** (moving average, Savitzky–Golay) as a derived plot.
 - **Peak finding** (`scipy.signal.find_peaks`) that adds notes at the peaks.
 
@@ -848,6 +852,63 @@ it is a standard figure of a field, a few lines of NumPy or SciPy in the
 script, and a plot with a few settings; the model stores what is computed,
 never the result. The Allan deviation is the first (F4.9). The three above
 are judged by the same points when they come up.
+
+### F11 Units and a range per plot — M
+
+Asked for by the user (2026-10-26): show times in min, h or days, counted
+from the start, and draw a plot over part of its data only. Decided with
+the user in decision 0041: the conversion acts on the data, it can start at
+zero, and the range is given in x values.
+
+1. **Model.** `Conversion(factor > 0, from_start: bool, unit: str | None)`;
+   `x_conversion` and `y_conversion` (None by default) on line, points and
+   error bars, `x_conversion` on a histogram (its values) and an Allan
+   deviation (τ, factor only: `from_start` does nothing there and is greyed
+   by a B8.4 rule). `x_range: tuple[float, float] | None` on the same five,
+   ordered like `fit_range`, in shown values. Shown = (value − nanmin) ×
+   factor; errors and bands × factor. Defaults leave every 0.1.0 file as it
+   is, so no migration.
+2. **One place for the arithmetic**, used by renderer and code generator,
+   as `render/ticks.scaling` is for the prefix: the converted column, the
+   kept rows of a plot (range, then left-out rows, then non-finite x), and
+   how the script writes the factor (`/ 3600`, `* 1000`).
+3. **Renderer.** Lines, points and error bars draw only the rows in range;
+   left-out rows outside it are not drawn. A histogram counts the values in
+   range, with the bins of a bin count spanning it (`np.histogram`'s
+   `range`). An Allan deviation takes the samples whose time since the
+   first lies in range, τ0 unchanged; its τ are then converted.
+4. **Fits and residuals.** A fit and its residuals use the converted, kept
+   rows; its `fit_range` must lie within `x_range` (else a problem in the
+   list). A command for the conversion converts the plot's `x_range` and its
+   fits' `fit_range` along and fits again in the same undo step, refused
+   like leaving a point out when a fit then has too few points or fails;
+   held values and bounds stay as typed.
+5. **The axis follows**, in the same step: its unit text becomes the
+   conversion's unit when it was the old one or empty; its fixed limits,
+   ticks, step and the reference lines, ranges and notes on it are
+   converted along when no other data plot is drawn against that axis.
+6. **Code generator.** One line per converted column, named after column
+   and unit (`t_h`, `t_scaled` without a unit, numbered on a clash), with a
+   comment ("h since the start"); the range joins the plot's `kept` mask.
+   Equivalence cases: error bars with both conversions, a band and a fit;
+   a histogram with a range; an Allan deviation with a conversion and a
+   range.
+7. **Property panel.** In the plot's data section: "x in" with "as in the
+   file", "min (÷ 60)", "h (÷ 3600)", "days (÷ 86 400)", "ms (× 1000)" and
+   "another factor" (factor and unit fields); "Start at 0"; and "Use only x
+   from … to …" (for a histogram "values", for an Allan deviation "times").
+   Names, tooltips, a field-test object in `everything.py`.
+8. **Problem list and edge data.** A range with no rows in it; a fit range
+   outside the plot's range; an Allan range with a gap or too few samples;
+   a conversion of a column that is all NaN. Cases in the edge matrix.
+9. **Assistant.** `set_field` on the new fields goes through the same
+   command as the panel, so the fits are run again; `tools/spec.py` names
+   them.
+10. **Docs.** CHANGELOG, README, the manual checklist in `docs/testing.md`.
+
+*Follow-ups, only if asked:* the conversion in the plot dialog; dragging
+the range in the preview; a row range; converted positions of a color
+mesh; date axes (F5.5) for timestamps instead of hours since the start.
 
 ---
 
@@ -1038,7 +1099,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
-| F10 | Scale/offset per column, smoothing, peak finding: in scope or not? (Judged by decision 0036.) |
+| F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
 | Phase 5 | German user interface? |
