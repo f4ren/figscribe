@@ -11,7 +11,13 @@ the GUI as a whole and need no upkeep when something is added:
   field must change the model, leave a figure that can be drawn, change what
   is drawn and come back with undo. A field whose right outcome is something
   else goes into `EXPECTED` with the reason; a known problem into `KNOWN`
-  with its roadmap item, and the test says when it is fixed.
+  with its roadmap item, and the test says when it is fixed. A field greyed
+  out because it does nothing in that state is skipped there.
+- **`tests/gui/test_without_effect.py`** checks each rule of
+  `gui/effect.py`, which greys such fields out, against the renderer: while
+  the rule holds, a change of the field leaves the figure as it was; once
+  the setting it waits for is made, the same change shows. A new rule needs
+  a case there, or the test fails.
 - **`tests/gui/test_every_action.py`** triggers every menu action of the main
   window and every entry of the outline's context menus. Dialogs are answered
   in the test; no action may end in an error that figscribe calls a bug.

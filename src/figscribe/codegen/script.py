@@ -923,8 +923,19 @@ class _Writer:
             call = f"{ax}.imshow"
         else:
             args = [values]
-            if artist.x is not None and artist.y is not None:
-                args = [self.column(artist.x), self.column(artist.y), values]
+            if artist.x is not None or artist.y is not None:
+                # Without one of them, the cells are numbered along it.
+                x = (
+                    self.column(artist.x)
+                    if artist.x is not None
+                    else f"np.arange({values}.shape[1])"
+                )
+                y = (
+                    self.column(artist.y)
+                    if artist.y is not None
+                    else f"np.arange({values}.shape[0])"
+                )
+                args = [x, y, values]
             kwargs["shading"] = '"auto"'
             call = f"{ax}.pcolormesh"
         bar = artist.colorbar

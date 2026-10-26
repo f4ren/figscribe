@@ -60,11 +60,14 @@ def build(folder: Path) -> Path:
         folder / "map.npz",
         counts=np.exp(-((x - 8.0) ** 2 + (y - 6.0) ** 2) / 20.0) + 0.01,
         background=0.1 + 0.01 * x + 0.02 * y,
-        x=np.arange(16.0),
-        y=np.arange(12.0),
+        x=np.arange(16.0) ** 1.2,  # not the cell numbers, so a change shows
+        y=np.arange(12.0) ** 1.2,
     )
     scan = csv_source(folder / "scan.csv", folder, header_row=0, skip_rows=1)
     grid = numpy_source(folder / "map.npz", folder, array="counts")
+    background = numpy_source(folder / "map.npz", folder, array="background")
+    xs = numpy_source(folder / "map.npz", folder, array="x")
+    ys = numpy_source(folder / "map.npz", folder, array="y")
 
     def col(name: str) -> ColumnRef:
         return ColumnRef(source=scan.id, column=name)
@@ -103,7 +106,14 @@ def build(folder: Path) -> Path:
     d = Axes(
         row=1,
         col=1,
-        artists=[ColorMesh(c=ArrayRef(source=grid.id), colorbar=Colorbar())],
+        artists=[
+            ColorMesh(
+                c=ArrayRef(source=grid.id),
+                x=ColumnRef(source=xs.id, column=0),
+                y=ColumnRef(source=ys.id, column=0),
+                colorbar=Colorbar(),
+            )
+        ],
     )
     e = Axes(
         title="Detail",
@@ -131,7 +141,8 @@ def build(folder: Path) -> Path:
         panel_labels=PanelLabels(),
         axes=[a, b, c, d, e],
     )
-    project = Project(sources=[scan, grid], figures=[figure])
+    sources = [scan, grid, background, xs, ys]
+    project = Project(sources=sources, figures=[figure])
 
     history = History(project)
     fit = FitCurve(

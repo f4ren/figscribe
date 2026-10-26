@@ -52,6 +52,7 @@ from figscribe.fit import FitError, refit, residuals
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
+from figscribe.gui.effect import without_effect
 from figscribe.gui.markers import LIKE_THE_PLOT, marker_icon
 from figscribe.gui.markers import MARKERS as ALL_MARKERS
 from figscribe.gui.names import (
@@ -557,6 +558,7 @@ class PropertyPanel(QScrollArea):
             if isinstance(section.header, QToolButton):
                 self._folded[title] = not section.expanded
         self.editors = {}
+        self._captions: dict[Path, tuple[QLabel, str | None]] = {}
         self.sections = {}
         self.axis_links: dict[str, QPushButton] = {}
         body = QWidget()
@@ -590,6 +592,7 @@ class PropertyPanel(QScrollArea):
             self.axis_form.show(obj)
         elif obj is not None:
             self._fill(obj, layout)
+            self._grey_out(obj)
         layout.addStretch(1)
         old = self.takeWidget()
         if old is not None:
@@ -613,6 +616,17 @@ class PropertyPanel(QScrollArea):
             self.axis_form.show(obj)
         for path, editor in self.editors.items():
             editor.show(_get(obj, path))
+        self._grey_out(obj)
+
+    def _grey_out(self, obj: BaseModel) -> None:
+        """Grey out the fields that do nothing now, and say why."""
+        for path, editor in self.editors.items():
+            caption, tip = self._captions[path]
+            why = without_effect(obj, path, self.document.project)
+            told = "\n\n".join(t for t in (why, tip) if t)
+            for widget in (caption, editor.widget):
+                widget.setEnabled(why is None)
+                widget.setToolTip(told)
 
     def commit(self, oid: str, path: Path, value: Any) -> None:
         """Set the field at `path` of object `oid` to `value`.
@@ -813,6 +827,7 @@ class PropertyPanel(QScrollArea):
         self.editors[path] = editor
         caption = _form_label(name)
         tip = tip_for(type(obj), name)
+        self._captions[path] = (caption, tip)
         if tip is not None:
             caption.setToolTip(tip)
             editor.widget.setToolTip(tip)

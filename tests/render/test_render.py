@@ -727,3 +727,33 @@ def test_an_error_band_without_y_errors_draws_nothing_more(data, ref) -> None:
     plot = ErrorbarPlot(x=ref("t"), y=ref("U"), band=ErrorBand())
     ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
     assert not ax.collections and len(ax.lines) == 1
+
+
+def test_a_mesh_numbers_its_cells_along_an_axis_without_positions() -> None:
+    from figscribe.model import ArrayRef, ColorMesh, ColumnRef
+
+    grid = np.arange(12.0).reshape(3, 4)
+    columns = {"x": np.array([0.0, 1.0, 3.0, 7.0]), "short": np.arange(2.0)}
+
+    def data(ref):
+        return grid if isinstance(ref, ArrayRef) else columns[ref.column]
+
+    mesh = ColorMesh(c=ArrayRef(source="s"), x=ColumnRef(source="s", column="x"))
+    fig = render(Figure(axes=[Axes(artists=[mesh])]), data)
+    fig.canvas.draw()
+    assert fig.axes[0].get_ylim() == pytest.approx((-0.5, 2.5))  # rows 0, 1, 2
+
+    from figscribe.io import DataError
+
+    mesh.x = ColumnRef(source="s", column="short")
+    with pytest.raises(DataError, match="4 cells along x, but 2 x positions"):
+        render(Figure(axes=[Axes(artists=[mesh])]), data)
+
+
+def test_an_image_of_a_single_column_is_refused_in_words() -> None:
+    from figscribe.io import DataError
+    from figscribe.model import ArrayRef, ImagePlot
+
+    image = ImagePlot(data=ArrayRef(source="s"))
+    with pytest.raises(DataError, match="needs 2-D data"):
+        render(Figure(axes=[Axes(artists=[image])]), lambda ref: np.arange(5.0))

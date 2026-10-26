@@ -549,6 +549,12 @@ def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
     values = np.asarray(
         data(artist.data if isinstance(artist, ImagePlot) else artist.c)
     )
+    if values.ndim != 2:
+        what = "an image" if isinstance(artist, ImagePlot) else "a color mesh"
+        raise DataError(
+            f"{artist.label or what} needs 2-D data, a table of values, but the "
+            f"data chosen is {values.ndim}-D"
+        )
     scaling = colour_scaling(artist)
     if isinstance(artist, ImagePlot):
         placement = {"origin": artist.origin, "aspect": artist.aspect}
@@ -557,8 +563,20 @@ def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
         mappable = ax.imshow(values, cmap=artist.cmap, **scaling, **placement, **common)
     else:
         grid = []
-        if artist.x is not None and artist.y is not None:
-            grid = [data(artist.x), data(artist.y)]
+        if artist.x is not None or artist.y is not None:
+            # Without one of them, the cells are numbered along it.
+            rows, cols = values.shape
+            x = data(artist.x) if artist.x is not None else np.arange(cols)
+            y = data(artist.y) if artist.y is not None else np.arange(rows)
+            for name, positions, count in (("x", x, cols), ("y", y, rows)):
+                if len(positions) not in (count, count + 1):
+                    raise DataError(
+                        f"{artist.label or 'the color mesh'} has {count} cells "
+                        f"along {name}, but {len(positions)} {name} positions; it "
+                        f"needs {count} (the cells' centres) or {count + 1} (their "
+                        "edges)"
+                    )
+            grid = [x, y]
         mappable = ax.pcolormesh(
             *grid, values, cmap=artist.cmap, shading="auto", **scaling, **common
         )
