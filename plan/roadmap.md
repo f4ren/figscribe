@@ -616,8 +616,8 @@ assistant's `set_field` on `left_out` does the same. Residuals skip them
 too; the script names the mask `kept`. *Learned:* the click must pick the
 nearest point over all drawn parts, since the kept line also lies within
 the pick radius of a left-out point. *Open:* ~~a row range per plot~~
-(planned as F11, by x values); the
-panel shows which rows are left out only in the preview.
+(planned as F11, by x values); the panel shows which rows are left out
+only in the preview.
 
 **Finding outliers: done** (2026-10-26): "Find outliers" in the fit dialog
 proposes the points beyond k·σ (`fit.outliers`, iterated until the set
