@@ -19,11 +19,14 @@ from figscribe.commands.history import History
 from figscribe.commands.ops import (
     add_figure,
     add_panel,
+    copy_style,
+    drawing_order,
     duplicate_figure,
     remove_artist,
     remove_axes,
     remove_figure,
     remove_source,
+    to_front,
 )
 
 __all__ = [
@@ -38,9 +41,12 @@ __all__ = [
     "find",
     "add_figure",
     "add_panel",
+    "copy_style",
+    "drawing_order",
     "duplicate_figure",
     "remove_artist",
     "remove_axes",
     "remove_figure",
     "remove_source",
+    "to_front",
 ]

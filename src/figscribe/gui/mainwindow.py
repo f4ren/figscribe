@@ -216,6 +216,7 @@ class MainWindow(QMainWindow):
         )
         self.properties.edit_fit = self.edit_fit
         self.preview.show_error = self.show_error
+        self.preview.fit_requested.connect(self._fit_plot)
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
@@ -702,6 +703,10 @@ class MainWindow(QMainWindow):
             return
         self._push(command)
         self.document.select(fit.id)
+
+    def _fit_plot(self, oid: str) -> None:
+        self.document.select(oid)
+        self.add_fit()
 
     def edit_fit(self, fit_id: str) -> None:
         """Open the fit dialog on the fit `fit_id` and take what it changes,
