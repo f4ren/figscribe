@@ -12,6 +12,13 @@ release open in every later one.
   `figscribe script --figure NAME` and `--all`.
 - Error bands: an error bar plot draws its y errors as a shaded band around
   the line, for dense data.
+- The Allan deviation: σ_y(τ) of an evenly sampled series, frequency or
+  phase, on log-log axes, for the stability of clocks, lasers and sensors.
+  The script computes it with a few lines of NumPy, no extra package.
+- The plot dialog shows the kinds as tiles, the columns as a sentence, a
+  preview with the data, and which panel the plot goes to.
+- Settings that do nothing in the current state are greyed out, and their
+  tooltip says why.
 
 **Editing where it is drawn**
 - Double-click an axis label, title, legend entry or note to edit it in
@@ -21,6 +28,8 @@ release open in every later one.
   *Fit…*, *Hide*.
 
 **Fixed**
+- With openai 3.38 or later, the assistant again says why Gemini refused a
+  request and how long to wait at a rate limit.
 - A color the panel refused no longer breaks the panel the next time it is
   built.
 - The script names the encoding of a UTF-8 data file with letters beyond

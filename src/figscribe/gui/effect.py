@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from figscribe.model import (
+    AllanDeviationPlot,
     Axes,
     ColorMesh,
     ErrorbarPlot,
@@ -93,13 +94,13 @@ RULES: list[Rule] = [
         lambda axes, _: not axes.legend.visible or axes.legend.position is not None,
     ),
     Rule(
-        (LinePlot, ErrorbarPlot),
+        (LinePlot, ErrorbarPlot, AllanDeviationPlot),
         (("linewidth",),),
         'there is no line: its line style is "none"',
         lambda plot, _: plot.linestyle in NO_LINE,
     ),
     Rule(
-        (LinePlot,),
+        (LinePlot, AllanDeviationPlot),
         (("markersize",),),
         "the plot has no marker",
         lambda plot, _: plot.marker is None,
@@ -122,6 +123,12 @@ RULES: list[Rule] = [
         (("axis",),),
         "the line is vertical: it lies along x, whichever y axis it belongs to",
         lambda line, _: line.orientation == "vertical",
+    ),
+    Rule(
+        (AllanDeviationPlot,),
+        (("sample_interval",),),
+        "a column of times gives the interval",
+        lambda plot, _: plot.time is not None,
     ),
     Rule(
         (ImagePlot, ColorMesh),

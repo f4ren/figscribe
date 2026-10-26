@@ -371,6 +371,10 @@ _ICONS = {
     "span": '<rect x="4.5" y="1.5" width="7" height="13" fill="{c}" opacity="0.4"/>',
     "image": '<rect x="2" y="2" width="12" height="12" fill="{c}" opacity="0.35"/>'
     '<rect x="2" y="2" width="6" height="6" fill="{c}"/>',
+    "allan": '<path d="M2 3 L6 7.5 L10 10.5 L14 11.5" stroke="{c}" stroke-width="1.5" '
+    'fill="none"/><circle cx="2.5" cy="3.5" r="1.6" fill="{c}"/>'
+    '<circle cx="6" cy="7.5" r="1.6" fill="{c}"/><circle cx="10" cy="10.5" r="1.6" '
+    'fill="{c}"/><circle cx="14" cy="11.5" r="1.6" fill="{c}"/>',
     "colormesh": '<rect x="2" y="2" width="6" height="6" fill="{c}" opacity="0.3"/>'
     '<rect x="8" y="2" width="6" height="6" fill="{c}" opacity="0.75"/>'
     '<rect x="2" y="8" width="6" height="6" fill="{c}"/>'
@@ -391,6 +395,7 @@ ARTIST_ICONS = {
     "histogram": "histogram",
     "image": "image",
     "colormesh": "colormesh",
+    "allan": "allan",
     "refline": "refline",
     "span": "span",
 }

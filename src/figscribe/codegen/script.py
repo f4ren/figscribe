@@ -22,6 +22,7 @@ from figscribe import __version__
 from figscribe.fit import free_parameters, numpy_source, parameter_names
 from figscribe.io.files import resolve_path
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     Axes,
@@ -187,6 +188,8 @@ class _Writer:
         self.kept = self._name_kept()
         """{plot id: name of the mask of its rows that are not left out}."""
         self.fits = self._name_fits()
+        self.allan = self._name_allan()
+        """{Allan deviation plot id: names of its τ0, phase, m and σ}."""
         self.axes_names = self._name_axes()
         self.axis_specs = self._ticks_that_fit()
 
@@ -197,7 +200,7 @@ class _Writer:
         refs: list[ColumnRef] = []
         for axes in self.figure.axes:
             for artist in axes.artists:
-                for field in ("x", "y", "xerr", "yerr", "values"):
+                for field in ("x", "y", "xerr", "yerr", "values", "time"):
                     ref = getattr(artist, field, None)
                     if isinstance(ref, ColumnRef) and ref not in refs:
                         refs.append(ref)
@@ -310,6 +313,27 @@ class _Writer:
                 self.held[fit.id] = held
         return found
 
+    def _name_allan(self) -> dict[str, dict[str, str]]:
+        """Names for each Allan deviation that is drawn: one with gaps is
+        not (as the renderer does not), when the data is known."""
+        taken = set(RESERVED) | set(self.columns.values()) | {"overlapping_adev"}
+        found: dict[str, dict[str, str]] = {}
+        plots = [a for a in self.artists.values() if isinstance(a, AllanDeviationPlot)]
+        for number, plot in enumerate(plots, start=1):
+            if self.data is not None and not np.all(
+                np.isfinite(np.asarray(self.data(plot.values), dtype=float))
+            ):
+                continue
+            names = {}
+            for base in ("tau0", "phase", "m", "adev"):
+                name = base if number == 1 else f"{base}_{number}"
+                while name in taken:
+                    name += "_"
+                taken.add(name)
+                names[base] = name
+            found[plot.id] = names
+        return found
+
     def _name_axes(self) -> list[str]:
         if len(self.figure.axes) == 1:
             return ["ax"]
@@ -345,6 +369,7 @@ class _Writer:
         self._left_out()
         self._fit_models()
         self._fits()
+        self._allan_deviations()
         self._figure()
         self.section("Save")
         self.emit(f"fig.savefig(HERE / {_str(output)})")
@@ -582,6 +607,63 @@ class _Writer:
                     f"def {self.held[fit_id]}(x, {', '.join(free)}):",
                     f"    return {function}(x, {', '.join(arguments)})",
                 )
+
+    def _allan_deviations(self) -> None:
+        if not self.allan:
+            return
+        self.section("Allan deviation")
+        self.emit(*OVERLAPPING_ADEV.splitlines(), "")
+        for plot_id, names in self.allan.items():
+            plot = self.artists[plot_id]
+            tau0, phase, m, adev = names.values()
+            values = self.column(plot.values)
+            kind = "phase in s" if plot.data_type == "phase" else "fractional frequency"
+            self.emit("", f"# {_describe(plot)}: {values} is {kind}.")
+            if plot.time is not None:
+                times = self.column(plot.time)
+                self.emit(
+                    f"# The sample interval is the median step of {times}.",
+                    f"{tau0} = np.median(np.diff({times}))",
+                )
+            else:
+                self.emit(f"{tau0} = {float(plot.sample_interval)!r}  # s")
+            if plot.data_type == "phase":
+                self.emit(f"{phase} = {values}")
+            else:
+                self.emit(
+                    "# Summed up into phase, starting from 0.",
+                    f"{phase} = np.concatenate([[0.0], np.cumsum({values}) * {tau0}])",
+                )
+            spacing = {
+                "octave": f"{m} = 2 ** np.arange(62)  # tau = 1, 2, 4, 8, ... tau0",
+                "decade": f"{m} = np.array([k * 10**e for e in range(19) for k in "
+                "(1, 2, 5)])",
+                "all": f"{m} = np.arange(1, ({phase}.size - 1) // 2 + 1)",
+            }[plot.taus]
+            self.emit(spacing)
+            if plot.taus != "all":
+                self.emit(f"{m} = {m}[{m} <= ({phase}.size - 1) // 2]")
+            self.emit(f"{adev} = overlapping_adev({phase}, {tau0}, {m})")
+
+    def _allan_plot(self, ax: str, plot, common: dict[str, str]) -> None:
+        if plot.id not in self.allan:
+            self.emit(
+                f"# {_describe(plot)}: {self.column(plot.values)} has gaps, so its "
+                "Allan deviation is not drawn."
+            )
+            return
+        tau0, phase, m, adev = self.allan[plot.id].values()
+        kwargs = {}
+        if plot.error_bars:
+            kwargs["yerr"] = f"{adev} / np.sqrt({phase}.size - 2 * {m})"
+        kwargs |= _some(color=plot.color)
+        kwargs |= {
+            "marker": _str(plot.marker or "none"),
+            "markersize": _num(plot.markersize),
+            "linestyle": _str(plot.linestyle),
+            "linewidth": _num(plot.linewidth),
+        }
+        self.call(f"{ax}.errorbar", f"{m} * {tau0}", adev, **kwargs, **common)
 
     def _fits(self) -> None:
         for fit_id, (function, popt) in self.fits.items():
@@ -883,6 +965,8 @@ class _Writer:
             )
         elif isinstance(artist, ImagePlot | ColorMesh):
             self._two_d(ax, artist, common)
+        elif isinstance(artist, AllanDeviationPlot):
+            self._allan_plot(ax, artist, common)
         elif isinstance(artist, FitCurve):
             self._fit_curve(ax, artist, common)
         elif isinstance(artist, ResidualPlot):
@@ -1171,6 +1255,19 @@ class _Writer:
 
 
 # --- helpers ---------------------------------------------------------------------
+
+
+OVERLAPPING_ADEV = '''\
+def overlapping_adev(phase, tau0, m):
+    """sigma_y(tau) at tau = m * tau0 from phase in s, with the overlapping
+    estimator of NIST SP 1065."""
+    sigma = np.empty(m.size)
+    for k, mk in enumerate(m):
+        d = phase[2 * mk :] - 2 * phase[mk:-mk] + phase[: -2 * mk]
+        sigma[k] = np.sqrt(np.sum(d**2) / (2 * (mk * tau0) ** 2 * d.size))
+    return sigma'''
+"""The function the script computes Allan deviations with; figscribe.allan
+does the same, step by step."""
 
 
 def _common(artist, default_zorder: float) -> dict[str, str]:

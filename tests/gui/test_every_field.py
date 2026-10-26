@@ -129,6 +129,7 @@ OBJECTS: dict[str, Callable[[Project], str]] = {
     "residuals": _artist("residual"),
     "note": _artist("annotation"),
     "histogram": _artist("histogram"),
+    "Allan deviation": _artist("allan"),
     "reference line": _artist("refline"),
     "shaded range": _artist("span"),
     "image": _artist("image"),
