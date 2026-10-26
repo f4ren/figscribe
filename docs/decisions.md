@@ -1505,3 +1505,48 @@ step** (any column through any function before plotting): that is the
 column-formula language the brief excludes. **Computing outside**: works
 today (import τ, σ and its error as a CSV and draw error bars on log axes),
 but the figure then no longer says how it came from the measurement.
+
+## 0037 — Several figures in one project
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The model held a list of figures from the start, but the GUI and `figscribe
+script` used only the first, and there was no way to add one (roadmap F8).
+A scientist's project typically has several plots of the same data: the
+measurement, a detail, the fit's residuals for the supplement.
+
+### Decision
+
+- **Tabs above the preview, and the outline**, as the user chose: the tabs
+  show only while there is more than one figure, so that a project of one
+  looks as before. Choosing a tab, or anything of a figure in the outline,
+  shows that figure; `Document.figure_changed` tells the preview and the code
+  drawer, which until then redrew only when the model changed.
+- **A new figure takes the look of the shown one**, size, fonts, ticks and
+  panel letters, since a project's figures go into the same paper; it gets
+  one empty panel and the name "Figure N" after its place. *Figure* sits in
+  the toolbar after *Data*, in the order a figure is built, as the user
+  proposed.
+- **A duplicate has ids of its own**: its fits, residuals and insets point at
+  its own plots and panels, its plots at the same data files.
+- **One menu for a figure**, in the tabs and the outline: rename, duplicate,
+  move, delete. Dragging a tab moves the figure once the button is released,
+  as one undo step, not one per tab passed.
+- **A project keeps at least one figure**: deleting the last is refused with
+  a message, in the GUI and in the assistant's remove.
+- **Export all** writes every figure, as PDF, SVG, PNG or its script, into a
+  folder, named after the figures; `figscribe script --all` does the same for
+  scripts, `--figure NAME` picks one. Two figures whose names give the same
+  file name get a number (`scan`, `scan-2`), so no file overwrites another.
+
+### Alternatives considered
+
+**Tabs only, or the outline only**: the outline already listed the figures,
+but which one is shown could then be seen only from the selection; tabs
+alone would hide the other figures' contents. **A new figure from the
+defaults**: every journal setting would have to be made again. **Moving a
+figure with each tab passed while dragging**: one undo step per tab, for one
+intended move.

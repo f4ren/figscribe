@@ -45,6 +45,9 @@ class Document(QObject):
     """The selected object id, or None."""
     state_changed = Signal()
     """Path or saved state changed; the window title follows it."""
+    figure_changed = Signal()
+    """Another figure is shown, since something in it was selected; a change
+    of the model announces itself through `changed` instead."""
 
     def __init__(self, project: Project | None = None, path: Path | None = None):
         super().__init__()
@@ -150,11 +153,14 @@ class Document(QObject):
         if oid == self._selected:
             return
         self._selected = oid
+        shown = self.figure
         if oid is not None:
             figure = self._figure_of(oid)
             if figure is not None:
                 self.current_figure = figure.id
         self.selection_changed.emit(oid)
+        if self.figure is not shown:
+            self.figure_changed.emit()
 
     @property
     def figure(self) -> Figure | None:

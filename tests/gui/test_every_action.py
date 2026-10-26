@@ -58,6 +58,15 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
     )
     monkeypatch.setattr(QFileDialog, "getOpenFileName", open_file)
     monkeypatch.setattr(QFileDialog, "getSaveFileName", save_file)
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(out))
+    monkeypatch.setattr(
+        QInputDialog,
+        "getItem",
+        lambda parent, title, label, items, *a, **k: (
+            items[0],
+            True,
+        ),
+    )
     monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("A note", True))
     monkeypatch.setattr(
         QInputDialog, "getMultiLineText", lambda *a, **k: ("A note\nof two lines", True)

@@ -34,16 +34,19 @@ from PySide6.QtWidgets import (
 
 from figscribe.assistant.chat import Provider
 from figscribe.assistant.toolserver import ToolServer
-from figscribe.codegen import generate, script_name
+from figscribe.codegen import file_stems, generate, script_name
 from figscribe.commands import (
     CommandError,
     InsertItem,
     Macro,
     SetField,
+    add_figure,
     add_panel,
+    duplicate_figure,
     find,
     remove_artist,
     remove_axes,
+    remove_figure,
     remove_source,
 )
 from figscribe.commands.core import noun, walk
@@ -55,6 +58,7 @@ from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.databar import DataBar
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
+from figscribe.gui.figures import FigureTabs, move_figure
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
@@ -101,6 +105,13 @@ DATA_FILTER = (
 )
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
 SCRIPT_FILTER = "Python script (*.py)"
+EXPORT_ALL_FORMATS = {
+    "PDF": ".pdf",
+    "SVG": ".svg",
+    "PNG": ".png",
+    "Python scripts": ".py",
+}
+"""What Export All Figures writes, each figure into a file of its own."""
 DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat", ".npy", ".npz"}
 NUMPY_SUFFIXES = {".npy", ".npz"}
 START_FILTER = (
@@ -133,6 +144,8 @@ class MainWindow(QMainWindow):
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         self.ask_text: Callable[[str, str], str | None] = self._ask_text
         """Asks for a line of text, None if cancelled; replaced in tests."""
+        self.ask_name: Callable[[str, str, str], str | None] = self._ask_name
+        """Asks for a name, given the current one; None if cancelled."""
         """Runs a dialog, True if accepted; replaced in tests."""
 
         self.preview = Preview(self.document)
@@ -150,10 +163,14 @@ class MainWindow(QMainWindow):
         self.code.save_requested.connect(self._script_dialog)
         self.code.hide()
         self.data_bar = DataBar(self.document)
+        self.figure_tabs = FigureTabs(self.document)
+        self.figure_tabs.requested.connect(self.figure_action)
+        self.figure_tabs.add_requested.connect(self.add_figure)
         figure_area = QWidget()
         column = QVBoxLayout(figure_area)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
+        column.addWidget(self.figure_tabs)
         column.addWidget(self.data_bar)
         column.addWidget(self.preview, 1)
         self.workspace = QSplitter(Qt.Orientation.Vertical)
@@ -181,6 +198,7 @@ class MainWindow(QMainWindow):
             lambda oid, side: self.add_panel(side, oid)
         )
         self.outline.delete_requested.connect(self._delete)
+        self.outline.figure_requested.connect(self.figure_action)
         self.outline.note_requested.connect(self.add_note)
         self.outline.marking_requested.connect(
             lambda oid, kind, orientation: self.add_marking(kind, orientation, oid)
@@ -408,9 +426,10 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.show_error(f"Cannot export to {path}", exc)
 
-    def export_script(self, path: str | Path) -> None:
-        """Write the Python script that draws the shown figure to `path`."""
-        figure = self.document.figure
+    def export_script(self, path: str | Path, figure=None) -> None:
+        """Write the Python script that draws `figure` (default: the shown
+        one) to `path`."""
+        figure = figure or self.document.figure
         if figure is None:
             return
         path = Path(path)
@@ -426,6 +445,50 @@ class MainWindow(QMainWindow):
             path.write_text(script, encoding="utf-8")
         except Exception as exc:
             self.show_error(f"Cannot write {path.name}", exc)
+
+    def export_all(self, folder: str | Path, suffix: str) -> list[Path]:
+        """Write every figure into `folder`, each named after it, as `suffix`
+        (".pdf", ".svg", ".png", or ".py" for its script); the paths written."""
+        folder = Path(folder)
+        written: list[Path] = []
+        for figure, path in zip(
+            self.document.project.figures,
+            export_names(self.document.project.figures, folder, suffix),
+            strict=True,
+        ):
+            try:
+                if suffix == ".py":
+                    self.export_script(path, figure)
+                else:
+                    export(figure, self.document.data, path)
+            except Exception as exc:
+                self.show_error(f"Cannot export {figure.name}", exc)
+                break
+            written.append(path)
+        return written
+
+    def _export_all_dialog(self) -> None:
+        folder = QFileDialog.getExistingDirectory(
+            self, "Export all figures into", str(self.document.project_dir or "")
+        )
+        if not folder:
+            return
+        formats = list(EXPORT_ALL_FORMATS)
+        chosen, ok = QInputDialog.getItem(
+            self, "Export all figures", "Each figure as:", formats, 0, False
+        )
+        if not ok:
+            return
+        suffix = EXPORT_ALL_FORMATS[chosen]
+        names = export_names(self.document.project.figures, Path(folder), suffix)
+        there = [p.name for p in names if p.exists()]
+        if there and not self.ask(
+            "Replace files",
+            f"{folder} already has {', '.join(there)}. Replace them?",
+        ):
+            return
+        written = self.export_all(folder, suffix)
+        self.statusBar().showMessage(f"Exported {len(written)} figures", 5000)
 
     def _script_dialog(self) -> None:
         figure = self.document.figure
@@ -729,6 +792,54 @@ class MainWindow(QMainWindow):
         fittable = [a for a in plots if isinstance(a, FITTABLE)]
         return fittable[0] if len(fittable) == 1 else None
 
+    def add_figure(self) -> None:
+        """Add a figure after the shown one, with its look, and show it."""
+        shown = self.document.figure
+        after = shown.id if shown is not None else None
+        command, figure = add_figure(self.document.project, after)
+        self._push(command)
+        self.document.select(figure.id)
+
+    def duplicate_figure(self, oid: str | None = None) -> None:
+        """Copy the figure `oid` (default: the shown one) and show the copy."""
+        oid = oid or (self.document.figure.id if self.document.figure else None)
+        if oid is None:
+            return
+        command, copy = duplicate_figure(self.document.project, oid)
+        self._push(command)
+        self.document.select(copy.id)
+
+    def rename_figure(self, oid: str | None = None) -> None:
+        figure = self._figure(oid)
+        if figure is None:
+            return
+        name = self.ask_name("Rename figure", "Name of the figure:", figure.name)
+        if name and name != figure.name:
+            self._push(SetField(figure.id, ("name",), name, "Rename figure"))
+
+    def figure_action(self, oid: str, what: str) -> None:
+        """Do `what` with the figure `oid`, as the figure menu offers it."""
+        if what == "rename":
+            self.rename_figure(oid)
+        elif what == "duplicate":
+            self.duplicate_figure(oid)
+        elif what in ("earlier", "later"):
+            try:
+                move_figure(self.document, oid, -1 if what == "earlier" else 1)
+            except CommandError as exc:
+                self.show_error("Cannot move the figure", exc)
+        elif what == "delete":
+            self._delete(oid)
+
+    def _figure(self, oid: str | None):
+        if oid is None:
+            return self.document.figure
+        return next((f for f in self.document.project.figures if f.id == oid), None)
+
+    def _ask_name(self, title: str, prompt: str, current: str) -> str | None:
+        text, ok = QInputDialog.getText(self, title, prompt, text=current)
+        return text.strip() or None if ok else None
+
     def add_panel(self, side: str, oid: str | None = None) -> None:
         """Add an empty panel beside or inside the panel `oid` (default: the
         selected one, or that of the selected plot, or the first)."""
@@ -800,7 +911,7 @@ class MainWindow(QMainWindow):
     # --- edit actions -------------------------------------------------------
 
     def delete_selected(self) -> None:
-        """Remove the selected artist or axes, with what depends on it."""
+        """Remove the selected object, with what depends on it."""
         oid = self.document.selected
         for obj, _, field in walk(self.document.project):
             if obj.id != oid:
@@ -809,6 +920,11 @@ class MainWindow(QMainWindow):
                 self._push(remove_artist(self.document.project, oid))
             elif isinstance(obj, Axes):
                 self._push(remove_axes(self.document.project, oid))
+            elif field == "figures":
+                try:
+                    self._push(remove_figure(self.document.project, oid))
+                except CommandError as exc:
+                    self.show_error("Cannot delete the figure", exc)
             elif field == "sources":
                 self._remove_source(oid)
             return
@@ -843,6 +959,7 @@ class MainWindow(QMainWindow):
         document.allow_preview = self.document.allow_preview
         self.document = document
         views = (
+            self.figure_tabs,
             self.data_bar,
             self.preview,
             self.outline,
@@ -964,6 +1081,7 @@ class MainWindow(QMainWindow):
         self.script_action = self._action(
             file, "Export &Python Script…", self._script_dialog, "Ctrl+Shift+E"
         )
+        self._action(file, "Export A&ll Figures…", self._export_all_dialog)
         file.addSeparator()
         self._action(file, "&Quit", self.close, QKeySequence.StandardKey.Quit)
 
@@ -983,6 +1101,9 @@ class MainWindow(QMainWindow):
         self.import_action = self._action(
             insert, "&Import Data…", lambda: self.import_csv(), "Ctrl+I"
         )
+        self.add_figure_action = self._action(insert, "Add Fi&gure", self.add_figure)
+        self._action(insert, "D&uplicate Figure", lambda: self.duplicate_figure())
+        insert.addSeparator()
         self.plot_action = self._action(
             insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P"
         )
@@ -1054,10 +1175,14 @@ class MainWindow(QMainWindow):
         bar.addWidget(spacer)
 
         # What can be added, in the order a figure is built: data, then what
-        # holds what. Figure joins after Data once a project has several.
+        # holds what.
         self.import_action.setIcon(theme.icon("plus"))
         self.import_action.setIconText("Data")
         bar.addAction(self.import_action)
+        self.add_figure_action.setIcon(theme.icon("plus"))
+        self.add_figure_action.setIconText("Figure")
+        self.add_figure_action.setToolTip("Add a figure after the shown one")
+        bar.addAction(self.add_figure_action)
         panel = QToolButton()
         panel.setText("Panel")
         panel.setIcon(theme.icon("plus"))
@@ -1145,6 +1270,12 @@ def _dropped_files(event) -> list[Path]:
     if not mime.hasUrls():
         return []
     return [Path(url.toLocalFile()) for url in mime.urls() if url.isLocalFile()]
+
+
+def export_names(figures, folder: Path, suffix: str) -> list[Path]:
+    """A file in `folder` for each figure, named after it; a name two figures
+    share gets a number."""
+    return [folder / f"{stem}{suffix}" for stem in file_stems(figures)]
 
 
 def _axes_with_id(figure, oid: str | None) -> Axes | None:

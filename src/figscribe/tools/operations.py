@@ -34,6 +34,7 @@ from figscribe.commands import (
     find,
     remove_artist,
     remove_axes,
+    remove_figure,
     remove_source,
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
@@ -426,7 +427,7 @@ def _remove(project: Project, object_id: str) -> Command:
         if field == "axes":
             return remove_axes(project, object_id)
         if field == "figures":
-            return RemoveItem(None, "figures", object_id)
+            return remove_figure(project, object_id)
         return remove_source(project, object_id)
     raise ToolError(f"no object with id {object_id!r}")
 

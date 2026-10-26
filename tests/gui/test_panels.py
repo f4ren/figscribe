@@ -91,7 +91,14 @@ def test_deleting_from_the_context_menu(window: MainWindow) -> None:
     window.outline.context_menu(axes.id).actions()[-1].trigger()
     assert window.document.figure.axes == []
     figure_menu = window.outline.context_menu(window.document.figure.id)
-    assert _menu_texts(figure_menu) == ["Add a panel"]
+    assert _menu_texts(figure_menu) == [
+        "Add a panel",
+        "Rename…",
+        "Duplicate",
+        "Move up",
+        "Move down",
+        "Delete figure",
+    ]
     figure_menu.actions()[0].trigger()
     assert len(window.document.figure.axes) == 1
 

@@ -338,6 +338,17 @@ def test_a_data_file_is_removed_with_its_plots(tools, workspace) -> None:
     assert workspace.project.sources == []
 
 
+def test_a_figure_is_removed_but_never_the_last(tools, workspace) -> None:
+    figure, *_ = _ids(workspace)
+    with pytest.raises(ToolError, match="at least one figure"):
+        tools.call("remove", {"object_id": figure})
+    new = {"name": "B", "axes": [{}]}  # as the system prompt says
+    added = tools.call("insert", {"parent_id": None, "field": "figures", "object": new})
+    tools.call("remove", {"object_id": figure})
+    assert [f.id for f in workspace.project.figures] == [added["id"]]
+    assert len(workspace.project.figures[0].axes) == 1
+
+
 def test_unknown_ids_are_not_removed(tools) -> None:
     with pytest.raises(ToolError, match="no object"):
         tools.call("remove", {"object_id": "nope"})

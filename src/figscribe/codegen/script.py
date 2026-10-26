@@ -121,6 +121,20 @@ def script_name(figure: Figure) -> str:
     return f"{_slug(figure.name) or 'figure'}.py"
 
 
+def file_stems(figures: list[Figure]) -> list[str]:
+    """A file name without suffix for each figure, as `script_name` makes it;
+    a name two figures share gets a number, so that no file overwrites
+    another."""
+    stems: list[str] = []
+    for figure in figures:
+        stem = base = script_name(figure).removesuffix(".py")
+        n = 2
+        while stem in stems:
+            stem, n = f"{base}-{n}", n + 1
+        stems.append(stem)
+    return stems
+
+
 def generate(
     project: Project,
     figure: Figure | None = None,
