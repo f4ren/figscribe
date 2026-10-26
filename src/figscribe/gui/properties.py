@@ -25,8 +25,8 @@ from typing import Any, Literal
 import matplotlib.style
 from matplotlib.colors import TABLEAU_COLORS, to_hex
 from pydantic import BaseModel
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -510,6 +510,30 @@ TIPS = {
 "Class.field" where the same name means something else there."""
 
 
+FILTER_DELAY_MS = 150
+"""How long the search waits after a key before it filters, so that typing
+a word builds the form once."""
+
+
+def _row_text(form: QFormLayout, row: int) -> str:
+    """What a search looks in for a row: its caption, and the tooltips of
+    the caption and the field, lower case."""
+    parts = []
+    for role in (
+        QFormLayout.ItemRole.LabelRole,
+        QFormLayout.ItemRole.FieldRole,
+        QFormLayout.ItemRole.SpanningRole,
+    ):
+        item = form.itemAt(row, role)
+        widget = item.widget() if item is not None else None
+        if widget is None:
+            continue
+        if role != QFormLayout.ItemRole.FieldRole:  # a field's text is its value
+            parts.append(getattr(widget, "text", lambda: "")())
+        parts.append(widget.toolTip())
+    return " ".join(p for p in parts if isinstance(p, str)).lower()
+
+
 def tip_for(owner: type[BaseModel], name: str) -> str | None:
     return TIPS.get(f"{owner.__name__}.{name}", TIPS.get(name))
 
@@ -555,6 +579,26 @@ class PropertyPanel(QScrollArea):
         self.edit_fit: Callable[[str], None] = lambda fit_id: None
         """Opens the fit dialog on a fit that is there; the window does."""
         self._folded = {title: True for title in COLLAPSED}
+        self.search = QLineEdit()
+        """Filters the fields by name and tooltip; the window puts it above
+        the panel, where it stays when the form is built anew."""
+        self.search.setObjectName("search")
+        self.search.setPlaceholderText("Find a setting, e.g. tick or font")
+        self.search.setClearButtonEnabled(True)
+        self._filtering = QTimer(self)
+        self._filtering.setSingleShot(True)
+        self._filtering.setInterval(FILTER_DELAY_MS)
+        self._filtering.timeout.connect(self.rebuild)
+        self.search.textChanged.connect(lambda _: self._filtering.start())
+        QShortcut(
+            QKeySequence(Qt.Key.Key_Escape),
+            self.search,
+            self.search.clear,
+            context=Qt.ShortcutContext.WidgetShortcut,
+        )
+        self.matches = 0
+        """How many fields the search shows; all of them without a search."""
+        self._searched = False
         self.set_document(document)
 
     def set_document(self, document: Document) -> None:
@@ -570,7 +614,8 @@ class PropertyPanel(QScrollArea):
     def rebuild(self, *_: object) -> None:
         """Build the form for the selected object."""
         for title, section in self.sections.items():
-            if isinstance(section.header, QToolButton):
+            # What the search opened is not what the user unfolded.
+            if isinstance(section.header, QToolButton) and not self._searched:
                 self._folded[title] = not section.expanded
         self.editors = {}
         self._captions: dict[Path, tuple[QLabel, str | None]] = {}
@@ -608,6 +653,11 @@ class PropertyPanel(QScrollArea):
         elif obj is not None:
             self._fill(obj, layout)
             self._grey_out(obj)
+        self._no_match = label("", "hint")
+        self._no_match.setContentsMargins(16, 16, 16, 16)
+        self._no_match.hide()
+        layout.addWidget(self._no_match)
+        self._filter()
         layout.addStretch(1)
         old = self.takeWidget()
         if old is not None:
@@ -632,6 +682,70 @@ class PropertyPanel(QScrollArea):
         for path, editor in self.editors.items():
             editor.show(_get(obj, path))
         self._grey_out(obj)
+        self._filter()
+
+    def _filter(self) -> None:
+        """Hide the fields the search does not find, and the sections left
+        empty; open a folded section that has one."""
+        self._filtering.stop()
+        words = self.search.text().lower().split()
+        self._searched = bool(words)
+        self.matches = 0
+        for title, section in self.sections.items():
+            form = section.body.layout()
+            if not isinstance(form, QFormLayout):
+                continue
+            titled = all(w in title.lower() for w in words)
+            shown = 0
+            for row in range(form.rowCount()):
+                if not form.isRowVisible(row):
+                    continue  # hidden by the form itself, for another setting
+                if titled or all(w in _row_text(form, row) for w in words):
+                    shown += 1
+                else:
+                    form.setRowVisible(row, False)
+            self.matches += shown
+            if not words:
+                continue
+            section.setVisible(shown > 0)
+            if shown and isinstance(section.header, QToolButton):
+                section.header.setChecked(True)
+        if words and not self.matches and self.sections:
+            self._no_match.setText(f"No setting here matches “{self.search.text()}”.")
+            self._no_match.show()
+
+    def reveal(self, caption: str, title: str) -> None:
+        """Show the field `caption` of section `title`, as `settings` names
+        it: without a search, its section open, scrolled to and focused."""
+        if self.search.text():
+            self.search.clear()
+            self.rebuild()
+        for text, where, widget in self.settings():
+            if (text, where) == (caption, title):
+                section = self.sections[title]
+                if isinstance(section.header, QToolButton):
+                    section.header.setChecked(True)
+                self.ensureWidgetVisible(widget)
+                widget.setFocus(Qt.FocusReason.ShortcutFocusReason)
+                return
+
+    def settings(self) -> list[tuple[str, str, QWidget]]:
+        """(caption, section, field widget) of every field of the selection,
+        for the command palette."""
+        found = []
+        for title, section in self.sections.items():
+            form = section.body.layout()
+            if not isinstance(form, QFormLayout):
+                continue
+            for row in range(form.rowCount()):
+                caption = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                field = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+                if caption is None or field is None or field.widget() is None:
+                    continue
+                text = getattr(caption.widget(), "text", lambda: "")()
+                if text and field.widget().isEnabled():
+                    found.append((text, title, field.widget()))
+        return found
 
     def _grey_out(self, obj: BaseModel) -> None:
         """Grey out the fields that do nothing now, and say why."""

@@ -1550,3 +1550,43 @@ alone would hide the other figures' contents. **A new figure from the
 defaults**: every journal setting would have to be made again. **Moving a
 figure with each tab passed while dragging**: one undo step per tab, for one
 intended move.
+
+## 0038 — Finding a setting: a search and a command palette
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The property panel shows every field of the model, which is the point of
+it, and a plot has some thirty; a figure as many again. Finding "the one
+for the tick length" means knowing which section it is in (roadmap U3).
+
+### Decision
+
+- **A search field above the property panel** (Ctrl+F), fixed while the
+  form scrolls. Every typed word must occur in a field's caption, in its
+  tooltip, or in its section's title; the rest of the rows and the sections
+  left empty are hidden, and a folded section with a match opens. The
+  field's value is not searched: "tick" should not find a label that says
+  "ticks". The search stays when another object is selected, so that the
+  same setting can be found on the next plot, and Esc clears it. A section
+  the search opened is not remembered as opened by the user.
+- **The form is built anew for each search**, 150 ms after the last key,
+  and the rows are hidden after building. Showing them again would have to
+  know which rows the forms hide themselves (the axis form shows the step
+  only with "every"), and building takes a few milliseconds.
+- **A command palette** (Ctrl+K): every enabled menu action, with the menus
+  it is in, and every field of the selection, as "Setting · section".
+  Words are matched as in the search; entries starting with the first word
+  come first. Up and Down move, Enter chooses. A setting is shown: the
+  search cleared, its section opened, scrolled to and focused. The chosen
+  action runs after the palette closed, so that a dialog it opens (Add
+  Plot…) is not inside the palette's.
+
+### Alternatives considered
+
+**Fuzzy matching** (letters in order, "lnw" for line width): unexpected
+results for short queries, and the words people type are the ones in the
+captions and tooltips. **The palette also listing the objects of the
+project** ("go to the residuals"): the outline already does that.

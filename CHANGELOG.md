@@ -20,6 +20,11 @@ release open in every later one.
 - Settings that do nothing in the current state are greyed out, and their
   tooltip says why.
 
+**Finding things**
+- A search above the property panel (Ctrl+F) keeps the settings whose name
+  or explanation has the typed words.
+- A command palette (Ctrl+K) finds any menu action or setting by typing.
+
 **Fixed**
 - With openai 3.38 or later, the assistant again says why Gemini refused a
   request and how long to wait at a rate limit.
