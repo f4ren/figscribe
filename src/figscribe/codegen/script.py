@@ -1114,13 +1114,17 @@ def _describe(artist) -> str:
 
 
 def _str(text: str) -> str:
-    """A string literal as a person would write it: double quotes, and a raw
-    string for LaTeX."""
-    if "\\" in text and '"' not in text and not text.endswith("\\"):
-        return f'r"{text}"'
-    if '"' not in text and "\\" not in text and "\n" not in text:
-        return f'"{text}"'
-    return repr(text)
+    """A string literal as a person would write it: double quotes, a raw
+    string for LaTeX, and a line break as \\n."""
+    if "\n" not in text:
+        if "\\" in text and '"' not in text and not text.endswith("\\"):
+            return f'r"{text}"'
+        if '"' not in text and "\\" not in text:
+            return f'"{text}"'
+    if any(ord(c) < 32 for c in text.replace("\n", "")):
+        return repr(text)  # other control characters, rare enough to look odd
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
 
 
 def _num(value: float) -> str:

@@ -665,7 +665,9 @@ The model holds a list of figures, but the GUI and `figscribe script` only
 use the first, and there is no *Add figure*. Add, duplicate, rename, reorder
 and switch figures (tabs or the outline), *Export all*, and
 `figscribe script --figure NAME` / `--all`. Asked for by the user
-(2026-10-25): a scientist's project typically has several plots.
+(2026-10-25): a scientist's project typically has several plots. The toolbar
+adds things in the order a figure is built (Data, Panel, Plot, Fit, Note,
+since 2026-10-26); *Figure* joins it after *Data*, as the user proposed.
 
 ### F9 Reading values off the figure — S
 

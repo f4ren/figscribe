@@ -176,7 +176,8 @@ def artist_name(artist) -> str:
             return f"{model.name.capitalize()} fit"
         return f"Fit: {model.expression}"
     if artist.kind == "annotation":
-        return f"Note: {artist.text}"
+        first, *more = artist.text.split("\n")
+        return f"Note: {first} …" if more else f"Note: {first}"
     return KIND_NAMES.get(artist.kind, artist.kind)
 
 

@@ -59,6 +59,9 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
     monkeypatch.setattr(QFileDialog, "getOpenFileName", open_file)
     monkeypatch.setattr(QFileDialog, "getSaveFileName", save_file)
     monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("A note", True))
+    monkeypatch.setattr(
+        QInputDialog, "getMultiLineText", lambda *a, **k: ("A note\nof two lines", True)
+    )
     monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
 
     def make() -> MainWindow:

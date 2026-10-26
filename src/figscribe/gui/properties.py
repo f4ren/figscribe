@@ -55,7 +55,7 @@ from figscribe.gui.names import (
     with_error,
 )
 from figscribe.gui.numbers import number, numbers, whole
-from figscribe.gui.widgets import Section, label
+from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
 from figscribe.io.refresh import read_differently, reading_options
 from figscribe.model import (
@@ -1111,6 +1111,8 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return PartEditor(spec, path, panel)
     if name in ("marker", "left_out_marker"):
         return _marker_list(spec, path, panel)
+    if name == "text":
+        return NoteText(spec, path, panel)
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
@@ -1314,3 +1316,30 @@ def _result_lines(fit: FitCurve, found) -> list[tuple[str, str]]:
             ("Largest residual", f"{found.largest:.3g} (row {found.row + 1})"),
         ]
     return lines
+
+
+class NoteText(Editor):
+    """A note's text over several lines, taken on leaving the field or with
+    Ctrl+Enter (Cmd+Enter on macOS)."""
+
+    def __init__(self, spec, path, panel):
+        super().__init__(spec, path, panel)
+        self.widget = TextBox()
+        self.widget.setTabChangesFocus(True)
+        self.widget.setFixedHeight(84)  # four lines, then it scrolls
+        self.widget.finished.connect(self._finish)
+        self.value = ""
+
+    def show(self, value: Any) -> None:
+        self.value = value or ""
+        self.widget.setPlainText(self.value)
+
+    def _finish(self) -> None:
+        text = self.widget.toPlainText().strip()
+        if text == self.value:
+            return
+        if not text:
+            self.panel.report("A note needs some text; delete the note instead.")
+            self.show(self.value)
+            return
+        self.commit(text)

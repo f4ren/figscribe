@@ -637,7 +637,10 @@ class MainWindow(QMainWindow):
         if target is None:
             self.show_error("No panel", "Add a panel or a plot first.")
             return
-        text = self.ask_text("Add note", "Text (LaTeX allowed, e.g. $\\mu$):")
+        text = self.ask_text(
+            "Add note",
+            "Text, over several lines if you like (LaTeX allowed, e.g. $\\mu$):",
+        )
         if not text:
             return
         note = Annotation(text=text, position=(0.5, 0.5), coords="axes")
@@ -645,7 +648,8 @@ class MainWindow(QMainWindow):
         self.document.select(note.id)
 
     def _ask_text(self, title: str, prompt: str) -> str | None:
-        text, ok = QInputDialog.getText(self, title, prompt)
+        """Several lines of text; None if cancelled."""
+        text, ok = QInputDialog.getMultiLineText(self, title, prompt)
         return text.strip() if ok else None
 
     def _fit_target(self):
@@ -959,13 +963,11 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         bar.addWidget(spacer)
 
-        for action, text in ((self.import_action, "Data"), (self.plot_action, "Plot")):
-            action.setIcon(theme.icon("plus"))
-            action.setIconText(text)
-            bar.addAction(action)
-        self.fit_action.setIcon(theme.icon("fit"))
-        self.fit_action.setIconText("Fit")
-        bar.addAction(self.fit_action)
+        # What can be added, in the order a figure is built: data, then what
+        # holds what. Figure joins after Data once a project has several.
+        self.import_action.setIcon(theme.icon("plus"))
+        self.import_action.setIconText("Data")
+        bar.addAction(self.import_action)
         panel = QToolButton()
         panel.setText("Panel")
         panel.setIcon(theme.icon("plus"))
@@ -974,6 +976,15 @@ class MainWindow(QMainWindow):
         panel.setMenu(self.panel_menu)
         panel.setToolTip("Add a panel beside or inside the selected one")
         bar.addWidget(panel)
+        self.plot_action.setIcon(theme.icon("plus"))
+        self.plot_action.setIconText("Plot")
+        bar.addAction(self.plot_action)
+        self.fit_action.setIcon(theme.icon("fit"))
+        self.fit_action.setIconText("Fit")
+        bar.addAction(self.fit_action)
+        self.note_action.setIcon(theme.icon("plus"))
+        self.note_action.setIconText("Note")
+        bar.addAction(self.note_action)
         bar.addSeparator()
         for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):
             action.setIcon(theme.icon(name))
