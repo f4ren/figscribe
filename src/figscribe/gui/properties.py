@@ -301,6 +301,7 @@ BASIC = {
     "ScatterPlot": ("color", "marker", "size", "edgecolor", "label"),
     "ErrorbarPlot": ("color", "marker", "linestyle", "capsize", "label"),
     "Histogram": ("color", "histtype", "density", "label"),
+    "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
     "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
     "ResidualPlot": ("color", "marker", "markersize", "linestyle"),
     "Annotation": ("text", "color", "fontsize", "position", "arrow_to"),
