@@ -758,6 +758,14 @@ and switch figures (tabs or the outline), *Export all*, and
 adds things in the order a figure is built (Data, Panel, Plot, Fit, Note,
 since 2026-10-26); *Figure* joins it after *Data*, as the user proposed.
 
+**Done** (2026-10-26, decision 0037): a tab bar above the preview while a
+project has several figures (the user's choice: tabs and the outline), the
+same menu in both (rename, duplicate, move, delete), *Insert > Add Figure*
+and *Duplicate Figure*, *Figure* in the toolbar, *File > Export All
+Figures…*, `figscribe script --figure NAME` and `--all`. A new figure takes
+the shown one's look. *Follow-ups:* the assistant's preview and script tools
+use the shown figure and cannot name another; a figure from a template.
+
 ### F9 Reading values off the figure — S
 
 A data cursor: hover shows the nearest point's x and y in the status bar; a

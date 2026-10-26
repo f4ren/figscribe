@@ -112,6 +112,8 @@ script.
   your choice, and the script leaves out the same rows, with the reason.
 
 **Layout and style**
+- Several figures in one project, as tabs above the figure: add one with
+  the look of the others, duplicate, rename, reorder.
 - Several panels in a grid: add one to the right, left, above or below, or
   as an inset. Shared x and y axes, a second y axis on the right.
 - Exact figure size in mm, font sizes in pt, linear, log and symlog axes,
@@ -142,7 +144,8 @@ script.
   live, as you edit.
 
 **Export**
-- PDF, SVG and PNG at the exact size.
+- PDF, SVG and PNG at the exact size; *File > Export All Figures…* writes
+  every figure of the project at once.
 - A standalone Python script (see below).
 - The project itself as a readable JSON file (`.figscribe`).
 
@@ -273,7 +276,11 @@ On macOS, Cmd takes the place of Ctrl.
 
 ```
 figscribe [PROJECT.figscribe]                 open the GUI, optionally with a project
-figscribe script PROJECT.figscribe [-o FILE]  write the Python script for the first figure
+figscribe script PROJECT.figscribe [--figure NAME] [-o FILE]
+                                              write the Python script for a figure
+                                              (by default the first)
+figscribe script PROJECT.figscribe --all [-o FOLDER]
+                                              write a script for every figure
 figscribe mcp                                 serve the open project to an MCP client
 figscribe bench [--help]                      measure a model on typical assistant requests
 figscribe --version

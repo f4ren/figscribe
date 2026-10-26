@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from figscribe.commands import CommandError, SetField, find
 from figscribe.gui import theme
 from figscribe.gui.document import Document, split_axis
+from figscribe.gui.figures import fill_figure_menu
 from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
 from figscribe.gui.widgets import FlowLayout, chip
@@ -58,6 +59,9 @@ class Outline(QTreeWidget):
     delete_requested = Signal(str)
     note_requested = Signal(str)
     marking_requested = Signal(str, str, str)
+    figure_requested = Signal(str, str)
+    """Something done with the figure with this id: (id, what), as
+    `figures.fill_figure_menu` asks for it."""
     """A reference line or shaded range for a panel: (panel id, kind,
     orientation), as `markings.ENTRIES` has them."""
     """Add a note to the panel with this id."""
@@ -273,8 +277,10 @@ class Outline(QTreeWidget):
                 menu.addAction(
                     "Add a panel", lambda: self.panel_requested.emit(oid, "right")
                 )
-            else:
-                return None
+                menu.addSeparator()
+            fill_figure_menu(
+                menu, self.document, oid, self.figure_requested.emit, across=False
+            )
         elif any(source.id == oid for source in self.document.project.sources):
             menu.addAction("Remove data file", lambda: self.delete_requested.emit(oid))
         elif hasattr(obj, "visible") and hasattr(obj, "kind"):

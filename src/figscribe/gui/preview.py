@@ -145,6 +145,7 @@ class Preview(QWidget):
         self.document = document
         self.view = {}
         document.changed.connect(self.refresh)
+        document.figure_changed.connect(self.refresh)
         document.selection_changed.connect(self.update)
         self.refresh()
 

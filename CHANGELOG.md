@@ -6,6 +6,10 @@ release open in every later one.
 ## Unreleased
 
 **Figures**
+- Several figures in one project: tabs above the figure, *Insert > Add
+  Figure* (with the look of the shown one), duplicate, rename, reorder and
+  delete from a tab or the outline; *File > Export All Figures…*;
+  `figscribe script --figure NAME` and `--all`.
 - Error bands: an error bar plot draws its y errors as a shaded band around
   the line, for dense data.
 

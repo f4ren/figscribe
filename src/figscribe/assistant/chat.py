@@ -83,7 +83,9 @@ name}. A line across the panel at a value: "kind" refline with "at" and \
 "orientation" ("vertical" at an x value, "horizontal" at a y value); a \
 shaded range: "kind" span with "start", "end" and "orientation". New \
 panels: add_panel, then insert into the id it returns. A fit with its \
-residual panel: fit with "residuals": true."""
+residual panel: fit with "residuals": true. A project can hold several \
+figures; get_project names the shown one ("shown_figure"). A new figure: \
+insert into "figures" with parent_id null and {"name": ..., "axes": [{}]}."""
 
 
 class ChatError(Exception):

@@ -72,6 +72,7 @@ class CodePanel(QWidget):
     def set_document(self, document: Document) -> None:
         self.document = document
         document.changed.connect(self.schedule)
+        document.figure_changed.connect(self.schedule)
         self.schedule()
 
     def schedule(self) -> None:
