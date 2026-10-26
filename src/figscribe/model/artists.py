@@ -163,6 +163,41 @@ class Histogram(ArtistBase):
     """A Matplotlib color; None takes the next color of the color cycle."""
 
 
+class AllanDeviationPlot(ArtistBase):
+    """The overlapping Allan deviation σ_y(τ) of an evenly sampled series
+    against the averaging time τ: how stable a clock, laser or sensor is over
+    time (decision 0036). Shown on log-log axes. Renderer and script compute
+    it alike; the model stores only how."""
+
+    kind: Literal["allan"] = "allan"
+    values: ColumnRef
+    """The series: fractional frequency values, or phase in s (see
+    `data_type`), one per sample, without gaps."""
+    data_type: Literal["frequency", "phase"] = "frequency"
+    """"frequency": the values are fractional frequency y, without unit;
+    "phase": they are phase (time error) x in s."""
+    sample_interval: float = Field(1.0, gt=0.0)
+    """Time between samples τ0 in s; unused when `time` is set."""
+    time: ColumnRef | None = None
+    """Column of the sample times in s, evenly spaced; its median step is τ0.
+    None takes `sample_interval`."""
+    taus: Literal["octave", "decade", "all"] = "octave"
+    """Which τ = m·τ0 are shown: m = 1, 2, 4, 8, … ("octave"), 1, 2, 5, 10,
+    … ("decade") or every m ("all"); up to half the series."""
+    error_bars: bool = True
+    """Show σ/√(N − 2m) as error bars, a simple estimate of the uncertainty."""
+    color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
+    marker: str | None = "o"
+    """A Matplotlib marker such as "o" or "s"; None draws none."""
+    markersize: float = Field(4.0, gt=0.0)
+    """Marker size in pt."""
+    linestyle: str = "-"
+    """"-", "--", "-.", ":", or "none" for points only."""
+    linewidth: float = Field(1.5, gt=0.0)
+    """Line width in pt."""
+
+
 class Colorbar(StrictModel):
     visible: bool = True
     """False hides the color bar but keeps its settings."""
@@ -378,6 +413,7 @@ Artist = Annotated[
     | ScatterPlot
     | ErrorbarPlot
     | Histogram
+    | AllanDeviationPlot
     | ImagePlot
     | ColorMesh
     | FitCurve

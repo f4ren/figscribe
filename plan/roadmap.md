@@ -712,6 +712,28 @@ In order of demand:
      the known level, both inputs (frequency and phase) giving the same
      curve, and the pixel equivalence of the script.
 
+   **Done** (2026-10-26), as planned:
+   - `AllanDeviationPlot` ("allan"), computed in `figscribe/allan.py`;
+     the script defines `overlapping_adev` and repeats the steps.
+   - A tile in the plot dialog, with "Values" and an optional "Times".
+   - Added to an empty panel, the axes become log-log, τ (s) against
+     σ_y(τ).
+   - "Sample interval" is greyed while a column of times gives it.
+   - A series with gaps is not drawn, in figscribe and the script alike,
+     and the problem list says so; uneven times are refused in words.
+
+   Checked against `allantools` outside the repository: agreement to 10⁻¹⁴
+   for every spacing and for phase input. The NIST test series gives
+   0.2922319 at τ = 1 and 0.09159953 at τ = 10, as published, and its
+   mean 0.4897745 (the series starts with the seed itself).
+   *Learned:* `2 ** np.arange(64)` overflows to a negative number at 2⁶³,
+   which then passes `m <= top`; 62 octaves are enough. In the edge-data
+   matrix, values at or below zero on a log axis are no problem for an
+   Allan deviation: the axis shows σ, not the values.
+   *Follow-ups:* modified ADEV, Hadamard and time deviation as a choice;
+   χ² confidence intervals; the plot dialog could pick a column named "t"
+   or "time" as the times.
+
 ### F5 Axes for publication — M
 
 1. **Number format** of tick labels: automatic, fixed decimals, scientific

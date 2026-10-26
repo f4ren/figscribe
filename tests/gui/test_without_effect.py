@@ -21,6 +21,7 @@ from figscribe.gui import Document
 from figscribe.gui.effect import RULES, without_effect
 from figscribe.gui.properties import PropertyPanel
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     Axes,
     AxisSpec,
@@ -189,6 +190,12 @@ CASES: dict[tuple[str, tuple], Case] = {
         "counts",
         ("colorbar", "visible"),
         True,
+    ),
+    ("AllanDeviationPlot", ("sample_interval",)): (
+        _alone(lambda: AllanDeviationPlot(values=col("U"), time=col("t"))),
+        2.0,
+        ("time",),
+        None,
     ),
     ("FitCurve", ("extend_curve",)): (
         _fitted(),

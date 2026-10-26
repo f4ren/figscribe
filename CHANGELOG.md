@@ -12,6 +12,13 @@ release open in every later one.
   `figscribe script --figure NAME` and `--all`.
 - Error bands: an error bar plot draws its y errors as a shaded band around
   the line, for dense data.
+- The Allan deviation: σ_y(τ) of an evenly sampled series, frequency or
+  phase, on log-log axes, for the stability of clocks, lasers and sensors.
+  The script computes it with a few lines of NumPy, no extra package.
+- The plot dialog shows the kinds as tiles, the columns as a sentence, a
+  preview with the data, and which panel the plot goes to.
+- Settings that do nothing in the current state are greyed out, and their
+  tooltip says why.
 
 **Finding things**
 - A search above the property panel (Ctrl+F) keeps the settings whose name

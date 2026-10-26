@@ -23,10 +23,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe.allan import allan_axes
 from figscribe.gui import theme
 from figscribe.gui.errors import explain
 from figscribe.gui.widgets import label, rule
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     ArtistBase,
     Axes,
@@ -49,6 +51,7 @@ KINDS: dict[str, tuple[type[ArtistBase], str]] = {
     "Points": (ScatterPlot, "scatter"),
     "Error bars": (ErrorbarPlot, "errorbar"),
     "Histogram": (Histogram, "histogram"),
+    "Allan deviation": (AllanDeviationPlot, "allan"),
     "Image": (ImagePlot, "image"),
     "Color mesh": (ColorMesh, "colormesh"),
 }
@@ -120,6 +123,8 @@ class PlotDialog(QDialog):
         self.x = self._column_box(single, optional=False)
         self.yerr = self._column_box(single, optional=True)
         self.xerr = self._column_box(single, optional=True)
+        self.time = self._column_box(single, optional=True)
+        self.time.setItemText(0, "none: 1 s apart, set later")
         self.label = QLineEdit()
         self.label.setPlaceholderText("not in the legend")
         self.hint = label("", "caption")
@@ -154,7 +159,7 @@ class PlotDialog(QDialog):
 
         self.kinds.buttonToggled.connect(lambda _, checked: checked and self._update())
         self.y.activated.connect(self._y_chosen)
-        for box in (self.x, self.yerr, self.xerr, self.array):
+        for box in (self.x, self.yerr, self.xerr, self.time, self.array):
             box.activated.connect(self._update)
         self.label.editingFinished.connect(self._update)
         self._update()
@@ -181,6 +186,12 @@ class PlotDialog(QDialog):
         if cls is Histogram:
             return Histogram(
                 values=self.y.currentData(), label=self.label.text() or None
+            )
+        if cls is AllanDeviationPlot:
+            return AllanDeviationPlot(
+                values=self.y.currentData(),
+                time=self.time.currentData(),
+                label=self.label.text() or None,
             )
         fields = {
             "x": self.x.currentData(),
@@ -220,6 +231,7 @@ class PlotDialog(QDialog):
         self.form.addRow("against", self.x)
         self.form.addRow("± y error", self.yerr)
         self.form.addRow("± x error", self.xerr)
+        self.form.addRow("Times", self.time)
         self.form.addRow("Data", self.array)
         self.form.addRow("Legend", self.label)
 
@@ -293,15 +305,18 @@ class PlotDialog(QDialog):
         two_d = kind in TWO_D
         shown = {
             self.y: not two_d,
-            self.x: kind not in (Histogram, *TWO_D),
+            self.x: kind not in (Histogram, AllanDeviationPlot, *TWO_D),
             self.yerr: kind is ErrorbarPlot,
             self.xerr: kind is ErrorbarPlot,
+            self.time: kind is AllanDeviationPlot,
             self.array: two_d,
             self.label: not two_d,  # the colour bar explains it
         }
         for widget, visible in shown.items():
             self.form.setRowVisible(widget, visible)
-        self.y_caption.setText("Values" if kind is Histogram else "Plot")
+        self.y_caption.setText(
+            "Values" if kind in (Histogram, AllanDeviationPlot) else "Plot"
+        )
         error, value = self.yerr.currentData(), self.y.currentData()
         named = error is not None and self._errors.get(_key(value)) == error
         self.hint.setText(
@@ -329,7 +344,9 @@ class PlotDialog(QDialog):
 def preview_image(artist: ArtistBase, data: DataProvider, scale: float) -> QImage:
     """`artist` alone in a small panel, its axes named after its columns."""
     labels = {}
-    if isinstance(artist, Histogram):
+    if isinstance(artist, AllanDeviationPlot):
+        labels = allan_axes()
+    elif isinstance(artist, Histogram):
         labels = {
             "x": AxisSpec(label=str(artist.values.column)),
             "y": AxisSpec(label="Count"),
@@ -380,16 +397,17 @@ def _kind_tile(name: str, glyph: str) -> QPushButton:
     tile.setAutoDefault(False)  # Enter adds the plot, even from a focused tile
     tile.setToolTip(name)
     column = QVBoxLayout(tile)
-    column.setContentsMargins(8, 10, 8, 8)
-    column.setSpacing(6)
+    column.setContentsMargins(6, 10, 6, 8)
+    column.setSpacing(4)
     mark = QLabel()
     mark.setPixmap(theme.icon(glyph, theme.ACCENT, 26).pixmap(26, 26))
     mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
     text = QLabel(name)
     text.setObjectName("tileTitle")
     text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    text.setWordWrap(True)  # "Allan deviation" takes two lines
     for part in (mark, text):
         part.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         column.addWidget(part)
-    tile.setFixedSize(92, 74)
+    tile.setFixedSize(92, 88)
     return tile

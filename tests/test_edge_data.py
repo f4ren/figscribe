@@ -25,6 +25,7 @@ from figscribe.fit import FitError, add_fit, refit
 from figscribe.io import DataError, csv_source, load_data
 from figscribe.io.numpyfile import numpy_source
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     Axes,
     ColumnRef,
@@ -65,7 +66,7 @@ CASES: dict[str, dict] = {
     "equal range": {"x": _X, "y": [1.0, 2.0] * 4, "limits": (5.0, 5.0)},
 }
 
-KINDS = ["line", "points", "error bars", "histogram", "fit"]
+KINDS = ["line", "points", "error bars", "histogram", "Allan deviation", "fit"]
 
 SAID = {
     "only NaN": "has no values to draw",
@@ -73,6 +74,9 @@ SAID = {
     "zero and below with a log scale": "are zero or below",
 }
 """Cases that draw, but not everything: the problem list must say what."""
+
+SAID_OF_ALLAN = {"only NaN": "needs an unbroken series"}
+"""An Allan deviation says it in its own words."""
 
 
 def _number(value) -> str:
@@ -99,6 +103,8 @@ def _plot(kind: str, source_id: str):
         return ScatterPlot(x=col("x"), y=col("y"))
     if kind == "histogram":
         return Histogram(values=col("y"))
+    if kind == "Allan deviation":
+        return AllanDeviationPlot(values=col("y"), time=col("x"))
     return ErrorbarPlot(x=col("x"), y=col("y"), yerr=col("dy"))
 
 
@@ -123,13 +129,16 @@ def _build(folder: Path, kind: str, case: dict) -> Project:
     return project
 
 
-def _outcome(folder: Path, project: Project, case: str = "") -> str:
+def _outcome(
+    folder: Path, project: Project, case: str = "", said: dict | None = None
+) -> str:
     """Draw, export and run the script; "refused: ..." or "drawn"."""
     figure = project.figures[0]
     data = load_data(project, folder)
-    if case in SAID:
+    said = said or SAID
+    if case in said:
         problems = [str(issue) for issue in validate_references(project, data)]
-        assert any(SAID[case] in p for p in problems), problems
+        assert any(said[case] in p for p in problems), problems
     try:
         FigureCanvasAgg(render(figure, data)).draw()
         export(figure, data, folder / "figure.pdf")
@@ -161,7 +170,9 @@ def test_awkward_columns(tmp_path: Path, kind: str, case: str) -> None:
         return  # refused, in words written for the user
     if kind == "histogram" and "log" in case:
         case = ""  # the values lie along x; the y axis counts them
-    _outcome(tmp_path, project, case)
+    if kind == "Allan deviation" and "log" in case:
+        case = ""  # the axis shows σ, not the values, which may be negative
+    _outcome(tmp_path, project, case, SAID_OF_ALLAN if "Allan" in kind else None)
 
 
 IMAGES: dict[str, np.ndarray] = {
