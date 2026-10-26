@@ -114,6 +114,7 @@ FIELD_NAMES = {
     "ncols": "Columns",
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
+    "band": "Error band",
     "orientation": "Direction",
     "at": "At",
     "start": "From",

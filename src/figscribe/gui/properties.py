@@ -72,6 +72,7 @@ from figscribe.model import (
     AxisSpec,
     Colorbar,
     ColumnRef,
+    ErrorBand,
     ExpressionFit,
     Figure,
     FitCurve,
@@ -80,6 +81,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
 )
+from figscribe.model.styles import style_problem
 from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
 
@@ -148,6 +150,7 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "y_right": AxisSpec,
     "colorbar": Colorbar,
     "panel_labels": PanelLabels,
+    "band": ErrorBand,
 }
 """Optional nested models switched on and off with a check box; when on, their
 fields get a section of their own."""
@@ -260,6 +263,7 @@ LOOK = [
     "linewidth",
     "capsize",
     "elinewidth",
+    "band",
 ]
 """How the "Look" section starts; other fields follow in model order."""
 SECTION_NAMES = {
@@ -268,6 +272,7 @@ SECTION_NAMES = {
     "y_right": "Right y axis",
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
+    "band": "Error band",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
@@ -289,6 +294,7 @@ COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
 
 PLACEHOLDERS = {
+    "band.color": "the plot's",
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
     "label": "not in the legend",
@@ -447,6 +453,11 @@ TIPS = {
     "panel_labels": "Letters on the panels, (a), (b), (c), in reading order, as "
     "journals ask for.",
     "PanelLabels.style": "How the letters are written.",
+    "band": "Shade the y errors as a band around the line instead of drawing bars, "
+    "for dense data; x errors stay bars.",
+    "ErrorBand.color": "Color of the band; empty takes the plot's.",
+    "ErrorBand.alpha": "Opacity of the band, 1 opaque, 0 invisible; times the "
+    "plot's own.",
     "bold": "Bold letters, as Nature and Science print them.",
     "placement": "Above and left of each panel's top left corner, or just within it.",
     "insets": "Give insets a letter too, right after the panel they sit in.",
@@ -635,6 +646,10 @@ class PropertyPanel(QScrollArea):
                     "Letter the panels", [SetField(obj.id, path, PanelLabels())]
                 )
             return Macro("Remove the panel labels", [SetField(obj.id, path, None)])
+        if path == ("band",):
+            if value:
+                return Macro("Shade the errors", [SetField(obj.id, path, ErrorBand())])
+            return Macro("Draw the errors as bars", [SetField(obj.id, path, None)])
         if path == ("colorbar",):
             if value:
                 return Macro("Show a color bar", [SetField(obj.id, path, Colorbar())])
@@ -1156,7 +1171,12 @@ class ColorEditor(TextEditor):
             swatch.setChecked(key == value)
 
     def commit(self, value: Any) -> None:
-        if value is not None and not _CYCLE_COLOR.fullmatch(value):
+        # Only a color Matplotlib draws: a refused one would break the swatches.
+        if (
+            value is not None
+            and not _CYCLE_COLOR.fullmatch(value)
+            and style_problem("color", value) is None
+        ):
             self.panel.remember_color(value)
         super().commit(value)
 
@@ -1397,7 +1417,9 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         editor = TextEditor(spec, path, panel, parse, format_)
     if spec.optional:
         nested = len(path) > 1  # e.g. an axis label, which no legend shows
-        placeholder = "none" if nested and name == "label" else PLACEHOLDERS.get(name)
+        placeholder = PLACEHOLDERS.get(".".join(path), PLACEHOLDERS.get(name))
+        if nested and name == "label":
+            placeholder = "none"
         editor.line.setPlaceholderText(placeholder or "none")
     return editor
 
@@ -1495,7 +1517,7 @@ def _shape(obj: BaseModel) -> tuple:
     """What decides the form's layout: the object, and its optional parts."""
     parts = tuple(
         getattr(obj, name, None) is None
-        for name in ("y_right", "colorbar", "panel_labels", "inset", "result")
+        for name in ("y_right", "colorbar", "panel_labels", "band", "inset", "result")
     )
     layout = getattr(obj, "layout", None)
     grid = (layout.rows, layout.cols) if layout is not None else None

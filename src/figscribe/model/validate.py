@@ -119,6 +119,14 @@ def validate_references(
                 why = _off_the_log_scale(artist, axes)
                 if why is not None:
                     issues.append(ReferenceIssue(tpath, artist.id, why))
+                if getattr(artist, "band", None) and artist.yerr is None:
+                    issues.append(
+                        ReferenceIssue(
+                            f"{tpath}.band",
+                            artist.id,
+                            "has an error band but no y errors to shade",
+                        )
+                    )
 
                 if data is not None and isinstance(artist, FITTABLE):
                     why = _unequal_or_unreadable(artist, data)

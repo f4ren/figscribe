@@ -1417,6 +1417,52 @@ where the user means, and the menu's middle is a start that the panel
 corrects in one field. **Dragging in the preview** is left for later, like
 the notes' dragging was added after notes.
 
+## 0035 — Error bands
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Dense data with y errors, a spectrum or a long time series, turns into a
+wall of error bars. Papers draw the errors as a shaded band around the line
+instead (roadmap F4.2); Matplotlib has `fill_between` for it.
+
+### Decision
+
+- **A way of drawing an error bar plot's y errors, not a plot of its own**:
+  `ErrorbarPlot.band`, an optional `ErrorBand` with `color` (None takes the
+  plot's) and `alpha` (0.25, times the plot's own). The data, the left-out
+  rows and the fits stay as they are, a fit is still weighted by the y
+  errors, and bars and band are one check box apart. A separate kind would
+  have needed its own columns, its own left-out rows and its own place among
+  the plots a fit can target.
+- **Only the y errors**: x errors stay bars, drawn by `errorbar` as before.
+  Without x errors the points and their line are drawn by `plot`, which is
+  what a person would write; capsize and error bar width then do nothing.
+- **Just behind the plot**: the band is drawn after the line, since a
+  color from the color cycle is known only then (`line, = ax.plot(...)`,
+  `color=line.get_color()` in the script), with a drawing order 0.1 below
+  the plot's, so that the line stays on top. Without an edge, as a shaded
+  range has none (0034).
+- **Left-out rows leave a gap** in the band (`where=` the shown rows), as
+  they break the line; their points are drawn apart, without an error, since
+  a band of one point has no width.
+- **No legend entry of its own**: the plot's entry stands for both.
+- **A band without y errors** is a problem in the list rather than refused,
+  so that the band can be switched on before the column is chosen.
+- An added field with a default: files of 0.1.0 read unchanged, so no schema
+  version and no migration.
+
+### Alternatives considered
+
+**`errors_as: "bars" | "band"` with the band's settings beside it**: they
+would show, and do nothing, while bars are drawn; the optional part shows
+them only when there is a band. **Drawing the band first**: it would need
+the color before the line takes one from the cycle, which only Matplotlib's
+private API gives. **A band in the legend** (a patch behind the line, as
+`(line, patch)` handles): left for later.
+
 ## 0036 — Analysis as derived plots, not a statistics suite
 
 **Date:** 2026-10-26

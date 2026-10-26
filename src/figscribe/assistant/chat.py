@@ -74,7 +74,9 @@ shows Hz values as kHz; limits and steps stay in Hz), the same for `y`, \
 `legend.visible`, `y_right` (an axis object such as {"label": "dU"}; null \
 removes it)
 - plot: `color`, `label` (legend entry), `marker`, `markersize`, \
-`linestyle`, `linewidth`, `capsize`, `axis` ("left" or "right")
+`linestyle`, `linewidth`, `capsize`, `axis` ("left" or "right"), and \
+for error bars `band` (the y errors as a shaded band: {"alpha": 0.25}; null \
+draws bars)
 New plots: insert into a panel's "artists" with "kind" line, scatter, \
 errorbar, histogram or annotation; columns are {"source": id, "column": \
 name}. A line across the panel at a value: "kind" refline with "at" and \

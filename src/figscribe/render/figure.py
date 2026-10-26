@@ -356,15 +356,21 @@ def _draw_points(
         for name in ("x", "y", "xerr", "yerr")
         if (ref := getattr(artist, name, None)) is not None
     }
+    # Errors drawn as a band are not drawn as bars, of the left-out rows neither.
+    spread = columns.pop("yerr") if banded(artist) else None
     count = len(columns["x"])
     try:
         shown = kept(count, artist.left_out)
     except FitError as exc:
         raise DataError(f"{artist.label or artist.kind}: {exc}") from None
     shown &= _inside_fits(artist, artists, columns["x"])
+    y = columns["y"]
     if not shown.all():
-        columns["y"] = np.where(shown, columns["y"], np.nan)
-    _draw_part(artist, ax, columns, {}, common).rows = np.arange(count)
+        columns["y"] = np.where(shown, y, np.nan)
+    part = _draw_part(artist, ax, columns, {}, common)
+    part.rows = np.arange(count)
+    if spread is not None:
+        _draw_band(artist, ax, columns["x"], y, spread, shown, part.get_color())
     if shown.all():
         return
     color = artist.left_out_color or LEFT_OUT_COLOR
@@ -390,6 +396,41 @@ def _draw_points(
     values["y"] = np.asarray(data(artist.y), dtype=float)[out]
     style = {"color": color, "marker": marker or "none", "linestyle": "none"}
     _draw_part(artist, ax, values, style, apart).rows = np.flatnonzero(out)
+
+
+def banded(artist) -> bool:
+    """Whether the plot draws its y errors as a band."""
+    return getattr(artist, "band", None) is not None and artist.yerr is not None
+
+
+BAND_BEHIND = 0.1
+"""How far below its plot a band is drawn, so that the line stays on top."""
+
+
+def band_options(artist) -> dict[str, float]:
+    """The band's opacity and drawing order, rounded so that the script shows
+    0.2 rather than 0.20000000000000004."""
+    return {
+        "alpha": round(artist.band.alpha * artist.alpha, 6),
+        "zorder": round(artist.zorder - BAND_BEHIND, 6),
+    }
+
+
+def _draw_band(artist, ax: MplAxes, x, y, spread, shown, color) -> None:
+    """The band of y ± spread, in the plot's color unless it has its own, with
+    a gap at the rows not shown."""
+    ax.fill_between(
+        x,
+        y - spread,
+        y + spread,
+        where=None if shown.all() else shown,
+        color=artist.band.color or color,
+        linewidth=0,
+        visible=artist.visible,
+        label="_nolegend_",
+        gid=artist.id,
+        **band_options(artist),
+    )
 
 
 def _inside_fits(artist, artists: Mapping, x: np.ndarray) -> np.ndarray:
@@ -430,7 +471,7 @@ def _segments(values: np.ndarray) -> np.ndarray:
 def _draw_part(artist, ax: MplAxes, values: dict, style: dict, options: dict):
     """Draw `values` as the plot does, with `style` over its own; return the
     Matplotlib artist that shows the points."""
-    if isinstance(artist, LinePlot):
+    if isinstance(artist, LinePlot) or (banded(artist) and "xerr" not in values):
         return ax.plot(
             values["x"],
             values["y"],

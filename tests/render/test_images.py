@@ -20,6 +20,7 @@ from matplotlib.testing.compare import compare_images
 from figscribe.model import (
     Axes,
     AxisSpec,
+    ErrorBand,
     ErrorbarPlot,
     Figure,
     GridLayout,
@@ -143,12 +144,41 @@ def _figures(ref) -> dict[str, Figure]:
                 )
             ],
         ),
+        "error_band": Figure(
+            dpi=100.0,
+            axes=[
+                Axes(
+                    **labelled,
+                    legend=Legend(visible=True),
+                    artists=[
+                        ErrorbarPlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            yerr=ref("dU"),
+                            linestyle="-",
+                            marker="none",
+                            label="signal",
+                            left_out=[14],
+                            band=ErrorBand(),
+                        ),
+                    ],
+                )
+            ],
+        ),
     }
 
 
 @pytest.mark.parametrize(
     "name",
-    ["line", "scatter", "errorbar", "two_panels", "panel_labels", "reference_lines"],
+    [
+        "line",
+        "scatter",
+        "errorbar",
+        "two_panels",
+        "panel_labels",
+        "reference_lines",
+        "error_band",
+    ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:
     figure = _figures(ref)[name]

@@ -3,6 +3,16 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
+## Unreleased
+
+**Figures**
+- Error bands: an error bar plot draws its y errors as a shaded band around
+  the line, for dense data.
+
+**Fixed**
+- A color the panel refused no longer breaks the panel the next time it is
+  built.
+
 ## 0.1.0 — 2026-10-26
 
 The first release to use: 0.0.1 and 0.0.2 only held the name on PyPI.

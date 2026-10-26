@@ -51,6 +51,8 @@ from figscribe.render.figure import (
     MM_PER_INCH,
     NO_LINE,
     DataProvider,
+    band_options,
+    banded,
     like_the_plot,
     tick_ranges,
 )
@@ -110,6 +112,7 @@ RESERVED = {
     "label",
     "right_handles",
     "right_labels",
+    "line",
 }
 
 
@@ -951,9 +954,15 @@ class _Writer:
             for name in ("xerr", "yerr")
             if (ref := getattr(artist, name, None)) is not None
         }
+        spread = errors.pop("yerr") if banded(artist) else None
         mask = self._shown(artist)
         shown = f"np.where({mask}, {y}, np.nan)" if mask else y
-        self._part(ax, artist, x, shown, errors, {}, common)
+        # The band takes the line's color; one from the color cycle is known
+        # only once the line is drawn.
+        named = spread is not None and artist.band.color is artist.color is None
+        self._part(ax, artist, x, shown, errors, {}, common, "line" if named else None)
+        if spread is not None:
+            self._band(ax, artist, x, y, spread, mask)
         if not mask:
             return
         color = _str(artist.left_out_color or LEFT_OUT_COLOR)
@@ -981,6 +990,19 @@ class _Writer:
         style = {"color": color, "marker": _str(marker or "none")}
         self._part(ax, artist, f"{x}[~{mask}]", f"{y}[~{mask}]", out, style, apart)
 
+    def _band(self, ax: str, artist, x: str, y: str, spread: str, mask) -> None:
+        """The y errors as a band, just behind the points and their line."""
+        color = artist.band.color or artist.color
+        kwargs = {"where": mask} if mask else {}
+        kwargs["color"] = _str(color) if color is not None else "line.get_color()"
+        kwargs |= {k: _num(v) for k, v in band_options(artist).items()}
+        kwargs["linewidth"] = "0"
+        if not artist.visible:
+            kwargs["visible"] = "False"
+        self.emit("# The y errors as a band, just behind the data.")
+        low, high = f"{y} - {spread}", f"{y} + {spread}"
+        self.call(f"{ax}.fill_between", x, low, high, **kwargs)
+
     def _shown(self, artist) -> str | None:
         """The mask of the rows drawn as the plot draws them: not left out, and
         inside the range of each fit that draws the others like left out.
@@ -1006,10 +1028,11 @@ class _Writer:
         )
         return name
 
-    def _part(self, ax, artist, x, y, errors, style, options) -> None:
-        """One call that draws points as the plot does, `style` over its own."""
+    def _part(self, ax, artist, x, y, errors, style, options, name=None) -> None:
+        """One call that draws points as the plot does, `style` over its own;
+        with `name`, the line it draws is kept under that name."""
         color = {"color": style["color"]} if style else _some(color=artist.color)
-        if isinstance(artist, LinePlot):
+        if isinstance(artist, LinePlot) or (banded(artist) and "xerr" not in errors):
             kwargs = color | {
                 "linestyle": '"none"' if style else _str(artist.linestyle),
                 "linewidth": _num(artist.linewidth),
@@ -1019,7 +1042,8 @@ class _Writer:
             )
             if marker is not None:
                 kwargs |= {"marker": marker, "markersize": _num(artist.markersize)}
-            self.call(f"{ax}.plot", x, y, **kwargs, **options)
+            call = f"{name}, = {ax}.plot" if name else f"{ax}.plot"
+            self.call(call, x, y, **kwargs, **options)
         elif isinstance(artist, ScatterPlot):
             kwargs = {"s": _num(artist.size)} | color
             kwargs["marker"] = style.get("marker") or _str(artist.marker)
@@ -1036,7 +1060,8 @@ class _Writer:
                 "capsize": _num(artist.capsize),
                 "elinewidth": _num(artist.elinewidth),
             }
-            self.call(f"{ax}.errorbar", x, y, **kwargs, **options)
+            call = f"{name}, _, _ = {ax}.errorbar" if name else f"{ax}.errorbar"
+            self.call(call, x, y, **kwargs, **options)
 
     def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
         if fit.id not in self.fits:

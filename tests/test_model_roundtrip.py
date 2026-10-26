@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -219,3 +220,20 @@ def test_reference_lines_and_spans_roundtrip(project: Project) -> None:
         span.start = 3.5
     with pytest.raises(ValidationError):
         ReferenceLine(at=math.inf)
+
+
+def test_an_error_band_roundtrips(project: Project) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = project.figures[0].axes[0].artists[0]
+    plot.band = ErrorBand(color="0.5", alpha=0.4)
+    assert loads(dumps(project)).figures[0].axes[0].artists[0].band == plot.band
+    with pytest.raises(ValidationError):
+        ErrorBand(alpha=1.5)
+
+
+def test_a_file_without_bands_still_reads() -> None:
+    """Files of 0.1.0 have no band field; they read with bars."""
+    text = Path(__file__).parents[1] / "examples/gaussian-scan/scan.figscribe"
+    plot = loads(text.read_text(encoding="utf-8")).figures[0].axes[0].artists[0]
+    assert plot.band is None
