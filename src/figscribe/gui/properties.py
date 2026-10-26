@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
@@ -906,8 +907,6 @@ class PropertyPanel(QScrollArea):
 
     def ask_marker(self, current: str | None) -> str | None:
         """Asks for a marker of one's own; None if cancelled. Replaced in tests."""
-        from PySide6.QtWidgets import QInputDialog
-
         text, ok = QInputDialog.getText(
             self,
             "Marker",
@@ -1047,8 +1046,6 @@ RECENT_COLORS = 5
 """How many recently set colors the color fields offer."""
 
 SWATCHES_PER_ROW = 6
-
-MARKERS = [("o", "Circle"), ("s", "Square"), ("^", "Triangle"), ("D", "Diamond")]
 
 LINESTYLES = [
     ("Solid", "-"),
@@ -1339,42 +1336,6 @@ class StyleEditor(ChoiceEditor):
             self.commit(str(chosen))
 
 
-class MarkerEditor(TextEditor):
-    """The common markers as buttons; any Matplotlib marker as text."""
-
-    def __init__(self, spec, path, panel):
-        super().__init__(spec, path, panel, str, str)
-        self.line.setPlaceholderText("any Matplotlib marker")
-        self.widget = QWidget()
-        column = QVBoxLayout(self.widget)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(6)
-        row = QHBoxLayout()
-        row.setSpacing(4)
-        options = list(MARKERS)
-        if spec.optional:
-            options.append((None, NONE_TEXT[path[-1]]))
-        self.buttons: dict[str | None, QToolButton] = {}
-        for value, name in options:
-            button = QToolButton()
-            button.setObjectName("choice")
-            button.setCheckable(True)
-            button.setToolTip(name)
-            glyph = "marker-none" if value is None else f"marker-{value}"
-            button.setIcon(theme.icon(glyph, theme.INK))
-            button.clicked.connect(lambda _=False, v=value: self.commit(v))
-            row.addWidget(button)
-            self.buttons[value] = button
-        row.addStretch(1)
-        column.addLayout(row)
-        column.addWidget(self.line)
-
-    def show(self, value: Any) -> None:
-        super().show(value)
-        for key, button in self.buttons.items():
-            button.setChecked(key == value)
-
-
 def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     name = path[-1]
     if spec.kind == "bool":
@@ -1408,8 +1369,6 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return ChoiceEditor(spec, path, panel, panel.document.array_choices())
     if spec.kind == "color":
         editor = ColorEditor(spec, path, panel)
-    elif name in ("marker", "left_out_marker") and spec.kind == "text":
-        editor = MarkerEditor(spec, path, panel)
     else:
         parse, format_ = _TEXT[spec.kind]
         if name in SHOWN:

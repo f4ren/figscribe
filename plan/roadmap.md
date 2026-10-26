@@ -150,7 +150,9 @@ import dialog (a chip says when it is not UTF-8) and the property panel.
 no `encoding=`, and NumPy 2 then uses the system's encoding: on Windows,
 cp1252, which cannot decode some UTF-8 bytes (e.g. `0x81` in "Á"), so the
 script may fail there on a header with such letters. Write `encoding="utf-8"`
-whenever the file is not plain ASCII.
+whenever the file is not plain ASCII. **Done** (2026-10-26): the script names
+`"utf-8-sig"` for a file with a byte order mark, `"utf-8"` for one with any
+other byte than ASCII, and nothing for plain ASCII.
 
 ### B4 Raw library errors reach the user (verified) — S
 
@@ -599,6 +601,7 @@ which asks for any Matplotlib marker such as `$\alpha$`. *Follow-up after U2
 is merged:* remove the old `MarkerEditor` and its four `MARKERS` from
 `gui/properties.py`, no longer used, and move the `QInputDialog` import of
 `ask_marker` up to the others; both wait because U2 changes those lines.
+**Done** (2026-10-26), with the theme's marker icons, which only it used.
 
 ### F3 Panel labels for journals — S
 
