@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -28,7 +27,7 @@ from PySide6.QtWidgets import (
 
 from figscribe.gui import theme
 from figscribe.gui.names import ENCODINGS
-from figscribe.gui.widgets import label
+from figscribe.gui.widgets import label, rule
 from figscribe.io.csvfile import csv_source, detect_encoding, read_csv
 from figscribe.io.errors import DataError
 from figscribe.model import CsvSource
@@ -259,9 +258,9 @@ class ImportDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addLayout(top)
-        layout.addWidget(_rule())
+        layout.addWidget(rule())
         layout.addLayout(middle, 1)
-        layout.addWidget(_rule())
+        layout.addWidget(rule())
         layout.addLayout(bottom)
 
     # --- options ------------------------------------------------------------
@@ -507,10 +506,3 @@ def _discard(widget: QWidget) -> None:
     widget.hide()
     widget.setParent(None)
     widget.deleteLater()
-
-
-def _rule() -> QFrame:
-    line = QFrame()
-    line.setObjectName("rule")
-    line.setFixedHeight(1)
-    return line

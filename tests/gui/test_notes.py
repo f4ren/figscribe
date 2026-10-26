@@ -70,8 +70,8 @@ def test_dragging_a_note_moves_it(qtbot, window: MainWindow) -> None:
 def test_a_histogram_from_the_plot_dialog(window: MainWindow) -> None:
     def histogram(dialog) -> bool:
         assert isinstance(dialog, PlotDialog)
-        dialog.kind.setCurrentText("Histogram")
-        assert not dialog.x.isEnabled()
+        dialog.tiles["Histogram"].click()
+        assert not dialog.x.isVisibleTo(dialog)
         return True
 
     window.run_dialog = histogram

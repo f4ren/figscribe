@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtWidgets import (
+    QFrame,
     QLabel,
     QLayout,
     QLayoutItem,
@@ -74,6 +75,14 @@ def chip(text: str, parent: QWidget | None = None) -> QLabel:
     label = QLabel(text, parent)
     label.setObjectName("chip")
     return label
+
+
+def rule() -> QFrame:
+    """A thin line between the parts of a dialog."""
+    line = QFrame()
+    line.setObjectName("rule")
+    line.setFixedHeight(1)
+    return line
 
 
 def label(text: str, name: str, parent: QWidget | None = None) -> QLabel:
