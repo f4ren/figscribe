@@ -42,6 +42,24 @@ def remove_artist(project: Project, artist_id: str) -> Macro:
     return Macro(f"Remove {noun(artist)}", steps)
 
 
+def remove_artists(project: Project, artist_ids: list[str]) -> Macro:
+    """Remove several artists at once, each with what refers to it, as one
+    undo step; one that goes with another already is not removed twice."""
+    steps: list[RemoveItem] = []
+    going: set[str] = set()
+    for artist_id in artist_ids:
+        if artist_id in going:
+            continue
+        new = [
+            step
+            for step in remove_artist(project, artist_id).steps
+            if step.item_id not in going
+        ]
+        going |= {step.item_id for step in new}
+        steps += new
+    return Macro(f"Remove {len(artist_ids)} plots", steps)
+
+
 def remove_axes(project: Project, axes_id: str) -> Macro:
     """Remove an Axes with its artists, and whatever elsewhere refers to them.
 

@@ -156,3 +156,18 @@ def test_an_unused_data_file_goes_alone(project: Project) -> None:
 def test_only_data_files_are_removed_as_such(project: Project) -> None:
     with pytest.raises(CommandError):
         remove_source(project, project.figures[0].id)
+
+
+def test_several_plots_go_at_once_with_what_refers_to_them(project: Project) -> None:
+    from figscribe.commands import remove_artists
+
+    data, fit = project.figures[0].axes[0].artists
+    (residuals,) = project.figures[0].axes[1].artists
+    before = dumps(project)
+    history = History(project)
+    for ids in ([fit.id, data.id], [data.id, fit.id, residuals.id]):
+        history.push(remove_artists(project, ids))
+        assert _kinds(project) == [[], []]
+        assert history.undo_text == f"Remove {len(ids)} plots"
+        history.undo()
+        assert dumps(project) == before

@@ -74,6 +74,8 @@ class Outline(QTreeWidget):
         self.setItemsExpandable(False)
         self.setIndentation(0)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        # Ctrl or Shift and click choose several plots, changed together.
+        self.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
         header = self.header()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -313,14 +315,42 @@ class Outline(QTreeWidget):
             self.set_visible(item.data(0, ID_ROLE), not visible)
 
     def _on_tree_selection(self) -> None:
+        """One row selects its object; several rows select their plots
+        together, or, with anything else among them, the row clicked last."""
         if self._syncing:
             return
-        items = self.selectedItems()
-        self.document.select(items[0].data(0, ID_ROLE) if items else None)
+        ids = [item.data(0, ID_ROLE) for item in self.selectedItems()]
+        ids = [oid for oid in ids if oid is not None]
+        plots = {a.id for _, a in self._plots()}
+        current = self.currentItem()
+        if len(ids) > 1 and all(oid in plots for oid in ids):
+            last = current.data(0, ID_ROLE) if current is not None else None
+            if last in ids:  # the one clicked last leads, as when it is alone
+                ids = [*(oid for oid in ids if oid != last), last]
+            self.document.select_many(ids)
+        elif len(ids) > 1 and current is not None:
+            self.document.select(current.data(0, ID_ROLE))
+            self._show_selection(self.document.selected)
+        else:
+            self.document.select(ids[0] if ids else None)
+
+    def _plots(self):
+        for figure in self.document.project.figures:
+            for axes in figure.axes:
+                for artist in axes.artists:
+                    yield axes, artist
 
     def _show_selection(self, oid: str | None) -> None:
         self._syncing = True
         try:
+            many = self.document.selection
+            if len(many) > 1:
+                self.clearSelection()
+                for each in many:
+                    item = self.item_for(each)
+                    if item is not None:
+                        item.setSelected(True)
+                return
             axis = split_axis(oid)
             if axis is not None:
                 oid = axis[0]  # an axis is shown as its panel's row

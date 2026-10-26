@@ -517,6 +517,58 @@ TIPS = {
 "Class.field" where the same name means something else there."""
 
 
+SHARED = (
+    "color",
+    "marker",
+    "markersize",
+    "size",
+    "edgecolor",
+    "linestyle",
+    "linewidth",
+    "capsize",
+    "elinewidth",
+    "alpha",
+    "visible",
+)
+"""What several plots chosen together can have set at once, where every one
+of them has it."""
+
+
+class _Several:
+    """The value of a setting the plots chosen together do not agree on."""
+
+    def __repr__(self) -> str:
+        return "several"
+
+
+SEVERAL = _Several()
+
+
+def _shared_spec(objs: list[BaseModel], name: str) -> Spec | None:
+    """The editor for `name` on all of `objs`, if each has it and of one
+    kind; None may be chosen only if every one of them takes it."""
+    specs = []
+    for obj in objs:
+        field = type(obj).model_fields.get(name)
+        if field is None:
+            return None
+        specs.append(spec_for(name, field.annotation))
+    if any(spec is None or spec.kind != specs[0].kind for spec in specs):
+        return None
+    return next((spec for spec in specs if not spec.optional), specs[0])
+
+
+def _common(objs: list[BaseModel], path: Path) -> Any:
+    """The value at `path` the objects agree on, or SEVERAL."""
+    values = [_get(obj, path) for obj in objs]
+    return values[0] if all(v == values[0] for v in values) else SEVERAL
+
+
+def _set_on_all(objs: list[BaseModel], path: Path, value: Any) -> Macro:
+    steps = [SetField(obj.id, path, value) for obj in objs if _get(obj, path) != value]
+    return Macro(f"Change {len(objs)} plots", steps)
+
+
 def _basic_first(groups: dict[str, list[str]], basic: tuple[str, ...] | None):
     """Move the fields that are not `basic` from their sections to "More",
     in their order, before what "More" has; drop the sections left empty."""
@@ -654,7 +706,11 @@ class PropertyPanel(QScrollArea):
         self.axis_form = None
         axis = split_axis(self.document.selected)
         obj = self._selected_object()
-        if obj is None:
+        several = self._several()
+        if several:
+            self._shown = self._shape_of(obj)
+            layout.addWidget(self._several_header(several))
+        elif obj is None:
             self._shown = None
             hint = label(
                 "Select a figure, panel, plot or data file to edit it.", "hint"
@@ -668,7 +724,9 @@ class PropertyPanel(QScrollArea):
         self._error.setContentsMargins(16, 8, 16, 0)
         self._error.hide()
         layout.addWidget(self._error)
-        if axis is not None and obj is not None:
+        if several:
+            self._fill_several(several, layout)
+        elif axis is not None and obj is not None:
             oid = self.document.selected
             self.axis_form = AxisForm(
                 self, axis[0], axis[1], layout, lambda: self.axis_range(oid)
@@ -696,6 +754,12 @@ class PropertyPanel(QScrollArea):
         obj = self._selected_object()
         if obj is None or self._shown != self._shape_of(obj):
             self.rebuild()
+            return
+        several = self._several()
+        if several:
+            for path, editor in self.editors.items():
+                editor.show(_common(several, path))
+            self._filter()
             return
         if isinstance(obj, FitCurve) and obj.result != self._fit_result:
             self.rebuild()
@@ -787,9 +851,14 @@ class PropertyPanel(QScrollArea):
         Ignored unless `oid` is still the selected object: an editor torn down
         by a selection change can still report its last input.
         """
-        if oid != self.document.selected:
+        if oid != self.document.selected or value is SEVERAL:
             return
         try:
+            several = self._several()
+            if several:
+                self.document.push(_set_on_all(several, path, value))
+                self._error.hide()
+                return
             obj = find(self.document.project, oid)
             if _get(obj, path) == value:
                 return
@@ -856,7 +925,53 @@ class PropertyPanel(QScrollArea):
 
     def _shape_of(self, obj: BaseModel) -> tuple:
         oid = self.document.selected
+        if len(self.document.selection) > 1:
+            return ("several", tuple(self.document.selection))
         return ("axis", oid) if split_axis(oid) else _shape(obj)
+
+    def _several(self) -> list[BaseModel]:
+        """The plots selected together; empty while one object or none is."""
+        oids = self.document.selection
+        if len(oids) < 2:
+            return []
+        try:
+            return [find(self.document.project, oid) for oid in oids]
+        except CommandError:
+            return []
+
+    def _several_header(self, objs: list[BaseModel]) -> QWidget:
+        box = self._header(objs[-1])
+        names = [artist_name(obj) for obj in objs]
+        self._kicker.setText(f"{len(objs)} PLOTS")
+        self._title.setText(", ".join(names))
+        self._title.setWordWrap(True)
+        return box
+
+    def _fill_several(self, objs: list[BaseModel], layout: QVBoxLayout) -> None:
+        """The settings the plots share, each showing their value if they
+        agree; a change sets it on all of them, as one undo step."""
+        form = self._section("Together", layout)
+        for name in SHARED:
+            spec = _shared_spec(objs, name)
+            if spec is None:
+                continue
+            path = (name,)
+            editor = make_editor(spec, path, self)
+            value = _common(objs, path)
+            editor.show(value)
+            line = getattr(editor, "line", None)
+            if value is SEVERAL and isinstance(line, QLineEdit):
+                line.setPlaceholderText("several values")
+            self.editors[path] = editor
+            caption = _form_label(name)
+            tip = tip_for(type(objs[-1]), name)
+            self._captions[path] = (caption, tip)
+            if tip is not None:
+                caption.setToolTip(tip)
+                editor.widget.setToolTip(tip)
+            form.addRow(caption, editor.widget)
+        if not self.editors:
+            form.addRow(label("These plots share no setting.", "hint"))
 
     # --- layout ---------------------------------------------------------------
 
@@ -1134,11 +1249,16 @@ class CheckEditor(Editor):
     def __init__(self, spec, path, panel):
         super().__init__(spec, path, panel)
         self.widget = QCheckBox()
-        self.widget.toggled.connect(lambda on: self.commit(on))
+        # clicked, not toggled: from "several" (partly checked) a click checks
+        # the box without toggling it.
+        self.widget.clicked.connect(lambda on: self.commit(on))
 
     def show(self, value: bool) -> None:
         self.widget.blockSignals(True)
-        self.widget.setChecked(bool(value))
+        if value is SEVERAL:
+            self.widget.setCheckState(Qt.CheckState.PartiallyChecked)
+        else:
+            self.widget.setChecked(bool(value))
         self.widget.blockSignals(False)
 
 
@@ -1169,7 +1289,8 @@ class ChoiceEditor(Editor):
     def show(self, value: Any) -> None:
         values = [v for _, v in self.choices]
         if value not in values:
-            self.choices.append((f"{value}{self.missing}", value))
+            text = "several" if value is SEVERAL else f"{value}{self.missing}"
+            self.choices.append((text, value))
             self.widget.addItem(self.choices[-1][0])
             values.append(value)
         self.widget.blockSignals(True)
@@ -1193,7 +1314,7 @@ class TextEditor(Editor):
         self.line.setText(self._text(value))
 
     def _text(self, value: Any) -> str:
-        return "" if value is None else self.format(value)
+        return "" if value is None or value is SEVERAL else self.format(value)
 
     def _finish(self) -> None:
         text = self.line.text().strip()
@@ -1740,7 +1861,7 @@ class MarkerList(ChoiceEditor):
         if value is not CUSTOM:
             super().commit(value)
             return
-        typed = self.panel.ask_marker(self.value)
+        typed = self.panel.ask_marker(None if self.value is SEVERAL else self.value)
         if typed is None:
             self.show(self.value)
         else:

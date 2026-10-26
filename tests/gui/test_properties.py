@@ -167,7 +167,7 @@ def test_booleans_are_a_checkbox(panel: PropertyPanel, document) -> None:
     document.select(_axes(document).id)
     box = panel.editors[("legend", "visible")].widget
     assert isinstance(box, QCheckBox) and box.isChecked()
-    box.setChecked(False)
+    box.click()
     assert _axes(document).legend.visible is False
 
 

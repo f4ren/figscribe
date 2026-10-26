@@ -504,9 +504,12 @@ in the panel alone would be wrong as soon as the size or labels change.
   outline and change color, marker size or line width for all at once (one
   undo step).
 
-**Done in part** (2026-10-26, decision 0038): the search above the property
-panel (Ctrl+F) and the command palette (Ctrl+K). *Open:* basic first, and
-settings for several objects, in a pull request of their own.
+**Done** (2026-10-26, decisions 0038 and 0039): the search above the
+property panel (Ctrl+F) and the command palette (Ctrl+K); the basic
+settings per kind of object first, the rest under *More*; several plots
+chosen with Ctrl or Shift in the outline, changed together or deleted as
+one undo step. *Follow-ups:* the preview marks only the last of several
+plots chosen; a right-click on one of several chosen chooses it alone.
 
 ### U4 Change things where they are drawn — M
 

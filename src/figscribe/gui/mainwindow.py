@@ -45,6 +45,7 @@ from figscribe.commands import (
     duplicate_figure,
     find,
     remove_artist,
+    remove_artists,
     remove_axes,
     remove_figure,
     remove_source,
@@ -942,7 +943,12 @@ class MainWindow(QMainWindow):
     # --- edit actions -------------------------------------------------------
 
     def delete_selected(self) -> None:
-        """Remove the selected object, with what depends on it."""
+        """Remove the selected object, with what depends on it; several
+        plots chosen together go at once."""
+        several = self.document.selection
+        if len(several) > 1:
+            self._push(remove_artists(self.document.project, several))
+            return
         oid = self.document.selected
         for obj, _, field in walk(self.document.project):
             if obj.id != oid:
