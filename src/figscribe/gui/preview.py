@@ -10,7 +10,8 @@ hit testing, so selection works on exactly what is drawn.
 The wheel zooms and dragging pans a panel; in an axis' frame, as drawn
 around it when selected, they zoom and pan that axis alone. That view lives
 only here, until "Use as axis range" writes it into the model. Dragging a
-legend moves it, one undo step on release.
+legend moves it, one undo step on release. A double-click on a label, a
+title, a legend entry or a note edits its text where it is drawn.
 """
 
 from __future__ import annotations
@@ -53,6 +54,7 @@ from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
+from figscribe.gui.inplace import Editable, open_editor
 from figscribe.gui.markings import ENTRIES, add, marking
 from figscribe.gui.names import size_text
 from figscribe.render import render
@@ -67,6 +69,8 @@ EMPTY_HINT = (
 )
 CAPTION = 30
 """Room below the figure for its size and resolution."""
+TEXT_NAMES = {"text": "note", "label": "label", "title": "title"}
+"""How the undo step names the text edited where it is drawn."""
 DRAG_THRESHOLD = 4
 """Logical pixels the mouse moves before a press becomes a drag."""
 ZOOM_STEP = 1.25
@@ -750,6 +754,106 @@ class Preview(QWidget):
             return
         self.document.push(command)
 
+    # --- texts edited where they are drawn ---------------------------------
+
+    def text_at(self, point: QPointF) -> Editable | None:
+        """The text at `point` that the model holds: a note, a legend entry,
+        a panel's title or an axis label; None if there is none."""
+        if self._figure is None or self.document.figure is None:
+            return None
+        x, y = self._to_display(point)
+        event = MouseEvent("button_press_event", self._figure.canvas, x, y)
+        project = self.document.project
+        panels = {a.id: a for a in self.document.figure.axes}
+        for ax in _all_axes(self._figure):
+            host = _host(ax)
+            if host not in panels:
+                continue  # a color bar
+            right = (ax.get_gid() or "").endswith(RIGHT)
+            for text in ax.texts:
+                if text.get_gid() and text.get_visible() and text.contains(event)[0]:
+                    note = find(project, text.get_gid())
+                    return self._editable(text, note.id, ("text",), note.text, True)
+            legend = ax.get_legend()
+            if legend is not None and legend.get_visible():
+                for text, oid in zip(
+                    legend.get_texts(), self._legend_ids(ax), strict=False
+                ):
+                    if oid and text.contains(event)[0]:
+                        label = find(project, oid).label or ""
+                        return self._editable(text, oid, ("label",), label)
+            if not right and _shown(ax.title) and ax.title.contains(event)[0]:
+                title = panels[host].title or ""
+                return self._editable(ax.title, host, ("title",), title)
+            fields = (
+                [("y_right", ax.yaxis)]
+                if right
+                else [
+                    ("x", ax.xaxis),
+                    ("y", ax.yaxis),
+                ]
+            )
+            for field, axis in fields:
+                drawn = axis.label
+                if _shown(drawn) and drawn.contains(event)[0]:
+                    current = getattr(panels[host], field).label or ""
+                    return self._editable(drawn, host, (field, "label"), current)
+        return None
+
+    def edit_text(self, editable: Editable) -> QWidget:
+        """A field over the text, which sets it when done."""
+        return open_editor(self, editable, lambda text: self._set_text(editable, text))
+
+    def _set_text(self, editable: Editable, text: str | None) -> None:
+        if text is None or text.strip() == editable.text.strip():
+            return
+        value: str | None = text.strip() or None
+        if editable.path == ("text",):
+            if value is None:
+                return  # a note without text would be gone; Delete does that
+            value = text.rstrip()
+        what = TEXT_NAMES.get(editable.path[-1], "text")
+        command = SetField(editable.oid, editable.path, value, f"Edit the {what}")
+        try:
+            self.document.push(command)
+        except CommandError as exc:
+            self.show_error("Cannot change the text", str(exc))
+
+    def _editable(self, text, oid: str, path, current: str, lines=False) -> Editable:
+        box = text.get_window_extent(self._figure.canvas.get_renderer())
+        rect = QRectF(self._to_widget(box.x0, box.y1), self._to_widget(box.x1, box.y0))
+        return Editable(oid, tuple(path), current, rect, lines)
+
+    def _legend_ids(self, ax) -> list[str | None]:
+        """The plot of each legend entry of `ax`, in the legend's order: its
+        own plots, then those of its right y axis."""
+        handles, _ = ax.get_legend_handles_labels()
+        twin = next(
+            (
+                other
+                for other in _all_axes(self._figure)
+                if other.get_gid() == f"{ax.get_gid()}{RIGHT}"
+            ),
+            None,
+        )
+        if twin is not None:
+            handles += twin.get_legend_handles_labels()[0]
+        ids = []
+        for handle in handles:
+            gid = handle.get_gid() if hasattr(handle, "get_gid") else None
+            if gid is None and hasattr(handle, "get_children"):
+                gid = next((c.get_gid() for c in handle.get_children()), None)
+            ids.append(gid)
+        return ids
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        editable = self.text_at(event.position())
+        if editable is None:
+            super().mouseDoubleClickEvent(event)
+            return
+        self._press = None
+        self.edit_text(editable)
+
     def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt naming
         menu = self.context_menu(QPointF(event.pos()))
         if menu is not None:
@@ -818,6 +922,11 @@ class Preview(QWidget):
         return QPointF(
             self._origin.x() + x / ratio, self._origin.y() + (height - y) / ratio
         )
+
+
+def _shown(text) -> bool:
+    """Whether a Matplotlib text is drawn, with something in it."""
+    return text.get_visible() and bool(text.get_text())
 
 
 def _host(ax) -> str:
