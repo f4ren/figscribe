@@ -315,7 +315,7 @@ the project. It found:
    test adds: a color mesh's x or y alone does nothing, the renderer uses
    them only as a pair. Do this after U2, which reworks the same panel code.
    The same holds for an error bar plot's line width while its line style is
-   "none" (issue #71).
+   "none" (issue #71), and for the grid's line width and style (F5.8).
 5. **Missing API key** (verified, by hand): "Load models" in the assistant
    settings with Claude and no key anywhere prints a traceback to the terminal
    and shows nothing in the dialog. The Anthropic SDK raises a `TypeError`
@@ -674,6 +674,17 @@ In order of demand:
       (`secondary_xaxis`); decide whether both are wanted.
    3. Adding a second y axis while `side="right"` is set: refuse and explain,
       or move the side back to the left? Proposed: refuse and explain.
+8. **Line widths of frame, ticks and grid.** Journals ask for a frame and
+   ticks of a stated width (often 0.5 to 1 pt), and a fine or dotted grid.
+   **Done** (2026-10-26): per figure, as the tick direction is, so that every
+   panel matches: `frame_width`, `tick_width`, `tick_length`,
+   `minor_tick_width` and `minor_tick_length`, in pt, each empty for the
+   style's. They become rcParams (`axes.linewidth`, `xtick.major.width`,
+   …), which the script sets in the one `plt.rcParams.update` it already
+   writes for the ticks; the frame width also reaches the colour bar's
+   outline, as in Matplotlib. Per panel, beside the grid color:
+   `grid_linewidth` and `grid_linestyle` (solid, dashed, dotted,
+   dash-dotted; "none" is not offered, it would be no grid).
 
 ### F6 Several files as one series — M
 

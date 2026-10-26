@@ -26,12 +26,25 @@ PREFIXES = {"p": -12, "n": -9, "µ": -6, "m": -3, "k": 3, "M": 6, "G": 9, "T": 1
 """SI prefixes and their powers of ten."""
 
 
+TICK_PARAMS = {
+    "tick_direction": "direction",
+    "tick_width": "major.width",
+    "tick_length": "major.size",
+    "minor_tick_width": "minor.width",
+    "minor_tick_length": "minor.size",
+}
+"""Figure fields that set the same rcParam of both axes, "xtick." and "ytick."."""
+
+
 def tick_style(figure: Figure) -> dict[str, object]:
-    """The rcParams for the figure's tick style; empty for Matplotlib's own."""
+    """The rcParams for the figure's frame and ticks; empty for Matplotlib's own."""
     style: dict[str, object] = {}
-    if figure.tick_direction is not None:
-        style["xtick.direction"] = figure.tick_direction
-        style["ytick.direction"] = figure.tick_direction
+    if figure.frame_width is not None:
+        style["axes.linewidth"] = figure.frame_width
+    for field, param in TICK_PARAMS.items():
+        if (value := getattr(figure, field)) is not None:
+            style[f"xtick.{param}"] = value
+            style[f"ytick.{param}"] = value
     if figure.ticks_all_sides:
         style["xtick.top"] = True
         style["ytick.right"] = True

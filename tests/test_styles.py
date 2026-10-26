@@ -41,6 +41,7 @@ def test_what_matplotlib_accepts_passes(name: str, value) -> None:
         ("grid_color", "dark", "is not a color"),
         ("marker", "q", "is not a marker"),
         ("linestyle", "..", "is not a line style"),
+        ("grid_linestyle", "..", "is not a line style"),
         ("cmap", "viridiss", "is not a color map"),
         ("location", "top", "is not a legend location"),
         ("stylesheet", "2", "is not a style sheet"),

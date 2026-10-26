@@ -627,6 +627,32 @@ def test_a_grid_in_its_own_color(tmp_path: Path) -> None:
     assert 'ax.grid(True, color="dimgray")' in script
 
 
+def test_wide_frame_long_ticks_and_a_dotted_grid(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        grid=True,
+        grid_which="both",
+        grid_linewidth=0.4,
+        grid_linestyle=":",
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [
+        Figure(
+            dpi=110,
+            frame_width=1.5,
+            tick_width=1.2,
+            tick_length=6.0,
+            minor_tick_width=0.8,
+            minor_tick_length=3.0,
+            axes=[axes],
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert '"axes.linewidth": 1.5' in script
+    assert '"xtick.major.size": 6' in script and '"ytick.minor.width": 0.8' in script
+    assert 'ax.grid(True, which="both", linewidth=0.4, linestyle=":")' in script
+
+
 def test_panel_labels_outside_with_an_inset_lettered(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     first = Axes(

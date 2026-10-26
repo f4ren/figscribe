@@ -65,6 +65,7 @@ TYPED = {
     "decimal": [","],
     "comment": ["%"],
     "major_value": ["1"],
+    "minor_tick_length": ["4"],  # 2 pt is Matplotlib's own
 }
 """What is typed instead into fields where those texts would not do, tried
 in turn like the entries of a list until what is drawn changes."""

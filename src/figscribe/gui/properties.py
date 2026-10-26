@@ -218,9 +218,16 @@ SECTIONS = {
     "grid_axis": "Panel",
     "grid_which": "Panel",
     "grid_color": "Panel",
+    "grid_linewidth": "Panel",
+    "grid_linestyle": "Panel",
     "font_size": "Style",
     "tick_direction": "Style",
     "ticks_all_sides": "Style",
+    "frame_width": "Style",
+    "tick_width": "Style",
+    "tick_length": "Style",
+    "minor_tick_width": "Style",
+    "minor_tick_length": "Style",
     "panel_labels": "Style",
     "path": "File",
     "sha256": "File",
@@ -284,6 +291,12 @@ PLACEHOLDERS = {
     "color": "automatic",
     "edgecolor": "automatic",
     "grid_color": "automatic",
+    "grid_linewidth": "default",
+    "frame_width": "default",
+    "tick_width": "default",
+    "tick_length": "default",
+    "minor_tick_width": "default",
+    "minor_tick_length": "default",
     "limits": "automatic",
     "ticks": "automatic",
     "tick_labels": "automatic",
@@ -336,6 +349,15 @@ TIPS = {
     "tick_direction": "Whether tick marks point into the plot, out of it, or both.",
     "ticks_all_sides": "Tick marks also on the top and right edge of every "
     "panel; the numbers stay at the bottom and left.",
+    "frame_width": "Line width of the frame around every panel; empty keeps "
+    "the style's 0.8 pt.",
+    "tick_width": "Line width of the numbered tick marks; empty keeps the "
+    "style's 0.8 pt.",
+    "tick_length": "Length of the numbered tick marks; empty keeps the style's 3.5 pt.",
+    "minor_tick_width": "Line width of the minor tick marks; empty keeps the "
+    "style's 0.6 pt.",
+    "minor_tick_length": "Length of the minor tick marks; empty keeps the "
+    "style's 2 pt.",
     "title": "Text above the panel; LaTeX between $ signs.",
     "title_size": "Font size of the title; empty follows the figure.",
     "y_right": "A second y axis on the right, for plots in another unit.",
@@ -344,6 +366,9 @@ TIPS = {
     "grid_which": "Grid lines at the numbered ticks, the minor ticks, or both.",
     "grid_color": "Color of the grid lines, e.g. dimgray or #696969; empty "
     "keeps the style's light gray.",
+    "grid_linewidth": "Width of the grid lines; empty keeps the style's 0.8 pt.",
+    "grid_linestyle": "How the grid lines are drawn: solid, dashed, dotted or "
+    "dash-dotted.",
     "row": "Grid row of the panel, counted from 1 at the top.",
     "col": "Grid column of the panel, counted from 1 at the left.",
     "rowspan": "How many grid rows the panel covers.",
@@ -1026,6 +1051,7 @@ CHOICES = {
         ("both", "both"),
     ],
 }
+CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
 CHOICES["unit_format"] = UNIT_FORMATS
 CHOICES["encoding"] = ENCODINGS
 CHOICES["placement"] = [
@@ -1040,6 +1066,7 @@ CHOICES["tick_direction"] = [
 NONE_TEXT = {
     "stylesheet": "Matplotlib's default",
     "tick_direction": "style default",
+    "grid_linestyle": "style default",
     "prefix": "as in the data",
     "marker": "No marker",
     "left_out_marker": "No marker",
