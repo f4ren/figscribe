@@ -299,3 +299,34 @@ def test_fixed_and_bounds_are_checked(options, message) -> None:
     model, true, x, y, yerr = _gaussian_data()
     with pytest.raises(FitError, match=message):
         run_fit(model, true, x, y, yerr, **options)
+
+
+# --- outliers -------------------------------------------------------------------
+
+
+def _with_glitches(yerr: bool):
+    model = PredefinedFit(name="linear")
+    x = np.linspace(0, 10, 41)
+    rng = np.random.default_rng(RNG_SEED)
+    y = 2.0 * x + 1.0 + rng.normal(0, 0.05, x.size)  # well inside the errors
+    y[[7, 30]] += [3.0, -4.0]
+    return model, x, y, (np.full(x.size, 0.1) if yerr else None)
+
+
+@pytest.mark.parametrize("errors", [True, False])
+def test_outliers_are_found_by_their_residuals(errors: bool) -> None:
+    from figscribe.fit import outliers
+
+    model, x, y, yerr = _with_glitches(errors)
+    start = initial_guess(model, x, y)
+    found = outliers(model, start, x, y, yerr, k=3.0)
+    assert list(np.flatnonzero(found)) == [7, 30]
+
+
+def test_without_outliers_none_are_found() -> None:
+    from figscribe.fit import outliers
+
+    model, x, _, yerr = _with_glitches(True)
+    y = 2.0 * x + 1.0
+    found = outliers(model, {"a": 1.0, "b": 0.0}, x, y + 0.01 * np.sin(x), yerr)
+    assert not found.any()

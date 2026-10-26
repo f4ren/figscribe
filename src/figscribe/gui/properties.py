@@ -259,6 +259,7 @@ COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
 
 PLACEHOLDERS = {
+    "left_out_note": "no reason given",
     "left_out_color": "light grey",
     "left_out_marker": "the plot's",
     "label": "not in the legend",
@@ -294,6 +295,8 @@ PLACEHOLDERS = {
 }
 
 TIPS = {
+    "left_out_note": "Why the rows are left out, e.g. detector glitch; the script "
+    "says it in a comment. Finding outliers in the fit dialog fills it in.",
     "left_out_color": "Color of the points left out (right-click a point in the "
     "preview); empty draws them light grey.",
     "left_out_marker": "Marker of the points left out, e.g. x or s; empty takes the "

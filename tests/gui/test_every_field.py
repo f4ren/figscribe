@@ -74,6 +74,9 @@ UNSEEN = "nothing drawn changes"
 REFUSED = "no input changed the model"
 EXPECTED = {
     "Figure.name": (UNSEEN, "names the exported files, not drawn"),
+    "LinePlot.left_out_note": (UNSEEN, "a comment in the script, not drawn"),
+    "ScatterPlot.left_out_note": (UNSEEN, "a comment in the script, not drawn"),
+    "ErrorbarPlot.left_out_note": (UNSEEN, "a comment in the script, not drawn"),
     "Figure.dpi": (UNSEEN, "only the PNG export's resolution; the preview has its own"),
     "Annotation.label": (UNSEEN, "a note has no legend entry"),
     "ImagePlot.label": (UNSEEN, "an image has no legend entry"),

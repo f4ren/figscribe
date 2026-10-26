@@ -13,6 +13,7 @@ from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.properties import PropertyPanel
+from figscribe.io.refresh import use_new_version
 from figscribe.model import (
     Axes,
     ExpressionFit,
@@ -343,3 +344,67 @@ def test_a_fit_range_is_shown_when_the_fit_is_changed(
     assert (dialog.range_low.text(), dialog.range_high.text()) == ("3", "7")
     assert dialog.extend.isChecked()
     assert dialog.fit().fit_range == (3.0, 7.0)
+
+
+# --- left-out points and outliers ---------------------------------------------------
+
+
+def _glitched(document: Document) -> None:
+    """Two points of the example pushed far off its peak, in the file, which
+    is then taken as it is now."""
+    source = document.project.sources[0]
+    path = document.base_dir / source.path
+    lines = path.read_text(encoding="utf-8").splitlines()
+    first = next(i for i, line in enumerate(lines) if line[:1].isdigit())
+    for row, shift in ((10, 0.6), (30, -0.5)):
+        t, u, du = lines[first + row].split(",")
+        lines[first + row] = f"{t},{float(u) + shift:.5f},{du}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    document.push(use_new_version(document.project, source.id, document.base_dir))
+
+
+def test_the_dialog_skips_the_points_left_out_of_the_plot(
+    qtbot, document: Document
+) -> None:
+    document.push(SetField(_data(document).id, ("left_out",), [10, 30]))
+    dialog = FitDialog(_data(document), document.data)
+    qtbot.addWidget(dialog)
+    assert dialog.points.text().startswith("39 of 41 points")
+
+
+def test_outliers_are_proposed_and_left_out_on_confirmation(
+    qtbot, window: MainWindow
+) -> None:
+    document = window.document
+    _glitched(document)
+
+    def find_and_take(dialog: FitDialog) -> bool:
+        dialog.find_outliers.click()
+        assert "Rows 11 and 31 lie more than 3σ off" in dialog.outlier_text.text()
+        before = dialog.result.reduced_chi_square
+        dialog.leave_outliers_out.click()
+        assert dialog.result.reduced_chi_square < before
+        return True
+
+    window.run_dialog = find_and_take
+    window.fit_action.trigger()
+    plot = document.figure.axes[0].artists[0]
+    assert plot.left_out == [10, 30]
+    assert "more than 3σ off" in plot.left_out_note
+    fit = document.figure.axes[0].artists[1]
+    assert fit.result is not None
+    document.undo()  # fit and left-out rows in one step
+    assert document.figure.axes[0].artists[0].left_out == []
+    assert len(document.figure.axes[0].artists) == 1
+
+
+def test_outliers_found_but_not_confirmed_stay_in(qtbot, window: MainWindow) -> None:
+    _glitched(window.document)
+
+    def only_find(dialog: FitDialog) -> bool:
+        dialog.find_outliers.click()
+        return True
+
+    window.run_dialog = only_find
+    window.fit_action.trigger()
+    assert window.document.figure.axes[0].artists[0].left_out == []
