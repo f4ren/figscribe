@@ -62,7 +62,9 @@ Common set_field paths (get_schema has all of them):
 - figure: `width_mm`, `height_mm`, `font_size`, `layout.share_x` ("none", \
 "col", "all"), `layout.share_y` ("none", "row", "all"), `tick_direction` \
 ("in", "out", "inout"), `ticks_all_sides`, `frame_width`, `tick_width`, \
-`tick_length`, `minor_tick_width`, `minor_tick_length` (all in pt)
+`tick_length`, `minor_tick_width`, `minor_tick_length` (all in pt), \
+`panel_labels` (letters (a), (b) on the panels: {"style": "(a)", "bold": \
+false}; null removes them)
 - panel (axes): `title`, `grid`, `grid_color`, `grid_linewidth`, \
 `grid_linestyle`, `x.label`, `x.unit`, \
 `x.scale` ("linear", "log", "symlog"), `x.limits` ([min, max]), `x.major_step`, \
@@ -75,8 +77,11 @@ removes it)
 `linestyle`, `linewidth`, `capsize`, `axis` ("left" or "right")
 New plots: insert into a panel's "artists" with "kind" line, scatter, \
 errorbar, histogram or annotation; columns are {"source": id, "column": \
-name}. New panels: add_panel, then insert into the id it returns. A fit with \
-its residual panel: fit with "residuals": true."""
+name}. A line across the panel at a value: "kind" refline with "at" and \
+"orientation" ("vertical" at an x value, "horizontal" at a y value); a \
+shaded range: "kind" span with "start", "end" and "orientation". New \
+panels: add_panel, then insert into the id it returns. A fit with its \
+residual panel: fit with "residuals": true."""
 
 
 class ChatError(Exception):

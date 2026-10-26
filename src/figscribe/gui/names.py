@@ -17,6 +17,8 @@ KIND_NAMES = {
     "fit": "Fit",
     "residual": "Residuals of the fit",
     "annotation": "Note",
+    "refline": "Reference line",
+    "span": "Shaded range",
 }
 
 FIELD_NAMES = {
@@ -112,6 +114,10 @@ FIELD_NAMES = {
     "ncols": "Columns",
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
+    "orientation": "Direction",
+    "at": "At",
+    "start": "From",
+    "end": "To",
     "style": "Letters",
     "bold": "Bold",
     "placement": "Placement",
@@ -187,6 +193,12 @@ def artist_name(artist) -> str:
         if model.kind == "predefined":
             return f"{model.name.capitalize()} fit"
         return f"Fit: {model.expression}"
+    if artist.kind in ("refline", "span"):
+        axis = "x" if artist.orientation == "vertical" else "y"
+        if artist.kind == "refline":
+            return f"Line at {axis} = {artist.at:g}"
+        low, high = sorted((artist.start, artist.end))
+        return f"Range of {axis} from {low:g} to {high:g}"
     if artist.kind == "annotation":
         first, *more = artist.text.split("\n")
         return f"Note: {first} …" if more else f"Note: {first}"

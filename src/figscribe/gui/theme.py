@@ -354,6 +354,9 @@ _ICONS = {
     "annotation": '<path d="M2 13 L7 8 M7 8 H14" stroke="{c}" stroke-width="1.5" '
     'fill="none" stroke-linecap="round"/>',
     "histogram": '<path d="M2 14 V9 H5 V5 H8 V7 H11 V10 H14 V14 Z" fill="{c}"/>',
+    "refline": '<path d="M8 1.5 V14.5" stroke="{c}" stroke-width="1.6" '
+    'stroke-dasharray="3 2"/>',
+    "span": '<rect x="4.5" y="1.5" width="7" height="13" fill="{c}" opacity="0.4"/>',
     "image": '<rect x="2" y="2" width="12" height="12" fill="{c}" opacity="0.35"/>'
     '<rect x="2" y="2" width="6" height="6" fill="{c}"/>',
     "chat": '<path d="M2.5 3.5 H13.5 V10.5 H7 L4 13 V10.5 H2.5 Z" fill="none" '
@@ -379,6 +382,8 @@ ARTIST_ICONS = {
     "histogram": "histogram",
     "image": "image",
     "colormesh": "image",
+    "refline": "refline",
+    "span": "span",
 }
 
 

@@ -235,6 +235,10 @@ SECTIONS = {
     "visible": "More",
     "zorder": "More",
     "axis": "Data",
+    "orientation": "Data",
+    "at": "Data",
+    "start": "Data",
+    "end": "Data",
     "y_right": "Panel",
     "data": "Data",
     "row": "Position",
@@ -390,6 +394,17 @@ TIPS = {
     "color": "A name such as blue or tab:orange, or a code such as #1f77b4; empty "
     "takes the next color of the cycle.",
     "Annotation.color": "Color of the text and the arrow; empty follows the style.",
+    "ReferenceLine.color": "A name such as gray or tab:orange, or a code such as "
+    "#1f77b4.",
+    "ShadedSpan.color": "A name such as gray or tab:orange, or a code such as "
+    "#1f77b4; the opacity keeps it light.",
+    "ReferenceLine.orientation": "Vertical: at an x value, from bottom to top. "
+    "Horizontal: at a y value, from left to right.",
+    "ShadedSpan.orientation": "Vertical: a range of x values, shaded from bottom to "
+    "top. Horizontal: a range of y values, shaded from left to right.",
+    "at": "The value the line marks, in the unit of its axis.",
+    "start": "One end of the shaded range, in the unit of its axis.",
+    "end": "The other end of the shaded range.",
     "edgecolor": "Color of the marker outlines; empty follows the style.",
     "linestyle": "How the line is drawn: solid, dashed, dash-dotted, dotted, or none "
     "for points only.",

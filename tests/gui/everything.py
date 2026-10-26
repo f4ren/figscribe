@@ -31,8 +31,10 @@ from figscribe.model import (
     PanelLabels,
     PredefinedFit,
     Project,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
     dumps,
 )
 
@@ -41,7 +43,8 @@ def build(folder: Path) -> Path:
     """Write the project and its files into `folder`; return the project file.
 
     Panel A has a line, points, error bars with a fit, a note with an arrow
-    and a right y axis with a plot on it; B a histogram and the residuals; C
+    and a right y axis with a plot on it; B a histogram, a reference line, a
+    shaded range and the residuals; C
     an image and D a color mesh, both with color bars; E is an inset in A.
     Everything that can be switched off is on, so that its settings show.
     """
@@ -86,7 +89,11 @@ def build(folder: Path) -> Path:
     b = Axes(
         col=1,
         legend=Legend(visible=True),
-        artists=[Histogram(values=col("U"), label="counts")],
+        artists=[
+            Histogram(values=col("U"), label="counts"),
+            ReferenceLine(at=5.0, label="mean"),
+            ShadedSpan(start=3.0, end=4.0, label="band"),
+        ],
     )
     c = Axes(
         row=1,

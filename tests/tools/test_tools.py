@@ -258,6 +258,22 @@ def test_insert_a_plot(tools, workspace) -> None:
     assert result["undo_step"] == "Add line plot"
 
 
+def test_insert_a_reference_line_and_a_shaded_range(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    line = {"kind": "refline", "orientation": "horizontal", "at": 0.5}
+    result = tools.call(
+        "insert", {"parent_id": axes, "field": "artists", "object": line}
+    )
+    assert result["undo_step"] == "Add reference line"
+    span = {"kind": "span", "start": 3, "end": 6, "label": "pulse"}
+    tools.call("insert", {"parent_id": axes, "field": "artists", "object": span})
+    added = workspace.project.figures[0].axes[0].artists[-2:]
+    assert [a.kind for a in added] == ["refline", "span"]
+    assert "ax.axhline(0.5" in tools.call("get_python_script", {})["script"]
+    with pytest.raises(ToolError, match="two different ends"):
+        tools.call("set_field", {"object_id": added[1].id, "path": ["end"], "value": 3})
+
+
 @pytest.mark.parametrize(
     ("field", "object", "message"),
     [

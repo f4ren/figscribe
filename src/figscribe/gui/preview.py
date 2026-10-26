@@ -53,6 +53,7 @@ from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
+from figscribe.gui.markings import ENTRIES, add, marking
 from figscribe.gui.names import size_text
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
@@ -695,23 +696,48 @@ class Preview(QWidget):
         return plot_id, row
 
     def context_menu(self, point: QPointF) -> QMenu | None:
-        """What can be done with the point at `point`: leave it out of its
-        plot and the plot's fits, or take it back in."""
-        found = self.point_at(point)
-        if found is None:
-            return None
-        plot_id, row = found
-        left_out = list(find(self.document.project, plot_id).left_out)
+        """What can be done at `point`: leave the point there out of its plot
+        and the plot's fits, or take it back in; and, in a panel, add a
+        reference line or a shaded range there."""
         menu = QMenu(self)
-        if row in left_out:
-            text, rows = (
-                f"Take row {row + 1} back in",
-                [r for r in left_out if r != row],
-            )
-        else:
-            text, rows = f"Leave out row {row + 1}", [*left_out, row]
-        menu.addAction(text, lambda: self._leave_out(plot_id, rows))
-        return menu
+        found = self.point_at(point)
+        if found is not None:
+            plot_id, row = found
+            left_out = list(find(self.document.project, plot_id).left_out)
+            if row in left_out:
+                text, rows = (
+                    f"Take row {row + 1} back in",
+                    [r for r in left_out if r != row],
+                )
+            else:
+                text, rows = f"Leave out row {row + 1}", [*left_out, row]
+            menu.addAction(text, lambda: self._leave_out(plot_id, rows))
+        ax = self.axes_at(point)
+        if ax is not None:
+            if menu.actions():
+                menu.addSeparator()
+            self._marking_entries(menu, ax, point)
+        return menu if menu.actions() else None
+
+    def _marking_entries(self, menu: QMenu, ax, point: QPointF) -> None:
+        """A line or a range at the clicked spot of the panel `ax`."""
+        x, y = ax.transData.inverted().transform(self._to_display(point))
+        places = {
+            "vertical": (x, ax.get_xlim(), ax.get_xscale(), "x"),
+            "horizontal": (y, ax.get_ylim(), ax.get_yscale(), "y"),
+        }
+        for _, kind, orientation in ENTRIES:
+            at, shown, scale, name = places[orientation]
+            made = marking(kind, orientation, *sorted(shown), log=scale == "log", at=at)
+            if kind == "refline":
+                text = f"{orientation.capitalize()} line at {name} = {made.at:g}"
+            else:
+                text = f"Shade {'an' if name == 'x' else 'a'} {name} range here"
+            menu.addAction(text, lambda m=made: self._add_marking(ax.get_gid(), m))
+
+    def _add_marking(self, axes_id: str, made) -> None:
+        self.document.push(add(axes_id, made))
+        self.document.select(made.id)
 
     def _leave_out(self, plot_id: str, rows: list[int]) -> None:
         try:

@@ -35,7 +35,9 @@ from figscribe.model import (
     PanelLabels,
     PredefinedFit,
     Project,
+    ReferenceLine,
     ScatterPlot,
+    ShadedSpan,
     loads,
 )
 from figscribe.render import export
@@ -691,3 +693,42 @@ def test_a_panel_label_inside_one_panel(tmp_path: Path) -> None:
     script = _assert_same(project, tmp_path)
     assert "ax.annotate(\n" in script and '"A",' in script
     assert "fontsize=13" in script and "for ax, label" not in script
+
+
+def test_reference_lines_and_shaded_spans(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(label="$t$", unit="s"),
+        y=AxisSpec(label="$U$", unit="V", scale="log", limits=(0.01, 2)),
+        y_right=AxisSpec(label="$t^2$", unit="s2"),
+        legend=Legend(visible=True),
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"], label="data"),
+            ScatterPlot(x=ref["t"], y=ref["t2"], axis="right"),
+            ReferenceLine(at=5.0, label="centre"),
+            ReferenceLine(
+                orientation="horizontal",
+                at=60.0,
+                axis="right",
+                color="C3",
+                linestyle="-.",
+                linewidth=2.0,
+            ),
+            ShadedSpan(start=3.5, end=6.5, label="peak", zorder=3.0),
+            ShadedSpan(orientation="horizontal", start=0.5, end=1.0, color="C2"),
+        ],
+    )
+    project.figures = [Figure(dpi=100, width_mm=110, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert (
+        'ax.axvline(5, color="gray", linestyle="--", linewidth=1, label="centre")'
+        in (script)
+    )
+    assert "ax_right.axhline(60," in script
+    assert (
+        'ax.axvspan(3.5, 6.5, color="gray", linewidth=0, label="peak", zorder=3, '
+        "alpha=0.2)" in script
+    )
+    assert 'ax.axhspan(0.5, 1, color="C2", linewidth=0, zorder=0.5, alpha=0.2)' in (
+        script
+    )

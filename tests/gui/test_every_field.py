@@ -132,6 +132,8 @@ OBJECTS: dict[str, Callable[[Project], str]] = {
     "residuals": _artist("residual"),
     "note": _artist("annotation"),
     "histogram": _artist("histogram"),
+    "reference line": _artist("refline"),
+    "shaded range": _artist("span"),
     "image": _artist("image"),
     "color mesh": _artist("colormesh"),
     "CSV file": lambda p: p.sources[0].id,

@@ -156,8 +156,9 @@ TOOLS: list[ToolSpec] = [
         "insert",
         "Add a figure, an axes (a panel in the figure's grid, or an inset with "
         '"inset": {"parent": axes id, "bounds": [x0, y0, w, h]}) or an artist '
-        '(plot, annotation, residuals) given as JSON. Returns its id. For "kind" '
-        "values and fields see get_schema. One undo step.",
+        "(plot, annotation, residuals, reference line, shaded range) given as "
+        'JSON. Returns its id. For "kind" values and fields see get_schema. One '
+        "undo step.",
         {
             "type": "object",
             "properties": _OBJECT_FIELDS,

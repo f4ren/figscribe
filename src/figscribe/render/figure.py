@@ -37,8 +37,10 @@ from figscribe.model import (
     ImagePlot,
     Legend,
     LinePlot,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
 )
 from figscribe.model.artists import LIKE_THE_PLOT
 from figscribe.model.validate import FITTABLE, unequal_columns
@@ -310,6 +312,19 @@ def _draw_artist(
             patch.set_gid(artist.id)
     elif isinstance(artist, Annotation):
         _draw_annotation(artist, ax, common)
+    elif isinstance(artist, ReferenceLine):
+        draw = ax.axvline if artist.orientation == "vertical" else ax.axhline
+        draw(
+            artist.at,
+            color=artist.color,
+            linestyle=artist.linestyle,
+            linewidth=artist.linewidth,
+            **common,
+        )
+    elif isinstance(artist, ShadedSpan):
+        draw = ax.axvspan if artist.orientation == "vertical" else ax.axhspan
+        # No edge: in the band's own color it would draw a darker outline.
+        draw(artist.start, artist.end, color=artist.color, linewidth=0, **common)
     elif isinstance(artist, ImagePlot | ColorMesh):
         _draw_2d(artist, ax, data, common)
     elif isinstance(artist, FitCurve):

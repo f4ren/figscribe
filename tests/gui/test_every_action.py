@@ -152,16 +152,14 @@ def test_every_entry_of_the_outline_menus_works(qtbot, window_factory, panel) ->
     problems = []
     for oid in ids:
         menu = window.outline.context_menu(oid)
-        entries = (
-            [a.text() for a in menu.actions() if not a.isSeparator()] if menu else []
-        )
+        entries = [a.text() for a in _in_menu(menu)] if menu else []
         for text in entries:
             before = dumps(document.project)
             document.select(oid)
             shown.clear()
             entry = next(
                 a
-                for a in window.outline.context_menu(oid).actions()
+                for a in _in_menu(window.outline.context_menu(oid))
                 if a.text() == text
             )
             entry.trigger()
