@@ -590,12 +590,11 @@ class PropertyPanel(QScrollArea):
         self._filtering.setInterval(FILTER_DELAY_MS)
         self._filtering.timeout.connect(self.rebuild)
         self.search.textChanged.connect(lambda _: self._filtering.start())
-        QShortcut(
-            QKeySequence(Qt.Key.Key_Escape),
-            self.search,
-            self.search.clear,
-            context=Qt.ShortcutContext.WidgetShortcut,
-        )
+        clear = QShortcut(QKeySequence(Qt.Key.Key_Escape), self.search)
+        # Set apart: PySide6 ignores a context given to the constructor, and
+        # Esc would then act in the whole window.
+        clear.setContext(Qt.ShortcutContext.WidgetShortcut)
+        clear.activated.connect(self.search.clear)
         self.matches = 0
         """How many fields the search shows; all of them without a search."""
         self._searched = False
