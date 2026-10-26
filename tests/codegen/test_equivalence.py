@@ -416,6 +416,39 @@ def test_a_windows_file_keeps_its_encoding(tmp_path: Path) -> None:
     assert 'encoding="cp1252"' in script
 
 
+@pytest.mark.parametrize(
+    ("header", "bom", "expected"),
+    [
+        ("t,U (V)", False, None),
+        ("t,I (µA)", False, '"utf-8"'),
+        ("t,I (µA)", True, '"utf-8-sig"'),
+    ],
+)
+def test_a_utf8_file_names_its_encoding_unless_plain_ascii(
+    tmp_path: Path, header: str, bom: bool, expected: str | None
+) -> None:
+    """Without encoding=, NumPy reads with the system's encoding: cp1252 on
+    Windows, which cannot decode every UTF-8 byte (0x81 in "Á")."""
+    text = f"{header}\n0,1.5\n1,2.5\n2,2\n"
+    (tmp_path / "data.csv").write_bytes(
+        ("\ufeff" if bom else "").encode() + text.encode()
+    )
+    source = csv_source(tmp_path / "data.csv", tmp_path)
+    ref = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    y = next(c for c in source.columns if c != "t")
+    axes = Axes(artists=[LinePlot(x=ref["t"], y=ref[y])])
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[axes])],
+    )
+    script = _assert_same(project, tmp_path)
+    if expected is None:
+        assert "encoding=" not in script
+    else:
+        assert f"encoding={expected}" in script
+
+
 def test_histograms_and_notes(tmp_path: Path) -> None:
     from figscribe.model import Annotation, Histogram
 
