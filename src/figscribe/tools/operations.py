@@ -36,9 +36,14 @@ from figscribe.commands import (
     remove_axes,
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
-from figscribe.fit import FitError, add_fit, refit
+from figscribe.fit import FitError, add_fit, refit, set_left_out
 from figscribe.io import DataError
-from figscribe.io.refresh import source_state, use_new_version
+from figscribe.io.refresh import (
+    read_differently,
+    reading_options,
+    source_state,
+    use_new_version,
+)
 from figscribe.model import (
     Axes,
     DataSource,
@@ -170,8 +175,27 @@ class Toolbox:
     def tool_set_field(
         self, object_id: str | None, path: list[str], value: Any
     ) -> dict[str, Any]:
-        command = _set_field(self.workspace.project, object_id, path, value)
+        command = self._set_field(self.workspace.project, object_id, path, value)
         return self._push(command, {})
+
+    def _set_field(
+        self, project: Project, object_id: str | None, path: list[str], value: Any
+    ) -> Command:
+        command = _set_field(project, object_id, path, value)
+        if path == ["left_out"]:
+            try:  # the plot's fits are fitted again without those rows
+                data = self.workspace.data
+                return set_left_out(project, object_id, list(command.value), data)
+            except FitError as exc:
+                raise ToolError(str(exc)) from exc
+        if len(path) == 1 and path[0] in reading_options(find(project, object_id)):
+            try:  # the file is read that way at once, with its new columns
+                return read_differently(
+                    project, object_id, path[0], command.value, self.workspace.base_dir
+                )
+            except DataError as exc:
+                raise ToolError(str(exc)) from exc
+        return command
 
     def tool_insert(
         self,
@@ -205,6 +229,9 @@ class Toolbox:
         label: str | None = None,
         initial_values: dict[str, float] | None = None,
         residuals: bool = False,
+        fixed: list[str] | None = None,
+        bounds: dict[str, tuple[float | None, float | None]] | None = None,
+        fit_range: tuple[float, float] | None = None,
     ) -> dict[str, Any]:
         command, fit_id = _fit(
             self.workspace.project,
@@ -214,6 +241,9 @@ class Toolbox:
             label,
             initial_values,
             residuals,
+            fixed,
+            bounds,
+            fit_range,
         )
         info = self._push(command, {"id": fit_id})
         info["result"] = find(self.workspace.project, fit_id).result.model_dump()
@@ -273,7 +303,7 @@ class Toolbox:
     ) -> tuple[Command, str | None]:
         op = operation.pop("op", None)
         builders = {
-            "set_field": lambda **a: (_set_field(project, **a), None),
+            "set_field": lambda **a: (self._set_field(project, **a), None),
             "insert": lambda **a: _insert(project, **a),
             "remove": lambda **a: (_remove(project, **a), None),
             "move": lambda **a: (_move(project, **a), None),
@@ -415,6 +445,9 @@ def _fit(
     label: str | None = None,
     initial_values: dict[str, float] | None = None,
     residuals: bool = False,
+    fixed: list[str] | None = None,
+    bounds: dict[str, tuple[float | None, float | None]] | None = None,
+    fit_range: tuple[float, float] | None = None,
 ) -> tuple[Macro, str]:
     """A FitCurve on `target_id`, in the target's axes, fitted at once; with
     `residuals` also their panel below, as the GUI's fit dialog makes it."""
@@ -433,6 +466,11 @@ def _fit(
         model=_validate(FitModel, model, "model"),
         label=label,
         initial_values=initial_values or {},
+        fixed=fixed or [],
+        parameter_bounds=_validate(
+            dict[str, tuple[float | None, float | None]], bounds or {}, "bounds"
+        ),
+        fit_range=_validate(tuple[float, float] | None, fit_range, "fit_range"),
     )
     placed = add_fit(project, fit, residuals)
     staging = project.model_copy(deep=True)

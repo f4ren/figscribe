@@ -11,27 +11,48 @@ from figscribe.fit.expression import (
     compile_expression,
     free_names,
 )
-from figscribe.fit.ops import add_fit, refit
+from figscribe.fit.ops import (
+    Residuals,
+    add_fit,
+    refit,
+    residuals,
+    set_left_out,
+    update_fit,
+)
 from figscribe.fit.run import (
     evaluate,
+    free_parameters,
+    in_range,
     initial_guess,
+    kept,
     numpy_source,
+    outliers,
     parameter_names,
     run_fit,
     source_of,
+    within,
 )
 
 __all__ = [
+    "Residuals",
+    "residuals",
     "ExpressionError",
     "add_fit",
     "FitError",
     "compile_expression",
     "evaluate",
     "free_names",
+    "free_parameters",
+    "in_range",
+    "kept",
     "initial_guess",
     "numpy_source",
+    "outliers",
     "parameter_names",
     "refit",
     "run_fit",
+    "set_left_out",
     "source_of",
+    "update_fit",
+    "within",
 ]

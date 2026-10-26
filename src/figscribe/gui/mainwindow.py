@@ -41,12 +41,13 @@ from figscribe.commands import (
     Macro,
     SetField,
     add_panel,
+    find,
     remove_artist,
     remove_axes,
 )
 from figscribe.commands.core import walk
 from figscribe.examples import bundled_example
-from figscribe.fit import FitError, add_fit
+from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
@@ -184,6 +185,8 @@ class MainWindow(QMainWindow):
         self.properties_dock = self._dock(
             "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
         )
+        self.properties.edit_fit = self.edit_fit
+        self.preview.show_error = self.show_error
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
@@ -581,11 +584,50 @@ class MainWindow(QMainWindow):
         fit = dialog.fit()
         try:
             command = add_fit(self.document.project, fit, dialog.residuals.isChecked())
+            command = self._with_outliers(command, dialog)
         except FitError as exc:
             self.show_error("Cannot fit", exc)
             return
         self._push(command)
         self.document.select(fit.id)
+
+    def edit_fit(self, fit_id: str) -> None:
+        """Open the fit dialog on the fit `fit_id` and take what it changes,
+        as one undo step."""
+        try:
+            fit = find(self.document.project, fit_id)
+            target = find(self.document.project, fit.target)
+            dialog = FitDialog(target, self.document.data, parent=self, fit=fit)
+        except Exception as exc:  # gone, or the data cannot be read
+            self.show_error("Cannot change the fit", exc)
+            return
+        if not self.run_dialog(dialog) or dialog.fit() is None:
+            return
+        try:
+            command = update_fit(self.document.project, fit_id, dialog.fit())
+            command = self._with_outliers(command, dialog)
+        except FitError as exc:
+            self.show_error("Cannot change the fit", exc)
+            return
+        self._push(command)
+
+    def _with_outliers(self, command: Macro, dialog: FitDialog) -> Macro:
+        """`command`, and the outliers the user confirmed in the dialog left
+        out of the plot, with the plot's fits fitted again: one step."""
+        rows = dialog.left_out_rows()
+        if rows is None:
+            return command
+        staging = self.document.project.model_copy(deep=True)
+        command.apply(staging)
+        plot_id = dialog.target.id
+        leave = set_left_out(staging, plot_id, rows, self.document.data)
+        note = SetField(plot_id, ("left_out_note",), dialog.left_out_note())
+        count = len(dialog.pending)
+        return Macro(
+            f"{command.description} and leave out {count} outlier"
+            + ("s" * (count != 1)),
+            [*command.steps, *leave.steps, note],
+        )
 
     def add_note(self, oid: str | None = None) -> None:
         """Add a note in the middle of a panel; drag it in the preview."""
@@ -596,7 +638,10 @@ class MainWindow(QMainWindow):
         if target is None:
             self.show_error("No panel", "Add a panel or a plot first.")
             return
-        text = self.ask_text("Add note", "Text (LaTeX allowed, e.g. $\\mu$):")
+        text = self.ask_text(
+            "Add note",
+            "Text, over several lines if you like (LaTeX allowed, e.g. $\\mu$):",
+        )
         if not text:
             return
         note = Annotation(text=text, position=(0.5, 0.5), coords="axes")
@@ -604,7 +649,8 @@ class MainWindow(QMainWindow):
         self.document.select(note.id)
 
     def _ask_text(self, title: str, prompt: str) -> str | None:
-        text, ok = QInputDialog.getText(self, title, prompt)
+        """Several lines of text; None if cancelled."""
+        text, ok = QInputDialog.getMultiLineText(self, title, prompt)
         return text.strip() if ok else None
 
     def _fit_target(self):
@@ -918,13 +964,11 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         bar.addWidget(spacer)
 
-        for action, text in ((self.import_action, "Data"), (self.plot_action, "Plot")):
-            action.setIcon(theme.icon("plus"))
-            action.setIconText(text)
-            bar.addAction(action)
-        self.fit_action.setIcon(theme.icon("fit"))
-        self.fit_action.setIconText("Fit")
-        bar.addAction(self.fit_action)
+        # What can be added, in the order a figure is built: data, then what
+        # holds what. Figure joins after Data once a project has several.
+        self.import_action.setIcon(theme.icon("plus"))
+        self.import_action.setIconText("Data")
+        bar.addAction(self.import_action)
         panel = QToolButton()
         panel.setText("Panel")
         panel.setIcon(theme.icon("plus"))
@@ -933,6 +977,15 @@ class MainWindow(QMainWindow):
         panel.setMenu(self.panel_menu)
         panel.setToolTip("Add a panel beside or inside the selected one")
         bar.addWidget(panel)
+        self.plot_action.setIcon(theme.icon("plus"))
+        self.plot_action.setIconText("Plot")
+        bar.addAction(self.plot_action)
+        self.fit_action.setIcon(theme.icon("fit"))
+        self.fit_action.setIconText("Fit")
+        bar.addAction(self.fit_action)
+        self.note_action.setIcon(theme.icon("plus"))
+        self.note_action.setIconText("Note")
+        bar.addAction(self.note_action)
         bar.addSeparator()
         for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):
             action.setIcon(theme.icon(name))

@@ -12,6 +12,8 @@ import inspect
 from pathlib import Path
 from typing import Literal
 
+from pydantic import ValidationError
+
 from figscribe.commands import Command, CommandError, Macro, SetField, find
 from figscribe.io.csvfile import csv_source
 from figscribe.io.errors import DataError
@@ -40,20 +42,9 @@ def reread(
     """`source` as importing its file again would record it, read the way it
     is read now; from `path` instead, for a file that moved. A DataError if
     the file cannot be read that way."""
-    if isinstance(source, CsvSource):
-        describe = csv_source
-    elif isinstance(source, NumpySource):
-        describe = numpy_source
-    else:
-        raise DataError(f"reading {source.format!r} sources is not implemented yet")
+    describe = _describer(source)
     target = Path(path) if path is not None else resolve_path(source.path, base_dir)
-    # Every reading option the source has, so that a new one is kept too;
-    # the first two parameters are the file and the project's directory.
-    options = {
-        name: getattr(source, name)
-        for name in list(inspect.signature(describe).parameters)[2:]
-        if name in type(source).model_fields
-    }
+    options = {name: getattr(source, name) for name in reading_options(source)}
     try:
         fresh = describe(target, base_dir, **options)
     except OSError as exc:
@@ -87,6 +78,77 @@ def use_new_version(
             if getattr(new, field) != getattr(source, field)
         ],
     )
+
+
+OPTION_NAMES = {
+    "delimiter": "separator",
+    "decimal": "decimal mark",
+    "header_row": "header line",
+    "skip_rows": "number of lines skipped",
+    "comment": "comment mark",
+    "encoding": "text encoding",
+    "array": "array",
+}
+"""What each reading option is called in the undo text."""
+
+
+def reading_options(obj: object) -> tuple[str, ...]:
+    """The fields that say how a data file is read; none for anything else."""
+    if not isinstance(obj, CsvSource | NumpySource):
+        return ()
+    # The reader's options after the file and the project's directory, so
+    # that a new one counts without being listed here.
+    parameters = list(inspect.signature(_describer(obj)).parameters)[2:]
+    return tuple(name for name in parameters if name in type(obj).model_fields)
+
+
+def read_differently(
+    project: Project, source_id: str, field: str, value: object, base_dir: str | Path
+) -> Command:
+    """Read the source's file with `field` set to `value`: one step that also
+    takes the columns and rows the file then has.
+
+    A DataError, changing nothing, if the file cannot be read that way, or is
+    no longer the one imported: reading it again would take the new version
+    without saying so.
+    """
+    source = find(project, source_id)
+    if not isinstance(source, CsvSource | NumpySource):
+        raise CommandError(f"{source_id!r} is not a data file")
+    if field not in reading_options(source):
+        raise CommandError(f"{field!r} is not how {source.path} is read")
+    name = Path(source.path).name
+    state = source_state(source, base_dir)
+    if state == "changed":
+        raise DataError(
+            f"{name} has changed since it was imported; use its new version first"
+        )
+    if state == "missing":
+        raise DataError(f"{name} is missing; locate it first")
+    candidate = source.model_copy()
+    try:
+        setattr(candidate, field, value)
+    except ValidationError as exc:
+        reason = "; ".join(e["msg"] for e in exc.errors())
+        raise CommandError(f"cannot set {field}: {reason}") from exc
+    new = reread(candidate, base_dir)
+    return Macro(
+        f"Read {name} with another {OPTION_NAMES.get(field, field)}",
+        [SetField(source.id, (field,), value)]
+        + [
+            SetField(source.id, (part,), getattr(new, part))
+            for part in ("columns", "row_count")
+            if getattr(new, part) != getattr(source, part)
+        ],
+    )
+
+
+def _describer(source: DataSource):
+    if isinstance(source, CsvSource):
+        return csv_source
+    if isinstance(source, NumpySource):
+        return numpy_source
+    raise DataError(f"reading {source.format!r} sources is not implemented yet")
 
 
 def describe_change(old: DataSource, new: DataSource) -> str:

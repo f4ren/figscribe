@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QFont,
     QFontDatabase,
     QIcon,
+    QImage,
     QPainter,
     QPalette,
     QPixmap,
@@ -29,6 +30,10 @@ SURFACE = "#FFFFFF"
 SUBTLE = "#F1F1EC"
 BORDER = "#E3E3DE"
 CONTROL_BORDER = "#D7D7D1"
+CHECK_BORDER = "#7A7A80"
+"""The edge of a check box: 4.3:1 on white, where a control needs 3:1 (WCAG
+1.4.11) to be seen at all; the field borders can be fainter, their text and
+size show them."""
 INK = "#1C1C1E"
 MUTED = "#5F5F66"
 """Secondary text; 6:1 on white."""
@@ -115,6 +120,21 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {ACCENT}; }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
 QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: 0; }}
 QCheckBox {{ spacing: 8px; }}
+QCheckBox::indicator {{
+    width: 14px; height: 14px; border: 1px solid {CHECK_BORDER};
+    border-radius: 4px; background: {SURFACE};
+}}
+QCheckBox::indicator:hover, QCheckBox::indicator:focus {{ border-color: {ACCENT}; }}
+QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
+QCheckBox::indicator:checked:hover {{
+    background: {ACCENT_HOVER}; border-color: {ACCENT_HOVER};
+}}
+QCheckBox::indicator:disabled {{
+    border-color: {CONTROL_BORDER}; background: {SUBTLE};
+}}
+QCheckBox::indicator:checked:disabled {{
+    background: {CONTROL_BORDER}; border-color: {CONTROL_BORDER};
+}}
 
 QPushButton {{
     background: {SURFACE}; border: 1px solid {CONTROL_BORDER}; border-radius: 8px;
@@ -260,10 +280,14 @@ def apply(app: QApplication) -> None:
     ):
         palette.setColor(role, QColor(color))
     app.setPalette(palette)
-    arrow = resources.files("figscribe.gui") / "icons" / "chevron-down.svg"
+    app.setWindowIcon(app_icon())
+    icons = resources.files("figscribe.gui") / "icons"
+    arrow = Path(str(icons / "chevron-down.svg")).as_posix()
+    check = Path(str(icons / "check.svg")).as_posix()
     app.setStyleSheet(
         STYLE_SHEET
-        + f"QComboBox::down-arrow {{ image: url({Path(str(arrow)).as_posix()}); }}"
+        + f"QComboBox::down-arrow {{ image: url({arrow}); }}"
+        + f"QCheckBox::indicator:checked {{ image: url({check}); }}"
     )
 
 
@@ -356,6 +380,38 @@ ARTIST_ICONS = {
     "image": "image",
     "colormesh": "image",
 }
+
+
+APP_ICON_SIZES = (16, 24, 32, 48, 64, 128, 256, 512, 1024)
+SMALL_APP_ICON = 48
+"""Up to this size the icon is drawn from figscribe-small.svg: the whole
+square and the curve alone, which the full drawing is too fine for."""
+
+
+def app_icon_svg(size: int) -> Path:
+    """The drawing of the application icon for `size` pixels."""
+    name = "figscribe-small.svg" if size <= SMALL_APP_ICON else "figscribe.svg"
+    return Path(str(resources.files("figscribe.gui") / "icons" / name))
+
+
+def render_app_icon(size: int, drawing: Path | None = None) -> QImage:
+    """The application icon at `size` pixels, from `drawing` if given."""
+    image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    renderer = QSvgRenderer(str(drawing or app_icon_svg(size)))
+    renderer.render(painter, QRectF(0, 0, size, size))
+    painter.end()
+    return image
+
+
+def app_icon() -> QIcon:
+    """The window and Dock icon, one pixmap per size."""
+    result = QIcon()
+    for size in APP_ICON_SIZES:
+        result.addPixmap(QPixmap.fromImage(render_app_icon(size)))
+    return result
 
 
 def icon(name: str, color: str = INK, size: int = 16) -> QIcon:

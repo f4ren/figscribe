@@ -5,14 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QDialogButtonBox
+from PySide6.QtWidgets import QDialogButtonBox, QLabel
 
 from figscribe.commands import InsertItem, SetField
-from figscribe.fit import FitError, add_fit
+from figscribe.fit import FitError, add_fit, refit
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.properties import PropertyPanel
+from figscribe.io.refresh import use_new_version
 from figscribe.model import (
     Axes,
     ExpressionFit,
@@ -97,6 +98,29 @@ def test_start_values_can_be_changed(dialog: FitDialog) -> None:
     dialog.start["mu"].setText("0")
     dialog._guess_again()
     assert float(dialog.start["mu"].text()) != 0
+
+
+def test_a_parameter_can_be_held_at_its_start_value(dialog: FitDialog) -> None:
+    dialog.start["sigma"].setText("0.9")
+    dialog.start["sigma"].editingFinished.emit()
+    dialog.fixed["sigma"].click()
+    assert dialog.result.parameters["sigma"] == 0.9
+    assert dialog.result.uncertainties["sigma"] == 0.0
+    fit = dialog.fit()
+    assert fit.fixed == ["sigma"] and fit.initial_values["sigma"] == 0.9
+    dialog.fixed["sigma"].click()
+    assert dialog.result.parameters["sigma"] != 0.9
+
+
+def test_a_parameter_can_be_bounded(dialog: FitDialog) -> None:
+    fitted = dialog.result.parameters["a"]
+    dialog.upper["a"].setText(f"{fitted * 0.9:.6g}")
+    dialog.upper["a"].editingFinished.emit()
+    assert dialog.result.parameters["a"] <= fitted * 0.9 * (1 + 1e-9)
+    assert dialog.fit().parameter_bounds == {"a": (None, float(f"{fitted * 0.9:.6g}"))}
+    dialog.lower["a"].setText(f"{fitted * 2:.6g}")  # above the upper: refused
+    dialog.lower["a"].editingFinished.emit()
+    assert "lower bound of a" in dialog.error.text() and not _ok(dialog)
 
 
 def test_a_typed_label_is_kept(dialog: FitDialog) -> None:
@@ -202,3 +226,227 @@ def test_fitting_again_after_a_change(qtbot, document: Document) -> None:
     panel.fit_again_button.click()
     assert document.figure.axes[0].artists[1].result is not None
     assert document.history.undo_text == "Fit linear"
+
+
+def test_a_guess_moves_into_a_bound_but_a_typed_start_does_not(
+    dialog: FitDialog,
+) -> None:
+    dialog.lower["sigma"].setText("5")
+    dialog.lower["sigma"].editingFinished.emit()
+    assert float(dialog.start["sigma"].text()) == 5  # the guess, moved in
+    assert _ok(dialog)
+    dialog.start["c"].setText("9")
+    dialog.start["c"].setModified(True)  # as typed by the user
+    dialog.upper["c"].setText("1")
+    dialog.upper["c"].editingFinished.emit()
+    assert "start value of c, 9, lies outside" in dialog.error.text()
+    assert not _ok(dialog)
+
+
+def test_the_panel_shows_a_held_parameter_as_held(qtbot, document: Document) -> None:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"c": 0.0},
+        fixed=["c"],
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(fit.id)
+    shown = [w.text() for w in panel.findChildren(QLabel)]
+    assert "0 (held)" in shown
+
+
+# --- changing a fit that is there -------------------------------------------------
+
+
+def _held_fit(document: Document) -> FitCurve:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"a": 1.0, "mu": 5.0, "sigma": 1.0, "c": 0.0},
+        fixed=["c"],
+        parameter_bounds={"sigma": (0.2, None)},
+        label="peak",
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    return document.figure.axes[0].artists[1]
+
+
+def test_the_dialog_shows_a_fit_as_it_is(qtbot, document: Document) -> None:
+    fit = _held_fit(document)
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    assert dialog.model_key == "gaussian"
+    assert {n: float(line.text()) for n, line in dialog.start.items()} == {
+        "a": 1.0,
+        "mu": 5.0,
+        "sigma": 1.0,
+        "c": 0.0,
+    }
+    assert dialog.held() == ["c"] and dialog.bounds() == {"sigma": (0.2, None)}
+    assert dialog.label.text() == "peak"
+    assert dialog.residuals.isHidden()
+    ok = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    assert ok.text() == "Update fit" and _ok(dialog)
+    assert dialog.fit().id == fit.id
+
+
+def test_the_panel_opens_a_fit_to_change_it(window: MainWindow) -> None:
+    fit = _held_fit(window.document)
+    window.document.select(fit.id)
+
+    def free_c(dialog: FitDialog) -> bool:
+        dialog.fixed["c"].click()
+        return True
+
+    window.run_dialog = free_c
+    window.properties.edit_fit_button.click()
+    changed = window.document.figure.axes[0].artists[1]
+    assert changed.fixed == [] and changed.result.uncertainties["c"] > 0
+    assert window.document.history.undo_text == "Change the fit"
+    window.document.undo()
+    assert window.document.figure.axes[0].artists[1].fixed == ["c"]
+
+
+def test_a_fit_range_is_typed_in_the_dialog(dialog: FitDialog) -> None:
+    everything = dialog.result.parameters["mu"]
+    dialog.range_low.setText("3")
+    dialog.range_high.setText("7")
+    dialog.range_high.editingFinished.emit()
+    assert "of 41 points" in dialog.points.text()
+    assert dialog.result.parameters["mu"] != everything
+    fit = dialog.fit()
+    assert fit.fit_range == (3.0, 7.0) and not fit.extend_curve
+    dialog.extend.click()
+    assert dialog.fit().extend_curve
+    dialog.range_low.setText("8")
+    dialog.range_low.editingFinished.emit()
+    assert "lower end" in dialog.error.text() and not _ok(dialog)
+
+
+def test_a_fit_range_is_shown_when_the_fit_is_changed(
+    qtbot, document: Document
+) -> None:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(3.0, 7.0),
+        extend_curve=True,
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    assert (dialog.range_low.text(), dialog.range_high.text()) == ("3", "7")
+    assert dialog.extend.isChecked()
+    assert dialog.fit().fit_range == (3.0, 7.0)
+
+
+# --- left-out points and outliers ---------------------------------------------------
+
+
+def _glitched(document: Document) -> None:
+    """Two points of the example pushed far off its peak, in the file, which
+    is then taken as it is now."""
+    source = document.project.sources[0]
+    path = document.base_dir / source.path
+    lines = path.read_text(encoding="utf-8").splitlines()
+    first = next(i for i, line in enumerate(lines) if line[:1].isdigit())
+    for row, shift in ((10, 0.6), (30, -0.5)):
+        t, u, du = lines[first + row].split(",")
+        lines[first + row] = f"{t},{float(u) + shift:.5f},{du}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    document.push(use_new_version(document.project, source.id, document.base_dir))
+
+
+def test_the_dialog_skips_the_points_left_out_of_the_plot(
+    qtbot, document: Document
+) -> None:
+    document.push(SetField(_data(document).id, ("left_out",), [10, 30]))
+    dialog = FitDialog(_data(document), document.data)
+    qtbot.addWidget(dialog)
+    assert dialog.points.text().startswith("39 of 41 points")
+
+
+def test_outliers_are_proposed_and_left_out_on_confirmation(
+    qtbot, window: MainWindow
+) -> None:
+    document = window.document
+    _glitched(document)
+
+    def find_and_take(dialog: FitDialog) -> bool:
+        dialog.find_outliers.click()
+        assert "Rows 11 and 31 lie more than 3σ off" in dialog.outlier_text.text()
+        before = dialog.result.reduced_chi_square
+        dialog.leave_outliers_out.click()
+        assert dialog.result.reduced_chi_square < before
+        return True
+
+    window.run_dialog = find_and_take
+    window.fit_action.trigger()
+    plot = document.figure.axes[0].artists[0]
+    assert plot.left_out == [10, 30]
+    assert "more than 3σ off" in plot.left_out_note
+    fit = document.figure.axes[0].artists[1]
+    assert fit.result is not None
+    document.undo()  # fit and left-out rows in one step
+    assert document.figure.axes[0].artists[0].left_out == []
+    assert len(document.figure.axes[0].artists) == 1
+
+
+def test_outliers_found_but_not_confirmed_stay_in(qtbot, window: MainWindow) -> None:
+    _glitched(window.document)
+
+    def only_find(dialog: FitDialog) -> bool:
+        dialog.find_outliers.click()
+        return True
+
+    window.run_dialog = only_find
+    window.fit_action.trigger()
+    assert window.document.figure.axes[0].artists[0].left_out == []
+
+
+def test_points_outside_the_range_can_be_drawn_like_left_out(
+    dialog: FitDialog,
+) -> None:
+    dialog.range_low.setText("3")
+    dialog.range_high.setText("7")
+    dialog.range_high.editingFinished.emit()
+    assert not dialog.fit().outside_as_left_out
+    dialog.outside.click()
+    assert dialog.fit().outside_as_left_out
+
+
+# --- the result card ------------------------------------------------------------
+
+
+def test_the_result_tells_the_residuals_and_can_be_copied(
+    qtbot, document: Document
+) -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    fit = FitCurve(
+        target=_data(document).id, model=PredefinedFit(name="gaussian"), label="peak"
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(SetField(_data(document).id, ("left_out",), [3]))
+    document.push(refit(document.project, fit.id, document.data))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(fit.id)
+    shown = {w.text(): w for w in panel.findChildren(QLabel)}
+    assert "40 of 41" in shown and "Residual RMS" in shown
+    largest = next(t for t in shown if t.endswith(")") and "row" in t)
+    assert largest.split("row ")[1].rstrip(")").isdigit()
+    value = next(w for t, w in shown.items() if "±" in t)
+    assert value.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
+    panel.copy_result_button.click()
+    copied = QApplication.clipboard().text()
+    assert copied.startswith("peak: Gaussian fit to ")
+    assert "mu = 4.96" in copied and "Residual RMS" in copied
+    assert "Points fitted = 40 of 41" in copied

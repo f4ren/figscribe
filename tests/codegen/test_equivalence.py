@@ -29,6 +29,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     GridLayout,
+    Histogram,
     Legend,
     LinePlot,
     PredefinedFit,
@@ -123,6 +124,112 @@ def test_fit_and_residuals(tmp_path: Path) -> None:
     script = _assert_same(project, tmp_path)
     assert "curve_fit(" in script and "sharex=ax_a" in script
     assert 'ax_a.tick_params(axis="x"' in script
+
+
+def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"c": 0.0},
+        fixed=["c"],
+        parameter_bounds={"sigma": (0.5, None)},
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "bounds=" in script and "c is held at 0" in script
+
+
+def test_a_histogram_of_one_value(tmp_path: Path) -> None:
+    """np.loadtxt gives one row of one column as a number, not an array."""
+    (tmp_path / "one.csv").write_text("x,y\n1.0,2.0\n", encoding="utf-8")
+    source = csv_source(tmp_path / "one.csv", tmp_path, header_row=0, skip_rows=0)
+    values = ColumnRef(source=source.id, column="y")
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=72, axes=[Axes(artists=[Histogram(values=values)])])],
+    )
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("extend", [False, True])
+def test_a_fit_over_part_of_the_data(tmp_path: Path, extend: bool) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(2.5, 7.5),
+        extend_curve=extend,
+    )
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "in_range = (t >= 2.5) & (t <= 7.5)" in script
+
+
+def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        left_out=[3, 20],
+        left_out_note="more than 3σ off the Gaussian fit",
+    )
+    line = LinePlot(x=ref["t"], y=ref["t2"], left_out=[5, 6, 9])
+    dashed = LinePlot(
+        x=ref["t"],
+        y=ref["U"],
+        marker="o",
+        left_out=[12],
+        left_out_linestyle="--",
+        left_out_marker=None,
+    )
+    points = ScatterPlot(
+        x=ref["t"], y=ref["U"], left_out=[7], left_out_color="red", left_out_marker="x"
+    )
+    project.figures = [
+        Figure(
+            dpi=150,
+            layout=GridLayout(rows=1, cols=2),
+            axes=[
+                Axes(legend=Legend(visible=True), artists=[data]),
+                Axes(col=1, artists=[line, dashed, points]),
+            ],
+        )
+    ]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "kept_1[[3, 20]] = False" in script
+    assert "np.where(kept_2, t2, np.nan)" in script
+    assert "more than 3σ off the Gaussian fit" in script
+
+
+def test_points_outside_the_fit_range_drawn_like_left_out(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"], y=ref["U"], yerr=ref["dU"], linestyle="-", left_out=[18]
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(2.5, 7.5),
+        outside_as_left_out=True,
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "shown = kept & in_range" in script
 
 
 def test_many_settings(tmp_path: Path) -> None:
@@ -304,6 +411,11 @@ def test_histograms_and_notes(tmp_path: Path) -> None:
                 label="t",
             ),
             Annotation(text="counts", position=(0.05, 0.9), coords="axes"),
+            Annotation(
+                text="$y = a x + b$\nwith $\\mu$ fitted",
+                position=(0.05, 0.6),
+                coords="axes",
+            ),
         ],
     )
     right = Axes(

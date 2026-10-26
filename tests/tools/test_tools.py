@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from figscribe.commands import find
 from figscribe.model import ErrorbarPlot, LinePlot, dumps, loads
 from figscribe.tools import TOOLS, ProjectWorkspace, Toolbox, ToolError
 
@@ -128,7 +129,7 @@ def test_set_field_is_strict(tools, workspace) -> None:
     figure, *_ = _ids(workspace)
     with pytest.raises(ToolError, match="valid number"):
         tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": "300"})
-    with pytest.raises(ToolError, match="greater than 0"):
+    with pytest.raises(ToolError, match="greater than or equal to 72"):
         tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": -1})
     tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": 150})
     assert workspace.project.figures[0].dpi == 150.0
@@ -192,9 +193,18 @@ def test_set_field_refuses_bad_addresses(
 
 
 def test_problems_are_reported_after_a_change(tools, workspace) -> None:
-    _, axes, _, _ = _ids(workspace)
-    result = tools.call("set_field", {"object_id": axes, "path": ["row"], "value": 4})
+    figure, *_ = _ids(workspace)
+    path = ["layout", "width_ratios"]  # two ratios for one column
+    result = tools.call(
+        "set_field", {"object_id": figure, "path": path, "value": [1.0, 2.0]}
+    )
     assert result["problems"] and "grid" in result["problems"][0]
+
+
+def test_a_panel_outside_the_grid_is_refused(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    with pytest.raises(ToolError, match="outside the grid"):
+        tools.call("set_field", {"object_id": axes, "path": ["row"], "value": 4})
 
 
 # --- insert, remove, move ------------------------------------------------------
@@ -602,3 +612,70 @@ def test_a_changed_data_file_can_be_taken_as_it_is_now(
     assert result["problems"] == []
     with pytest.raises(ToolError, match="has not changed"):
         tools.call("use_new_data_version", {"source_id": source})
+
+
+def test_a_reading_option_reads_the_file_or_is_refused(tools, workspace) -> None:
+    source = workspace.project.sources[0]
+    with pytest.raises(ToolError, match="cannot read"):
+        tools.call(
+            "set_field", {"object_id": source.id, "path": ["delimiter"], "value": "2"}
+        )
+    assert workspace.project.sources[0] == source
+    tools.call("set_field", {"object_id": source.id, "path": ["comment"], "value": "%"})
+    assert workspace.project.sources[0].comment == "%"
+    assert workspace.history.undo_text.startswith("Read ")
+
+
+def test_apply_changes_reads_the_file_as_set_field_does(tools, workspace) -> None:
+    source = workspace.project.sources[0]
+    change = {"op": "set_field", "object_id": source.id, "path": ["delimiter"]}
+    with pytest.raises(ToolError, match="cannot read"):
+        tools.call(
+            "apply_changes",
+            {"description": "Separator", "operations": [{**change, "value": "2"}]},
+        )
+    assert workspace.project.sources[0] == source
+
+
+def test_a_fit_can_hold_and_bound_parameters(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "fit",
+        {
+            "target_id": artist,
+            "model": {"kind": "predefined", "name": "gaussian"},
+            "initial_values": {"c": 0.0},
+            "fixed": ["c"],
+            "bounds": {"sigma": [0.1, None]},
+        },
+    )
+    assert result["result"]["parameters"]["c"] == 0.0
+    fit = find(workspace.project, result["id"])
+    assert fit.fixed == ["c"] and fit.parameter_bounds == {"sigma": (0.1, None)}
+
+
+def test_a_fit_can_use_part_of_the_data(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "fit",
+        {
+            "target_id": artist,
+            "model": {"kind": "predefined", "name": "gaussian"},
+            "fit_range": [2.0, 8.0],
+        },
+    )
+    assert find(workspace.project, result["id"]).fit_range == (2.0, 8.0)
+
+
+def test_leaving_points_out_fits_the_plot_again(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    fitted = tools.call(
+        "fit",
+        {"target_id": artist, "model": {"kind": "predefined", "name": "gaussian"}},
+    )
+    before = find(workspace.project, fitted["id"]).result
+    tools.call(
+        "set_field", {"object_id": artist, "path": ["left_out"], "value": [0, 1, 2]}
+    )
+    assert find(workspace.project, artist).left_out == [0, 1, 2]
+    assert find(workspace.project, fitted["id"]).result != before

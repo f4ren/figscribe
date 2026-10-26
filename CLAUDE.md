@@ -10,6 +10,8 @@ code. Start here:
 - **Why things are as they are:** [`docs/decisions.md`](docs/decisions.md).
   Read the entries for the area you touch before changing it.
 - **The vision and non-goals:** [`plan/project-brief.md`](plan/project-brief.md).
+- **How the GUI is tested:** [`docs/testing.md`](docs/testing.md), and the
+  manual checklist there for changes that are seen.
 
 ## Architecture in one paragraph
 
@@ -24,7 +26,8 @@ property panel and the assistant tools.
 
 ```
 pip install -e ".[dev]"                 # all extras, as CI installs them
-python -m pytest -q                     # Qt runs offscreen, set in tests/conftest.py
+python -m pytest -q -n auto --dist worksteal   # in parallel; Qt runs offscreen
+python -m pytest -q -m "not slow"       # without the GUI sweeps, while iterating
 ruff check . && ruff format --check .   # CI fails on either
 FIGSCRIBE_UPDATE_BASELINES=1 python -m pytest tests/render/test_images.py
                                         # after an intended rendering change;

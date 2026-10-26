@@ -281,6 +281,25 @@ def test_the_claude_client_reports_a_refused_key(monkeypatch) -> None:
     assert haiku["model"] == "claude-haiku-5-5" and "fallbacks" not in haiku
 
 
+def test_the_claude_client_asks_for_a_key_when_there_is_none(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """No key, no token, no `ant auth login` profile: the SDK fails before any
+    request, with a TypeError of its own."""
+    pytest.importorskip("anthropic")
+    import os
+
+    for name in list(os.environ):
+        if name.startswith("ANTHROPIC_"):
+            monkeypatch.delenv(name)
+    for name in ("HOME", "USERPROFILE", "APPDATA"):  # where profiles are kept
+        monkeypatch.setenv(name, str(tmp_path))
+    with pytest.raises(ChatError, match="No valid API key"):
+        ClaudeModel().list_models()
+    with pytest.raises(ChatError, match="No valid API key"):
+        ClaudeModel().respond(["hi"], lambda _: None)
+
+
 # --- the panel --------------------------------------------------------------
 
 

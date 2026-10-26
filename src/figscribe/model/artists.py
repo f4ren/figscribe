@@ -9,10 +9,13 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from figscribe.model.base import AnyFloat, Identified, StrictModel
 from figscribe.model.data import ArrayRef, ColumnRef
+
+LIKE_THE_PLOT = "same"
+"""For the look of left-out points: as the plot itself has it."""
 
 Color = str
 """A Matplotlib color spec ("C0", "#ff0000", "tab:blue", ...).
@@ -52,6 +55,19 @@ class LinePlot(ArtistBase):
     """A Matplotlib marker such as "o", "s" or "^"; None draws none."""
     markersize: float = Field(4.0, gt=0.0)
     """Marker size in pt."""
+    left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
+    """Rows of the data, counted from 0, drawn apart and skipped by every fit of
+    this plot; the data file stays as it is."""
+    left_out_color: Color | None = None
+    """Color of the left-out points; None draws them light grey."""
+    left_out_marker: str | None = LIKE_THE_PLOT
+    """Marker of the left-out points: "same" takes the plot's, None draws none."""
+    left_out_linestyle: str = LIKE_THE_PLOT
+    """How the line runs on through the left-out rows, in their color: "same"
+    as the plot's, or "-", "--", "-.", ":", or "none" for a gap."""
+    left_out_note: str | None = None
+    """Why the rows are left out, e.g. "detector glitch"; written into the
+    script. Finding outliers fills it in."""
 
 
 class ScatterPlot(ArtistBase):
@@ -68,6 +84,16 @@ class ScatterPlot(ArtistBase):
     """Marker area in pt², as Matplotlib's scatter takes it."""
     edgecolor: Color | None = None
     """Color of the marker outlines; None follows the style."""
+    left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
+    """Rows of the data, counted from 0, drawn apart and skipped by every fit of
+    this plot; the data file stays as it is."""
+    left_out_color: Color | None = None
+    """Color of the left-out points; None draws them light grey."""
+    left_out_marker: str | None = LIKE_THE_PLOT
+    """Marker of the left-out points: "same" takes the plot's, None draws none."""
+    left_out_note: str | None = None
+    """Why the rows are left out, e.g. "detector glitch"; written into the
+    script. Finding outliers fills it in."""
 
 
 class ErrorbarPlot(ArtistBase):
@@ -92,6 +118,19 @@ class ErrorbarPlot(ArtistBase):
     """Length of the caps at the ends of the error bars in pt; 0 for none."""
     elinewidth: float = Field(1.0, gt=0.0)
     """Line width of the error bars in pt."""
+    left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
+    """Rows of the data, counted from 0, drawn apart and skipped by every fit of
+    this plot; the data file stays as it is."""
+    left_out_color: Color | None = None
+    """Color of the left-out points; None draws them light grey."""
+    left_out_marker: str | None = LIKE_THE_PLOT
+    """Marker of the left-out points: "same" takes the plot's, None draws none."""
+    left_out_linestyle: str = LIKE_THE_PLOT
+    """How the line runs on through the left-out rows, in their color: "same"
+    as the plot's, or "-", "--", "-.", ":", or "none" for a gap."""
+    left_out_note: str | None = None
+    """Why the rows are left out, e.g. "detector glitch"; written into the
+    script. Finding outliers fills it in."""
 
 
 class Histogram(ArtistBase):
@@ -198,6 +237,20 @@ class FitCurve(ArtistBase):
     """The function fitted."""
     initial_values: dict[str, float] = Field(default_factory=dict)
     """Start values by parameter name; missing ones are guessed from the data."""
+    fixed: list[str] = Field(default_factory=list)
+    """Parameters held at their start value instead of fitted."""
+    parameter_bounds: dict[str, tuple[float | None, float | None]] = Field(
+        default_factory=dict
+    )
+    """(lower, upper) by parameter name, None for an open end; a fitted value
+    stays within them."""
+    fit_range: tuple[float, float] | None = None
+    """(lower, upper) of x: only the points within it are fitted; None fits all."""
+    extend_curve: bool = False
+    """Draw the fitted curve across all the data, not only the fit range."""
+    outside_as_left_out: bool = False
+    """Draw the plot's points outside the fit range like its left-out points;
+    they are not left out of the plot."""
     result: FitResult | None = None
     """The outcome of the last fit; None before the first."""
     color: Color | None = None
@@ -206,6 +259,21 @@ class FitCurve(ArtistBase):
     """"-", "--", "-." or ":"."""
     linewidth: float = Field(1.5, gt=0.0)
     """Line width in pt."""
+
+    @field_validator("fit_range")
+    @classmethod
+    def _ordered(cls, fit_range):
+        if fit_range is not None and not fit_range[0] < fit_range[1]:
+            raise ValueError("the lower end of the fit range is not below the upper")
+        return fit_range
+
+    @field_validator("parameter_bounds")
+    @classmethod
+    def _ranges(cls, bounds):
+        for name, (lower, upper) in bounds.items():
+            if lower is not None and upper is not None and not lower < upper:
+                raise ValueError(f"the lower bound of {name} is not below the upper")
+        return bounds
 
 
 class ResidualPlot(ArtistBase):

@@ -125,3 +125,15 @@ def test_the_command_line_writes_the_script_without_unreadable_data(
 
 def _env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["plain", "two\nlines", r"$\mu$", "$\\mu$ = 3\nsecond line", 'say "hi"\nnow'],
+)
+def test_text_literals_are_valid_python_on_one_line(text: str) -> None:
+    from figscribe.codegen.script import _str
+
+    literal = _str(text)
+    assert "\n" not in literal
+    assert eval(literal) == text  # noqa: S307 - our own literal

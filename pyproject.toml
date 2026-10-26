@@ -44,6 +44,7 @@ dev = [
     "mcp>=2.3",
     "pytest>=8",
     "pytest-qt>=4.4",
+    "pytest-xdist>=3.6",
     "ruff>=0.15",
 ]
 
@@ -66,6 +67,9 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+    "slow: takes most of a minute; run always, skip with -m 'not slow' while iterating",
+]
 
 [tool.hatch.version]
 path = "src/figscribe/__init__.py"

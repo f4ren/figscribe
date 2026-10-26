@@ -47,10 +47,12 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.commands import CommandError, Macro, SetField, find
-from figscribe.fit import FitError, refit
+from figscribe.fit import FitError, refit, residuals
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
+from figscribe.gui.markers import LIKE_THE_PLOT, marker_icon
+from figscribe.gui.markers import MARKERS as ALL_MARKERS
 from figscribe.gui.names import (
     ENCODINGS,
     KIND_NAMES,
@@ -61,8 +63,9 @@ from figscribe.gui.names import (
     with_error,
 )
 from figscribe.gui.numbers import number, numbers, whole
-from figscribe.gui.widgets import Section, label
+from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
+from figscribe.io.refresh import read_differently, reading_options
 from figscribe.model import (
     ArrayRef,
     Axes,
@@ -90,6 +93,10 @@ SKIPPED = {
     "columns": "read from the file on import and listed in the outline",
     "model": "chosen in the fit dialog",
     "initial_values": "set in the fit dialog",
+    "fit_range": "set in the fit dialog, since the fit is run again",
+    "left_out": "points are left out by right-clicking them in the preview",
+    "fixed": "set in the fit dialog, beside the start values",
+    "parameter_bounds": "set in the fit dialog, beside the start values",
     "result": "computed by the fit and shown in the fit dialog",
 }
 """Fields with no editor here, and why."""
@@ -121,7 +128,7 @@ EDITED_ELSEWHERE: dict[type[BaseModel], str] = {
 """Model classes whose fields the generated forms never show, and where they
 are edited instead."""
 
-COLOR_FIELDS = {"color", "edgecolor", "grid_color"}
+COLOR_FIELDS = {"color", "edgecolor", "grid_color", "left_out_color"}
 
 Path = tuple[str, ...]
 
@@ -264,6 +271,8 @@ COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
 
 PLACEHOLDERS = {
+    "left_out_note": "no reason given",
+    "left_out_color": "light grey",
     "label": "not in the legend",
     "color": "automatic",
     "edgecolor": "automatic",
@@ -297,6 +306,18 @@ PLACEHOLDERS = {
 }
 
 TIPS = {
+    "outside_as_left_out": "Draw the plot's points outside the fit range in its "
+    "left-out color and marker; they are not left out of the plot.",
+    "left_out_note": "Why the rows are left out, e.g. detector glitch; the script "
+    "says it in a comment. Finding outliers in the fit dialog fills it in.",
+    "left_out_color": "Color of the points left out (right-click a point in the "
+    "preview); empty draws them light grey.",
+    "left_out_marker": "Marker of the points left out: like the plot's, another, or "
+    "none.",
+    "left_out_linestyle": "How the line runs on through the rows left out, in "
+    "their color: like the plot's, another style, or none for a gap.",
+    "extend_curve": "Draw the fitted curve across all the data, not only over the "
+    "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",
     "width_mm": "Width of the whole figure as printed; 85 mm is a typical "
     "single journal column, 175 mm a double one.",
@@ -448,6 +469,8 @@ class PropertyPanel(QScrollArea):
         self.axis_form: AxisForm | None = None
         self.axis_range: Callable[[str], tuple[float, float] | None] = lambda _: None
         """The range an axis shows right now; the window asks the preview."""
+        self.edit_fit: Callable[[str], None] = lambda fit_id: None
+        """Opens the fit dialog on a fit that is there; the window does."""
         self._folded = {title: True for title in COLLAPSED}
         self.set_document(document)
 
@@ -501,6 +524,12 @@ class PropertyPanel(QScrollArea):
         elif obj is not None:
             self._fill(obj, layout)
         layout.addStretch(1)
+        old = self.takeWidget()
+        if old is not None:
+            # One of its editors may be what asked for this, still handling
+            # the click; setWidget() alone would delete it under Qt's feet.
+            old.hide()
+            old.deleteLater()
         self.setWidget(body)
 
     def refresh(self) -> None:
@@ -531,7 +560,7 @@ class PropertyPanel(QScrollArea):
             if _get(obj, path) == value:
                 return
             self.document.push(self._command(obj, path, value))
-        except CommandError as exc:
+        except (CommandError, DataError) as exc:
             self.report(str(exc))
             self.refresh()
         else:
@@ -539,7 +568,12 @@ class PropertyPanel(QScrollArea):
 
     def _command(self, obj: BaseModel, path: Path, value: Any):
         """The change for one field; a right y axis comes and goes with the
-        plots drawn against it."""
+        plots drawn against it, and a data file is read again when how it is
+        read changes."""
+        if len(path) == 1 and path[0] in reading_options(obj):
+            return read_differently(
+                self.document.project, obj.id, path[0], value, self.document.base_dir
+            )
         if path == ("colorbar",):
             if value:
                 return Macro("Show a color bar", [SetField(obj.id, path, Colorbar())])
@@ -734,30 +768,58 @@ class PropertyPanel(QScrollArea):
         grid = QGridLayout(card)
         grid.setContentsMargins(12, 10, 12, 10)
         grid.setHorizontalSpacing(16)
-        result = fit.result
-        if result is None:
+        lines = _result_lines(fit, self._residuals(fit))
+        if not lines:
             grid.addWidget(label("Not fitted yet.", "hint"), 0, 0)
-        else:
-            for row, (name, value) in enumerate(result.parameters.items()):
-                error = result.uncertainties.get(name)
-                grid.addWidget(label(GREEK.get(name, name), "value"), row, 0)
-                grid.addWidget(label(with_error(value, error), "value"), row, 1)
-            row = len(result.parameters)
-            if result.reduced_chi_square is not None:
-                grid.addWidget(label("χ²ᵣ", "value"), row, 0)
-                chi = label(f"{result.reduced_chi_square:.2f}", "value")
-                grid.addWidget(chi, row, 1)
-            if not result.converged:
-                warning = label("The fit did not converge.", "error")
-                grid.addWidget(warning, row + 1, 0, 1, 2)
+        for row, (name, value) in enumerate(lines):
+            grid.addWidget(label(GREEK.get(name, name), "value"), row, 0)
+            shown = label(value, "value")
+            shown.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            grid.addWidget(shown, row, 1)
+        if fit.result is not None and not fit.result.converged:
+            warning = label("The fit did not converge.", "error")
+            grid.addWidget(warning, len(lines), 0, 1, 2)
         grid.setColumnStretch(1, 1)
         outer.addWidget(card)
+        copy = QPushButton("Copy the result")
+        copy.setObjectName("link")
+        copy.setToolTip("As text: parameters, χ²ᵣ and residuals")
+        copy.setEnabled(bool(lines))
+        copy.clicked.connect(lambda: self._copy_result(fit))
+        self.copy_result_button = copy
+        outer.addWidget(copy, 0, Qt.AlignmentFlag.AlignLeft)
+        edit = QPushButton("Change the fit…")
+        edit.setObjectName("link")
+        edit.setToolTip("Model, start values, held parameters and bounds")
+        edit.clicked.connect(lambda: self.edit_fit(fit.id))
+        self.edit_fit_button = edit
         again = QPushButton("Fit again with the current data")
         again.setObjectName("link")
         again.clicked.connect(lambda: self.fit_again(fit.id))
         self.fit_again_button = again
+        outer.addWidget(edit, 0, Qt.AlignmentFlag.AlignLeft)
         outer.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return holder
+
+    def _residuals(self, fit: FitCurve):
+        try:
+            return residuals(self.document.project, fit.id, self.document.data)
+        except (FitError, CommandError, DataError):
+            return None  # the data cannot be read; the preview says why
+
+    def _copy_result(self, fit: FitCurve) -> None:
+        target = find(self.document.project, fit.target)
+        name = (
+            f"{fit.model.name.capitalize()} fit"
+            if fit.model.kind == "predefined"
+            else f"Fit of {fit.model.expression}"
+        )
+        head = f"{fit.label}: " if fit.label else ""
+        lines = [f"{head}{name} to {artist_name(target)}"]
+        lines += [f"{n} = {v}" for n, v in _result_lines(fit, self._residuals(fit))]
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.clipboard().setText("\n".join(lines) + "\n")
 
     def fit_again(self, fit_id: str) -> None:
         """Run the fit again, e.g. after its data or start values changed."""
@@ -765,6 +827,18 @@ class PropertyPanel(QScrollArea):
             self.document.push(refit(self.document.project, fit_id, self.document.data))
         except (FitError, CommandError, DataError) as exc:
             self.report(str(exc))
+
+    def ask_marker(self, current: str | None) -> str | None:
+        """Asks for a marker of one's own; None if cancelled. Replaced in tests."""
+        from PySide6.QtWidgets import QInputDialog
+
+        text, ok = QInputDialog.getText(
+            self,
+            "Marker",
+            "Any Matplotlib marker, e.g. $\\alpha$ for a Greek letter:",
+            text=current or "",
+        )
+        return text.strip() or None if ok else None
 
     def _selected_object(self) -> BaseModel | None:
         oid = self.document.selected
@@ -943,6 +1017,7 @@ NONE_TEXT = {
     "tick_direction": "style default",
     "prefix": "as in the data",
     "marker": "No marker",
+    "left_out_marker": "No marker",
     "xerr": "no x errors",
     "yerr": "no y errors",
     "x": "cell numbers",
@@ -1191,7 +1266,7 @@ class MarkerEditor(TextEditor):
         row.setSpacing(4)
         options = list(MARKERS)
         if spec.optional:
-            options.append((None, NONE_TEXT["marker"]))
+            options.append((None, NONE_TEXT[path[-1]]))
         self.buttons: dict[str | None, QToolButton] = {}
         for value, name in options:
             button = QToolButton()
@@ -1219,6 +1294,10 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return CheckEditor(spec, path, panel)
     if spec.kind == "part":
         return PartEditor(spec, path, panel)
+    if name in ("marker", "left_out_marker"):
+        return _marker_list(spec, path, panel)
+    if name == "text":
+        return NoteText(spec, path, panel)
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
@@ -1242,7 +1321,7 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return ChoiceEditor(spec, path, panel, panel.document.array_choices())
     if spec.kind == "color":
         editor = ColorEditor(spec, path, panel)
-    elif name == "marker" and spec.kind == "text":
+    elif name in ("marker", "left_out_marker") and spec.kind == "text":
         editor = MarkerEditor(spec, path, panel)
     else:
         parse, format_ = _TEXT[spec.kind]
@@ -1412,3 +1491,90 @@ def _describe(obj: BaseModel, document: Document) -> tuple[str, str]:
         return "Data file", PurePath(obj.path).name
     kind = getattr(obj, "kind", "")
     return KIND_NAMES.get(kind, type(obj).__name__), artist_name(obj)
+
+
+def _marker_list(spec: Spec, path: Path, panel: PropertyPanel) -> ChoiceEditor:
+    """Every Matplotlib marker, drawn, in a list. A plot's own marker may be
+    "none" (error bars alone); a left-out point's may also be the plot's."""
+    choices = [(name, value) for value, name in ALL_MARKERS]
+    if path[-1] == "left_out_marker":
+        choices.insert(0, ("Like the plot", LIKE_THE_PLOT))
+    elif not spec.optional:
+        choices.append(("No marker", "none"))
+    choices.append(("Custom…", CUSTOM))
+    editor = MarkerList(spec, path, panel, choices, missing="")
+    for index, (_, value) in enumerate(editor.choices):
+        editor.widget.setItemIcon(index, marker_icon(value))
+    return editor
+
+
+CUSTOM = object()
+"""The list entry that asks for a marker of one's own."""
+
+
+class MarkerList(ChoiceEditor):
+    """A list of markers whose last entry asks for any other."""
+
+    def show(self, value: Any) -> None:
+        self.value = value
+        super().show(value)
+
+    def commit(self, value: Any) -> None:
+        if value is not CUSTOM:
+            super().commit(value)
+            return
+        typed = self.panel.ask_marker(self.value)
+        if typed is None:
+            self.show(self.value)
+        else:
+            super().commit(typed)
+
+
+CHOICES["left_out_linestyle"] = [("Like the plot", LIKE_THE_PLOT), *LINESTYLES]
+
+
+def _result_lines(fit: FitCurve, found) -> list[tuple[str, str]]:
+    """(name, value) of a fit's result as the card shows and copies it."""
+    result = fit.result
+    if result is None:
+        return []
+    lines = []
+    for name, value in result.parameters.items():
+        held = f"{value:.6g} (held)" if name in fit.fixed else None
+        lines.append((name, held or with_error(value, result.uncertainties.get(name))))
+    if result.reduced_chi_square is not None:
+        lines.append(("χ²ᵣ", f"{result.reduced_chi_square:.2f}"))
+    if found is not None:
+        lines += [
+            ("Points fitted", f"{found.used} of {found.total}"),
+            ("Residual RMS", f"{found.rms:.3g}"),
+            ("Largest residual", f"{found.largest:.3g} (row {found.row + 1})"),
+        ]
+    return lines
+
+
+class NoteText(Editor):
+    """A note's text over several lines, taken on leaving the field or with
+    Ctrl+Enter (Cmd+Enter on macOS)."""
+
+    def __init__(self, spec, path, panel):
+        super().__init__(spec, path, panel)
+        self.widget = TextBox()
+        self.widget.setTabChangesFocus(True)
+        self.widget.setFixedHeight(84)  # four lines, then it scrolls
+        self.widget.finished.connect(self._finish)
+        self.value = ""
+
+    def show(self, value: Any) -> None:
+        self.value = value or ""
+        self.widget.setPlainText(self.value)
+
+    def _finish(self) -> None:
+        text = self.widget.toPlainText().strip()
+        if text == self.value:
+            return
+        if not text:
+            self.panel.report("A note needs some text; delete the note instead.")
+            self.show(self.value)
+            return
+        self.commit(text)

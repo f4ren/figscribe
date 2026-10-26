@@ -22,9 +22,11 @@ from pathlib import Path
 
 from figscribe.model.artists import (
     ArtistBase,
+    ColorMesh,
     ErrorbarPlot,
     FitCurve,
     Histogram,
+    ImagePlot,
     LinePlot,
     ResidualPlot,
     ScatterPlot,
@@ -79,6 +81,8 @@ def validate_references(
     for fi, figure in enumerate(project.figures):
         fpath = f"figures[{fi}]"
         _check_grid(figure, fpath, issues)
+        for field, why in style_problems(figure):
+            issues.append(ReferenceIssue(f"{fpath}.{field}", figure.id, why))
 
         fit_ids = {
             a.id
@@ -113,6 +117,9 @@ def validate_references(
                 if data is not None and isinstance(artist, FITTABLE):
                     why = _unequal_or_unreadable(artist, data)
                     if why is not None:
+                        issues.append(ReferenceIssue(tpath, artist.id, why))
+                if data is not None:
+                    for why in _not_drawn(artist, axes, data):
                         issues.append(ReferenceIssue(tpath, artist.id, why))
 
                 for field, ref in _data_refs(artist):
@@ -156,6 +163,7 @@ def validate_references(
                                 f"artist but a {target.kind!r}",
                             )
                         )
+                    _check_fit_parameters(artist, tpath, issues)
 
                 if isinstance(artist, ResidualPlot) and artist.target not in fit_ids:
                     issues.append(
@@ -252,6 +260,56 @@ def _unequal_or_unreadable(artist, data) -> str | None:
         return None  # a file that cannot be read is shown above the preview
 
 
+def _not_drawn(artist, axes: Axes, data) -> list[str]:
+    """What of the artist's data cannot be seen: a column without a finite
+    value, or values at or below zero on a log axis or color scale."""
+    # Imported here: the data package imports the model, and NumPy is only
+    # needed once there is data.
+    import numpy as np
+
+    from figscribe.io.errors import DataError
+
+    right = getattr(artist, "axis", "left") == "right" and axes.y_right is not None
+    y_scale = (axes.y_right if right else axes.y).scale
+    shown: list[tuple[str, object, str]] = []  # (name, reference, scale)
+    if isinstance(artist, FITTABLE):
+        shown = [("x", artist.x, axes.x.scale), ("y", artist.y, y_scale)]
+    elif isinstance(artist, Histogram):
+        shown = [("values", artist.values, axes.x.scale)]
+    elif isinstance(artist, ImagePlot | ColorMesh):
+        reference = artist.data if isinstance(artist, ImagePlot) else artist.c
+        shown = [("values", reference, artist.norm)]
+    found = []
+    if isinstance(artist, FITTABLE) and artist.left_out:
+        try:
+            count = len(data(artist.x))
+        except DataError:
+            return []
+        for row in artist.left_out:
+            if row >= count:
+                found.append(
+                    f"row {row + 1} is left out, but the data has {count} rows"
+                )
+                break
+    for name, reference, scale in shown:
+        try:
+            values = np.asarray(data(reference), dtype=float).ravel()
+        except DataError:
+            return []  # a file that cannot be read is shown above the preview
+        what = (
+            f"{name} ({reference.column})" if isinstance(reference, ColumnRef) else name
+        )
+        finite = values[np.isfinite(values)]
+        if values.size and not finite.size:
+            found.append(f"{what} has no values to draw")
+        elif scale == "log" and (below := int(np.count_nonzero(finite <= 0))):
+            found.append(
+                f"{below} of {values.size} values of {what} are zero or below, "
+                "which a log scale does not show"
+            )
+    return found
+
+
 def _data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
     """Return (field name, source id) for every data reference on `artist`.
 
@@ -297,6 +355,39 @@ def _see(
         seen[oid] = location
 
 
+def _check_fit_parameters(
+    fit: FitCurve, path: str, issues: list[ReferenceIssue]
+) -> None:
+    """Fixed and bounded parameters must be the model's."""
+    if not fit.fixed and not fit.parameter_bounds:
+        return
+    # Imported here: the fit package needs SciPy, which reading a model must not.
+    from figscribe.fit import FitError, parameter_names
+
+    try:
+        names = parameter_names(fit.model)
+    except (FitError, ValueError):
+        return  # an expression that does not compile is reported when fitted
+    for name in fit.fixed:
+        if name not in names:
+            issues.append(
+                ReferenceIssue(
+                    f"{path}.fixed",
+                    fit.id,
+                    f"holds {name!r} fixed, which the model does not have",
+                )
+            )
+    for name in fit.parameter_bounds:
+        if name not in names:
+            issues.append(
+                ReferenceIssue(
+                    f"{path}.parameter_bounds",
+                    fit.id,
+                    f"bounds {name!r}, which the model does not have",
+                )
+            )
+
+
 def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None:
     layout = figure.layout
 
@@ -315,17 +406,31 @@ def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None
 
     in_grid = {a.id for a in figure.axes if a.inset is None}
     for ai, axes in enumerate(figure.axes):
-        if axes.inset is not None:
-            if axes.inset.parent not in in_grid:
-                issues.append(
-                    ReferenceIssue(
-                        f"{path}.axes[{ai}].inset.parent",
-                        axes.id,
-                        f"sits in {axes.inset.parent!r}, which is not a panel "
-                        "in this figure's grid",
-                    )
+        if axes.inset is not None and axes.inset.parent not in in_grid:
+            issues.append(
+                ReferenceIssue(
+                    f"{path}.axes[{ai}].inset.parent",
+                    axes.id,
+                    f"sits in {axes.inset.parent!r}, which is not a panel "
+                    "in this figure's grid",
                 )
-            continue
+            )
+    _check_spans(figure, path, issues)
+
+
+def outside_the_grid(project: Project) -> list[ReferenceIssue]:
+    """Panels that reach beyond their figure's grid, which cannot be drawn."""
+    issues: list[ReferenceIssue] = []
+    for fi, figure in enumerate(project.figures):
+        _check_spans(figure, f"figures[{fi}]", issues)
+    return issues
+
+
+def _check_spans(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None:
+    layout = figure.layout
+    for ai, axes in enumerate(figure.axes):
+        if axes.inset is not None:
+            continue  # an inset is placed by its bounds
         if axes.row + axes.rowspan > layout.rows:
             issues.append(
                 ReferenceIssue(

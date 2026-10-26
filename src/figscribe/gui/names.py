@@ -137,6 +137,16 @@ FIELD_NAMES = {
     "expression": "Formula",
     "parameters": "Parameters",
     "initial_values": "Start values",
+    "fixed": "Held fixed",
+    "parameter_bounds": "Parameter bounds",
+    "fit_range": "Fit range",
+    "extend_curve": "Curve over all the data",
+    "outside_as_left_out": "Points outside the range like left out",
+    "left_out": "Rows left out",
+    "left_out_color": "Left-out color",
+    "left_out_marker": "Left-out marker",
+    "left_out_linestyle": "Left-out line style",
+    "left_out_note": "Why left out",
     "result": "Result",
     "uncertainties": "Uncertainties (1σ)",
     "reduced_chi_square": "Reduced χ²",
@@ -166,7 +176,8 @@ def artist_name(artist) -> str:
             return f"{model.name.capitalize()} fit"
         return f"Fit: {model.expression}"
     if artist.kind == "annotation":
-        return f"Note: {artist.text}"
+        first, *more = artist.text.split("\n")
+        return f"Note: {first} …" if more else f"Note: {first}"
     return KIND_NAMES.get(artist.kind, artist.kind)
 
 

@@ -19,7 +19,7 @@ from string import ascii_lowercase
 import numpy as np
 
 from figscribe import __version__
-from figscribe.fit import numpy_source, parameter_names
+from figscribe.fit import free_parameters, numpy_source, parameter_names
 from figscribe.io.files import resolve_path
 from figscribe.model import (
     Annotation,
@@ -45,8 +45,11 @@ from figscribe.model import (
 from figscribe.render.figure import (
     COORDS,
     CURVE_POINTS,
+    LEFT_OUT_COLOR,
     MM_PER_INCH,
+    NO_LINE,
     DataProvider,
+    like_the_plot,
     tick_ranges,
 )
 from figscribe.render.labels import axis_label, unit_shown
@@ -85,6 +88,7 @@ RESERVED = {
     "hashlib",
     "curve_fit",
     "popt",
+    "popt_free",
     "pcov",
     "perr",
     "name",
@@ -148,6 +152,14 @@ class _Writer:
         self.sources = {s.id: s for s in project.sources}
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
+        self.held: dict[str, str] = {}
+        """{fit id: name of the model with its fixed parameters held}."""
+        self.ranges: dict[str, str] = {}
+        """{fit id: name of the mask of the points within its fit range}."""
+        self._masks: set[str] = set()
+        """Masks defined while drawing, so that each gets a name of its own."""
+        self.kept = self._name_kept()
+        """{plot id: name of the mask of its rows that are not left out}."""
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
         self.axis_specs = self._ticks_that_fit()
@@ -220,6 +232,22 @@ class _Writer:
                     names[key] = name
         return names
 
+    def _name_kept(self) -> dict[str, str]:
+        plots = [
+            a
+            for a in self.artists.values()
+            if isinstance(a, LinePlot | ScatterPlot | ErrorbarPlot) and a.left_out
+        ]
+        taken = set(RESERVED) | set(self.columns.values())
+        names = {}
+        for n, plot in enumerate(plots, start=1):
+            name = "kept" if len(plots) == 1 else f"kept_{n}"
+            while name in taken:
+                name += "_"
+            taken.add(name)
+            names[plot.id] = name
+        return names
+
     def _name_fits(self) -> dict[str, tuple[str, str]]:
         """{fit id: (model function name, parameter variable)} for drawn fits."""
         fits = [
@@ -242,6 +270,18 @@ class _Writer:
             taken.add(function)
             popt = "popt" if len(fits) == 1 else f"{function}_popt"
             found[fit.id] = (function, popt)
+            if fit.fit_range is not None:
+                mask = "in_range" if len(fits) == 1 else f"{function}_in_range"
+                while mask in taken:
+                    mask += "_"
+                taken.add(mask)
+                self.ranges[fit.id] = mask
+            if fit.fixed:
+                held = f"{function}_held"
+                while held in taken:
+                    held += "_"
+                taken.add(held)
+                self.held[fit.id] = held
         return found
 
     def _name_axes(self) -> list[str]:
@@ -276,6 +316,7 @@ class _Writer:
         self._header()
         self._imports()
         self._data(script_dir)
+        self._left_out()
         self._fit_models()
         self._fits()
         self._figure()
@@ -425,6 +466,8 @@ class _Writer:
             return
         if len(refs) == 1:
             kwargs["usecols"] = str(indices[0])
+            if self._single_row(refs, source):
+                kwargs["ndmin"] = "1"  # one value is still an array
             self.call(f"{refs[0][1]} = np.loadtxt", path, **kwargs)
             return
         if indices != list(range(len(source.columns))) or not source.columns:
@@ -470,6 +513,29 @@ class _Writer:
         values = self.data(ColumnRef(source=source.id, column=refs[0][0]))
         return len(values) == 1
 
+    def _left_out(self) -> None:
+        if not self.kept:
+            return
+        self.section("Points left out")
+        for plot_id, name in self.kept.items():
+            plot = self.artists[plot_id]
+            x = self.column(plot.x)
+            rows = [row + 1 for row in plot.left_out]
+            listed = (
+                f"row {rows[0]}"
+                if len(rows) == 1
+                else f"rows {', '.join(map(str, rows[:-1]))} and {rows[-1]}"
+            )
+            source = self.sources[plot.x.source]
+            if plot.left_out_note:
+                self.emit(f"# {_describe(plot).capitalize()}: {plot.left_out_note}")
+            self.emit(
+                f"# {_describe(plot).capitalize()}: {listed} of "
+                f"{Path(source.path).name} left out; the file is unchanged.",
+                f"{name} = np.ones({x}.size, dtype=bool)",
+                f"{name}[{plot.left_out}] = False",
+            )
+
     def _fit_models(self) -> None:
         if not self.fits:
             return
@@ -479,6 +545,17 @@ class _Writer:
             names = parameter_names(fit.model)
             self.emit("", f"def {function}(x, {', '.join(names)}):")
             self.emit(f"    return {numpy_source(fit.model)}", "")
+            if fit_id in self.held:
+                free = free_parameters(fit.model, fit.fixed)
+                values = {n: fit.initial_values.get(n, 1.0) for n in names}
+                held = ", ".join(f"{n} is held at {values[n]:g}" for n in fit.fixed)
+                arguments = [n if n in free else repr(float(values[n])) for n in names]
+                self.emit(
+                    "",
+                    f"# The fit varies {_and(free)}; {held}.",
+                    f"def {self.held[fit_id]}(x, {', '.join(free)}):",
+                    f"    return {function}(x, {', '.join(arguments)})",
+                )
 
     def _fits(self) -> None:
         for fit_id, (function, popt) in self.fits.items():
@@ -493,32 +570,62 @@ class _Writer:
             )
             names = parameter_names(fit.model)
             arrays = [a for a in (x, y, yerr) if a is not None]
+            used = []
             if self._finite(fit) is not True:
                 self.emit(
                     "# curve_fit needs finite values.",
                     "valid = " + " & ".join(f"np.isfinite({a})" for a in arrays),
                 )
-                x, y = f"{x}[valid]", f"{y}[valid]"
-                yerr = f"{yerr}[valid]" if yerr is not None else None
-            start = [fit.initial_values.get(n, 1.0) for n in names]
+                used.append("valid")
+            if fit.target in self.kept:
+                used.append(self.kept[fit.target])
+            if fit_id in self.ranges:
+                low, high = fit.fit_range
+                mask = self.ranges[fit_id]
+                self.emit(
+                    f"# The fit uses the points with {x} from {low:g} to {high:g}.",
+                    f"{mask} = ({x} >= {low!r}) & ({x} <= {high!r})",
+                )
+                used.append(mask)
+            if used:
+                points = " & ".join(used)
+                x, y = f"{x}[{points}]", f"{y}[{points}]"
+                yerr = f"{yerr}[{points}]" if yerr is not None else None
+            free = free_parameters(fit.model, fit.fixed)
+            start = [fit.initial_values.get(n, 1.0) for n in free]
             kwargs = {"p0": "[" + ", ".join(repr(float(v)) for v in start) + "]"}
+            if (bounds := _bounds(free, fit.parameter_bounds)) is not None:
+                kwargs["bounds"] = bounds
             if yerr is not None:
                 kwargs |= {"sigma": yerr, "absolute_sigma": "True"}
             pcov = "pcov" if popt == "popt" else popt.replace("popt", "pcov")
-            self.call(f"{popt}, {pcov} = curve_fit", function, x, y, **kwargs)
+            held = self.held.get(fit_id)
+            fitted = f"{popt}_free" if held else popt
+            self.call(f"{fitted}, {pcov} = curve_fit", held or function, x, y, **kwargs)
+            if held:
+                values = [
+                    f"{fitted}[{free.index(n)}]"
+                    if n in free
+                    else repr(float(fit.initial_values.get(n, 1.0)))
+                    for n in names
+                ]
+                self.emit(f"{popt} = [{', '.join(values)}]")
             result = fit.result
             if result.reduced_chi_square is not None:
                 self.emit(
                     f"# figscribe found χ²/ndf = {result.reduced_chi_square:.3g} "
                     f"for this fit."
                 )
-            labels = "[" + ", ".join(_str(n) for n in names) + "]"
+            labels = "[" + ", ".join(_str(n) for n in free) + "]"
             perr = "perr" if popt == "popt" else popt.replace("popt", "perr")
             self.emit(
                 f"{perr} = np.sqrt(np.diag({pcov}))",
-                f"for name, value, error in zip({labels}, {popt}, {perr}):",
+                f"for name, value, error in zip({labels}, {fitted}, {perr}):",
                 '    print(f"{name} = {value:.6g} ± {error:.2g}")',
             )
+            for name in fit.fixed:
+                value = fit.initial_values.get(name, 1.0)
+                self.emit(f"print({_str(f'{name} = {value:.6g} (held)')})")
 
     def _finite(self, fit: FitCurve) -> bool | None:
         """Whether all data of the fit is finite; None if unknown."""
@@ -687,41 +794,8 @@ class _Writer:
 
     def _artist(self, ax: str, artist) -> None:
         common = _common(artist, default_zorder=DEFAULT_ZORDER.get(artist.kind, 2.0))
-        if isinstance(artist, LinePlot):
-            kwargs = _some(color=artist.color)
-            kwargs |= {
-                "linestyle": _str(artist.linestyle),
-                "linewidth": _num(artist.linewidth),
-            }
-            if artist.marker is not None:
-                kwargs |= {
-                    "marker": _str(artist.marker),
-                    "markersize": _num(artist.markersize),
-                }
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.plot", x, y, **kwargs, **common)
-        elif isinstance(artist, ScatterPlot):
-            kwargs = {"s": _num(artist.size)} | _some(color=artist.color)
-            kwargs["marker"] = _str(artist.marker)
-            kwargs |= _some(edgecolors=artist.edgecolor)
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.scatter", x, y, **kwargs, **common)
-        elif isinstance(artist, ErrorbarPlot):
-            kwargs = {}
-            if artist.xerr is not None:
-                kwargs["xerr"] = self.column(artist.xerr)
-            if artist.yerr is not None:
-                kwargs["yerr"] = self.column(artist.yerr)
-            kwargs |= _some(color=artist.color)
-            kwargs |= {
-                "linestyle": _str(artist.linestyle),
-                "marker": _str(artist.marker),
-                "markersize": _num(artist.markersize),
-                "capsize": _num(artist.capsize),
-                "elinewidth": _num(artist.elinewidth),
-            }
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.errorbar", x, y, **kwargs, **common)
+        if isinstance(artist, LinePlot | ScatterPlot | ErrorbarPlot):
+            self._points(ax, artist, common)
         elif isinstance(artist, Histogram):
             values = self.column(artist.values)
             if not self._all_finite([artist.values]):
@@ -813,6 +887,101 @@ class _Writer:
             return False
         return all(bool(np.all(np.isfinite(self.data(r)))) for r in refs)
 
+    def _points(self, ax: str, artist, common: dict[str, str]) -> None:
+        """A line, scatter or error bar plot; the line runs on through its
+        left-out rows, in their color, and their points are drawn apart."""
+        x, y = self.column(artist.x), self.column(artist.y)
+        errors = {
+            name: self.column(ref)
+            for name in ("xerr", "yerr")
+            if (ref := getattr(artist, name, None)) is not None
+        }
+        mask = self._shown(artist)
+        shown = f"np.where({mask}, {y}, np.nan)" if mask else y
+        self._part(ax, artist, x, shown, errors, {}, common)
+        if not mask:
+            return
+        color = _str(artist.left_out_color or LEFT_OUT_COLOR)
+        apart = {k: v for k, v in common.items() if k != "label"}
+        linestyle = like_the_plot(artist, "linestyle")
+        if linestyle not in NO_LINE:
+            steps = f"{mask}_steps"
+            self.emit(
+                "# The line runs on through the rows left out, in their color.",
+                f"{steps} = ~({mask}[:-1] & {mask}[1:])",
+            )
+            pieces = [
+                f"np.column_stack([{v}[:-1], {v}[1:], np.full({v}.size - 1, np.nan)])"
+                f"[{steps}].ravel()"
+                for v in (x, y)
+            ]
+            kwargs = {"color": color, "linestyle": _str(linestyle)}
+            if isinstance(artist, LinePlot):
+                kwargs["linewidth"] = _num(artist.linewidth)
+            self.call(f"{ax}.plot", *pieces, **kwargs, **apart)
+        marker = like_the_plot(artist, "marker")
+        if marker is None and not isinstance(artist, ErrorbarPlot):
+            return
+        self.emit("# The rows left out, apart and without a legend entry.")
+        out = {name: f"{column}[~{mask}]" for name, column in errors.items()}
+        style = {"color": color, "marker": _str(marker or "none")}
+        self._part(ax, artist, f"{x}[~{mask}]", f"{y}[~{mask}]", out, style, apart)
+
+    def _shown(self, artist) -> str | None:
+        """The mask of the rows drawn as the plot draws them: not left out, and
+        inside the range of each fit that draws the others like left out.
+        Defined here when it joins several; None when all rows are."""
+        parts = [self.kept[artist.id]] if artist.id in self.kept else []
+        parts += [
+            self.ranges[fit.id]
+            for fit in self.artists.values()
+            if isinstance(fit, FitCurve)
+            and fit.target == artist.id
+            and fit.outside_as_left_out
+            and fit.id in self.ranges
+        ]
+        if len(parts) <= 1:
+            return parts[0] if parts else None
+        name = "shown"
+        while name in {*self.columns.values(), *self._masks}:
+            name += "_"
+        self._masks.add(name)
+        self.emit(
+            "# Drawn as the plot draws them: kept, and inside the fit range.",
+            f"{name} = {' & '.join(parts)}",
+        )
+        return name
+
+    def _part(self, ax, artist, x, y, errors, style, options) -> None:
+        """One call that draws points as the plot does, `style` over its own."""
+        color = {"color": style["color"]} if style else _some(color=artist.color)
+        if isinstance(artist, LinePlot):
+            kwargs = color | {
+                "linestyle": '"none"' if style else _str(artist.linestyle),
+                "linewidth": _num(artist.linewidth),
+            }
+            marker = style.get("marker") or (
+                _str(artist.marker) if artist.marker is not None else None
+            )
+            if marker is not None:
+                kwargs |= {"marker": marker, "markersize": _num(artist.markersize)}
+            self.call(f"{ax}.plot", x, y, **kwargs, **options)
+        elif isinstance(artist, ScatterPlot):
+            kwargs = {"s": _num(artist.size)} | color
+            kwargs["marker"] = style.get("marker") or _str(artist.marker)
+            kwargs |= _some(edgecolors=artist.edgecolor)
+            self.call(f"{ax}.scatter", x, y, **kwargs, **options)
+        else:
+            kwargs = dict(errors) | color
+            kwargs |= {
+                "linestyle": '"none"' if style else _str(artist.linestyle),
+                "marker": style.get("marker") or _str(artist.marker),
+                "markersize": _num(artist.markersize),
+                "capsize": _num(artist.capsize),
+                "elinewidth": _num(artist.elinewidth),
+            }
+            self.call(f"{ax}.errorbar", x, y, **kwargs, **options)
+
     def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
         if fit.id not in self.fits:
             self.emit(f"# {_describe(fit)} is not fitted yet, so it is not drawn.")
@@ -825,6 +994,10 @@ class _Writer:
         else:
             low = f"{x}[np.isfinite({x})].min()"
             high = f"{x}[np.isfinite({x})].max()"
+        if fit.fit_range is not None and not fit.extend_curve:
+            # Over the fit range, where there is data.
+            low = f"max({fit.fit_range[0]!r}, {low})"
+            high = f"min({fit.fit_range[1]!r}, {high})"
         self.emit(f"{xs} = np.linspace({low}, {high}, {CURVE_POINTS})")
         kwargs = _some(color=fit.color) | {
             "linestyle": _str(fit.linestyle),
@@ -848,6 +1021,16 @@ class _Writer:
         kwargs = {}
         if isinstance(target, ErrorbarPlot) and target.yerr is not None:
             kwargs["yerr"] = self.column(target.yerr)
+        masks = [
+            mask
+            for mask in (self.ranges.get(fit.id), self.kept.get(fit.target))
+            if mask is not None
+        ]
+        if masks:  # only the fitted points
+            mask = " & ".join(masks)
+            x, y = f"{x}[{mask}]", f"{y}[{mask}]"
+            if "yerr" in kwargs:
+                kwargs["yerr"] = f"{kwargs['yerr']}[{mask}]"
         kwargs |= _some(color=residuals.color) | {
             "marker": _str(residuals.marker),
             "markersize": _num(residuals.markersize),
@@ -903,6 +1086,23 @@ def _some(**values) -> dict[str, str]:
     return {k: _str(v) for k, v in values.items() if v is not None}
 
 
+def _and(names: list[str]) -> str:
+    """ "a, mu and sigma"."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _bounds(free: list[str], bounds) -> str | None:
+    """curve_fit's bounds for the free parameters, or None if there are none."""
+    pairs = [bounds.get(n, (None, None)) for n in free]
+    if all(low is None and high is None for low, high in pairs):
+        return None
+    lows = ", ".join("-np.inf" if low is None else repr(float(low)) for low, _ in pairs)
+    highs = ", ".join(
+        "np.inf" if high is None else repr(float(high)) for _, high in pairs
+    )
+    return f"([{lows}], [{highs}])"
+
+
 def _describe(artist) -> str:
     if artist.label:
         return artist.label
@@ -914,13 +1114,17 @@ def _describe(artist) -> str:
 
 
 def _str(text: str) -> str:
-    """A string literal as a person would write it: double quotes, and a raw
-    string for LaTeX."""
-    if "\\" in text and '"' not in text and not text.endswith("\\"):
-        return f'r"{text}"'
-    if '"' not in text and "\\" not in text and "\n" not in text:
-        return f'"{text}"'
-    return repr(text)
+    """A string literal as a person would write it: double quotes, a raw
+    string for LaTeX, and a line break as \\n."""
+    if "\n" not in text:
+        if "\\" in text and '"' not in text and not text.endswith("\\"):
+            return f'r"{text}"'
+        if '"' not in text and "\\" not in text:
+            return f'"{text}"'
+    if any(ord(c) < 32 for c in text.replace("\n", "")):
+        return repr(text)  # other control characters, rare enough to look odd
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
 
 
 def _num(value: float) -> str:

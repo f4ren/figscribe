@@ -7,10 +7,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from figscribe.commands import History
+from figscribe.commands import CommandError, History
 from figscribe.io import DataError, csv_source, sha256_of
 from figscribe.io.numpyfile import numpy_source
-from figscribe.io.refresh import describe_change, source_state, use_new_version
+from figscribe.io.refresh import (
+    describe_change,
+    read_differently,
+    source_state,
+    use_new_version,
+)
 from figscribe.model import ColumnRef, LinePlot, Project, loads
 
 SCAN = "# a scan\nt;U;dU\ns;V;V\n0;1,5;0,1\n1;2,5;0,1\n"
@@ -118,3 +123,43 @@ def test_a_plot_of_a_column_the_file_lost_is_reported(tmp_path: Path) -> None:
 def test_an_older_project_without_rows_still_loads(example: Path) -> None:
     project = loads(example.read_text(encoding="utf-8"))
     assert project.sources[0].row_count is None
+
+
+def test_a_reading_option_is_one_step_with_what_it_reads(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    old = project.sources[0].model_copy()
+    history = History(project)
+    history.push(read_differently(project, old.id, "header_row", 2, tmp_path))
+    new = project.sources[0]
+    assert new.header_row == 2 and new.columns != old.columns
+    assert new.row_count == 1  # the line after the header is still skipped
+    assert (new.sha256, new.path) == (old.sha256, old.path)
+    assert history.undo_text == "Read scan.csv with another header line"
+    history.undo()
+    assert project.sources[0] == old
+
+
+@pytest.mark.parametrize(("field", "value"), [("delimiter", "2"), ("decimal", ".")])
+def test_a_reading_option_that_cannot_read_the_file_is_refused(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    project = _project(tmp_path)
+    before = project.model_copy(deep=True)
+    with pytest.raises(DataError, match="scan.csv"):
+        read_differently(project, project.sources[0].id, field, value, tmp_path)
+    assert project == before
+
+
+def test_a_changed_file_is_not_read_differently(tmp_path: Path) -> None:
+    """Reading it again would quietly take the new version."""
+    project = _project(tmp_path)
+    (tmp_path / "scan.csv").write_bytes((SCAN + "2;3,5;0,1\n").encode())
+    with pytest.raises(DataError, match="has changed since it was imported"):
+        read_differently(project, project.sources[0].id, "header_row", 2, tmp_path)
+
+
+def test_a_separator_is_one_character(tmp_path: Path) -> None:
+    """NumPy takes no other, and said so with a TypeError nothing caught."""
+    project = _project(tmp_path)
+    with pytest.raises(CommandError, match="delimiter"):
+        read_differently(project, project.sources[0].id, "delimiter", ";;", tmp_path)

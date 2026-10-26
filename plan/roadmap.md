@@ -52,6 +52,24 @@ reproduction is given so a session can turn it into a failing test first.
    migration with a stored example file of the old version (see `_migrate` in
    `model/project.py`), unless the new field has a default and no released file
    predates it — say which in the pull request.
+10. **Every GUI element is tested the way a person uses it.** A pull request
+    that adds or changes a widget, dialog or action covers it in the field
+    test or an operation test of task B8, and goes through the manual
+    checklist in `docs/testing.md` if it changes what is seen. Tests click
+    (`click()`, `activated`, `editingFinished`, `QTest` mouse events); they do
+    not call `setChecked()` or `setCurrentIndex()` alone, which skips the code
+    a real click runs.
+11. **Others work on the same plan.** Before starting a task, look for a
+    branch or pull request that already works on it (`git fetch`,
+    `gh pr list`), and open a draft pull request as soon as the branch is
+    pushed, so the next session sees it.
+
+**Pulled forward** at the user's request (2026-10-25): F1.2 (held
+parameters and bounds) now, since it touches nothing U2 changes; F8 (several
+figures) right after U2 is merged and before U3 and U4, because it turns
+"the first figure" into "the current one" in eight modules, and the GUI work
+of U3 and U4 would otherwise be built on the old assumption. Nobody starts U3
+or U4 while F8 is open.
 
 Sizes: **S** is up to half a day, **M** a day or two, **L** more; split an L
 into pull requests that each leave `develop` working.
@@ -210,6 +228,16 @@ they find.
    ≤ 0 on a log axis, 1e-30 and 1e30, integer columns, reversed and equal
    limits. Render, export, and run the generated script for each. Nothing may
    crash; a problem shows as a message.
+   **Done** (2026-10-26): `tests/test_edge_data.py`, 55 column cases and 7
+   images (slow; seconds on several cores). Nothing crashed; it found four
+   things, all fixed: a file without rows said "column 'y' is out of range:
+   has 1 columns" (now "has no rows of data"); the script of a histogram of
+   one value failed (`ndmin=1`); an equal range was taken and widened by
+   Matplotlib (now refused: "a range needs two different ends"); and a
+   column of only NaN, or values at or below zero on a log axis or log color
+   scale, vanished without a word (now in the problem list, given the data).
+   *Learned:* fits with fewer points than parameters, and every other case,
+   already refused or drew correctly.
 2. **Undo stress**: random sequences of commands (add, change, delete, move
    panels, fit), then undo all: the project equals the start; redo all: equals
    the end. `[decide]` whether to add `hypothesis` as a dev dependency for this
@@ -226,6 +254,142 @@ they find.
    dialog and property panel.
 6. **Code generator**: every project in `examples/` and every bench case
    through the equivalence test (some bench cases may not be covered yet).
+
+### B8 Every GUI element is tested the way a person uses it (verified) — M
+
+*Now:* GUI tests set widgets directly (`setChecked`, `setCurrentIndex`), so
+code that only a real click runs is never tested. On 2026-10-25 a probe
+operated each of the 56 editors of the property panel on the example project
+like a user (click a box, pick an entry, type and press Enter) and checked:
+the model changes, the figure still draws, the image changes, undo restores
+the project. It found:
+
+1. **Crash** (verified): clicking "Right y axis" on a panel kills the
+   application with a segmentation fault, on `develop` too. The click adds an
+   optional part, `PropertyPanel.rebuild` builds a new form, and `setWidget()`
+   deletes the old one, with the box whose click Qt is still handling. "Color
+   bar" goes the same way. Fix: `takeWidget()` and `deleteLater()` the old form,
+   as `gui/databar.py` does. Look for the same pattern elsewhere (forms that
+   rebuild from a signal of one of their own widgets).
+   **Done** (2026-10-25): `rebuild` hides the old form and deletes it later;
+   the right axis and color bar tests click their box. *Learned:* only
+   `setWidget()` in the property panel replaced a form under its own widget;
+   the import and fit dialogs, the data bar and the start page already delete
+   later. Push buttons survive it anyway (Qt guards their click), check boxes
+   do not. The outline clears its tree from its own clicks; the operation
+   tests of item 2 below cover it.
+2. **Values that break the figure are accepted** (verified): resolution `2`
+   dpi (FreeType: "invalid ppem value"), style sheet `2` (unknown style), row
+   or column `2` in a 1 × 1 grid (GridSpec IndexError). The command takes them
+   and the preview shows the error afterwards. Refuse them in the command with
+   a plain message, as B4 does for colors; give `dpi` a sensible lower bound.
+   **Done** (2026-10-25, decisions 0003 and 0006): `dpi` is at least 72; a style sheet
+   is a name Matplotlib has or a path ending in `.mplstyle`, checked like the
+   other style strings; `History.push` refuses a command that puts a panel
+   outside its grid, judged after a whole macro. *Learned:* three tests used
+   a panel outside the grid as their example of a problem in the list; ratios
+   that do not match the grid are that example now, since they stay allowed
+   (no order of edits changes the number of rows without a mismatch on the
+   way). *Follow-up:* such ratios still make the figure undrawable; the panel
+   should adjust them when the number of rows or columns changes (after U2,
+   which gives each ratio its own field). Font sizes far below 1 pt would hit
+   the same FreeType limit as a tiny dpi; not checked yet.
+3. **Format fields of a data source** (verified): a separator, decimal mark or
+   comment mark that makes the file unreadable is taken, and the figure
+   breaks. Read the file with the new setting first and refuse it with the
+   reason, as B2's "Use the new version" does.
+   **Done** (2026-10-25, decision 0007): `io/refresh.read_differently` reads
+   the file with the new option and returns one undo step that also takes the
+   columns and row count it then has, or a DataError that the panel and the
+   assistant show; `reading_options` finds the options from the reader's
+   parameters, as `reread` does. A file that changed since import is not read
+   again that way, which would take its new version without saying so.
+   *Learned:* the assistant's `apply_changes` builds its steps apart from
+   `set_field`; both now go through one method. A header line that is fine
+   for the reader but renames columns leaves plots of the old names, which
+   `validate_references` reports (B2).
+4. **Settings without effect, without a hint** (verified): while "Grid lines"
+   is off, the grid's axes, tick choice and color do nothing; "Grid lines at:
+   minor ticks" shows nothing while the axis has its minor ticks switched off.
+   Disable such fields or say why they do nothing (relates to U2). The field
+   test adds: a color mesh's x or y alone does nothing, the renderer uses
+   them only as a pair. Do this after U2, which reworks the same panel code.
+5. **Missing API key** (verified, by hand): "Load models" in the assistant
+   settings with Claude and no key anywhere prints a traceback to the terminal
+   and shows nothing in the dialog. The Anthropic SDK raises a `TypeError`
+   ("Could not resolve authentication method") before any request, which
+   `_Translate` in `assistant/chat.py` does not map. Say "No valid API key …"
+   as for an invalid one. Check sending a chat message without a key too.
+   **Done** (2026-10-25): `ClaudeModel._errors` turns that `TypeError` into
+   the message for a missing key, for listing models and for a chat message;
+   any other `TypeError` stays a bug. The test clears the `ANTHROPIC_*`
+   variables and points the home directory away, so a profile from `ant auth
+   login` on the machine does not hide the case. The OpenAI client sends
+   "not-needed" as its key and gets the server's refusal instead.
+
+*Do*, so that a GUI change is tested again on every pull request:
+
+1. **A field test**, the probe as a pytest module: one test per editor of the
+   property panel and per field of the axis form, over a fixture project that
+   has every kind of object (each plot type, a 2 × 2 grid, an inset, a right
+   axis, a color bar, a fit, a note, CSV and NumPy sources). It operates the
+   editor like a user and checks: no crash, the model changes, undo restores,
+   the figure draws, the image changes. Since the panel is generated from the
+   model, a new field is in the test without anyone adding it. Fields that
+   rightly change nothing visible in the fixture are listed with the reason,
+   as U1 lists fields without an editor; that list shows the settings of item
+   4. A crash takes the test run down: run each editor in a subprocess, or
+   accept that a crash fails CI and say so.
+   **Done** (2026-10-25): `tests/gui/test_every_field.py` over
+   `tests/gui/everything.py`, one test per object (17), each going through all
+   its fields and reporting every one that fails; a crash fails the run, and
+   pytest-qt fails a test on any exception in Qt's event loop. `EXPECTED`
+   lists fields whose right outcome is not a visible change, `KNOWN` the
+   problems still open with their item. Marked `slow` (about a minute): CI
+   runs it, `-m "not slow"` skips it while iterating. Fixed on the way: a
+   separator of more than one character reached NumPy, which raised a
+   `TypeError` nothing caught; `CsvSource.delimiter` is one character now.
+   *Learned:* a widget in a folded section is not visible either, so the test
+   opens every section first, or it skips them silently; a list is tried
+   entry by entry until something visible changes, since its first entries
+   are often what is drawn anyway ("outward" ticks, "stepfilled" bars).
+   *Follow-ups:* choosing a column of another length for x breaks the figure
+   until y follows, with a plain message; mark such columns in the list. A
+   figure of 2 mm collapses its panels (Matplotlib warns); give the size a
+   sensible lower bound. Width and height ratios: see item 2.
+2. **Operation tests for what is not generated**: axis form, import, plot,
+   fit and assistant dialogs, the outline's context menus, the data bar, the
+   preview's zoom, pan and legend drag. Plus one test that triggers every
+   `QAction` of the main window once on the fixture project: no exception, no
+   raw message. A new action or dialog missing from the list fails the test,
+   like U1.
+   **Partly done** (2026-10-25): `tests/gui/test_every_action.py` triggers
+   every menu action of the main window (found on the window, so a new one is
+   tested without being listed) in a fresh window, and every entry of the
+   outline's context menus for every object, undoing what each changed;
+   dialogs are answered in the test, and no action may end in a message that
+   figscribe calls a bug. Both tests are `slow`; CI runs the slow tests on
+   Ubuntu with Python 3.13 only, which keeps the other jobs at their former
+   two to three minutes (the field test alone added two to four to each).
+   That job then took ten minutes; since decision 0028 every job runs the
+   tests in parallel with pytest-xdist, and the sweeps are split to spread.
+   *Open:* about twenty places in the dialog tests (import, images, fit,
+   notes, chat) still set widgets with `setChecked` or `setCurrentText`;
+   make them click, and add the preview's zoom, pan and legend drag with
+   `QTest` mouse events.
+3. **A manual checklist** in `docs/testing.md`, about 15 minutes, for what a
+   test cannot judge: the result looks right; real mouse and trackpad on macOS
+   and Windows; high DPI; dark mode; small window. Run before every release
+   (part of B7) and for every pull request that changes what is seen.
+   **Done** (2026-10-25): `docs/testing.md`, with what the automatic tests
+   cover and eleven steps by hand.
+   Found by hand the same day: check boxes were hard to see, a 1.45:1 edge
+   from the Fusion style on white. They have their own look now (14 px, a
+   4.3:1 edge, accent and a check mark when on, hover and focus), and the
+   checklist asks for every control in each state.
+
+*Done when:* items 1 to 5 above have failing tests and fixes; the field test
+and the action test run in CI; `docs/testing.md` exists; how-to rule 10 holds.
 
 ---
 
@@ -320,6 +484,10 @@ in the panel alone would be wrong as soon as the size or labels change.
 - Drag the corners of an inset to resize it and the gap between grid panels
   to change the ratios (one undo step on release, like the legend).
 - Right-click a plot: *Style like…*, *Bring to front*, *Fit…*, *Hide*.
+- **Done** (2026-10-25, asked for by the user): in an axis' frame, the one
+  drawn around it when selected, the wheel zooms and dragging pans that axis
+  alone. Over the panel, Shift with the wheel still zooms x only and Ctrl or
+  Alt y only. Clicking in the frame's gaps still selects nothing.
 
 ### U5 Missing everyday actions — S each
 
@@ -343,12 +511,34 @@ covariance detected). Missing:
 1. **Fit range**: fit only x in [a, b], typed or dragged in the preview; stored
    on `FitCurve`, applied in the script with a mask. Draw the curve over the
    fit range or the full range (option).
+   **Typed: done** (2026-10-26, pulled forward at the user's request):
+   `FitCurve.fit_range` and `extend_curve`; the dialog fits only the points
+   in range ("17 of 41 points"), guesses untyped start values from them, and
+   draws the curve over the range where there is data unless told to span
+   all of it; residuals show the fitted points; the script uses a named mask
+   `in_range`. *Open:* dragging the range in the preview.
 2. **Fixed parameters and bounds** per parameter in the fit dialog (bounds go
    to `curve_fit(bounds=...)`, fixed ones become constants of the model).
+   Asked for by the user (2026-10-25): a start value that is kept as it is.
+   **Done** (2026-10-25, decision 0029): `FitCurve.fixed` and
+   `parameter_bounds`, in the fit dialog ("held", and a range per parameter),
+   the assistant's fit tool, the script and the panel's result card.
+   *Learned:* the field could not be called `bounds`, which an inset already
+   has, since the panel's lists go by field name. A guessed start value
+   outside a bound the user set is moved in; a typed one is refused.
+   Changing a fit that is there: **done** the same day. "Change the fit…" on
+   the panel's result card opens the dialog on the fit as it is (model, start
+   values, held, bounds, label) and "Update fit" is one undo step
+   (`fit.update_fit`); its residuals and its look stay as they are.
 3. **Show the result in the figure**: a text box (a note bound to the fit)
    with chosen parameters as `value ± error unit`, rounded to two significant
    digits of the error as `names.with_error` already does; updates on refit.
 4. **Export the result**: copy as text, CSV, or a LaTeX table row.
+   **As text: done** (2026-10-26, asked for by the user): the result card's
+   values can be selected, "Copy the result" copies parameters, χ²ᵣ and the
+   residuals, and the card now tells the points fitted, the residual RMS
+   and the largest residual with its row (`fit.residuals`). *Open:* CSV and
+   a LaTeX table row.
 5. **Confidence band** (1σ) around the curve from the covariance, shaded.
 6. **More models**: sine, power law, logistic, Voigt, sum of two Gaussians or
    Lorentzians, exponential with offset; templates for the custom expression.
@@ -362,6 +552,52 @@ Click points in the preview to exclude them from a plot or a fit (outliers,
 detector glitches). Stored as indices on the plot, shown hollow or grey,
 emitted in the script as a mask with a comment. Also a row range per plot
 ("rows 100 to 2 000"). The data file stays untouched.
+
+**Decided with the user (2026-10-26)**, pulled forward after F1.1:
+- Left-out points are stored **on the plot**, so every fit of it skips them,
+  and are drawn in **another color**, light grey by default; the color and,
+  if wanted, a marker of their own can be set.
+- **Finding outliers** in the fit dialog: points whose residual exceeds k·σ
+  (k = 3; σ the point's error bar, or a robust scatter (MAD) without one),
+  refitting until nothing changes. They are **proposed**, and only left out
+  once the user confirms; they then join the same list, with a note on how
+  they were found. Not a rule stored on the fit: a list stays the same when
+  fitted again and reads plainly in the script.
+- Order: leaving points out by hand (right-click a point in the preview),
+  then finding outliers.
+
+**By hand: done** (2026-10-26): `left_out`, `left_out_color` and
+`left_out_marker` on line, scatter and error bar plots; right-click a point
+in the preview, "Leave out row 13" or "Take row 13 back in" (rows counted
+from 1 on screen, from 0 in the model), which fits every fit of the plot
+again in the same undo step and is refused if a fit would lack points; the
+assistant's `set_field` on `left_out` does the same. Residuals skip them
+too; the script names the mask `kept`. *Learned:* the click must pick the
+nearest point over all drawn parts, since the kept line also lies within
+the pick radius of a left-out point. *Open:* a row range per plot; the
+panel shows which rows are left out only in the preview.
+
+**Finding outliers: done** (2026-10-26): "Find outliers" in the fit dialog
+proposes the points beyond k·σ (`fit.outliers`, iterated until the set
+settles); "Leave them out" shows the fit without them, and only "Add fit" or
+"Update fit" leaves them out of the plot, with the fit as one undo step and
+`left_out_note` ("rows 11, 31: more than 3σ off the Gaussian fit"), which
+the panel lets the user edit and the script prints. Also fixed: the dialog
+fitted the plot's left-out rows, which `refit` skipped.
+
+**The look, as the user asked (2026-10-26):** markers are chosen from a list
+of every Matplotlib marker, each drawn (`gui/markers.py`), instead of four
+buttons and a text field. A left-out point's marker is "like the plot" by
+default (`"same"`), and "no marker" means none, as for the plot. A line runs
+on through the left-out rows in their color, with `left_out_linestyle` (like
+the plot by default, "none" for a gap), instead of joining the kept points
+across them. Also asked for: a fit can draw the plot's points outside its range
+like left-out ones (`outside_as_left_out`, a switch in the fit dialog and the
+panel; only drawn so, not left out), and a marker list ends in "Custom…",
+which asks for any Matplotlib marker such as `$\alpha$`. *Follow-up after U2
+is merged:* remove the old `MarkerEditor` and its four `MARKERS` from
+`gui/properties.py`, no longer used, and move the `QInputDialog` import of
+`ask_marker` up to the others; both wait because U2 changes those lines.
 
 ### F3 Panel labels for journals — S
 
@@ -397,6 +633,34 @@ In order of demand:
 4. **Frame**: hide the top/right spines; offset spines.
 5. `[decide]` **Date and time** axes for logged data.
 6. `[later]` Broken axes.
+7. `[decide]` **Which side an axis is on.** Matplotlib has four cases, and
+   figscribe covers two:
+
+   | Case | Matplotlib | figscribe |
+   |---|---|---|
+   | Tick marks on all sides, numbers only on one | `tick_params(top=True, right=True)` | `Figure.ticks_all_sides`, per figure |
+   | The same axis, with numbers and label, on the other side | `yaxis.tick_right()`, `set_label_position("right")` | missing |
+   | The same numbers on both sides | `tick_params(labelright=True)` | missing |
+   | A second axis with its own scale and data | `twinx()` / `twiny()` | `Axes.y_right`; none on top |
+
+   Proposal: keep placement and a second axis apart. `AxisSpec` gets `side`:
+   `"left"`, `"right"` or `"both"` for y, `"bottom"`, `"top"` or `"both"` for
+   x, set per panel, since in a grid with `share_y` the right column often
+   wants its labels on the right. `y_right` stays the second axis with its own
+   scale. While a panel has one, the right side is its: the command and
+   `validate_references` refuse `side="right"` or `"both"` for y with a plain
+   message, as B4 does. In the axis form a choice "Side: left / right / both",
+   apart from the box "Second y axis with its own scale", whose tooltip says
+   the difference. Nothing like it exists in the code yet (checked
+   2026-10-25: no field, no `tick_right` or `set_label_position` in the
+   renderer or the code generator). Questions:
+   1. Are left/right/both enough, or also "label left, numbers right"?
+      Proposed: enough; the split is rare.
+   2. A second, independent x axis on top (`x_top`, `twiny`) along with it,
+      like `y_right`? Not the same as item 3, which converts the bottom axis
+      (`secondary_xaxis`); decide whether both are wanted.
+   3. Adding a second y axis while `side="right"` is set: refuse and explain,
+      or move the side back to the left? Proposed: refuse and explain.
 
 ### F6 Several files as one series — M
 
@@ -419,7 +683,10 @@ measurement at ten temperatures". The script loads them in a loop.
 The model holds a list of figures, but the GUI and `figscribe script` only
 use the first, and there is no *Add figure*. Add, duplicate, rename, reorder
 and switch figures (tabs or the outline), *Export all*, and
-`figscribe script --figure NAME` / `--all`.
+`figscribe script --figure NAME` / `--all`. Asked for by the user
+(2026-10-25): a scientist's project typically has several plots. The toolbar
+adds things in the order a figure is built (Data, Panel, Plot, Fit, Note,
+since 2026-10-26); *Figure* joins it after *Data*, as the user proposed.
 
 ### F9 Reading values off the figure — S
 
@@ -533,6 +800,18 @@ where local models fail; write down in the README which model size is good
 enough for which request, and pick the default. New features from phases 1–3
 get bench cases.
 
+### R6 An application icon — S
+
+One drawing as SVG, from which every size is made: the window and Dock icon
+at run time, and `.icns` (macOS) and `.ico` (Windows) for the installers of
+R4.2. It should take up the accent color and the start page's mark, and stay
+legible at 16 px.
+
+**Done** (2026-10-25, decision 0030): `gui/icons/figscribe.svg` and
+`figscribe-small.svg` (up to 48 px); `theme.apply` sets the window icon;
+`packaging/make_icons.py` writes `packaging/icons/figscribe.icns`, `.ico` and
+a 1024 px PNG, which R4.2 can use as they are.
+
 ---
 
 ## Phase 5 — Later, optional
@@ -557,6 +836,7 @@ answer in `docs/decisions.md` when the task is started.
 | U6 | Gaps between panels in mm: new model fields in mm (schema bump), converted by the renderer and the code generator? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
+| F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F10 | Scale/offset per column, smoothing, peak finding: in scope or not? |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |

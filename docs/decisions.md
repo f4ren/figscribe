@@ -202,6 +202,14 @@ one.
   the way in, so the model never shares an object with its caller.
 - **`Macro` is all or nothing**: if a step fails, the steps already applied are
   reverted before the error propagates. A failed command is not recorded.
+- **The history refuses a command that puts a panel outside its grid**
+  (since 2026-10-25): `History.push` compares the panels beyond their grid
+  before and after the whole command and reverts it if one was added, so a
+  macro may grow the grid before moving a panel there, and a panel already
+  outside in a project file blocks nothing else. Matplotlib cannot draw such a
+  figure at all. Ratios that do not match the grid are only reported: changing
+  the number of rows with ratios set has no order of single edits without a
+  mismatch in between.
 - **One exception type**, `CommandError`, also for pydantic's validation
   errors, so the GUI has one thing to catch and show.
 - **User-level actions are functions building a `Macro`**, e.g.
@@ -381,7 +389,8 @@ class would have to be kept in step with every field added to the model.
   refused value shows pydantic's message above the form and the editor shows
   the model's value again. An unchanged value pushes nothing. The exception
   are style strings (colors, markers, line styles, color maps, legend
-  locations, since 2026-10-24): the model keeps them as text because
+  locations, since 2026-10-24; style sheets, since 2026-10-25, where a name
+  must be one Matplotlib has and a file must end in `.mplstyle`): the model keeps them as text because
   Matplotlib accepts many forms, and the commands ask Matplotlib whether it
   can draw them (`model/styles.py`), so the property panel, the dialogs and
   the assistant all refuse "blu" with the same plain message. A model
@@ -445,6 +454,13 @@ class would have to be kept in step with every field added to the model.
   import (`row_count`) so that a change can be told in rows; projects from
   before have none. The assistant gets *Use the new version* as a tool, not
   *Locate*: it must not point a source at other files on the machine.
+- **Changing how a file is read reads it at once** (added 2026-10-25): a new
+  separator, decimal mark, header line, number of skipped lines, comment mark,
+  encoding or array, from the property panel or the assistant, is one undo
+  step that also takes the columns and rows the file then has, or is refused
+  with the reader's reason if the file cannot be read that way. A file that
+  changed since import is refused too: reading it again would take the new
+  version without the bar's question.
 - **Adding the first plot to a figure without axes adds the axes too**, in the
   same undo step. Later plots go into the selected axes, the axes of the
   selected plot, or the figure's first axes.
@@ -1081,3 +1097,168 @@ froze, and a project file with such a step could not be opened usefully.
   freeze the window.
 - **Count major ticks only**, as first planned: the default minor ticks alone
   made the repro five times slower than the major ones.
+
+---
+
+## 0028 — Tests run in parallel with pytest-xdist
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+The tests that operate every field and action of the GUI (roadmap task B8)
+draw the whole figure after each change: about two and a half minutes on a
+laptop, nine on a CI runner, against half a minute for everything else. Run
+on one job only, they still made every pull request wait about ten minutes.
+
+### Decision
+
+- **`pytest-xdist` is a dev dependency**, and CI runs the tests with
+  `-n auto --dist worksteal`: idle workers take tests from busy ones, which
+  matters because a few tests take far longer than the rest. Locally the
+  whole suite drops from about 2.5 minutes to under one.
+- **The slow tests are split so they can spread**: one test per object for
+  the fields, per menu for the actions, per panel for the outline's menus.
+  A list is tried for at most six other entries, as a person would.
+- **The slow tests still run on one CI job** (Ubuntu, Python 3.13); they test
+  figscribe's logic, which does not differ by platform, while crashes such as
+  that of B8.1 have their own fast tests that run everywhere.
+
+### Alternatives considered
+
+**Rendering less in the tests**, such as without the layout engine: saves
+about a third, and the layout settings could then no longer be tested.
+**Fewer objects in the test project**: the point of the project is to have
+every kind. **Running the slow tests nightly** instead of per pull request:
+a problem would then reach `develop` before anyone sees it.
+
+---
+
+## 0029 — Fit parameters held fixed or kept within bounds
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+A fit could only vary every parameter of its model. Scientists hold some at
+a known value (a background, a line width from the instrument) and keep
+others physical (a width above zero), and the generated script has to give
+the same result.
+
+### Decision
+
+- **`FitCurve.fixed`** lists parameters held at their start value, and
+  **`FitCurve.parameter_bounds`** gives others a (lower, upper) range with
+  None for an open end. Not `bounds`: the property panel lists fields by name,
+  and an inset already has `bounds`.
+- **A held parameter is not fitted at all**: curve_fit sees a function of
+  the free parameters only. Its uncertainty is 0, it is shown as "held", and
+  it does not count as a degree of freedom in χ²ᵣ. The script defines that
+  function by name (`gaussian_held`), with a comment saying what is held.
+- **Bounds go to `curve_fit(bounds=...)`**, which then uses its bounded
+  method ("trf") instead of Levenberg–Marquardt; without bounds nothing
+  changes, so existing fits give the same numbers.
+- **A fit range** (`fit_range`, added 2026-10-26) fits only the points with
+  x within it; the curve is drawn over the range where there is data, or
+  across all the data with `extend_curve`, and the residuals show the
+  fitted points only. A range is a property of the fit, not of the plot:
+  another fit of the same data may need another range.
+- **A start value outside its bounds is refused** if the user gave it, and
+  moved in if it was guessed from the data: the user never saw that guess.
+  So are every parameter held, a lower bound not below the upper, and names
+  the model does not have; `validate_references` reports such names in a
+  project file.
+
+### Alternatives considered
+
+**Equal lower and upper bounds for a held parameter**: curve_fit refuses
+them, and nearly equal ones distort the covariance. **A held parameter as a
+literal in the model's expression**: the script would no longer show the
+model as it is named, and freeing the parameter again would need a new
+expression.
+
+---
+
+## 0030 — The application icon
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+figscribe had no icon: the window showed the platform's default and the macOS
+Dock Python's rocket. The installers of roadmap task R4.2 will need `.icns`
+for macOS and `.ico` for Windows.
+
+### Decision
+
+- **A pen writing a figure**: a gold nib drawing the Gaussian of the start
+  page's mark in white, on the accent blue, with faint axes. The name is
+  figure and scribe, and the icon shows both without letters: figscribe
+  writes the figure down, as a script.
+- **Two SVG drawings in `gui/icons`, every size made from them.** The full one
+  follows the macOS grid (824 of 1024 px with a margin). Up to 48 px
+  `figscribe-small.svg` is used instead: the whole square, no axes, a bolder
+  curve and a larger pen, which stays recognisable down to 32 px.
+- **`theme.apply` sets the window icon**, rendered once per size from 16 to
+  1024 px, so the Dock and taskbar show it also when figscribe runs from a
+  Python environment rather than an installer.
+- **`packaging/make_icons.py` writes `.icns`, `.ico` and a 1024 px PNG** to
+  `packaging/icons`, with Qt's SVG renderer and Pillow, which Matplotlib
+  already depends on; no new dependency. The files are committed so R4.2 can
+  use them as they are; the script is rerun after a change to the drawing.
+  The `.icns` uses the full drawing at every size, as macOS icons keep their
+  margin even in lists; the `.ico` uses the small one up to 48 px, as the
+  window icon does. Pillow writes no 16 and 32 px entries without Retina
+  scale into `.icns`; macOS scales them from 32 and 64 px.
+
+### Alternatives considered
+
+**Data points with the fit through them** (the first draft): a scientific
+figure, but nothing of the "scribe". **A speech bubble** at the plot: reads
+as a chat application and puts the assistant first, which is an extra; the
+toolbar already uses it for the chat. **A plot over lines of code**: says
+exactly what figscribe does, but looks like a document and is hard to read
+at 16 px. **Letters ("fs")**: need a font in the drawing and say less.
+**One drawing for every size**: at 16 px the margin leaves a blue speck. **Making the platform files at
+release time only**: the installers would then depend on Qt being able to
+render in CI before anyone has seen the result.
+
+---
+
+## 0030 — Points left out of a plot
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Outliers and detector glitches must stay out of a fit, but a paper must not
+hide that they were there, and the data file must stay as measured.
+
+### Decision
+
+- **Rows left out are stored on the plot** (`left_out`, counted from 0), so
+  every fit of it skips them; a fit range stays a property of the fit.
+- **They are drawn apart, in light grey by default**, with their error bars
+  and without a legend entry; color and marker can be set
+  (`left_out_color`, `left_out_marker`: "same" as the plot by default, None
+  for no marker). An explicit color leaves the color cycle alone, so the
+  other plots keep their colors.
+- **A line runs on through them** (asked for by the user): the kept rows are
+  drawn with NaN at the left-out ones, so the line breaks there, and the
+  steps to and from each left-out row are drawn in its color and
+  `left_out_linestyle` ("same" as the plot, "none" for a gap). Joining the
+  kept points across them, as at first, hid where the line was measured.
+- **Leaving out or taking back fits the plot's fits again** in the same undo
+  step, and is refused if a fit would have too few points; a row the data
+  lacks is reported by `validate_references`.
+- **The script keeps the file as it is** and names a mask, `kept`, with a
+  comment listing the rows as they are counted on screen.
+- **Outliers found automatically are proposed, not applied** (decided with
+  the user): points beyond k·σ of the fit without them, σ being the error
+  bar or 1.4826 × the median absolute deviation, fitted again until the set
+  settles. Once confirmed they join the same list, and `left_out_note` says
+  how they were found; the note is the user's to edit.
