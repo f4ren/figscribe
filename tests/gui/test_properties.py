@@ -577,3 +577,34 @@ def test_panel_labels_are_switched_on_and_set_up(
     assert document.history.undo_text == "Remove the panel labels"
     document.history.undo()
     assert _figure(document).panel_labels.style == "A"
+
+
+def _section_fields(panel: PropertyPanel) -> dict[str, list[str]]:
+    return {
+        title: [
+            ".".join(path)
+            for path, editor in panel.editors.items()
+            if section.isAncestorOf(editor.widget)
+        ]
+        for title, section in panel.sections.items()
+    }
+
+
+def test_the_basic_settings_come_first_the_rest_under_more(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_artist(document).id)  # the error bars
+    fields = _section_fields(panel)
+    assert fields["Look"] == ["color", "marker", "linestyle", "capsize"]
+    assert fields["Legend"] == ["label"]
+    assert fields["Data"] == ["axis", "x", "y", "xerr", "yerr"]  # all data stays
+    assert "markersize" in fields["More"] and "band" in fields["More"]
+    assert fields["More"][-2:] == ["visible", "zorder"]
+    assert not panel.sections["More"].expanded
+
+    document.select(_figure(document).id)
+    fields = _section_fields(panel)
+    assert fields["Size"] == ["name", "width_mm", "height_mm"]
+    assert fields["Style"] == ["font_size", "panel_labels"]
+    assert "tick_length" in fields["More"]
+    assert fields["Export"] == ["dpi"]

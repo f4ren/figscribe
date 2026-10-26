@@ -292,6 +292,28 @@ ORDER = [
     "Legend",
     "Export",
 ]
+BASIC = {
+    "LinePlot": ("color", "marker", "linestyle", "linewidth", "label"),
+    "ScatterPlot": ("color", "marker", "size", "edgecolor", "label"),
+    "ErrorbarPlot": ("color", "marker", "linestyle", "capsize", "label"),
+    "Histogram": ("color", "histtype", "density", "label"),
+    "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
+    "ResidualPlot": ("color", "marker", "markersize", "linestyle"),
+    "Annotation": ("text", "color", "fontsize", "position", "arrow_to"),
+    "ReferenceLine": ("color", "linestyle", "linewidth", "label"),
+    "ShadedSpan": ("color", "alpha", "label"),
+    "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
+    "ColorMesh": ("cmap", "norm", "vmin", "vmax", "colorbar"),
+    "Figure": ("name", "width_mm", "height_mm", "font_size", "panel_labels"),
+    "Axes": ("title", "grid", "y_right"),
+}
+"""The settings shown at first, per kind of object, apart from its data and
+position: the most asked for, in the assistant's benchmark and otherwise.
+The rest is under "More", folded, and found by the search."""
+WHOLE = {"Data", "File", "Reading", "Position", "Axes", "Export", "More"}
+"""Sections shown whole: what is plotted and where, not how it looks; and
+the PNG resolution, kept apart from the size (decision 0006)."""
+
 COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
 
@@ -493,6 +515,23 @@ TIPS = {
 }
 """Explanations shown when the mouse rests on a field, by field name, or by
 "Class.field" where the same name means something else there."""
+
+
+def _basic_first(groups: dict[str, list[str]], basic: tuple[str, ...] | None):
+    """Move the fields that are not `basic` from their sections to "More",
+    in their order, before what "More" has; drop the sections left empty."""
+    if basic is None:
+        return
+    moved = []
+    for title in list(groups):
+        if title in WHOLE:
+            continue
+        moved += [n for n in groups[title] if n not in basic]
+        groups[title] = [n for n in groups[title] if n in basic]
+        if not groups[title]:
+            del groups[title]
+    if moved:
+        groups["More"] = [*moved, *groups.get("More", [])]
 
 
 FILTER_DELAY_MS = 150
@@ -876,6 +915,7 @@ class PropertyPanel(QScrollArea):
             groups.setdefault(SECTIONS.get(name, fallback), []).append(name)
         if "Look" in groups:
             groups["Look"].sort(key=lambda n: LOOK.index(n) if n in LOOK else 99)
+        _basic_first(groups, BASIC.get(type(obj).__name__))
         titles = {_section_name(n): n for n in nested}
         if isinstance(obj, Axes):
             groups.setdefault("Axes", [])
