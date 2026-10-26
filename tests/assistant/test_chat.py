@@ -259,6 +259,48 @@ def test_openai_errors_are_explained() -> None:
         OpenAIModel(Provider("openai", "", "http://x/v1")).respond(["hi"], print)
 
 
+GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+
+def test_gemini_takes_its_own_key_from_the_environment(monkeypatch) -> None:
+    """An OpenAI key is never sent to Google."""
+    pytest.importorskip("openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    gemini = Provider("openai", "gemini-2.5-flash", GEMINI)
+    assert OpenAIModel(gemini).client.api_key != "sk-openai"
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    assert OpenAIModel(gemini).client.api_key == "gemini-key"
+    assert OpenAIModel(gemini, "typed").client.api_key == "typed"
+    local = Provider("openai", "m", "http://localhost:1234/v1")
+    assert OpenAIModel(local).client.api_key == "sk-openai"
+
+
+def test_a_refused_gemini_key_names_its_variable() -> None:
+    pytest.importorskip("openai")
+
+    def refuse(method, path, body):
+        return json_reply(401, {"error": {"message": "API key not valid"}})
+
+    with serve(refuse) as (url, _):
+        model = OpenAIModel(Provider("openai", "gemini-2.5-flash", f"{url}/v1"))
+        model.key_variable = "GEMINI_API_KEY"
+        with pytest.raises(ChatError, match="Set GEMINI_API_KEY"):
+            model.respond(["hi"], lambda _: None)
+
+
+def test_model_names_drop_googles_prefix() -> None:
+    pytest.importorskip("openai")
+
+    def models(method, path, body):
+        data = [{"id": "models/gemini-2.5-pro"}, {"id": "models/gemini-2.5-flash"}]
+        return json_reply(200, {"object": "list", "data": data})
+
+    with serve(models) as (url, _):
+        provider = Provider("openai", "", f"{url}/v1beta/openai/")
+        assert list_models(provider) == ["gemini-2.5-flash", "gemini-2.5-pro"]
+
+
 def test_the_claude_client_reports_a_refused_key(monkeypatch) -> None:
     """The SDK path, against a local server that refuses every request."""
     pytest.importorskip("anthropic")
@@ -418,6 +460,19 @@ def test_the_dialog_reports_an_unreachable_server(qtbot) -> None:
     assert "Cannot reach http://localhost:11434/v1" in dialog.status.text()
     dialog.kind.setCurrentIndex(dialog.kind.findData("anthropic"))
     assert dialog.provider() == Provider()  # Claude, with the default model
+
+
+def test_choosing_gemini_in_the_dialog(qtbot) -> None:
+    from figscribe.gui.assistantdialog import AssistantDialog
+
+    dialog = AssistantDialog(Provider("openai", "", "http://localhost:11434/v1", False))
+    qtbot.addWidget(dialog)
+    dialog.server.setCurrentText("Google Gemini")
+    assert dialog.url.text() == GEMINI
+    assert dialog.vision.isChecked()
+    assert "GEMINI_API_KEY" in dialog.key.placeholderText()
+    dialog.server.setCurrentText("ChatGPT (OpenAI)")
+    assert "OPENAI_API_KEY" in dialog.key.placeholderText()
 
 
 def test_the_window_remembers_the_model_but_never_the_key(qtbot, tmp_path) -> None:

@@ -791,6 +791,14 @@ legible at 16 px.
 `packaging/make_icons.py` writes `packaging/icons/figscribe.icns`, `.ico` and
 a 1024 px PNG, which R4.2 can use as they are.
 
+### R7 The assistant without paying per request — S
+
+Asked for by the user (2026-10-26): can a subscription (Claude Pro/Max,
+ChatGPT Plus) or a free model be used? A subscription cannot sign in to the
+API from another application, but it can drive figscribe through MCP.
+Offer Google Gemini, whose API has a free tier, as a server by name, and say
+in the README which ways cost nothing or use a subscription.
+
 ---
 
 ## Phase 5 — Later, optional
