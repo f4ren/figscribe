@@ -1417,7 +1417,7 @@ where the user means, and the menu's middle is a start that the panel
 corrects in one field. **Dragging in the preview** is left for later, like
 the notes' dragging was added after notes.
 
-## 0035 — Analysis as derived plots, not a statistics suite
+## 0036 — Analysis as derived plots, not a statistics suite
 
 **Date:** 2026-10-26
 **Status:** accepted

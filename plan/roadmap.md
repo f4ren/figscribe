@@ -641,7 +641,7 @@ In order of demand:
    temperatures, with a colormap across the series.
 7. **Contour lines** and filled contours for 2-D data.
 8. **Bar chart** for categories.
-9. **Allan deviation** (asked for by the user, 2026-10-26; decision 0035):
+9. **Allan deviation** (asked for by the user, 2026-10-26; decision 0036):
    σ_y(τ) of a time series against τ, on log-log axes, the standard figure
    for the stability of clocks, lasers, gyroscopes and sensors. A plot type
    of its own, computed like a histogram is: the model stores what is
@@ -762,7 +762,7 @@ is still asked for when plotting measurements. Decide each before building:
 - **Smoothing** (moving average, Savitzky–Golay) as a derived plot.
 - **Peak finding** (`scipy.signal.find_peaks`) that adds notes at the peaks.
 
-*Decided in part* (2026-10-26, decision 0035): an analysis is in scope when
+*Decided in part* (2026-10-26, decision 0036): an analysis is in scope when
 it is a standard figure of a field, a few lines of NumPy or SciPy in the
 script, and a plot with a few settings; the model stores what is computed,
 never the result. The Allan deviation is the first (F4.9). The three above
@@ -942,7 +942,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
-| F10 | Scale/offset per column, smoothing, peak finding: in scope or not? (Judged by decision 0035.) |
+| F10 | Scale/offset per column, smoothing, peak finding: in scope or not? (Judged by decision 0036.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
 | Phase 5 | German user interface? |
