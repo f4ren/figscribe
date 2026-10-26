@@ -46,7 +46,7 @@ from figscribe.commands import (
     remove_axes,
     remove_source,
 )
-from figscribe.commands.core import walk
+from figscribe.commands.core import noun, walk
 from figscribe.examples import bundled_example
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import markings, theme
@@ -57,9 +57,9 @@ from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
-from figscribe.gui.names import artist_name
+from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
-from figscribe.gui.plotdialog import PlotDialog, add_plot
+from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
@@ -73,6 +73,7 @@ from figscribe.model import (
     Axes,
     AxisSpec,
     Colorbar,
+    ColumnRef,
     FitCurve,
     Histogram,
     ImagePlot,
@@ -474,7 +475,8 @@ class MainWindow(QMainWindow):
                 self.add_plot()
             return True
         steps = [InsertItem(None, "sources", source)]
-        steps += self._plot_steps(figure, artist, dialog)
+        axes = _axes_with_id(figure, self._target_axes(figure))
+        steps += self._plot_steps(figure, artist, axes, dialog.unit_of)
         self._push(Macro(f"Add {Path(source.path).name} and plot", steps))
         self.document.select(artist.id)
         return True
@@ -513,48 +515,83 @@ class MainWindow(QMainWindow):
         self.document.select(image.id)
         return True
 
-    def _plot_steps(self, figure, artist, dialog) -> list:
-        """Put `artist` into the target axes, naming its empty axes after the
-        plotted columns and their units."""
+    def _plot_steps(self, figure, artist, axes: Axes | None, unit_of=None) -> list:
+        """Put `artist` into `axes`, or into a new panel if None; while the
+        panel is empty, name its axes after the plotted columns and units."""
+        unit_of = unit_of or (lambda column: None)
         if isinstance(artist, Histogram):
             values = artist.values
             labels = {
-                "x": AxisSpec(
-                    label=str(values.column), unit=dialog.unit_of(values.column)
-                ),
+                "x": AxisSpec(label=str(values.column), unit=unit_of(values.column)),
                 "y": AxisSpec(label="Count"),
             }
-        else:
+        elif isinstance(getattr(artist, "x", None), ColumnRef):
             labels = {
-                name: AxisSpec(label=str(ref.column), unit=dialog.unit_of(ref.column))
+                name: AxisSpec(label=str(ref.column), unit=unit_of(ref.column))
                 for name, ref in (("x", artist.x), ("y", artist.y))
             }
-        axes_id = self._target_axes(figure)
-        if axes_id is None:
-            axes = Axes(artists=[artist], **labels)
-            return [InsertItem(figure.id, "axes", axes)]
-        axes = next(a for a in figure.axes if a.id == axes_id)
+        else:
+            labels = {}  # an image: its colour bar says what it shows
+        if axes is None:
+            return [InsertItem(figure.id, "axes", Axes(artists=[artist], **labels))]
         steps = [
-            SetField(axes_id, (name,), spec)
+            SetField(axes.id, (name,), spec)
             for name, spec in labels.items()
             if getattr(axes, name).label is None and not axes.artists
         ]
-        return [*steps, InsertItem(axes_id, "artists", artist)]
+        return [*steps, InsertItem(axes.id, "artists", artist)]
 
     def add_plot(self) -> None:
-        """Add a plot of the data's columns to the selected axes."""
+        """Add a plot of the data's columns, to the panel chosen in the dialog."""
         columns = self.document.column_choices()
         arrays = self.document.array_choices()
         figure = self.document.figure
         if not (columns or arrays) or figure is None:
             self.show_error("Nothing to plot", "Import a data file first.")
             return
-        dialog = PlotDialog(columns, self, arrays=arrays)
+        target = self._target_axes(figure)
+        targets = [(panel_name(figure, axes), axes.id) for axes in figure.axes]
+        if figure.axes:
+            targets.append(("A new panel to the right", NEW_PANEL))
+        dialog = PlotDialog(
+            columns,
+            self,
+            arrays=arrays,
+            targets=targets,
+            target=target,
+            data=self.document.data,
+            summary=self._data_summary(columns),
+        )
         if not self.run_dialog(dialog):
             return
         artist = dialog.artist()
-        self._push(add_plot(figure, self._target_axes(figure), artist))
+        steps = []
+        if dialog.target_id() == NEW_PANEL:
+            beside = _axes_with_id(figure, target)
+            if beside.inset is not None:
+                beside = _axes_with_id(figure, beside.inset.parent)
+            command, axes = add_panel(self.document.project, beside.id, "right")
+            steps.append(command)
+        else:
+            axes = _axes_with_id(figure, dialog.target_id())
+        steps += self._plot_steps(figure, artist, axes)
+        self._push(Macro(f"Add {noun(artist)}", steps))
         self.document.select(artist.id)
+
+    def _data_summary(self, columns) -> str:
+        """ "scan.csv · 41 rows", or how many files there are."""
+        sources = self.document.project.sources
+        if len(sources) != 1:
+            return f"{len(sources)} data files"
+        source = sources[0]
+        name = Path(source.path).name
+        rows = getattr(source, "row_count", None)
+        if rows is None and columns:
+            try:
+                rows = len(self.document.data(columns[0][1]))
+            except Exception:  # noqa: BLE001 - the summary is only a courtesy
+                return name
+        return name if rows is None else f"{name} · {rows} rows"
 
     def _target_axes(self, figure) -> str | None:
         """The selected axes, the axes of the selected plot, or the first one."""
@@ -1108,3 +1145,7 @@ def _dropped_files(event) -> list[Path]:
     if not mime.hasUrls():
         return []
     return [Path(url.toLocalFile()) for url in mime.urls() if url.isLocalFile()]
+
+
+def _axes_with_id(figure, oid: str | None) -> Axes | None:
+    return next((axes for axes in figure.axes if axes.id == oid), None)

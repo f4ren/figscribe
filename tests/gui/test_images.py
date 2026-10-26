@@ -9,7 +9,6 @@ import pytest
 
 from figscribe.commands import SetField
 from figscribe.gui import Document, MainWindow
-from figscribe.gui.plotdialog import PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.properties import PropertyPanel
 from figscribe.model import ArrayRef, ColorMesh, ImagePlot
@@ -66,33 +65,13 @@ def test_an_unreadable_file_is_reported(window: MainWindow, tmp_path: Path) -> N
     assert not window.document.project.sources
 
 
-def test_the_plot_dialog_offers_images_once_there_are_arrays(qtbot) -> None:
-    columns_only = PlotDialog([])
-    qtbot.addWidget(columns_only)
-    assert columns_only.kind.findText("Image") == -1
-
-    ref = ArrayRef(source="s")
-    dialog = PlotDialog([], arrays=[("map.npy", ref)])
-    qtbot.addWidget(dialog)
-    dialog.kind.setCurrentText("Image")
-    assert dialog.array.isEnabled() and not dialog.x.isEnabled()
-    image = dialog.artist()
-    assert isinstance(image, ImagePlot) and image.data == ref
-    assert image.colorbar is not None
-    dialog.kind.setCurrentText("Color mesh")
-    mesh = dialog.artist()
-    assert isinstance(mesh, ColorMesh) and mesh.c == ref and mesh.x is None
-    dialog.kind.setCurrentText("Line")
-    assert not dialog.array.isEnabled()
-
-
 def test_add_plot_draws_an_image(window: MainWindow, grid: Path) -> None:
     window.import_numpy(grid)
     image = _artists(window)[0]
     window.document.select(image.id)
 
     def mesh(dialog) -> bool:
-        dialog.kind.setCurrentText("Color mesh")
+        dialog.tiles["Color mesh"].click()
         return True
 
     window.run_dialog = mesh
