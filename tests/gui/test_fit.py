@@ -419,3 +419,34 @@ def test_points_outside_the_range_can_be_drawn_like_left_out(
     assert not dialog.fit().outside_as_left_out
     dialog.outside.click()
     assert dialog.fit().outside_as_left_out
+
+
+# --- the result card ------------------------------------------------------------
+
+
+def test_the_result_tells_the_residuals_and_can_be_copied(
+    qtbot, document: Document
+) -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    fit = FitCurve(
+        target=_data(document).id, model=PredefinedFit(name="gaussian"), label="peak"
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(SetField(_data(document).id, ("left_out",), [3]))
+    document.push(refit(document.project, fit.id, document.data))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(fit.id)
+    shown = {w.text(): w for w in panel.findChildren(QLabel)}
+    assert "40 of 41" in shown and "Residual RMS" in shown
+    largest = next(t for t in shown if t.endswith(")") and "row" in t)
+    assert largest.split("row ")[1].rstrip(")").isdigit()
+    value = next(w for t, w in shown.items() if "±" in t)
+    assert value.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
+    panel.copy_result_button.click()
+    copied = QApplication.clipboard().text()
+    assert copied.startswith("peak: Gaussian fit to ")
+    assert "mu = 4.96" in copied and "Residual RMS" in copied
+    assert "40 of 41 points" in copied
