@@ -16,8 +16,7 @@ asking what was meant.
 - About 650 tests run in about 25 s; CI is green on Linux, Windows and macOS
   with Python 3.11 and 3.13. Decisions 0001 to 0026 are in
   [`docs/decisions.md`](../docs/decisions.md).
-- `main` is behind `develop` (last merged: PR #31). PyPI still has the 0.0.2
-  placeholder; 0.1.0 is prepared (R4).
+- 0.1.0 is released (2026-10-26, R4): `main` at PR #78, on PyPI.
 
 The findings below marked **(verified)** were reproduced on 2026-10-23; the
 reproduction is given so a session can turn it into a failing test first.
@@ -642,6 +641,32 @@ In order of demand:
    temperatures, with a colormap across the series.
 7. **Contour lines** and filled contours for 2-D data.
 8. **Bar chart** for categories.
+9. **Allan deviation** (asked for by the user, 2026-10-26; decision 0035):
+   σ_y(τ) of a time series against τ, on log-log axes, the standard figure
+   for the stability of clocks, lasers, gyroscopes and sensors. A plot type
+   of its own, computed like a histogram is: the model stores what is
+   computed, the renderer and the script compute it with the same NumPy.
+   - **Input**: one column of fractional frequency values y, or of phase
+     x in s; the sample interval τ0 as a number, or from a column of times
+     (refused, with a message, when the times are not evenly spaced).
+   - **Variant**: overlapping ADEV first. From phase x (for frequency data
+     x = τ0 · cumsum(y), with a leading 0), N phase points and τ = m·τ0:
+     σ²(τ) = Σ (x[i+2m] − 2x[i+m] + x[i])² / (2 τ² (N − 2m)). Modified
+     ADEV, Hadamard deviation and time deviation later, as a choice.
+   - **τ values**: octaves (m = 1, 2, 4, …) by default, or decades (1, 2,
+     5, 10, …), or every m; up to m = (N − 1) // 2.
+   - **Error bars**: σ / √(N − 2m) at first; χ² confidence intervals
+     (equivalent degrees of freedom, `scipy.stats.chi2`) later.
+   - **Adding one** sets both axes of the panel to log and labels them
+     τ (s) and σ_y(τ), as adding residuals sets up their panel.
+   - **The script** defines a short function `overlapping_adev(phase, tau0,
+     m)` and calls it; no `allantools`.
+   - **Not offered**: points left out (F2), which would cut the series;
+     NaN in the column is a problem in the list, not silently skipped.
+   - **Tests**: the reference values in NIST SP 1065 (section 12, the
+     1000-point test set), white frequency noise falling as τ^(−1/2) with
+     the known level, both inputs (frequency and phase) giving the same
+     curve, and the pixel equivalence of the script.
 
 ### F5 Axes for publication — M
 
@@ -736,6 +761,12 @@ is still asked for when plotting measurements. Decide each before building:
   written as one line in the script. Small, but touches the non-goal.
 - **Smoothing** (moving average, Savitzky–Golay) as a derived plot.
 - **Peak finding** (`scipy.signal.find_peaks`) that adds notes at the peaks.
+
+*Decided in part* (2026-10-26, decision 0035): an analysis is in scope when
+it is a standard figure of a field, a few lines of NumPy or SciPy in the
+script, and a plot with a few settings; the model stores what is computed,
+never the result. The Allan deviation is the first (F4.9). The three above
+are judged by the same points when they come up.
 
 ---
 
@@ -833,6 +864,10 @@ The version is 0.1.0, the classifier "Alpha", the release notes are in
 state installs into a fresh environment, and `figscribe script` writes a
 script from the bundled example that runs there. From now on, project files
 of a release must open in later ones (rule 9 above).
+**Released** the same day: PR #78 brought `develop` into `main`, the GitHub
+release `v0.1.0` ran `release.yml`, and `pip install "figscribe[chat]"` from
+PyPI into a fresh environment starts the window and writes a working script
+from the example.
 
 ### R5 The assistant: measure models (carried over from the brief) — M
 
@@ -907,7 +942,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
-| F10 | Scale/offset per column, smoothing, peak finding: in scope or not? |
+| F10 | Scale/offset per column, smoothing, peak finding: in scope or not? (Judged by decision 0035.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
 | Phase 5 | German user interface? |
