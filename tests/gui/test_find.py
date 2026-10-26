@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFormLayout
 
@@ -154,3 +154,15 @@ def test_the_arrow_keys_choose_another_entry(window: MainWindow) -> None:
     palette = _palette(window, "add panel", down=1)
     assert palette.chosen is matching(palette.entries, "add panel")[1]
     assert len(window.document.figure.axes) == 2
+
+
+def test_esc_elsewhere_leaves_the_search_alone(window: MainWindow, qtbot) -> None:
+    """Esc clears the search only in it: in the preview it drops a zoom."""
+    _search(window, qtbot, "tick")
+    preview = window.preview
+    preview.setFocus()
+    preview.zoom(QPointF(preview.width() / 2, preview.height() / 2), 2.0)
+    assert preview.view
+    QTest.keyClick(preview, Qt.Key.Key_Escape)
+    assert window.properties.search.text() == "tick"
+    assert not preview.view  # the view is back at the model's ranges
