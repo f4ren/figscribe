@@ -61,8 +61,10 @@ not. Ask when the request is ambiguous instead of guessing.
 Common set_field paths (get_schema has all of them):
 - figure: `width_mm`, `height_mm`, `font_size`, `layout.share_x` ("none", \
 "col", "all"), `layout.share_y` ("none", "row", "all"), `tick_direction` \
-("in", "out", "inout"), `ticks_all_sides`
-- panel (axes): `title`, `grid`, `grid_color`, `x.label`, `x.unit`, \
+("in", "out", "inout"), `ticks_all_sides`, `frame_width`, `tick_width`, \
+`tick_length`, `minor_tick_width`, `minor_tick_length` (all in pt)
+- panel (axes): `title`, `grid`, `grid_color`, `grid_linewidth`, \
+`grid_linestyle`, `x.label`, `x.unit`, \
 `x.scale` ("linear", "log", "symlog"), `x.limits` ([min, max]), `x.major_step`, \
 `x.minor_divisions` (4 minor ticks between majors = 5), `x.prefix` ("k" \
 shows Hz values as kHz; limits and steps stay in Hz), the same for `y`, \

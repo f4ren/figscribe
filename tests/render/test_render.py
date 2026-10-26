@@ -437,6 +437,33 @@ def test_tick_style_and_prefixes(data, ref) -> None:
     assert tick._tickdir == "in"
 
 
+def test_frame_ticks_and_grid_lines_have_widths(data, ref) -> None:
+    axes = Axes(
+        grid=True,
+        grid_linewidth=0.4,
+        grid_linestyle=":",
+        artists=[LinePlot(x=ref("t"), y=ref("U"))],
+    )
+    figure = Figure(
+        frame_width=1.2,
+        tick_width=1.0,
+        tick_length=5.0,
+        minor_tick_width=0.7,
+        minor_tick_length=2.5,
+        axes=[axes],
+    )
+    fig = render(figure, data)
+    fig.canvas.draw()
+    ax = fig.axes[0]
+    assert {spine.get_linewidth() for spine in ax.spines.values()} == {1.2}
+    major = ax.xaxis.get_major_ticks()[0].tick1line
+    minor = ax.yaxis.get_minor_ticks()[0].tick1line
+    assert (major.get_markeredgewidth(), major.get_markersize()) == (1.0, 5.0)
+    assert (minor.get_markeredgewidth(), minor.get_markersize()) == (0.7, 2.5)
+    line = ax.xaxis.get_major_ticks()[0].gridline
+    assert (line.get_linewidth(), line.get_linestyle()) == (0.4, ":")
+
+
 def _drawn(fig) -> float:
     """Seconds to draw `fig` as the preview does, ticks and all."""
     start = time.perf_counter()
