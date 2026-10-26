@@ -19,6 +19,7 @@ KINDS = {
     "left_out_color": "color",
     "marker": "marker",
     "left_out_marker": "marker",
+    "left_out_linestyle": "line style",
     "linestyle": "line style",
     "cmap": "color map",
     "location": "legend location",
@@ -42,6 +43,8 @@ def style_problem(name: str, value: object) -> str | None:
     `name` is not a style field."""
     kind = KINDS.get(name)
     if kind is None or not isinstance(value, str) or _accepted(kind, value):
+        return None
+    if name.startswith("left_out_") and value == "same":  # as the plot has it
         return None
     return f"{value!r} is not a {kind}; {EXAMPLES[kind]}"
 

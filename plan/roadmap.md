@@ -561,6 +561,16 @@ settles); "Leave them out" shows the fit without them, and only "Add fit" or
 the panel lets the user edit and the script prints. Also fixed: the dialog
 fitted the plot's left-out rows, which `refit` skipped.
 
+**The look, as the user asked (2026-10-26):** markers are chosen from a list
+of every Matplotlib marker, each drawn (`gui/markers.py`), instead of four
+buttons and a text field. A left-out point's marker is "like the plot" by
+default (`"same"`), and "no marker" means none, as for the plot. A line runs
+on through the left-out rows in their color, with `left_out_linestyle` (like
+the plot by default, "none" for a gap), instead of joining the kept points
+across them. *Follow-up after U2 is merged:* remove the old `MarkerEditor`
+and its four `MARKERS` from `gui/properties.py`, no longer used; they stay
+until then because U2 changes the lines around them.
+
 ### F3 Panel labels for journals — S
 
 (a), (b), (c) on each panel, automatically in reading order: style `(a)`,

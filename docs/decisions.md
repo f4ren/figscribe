@@ -1233,8 +1233,14 @@ hide that they were there, and the data file must stay as measured.
   every fit of it skips them; a fit range stays a property of the fit.
 - **They are drawn apart, in light grey by default**, with their error bars
   and without a legend entry; color and marker can be set
-  (`left_out_color`, `left_out_marker`). An explicit color leaves the color
-  cycle alone, so the other plots keep their colors.
+  (`left_out_color`, `left_out_marker`: "same" as the plot by default, None
+  for no marker). An explicit color leaves the color cycle alone, so the
+  other plots keep their colors.
+- **A line runs on through them** (asked for by the user): the kept rows are
+  drawn with NaN at the left-out ones, so the line breaks there, and the
+  steps to and from each left-out row are drawn in its color and
+  `left_out_linestyle` ("same" as the plot, "none" for a gap). Joining the
+  kept points across them, as at first, hid where the line was measured.
 - **Leaving out or taking back fits the plot's fits again** in the same undo
   step, and is refused if a fit would have too few points; a row the data
   lacks is reported by `validate_references`.

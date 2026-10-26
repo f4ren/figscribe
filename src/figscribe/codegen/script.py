@@ -47,7 +47,9 @@ from figscribe.render.figure import (
     CURVE_POINTS,
     LEFT_OUT_COLOR,
     MM_PER_INCH,
+    NO_LINE,
     DataProvider,
+    like_the_plot,
     tick_ranges,
 )
 from figscribe.render.labels import axis_label, unit_shown
@@ -884,59 +886,74 @@ class _Writer:
         return all(bool(np.all(np.isfinite(self.data(r)))) for r in refs)
 
     def _points(self, ax: str, artist, common: dict[str, str]) -> None:
-        """A line, scatter or error bar plot; its left-out rows apart."""
+        """A line, scatter or error bar plot; the line runs on through its
+        left-out rows, in their color, and their points are drawn apart."""
+        x, y = self.column(artist.x), self.column(artist.y)
+        errors = {
+            name: self.column(ref)
+            for name in ("xerr", "yerr")
+            if (ref := getattr(artist, name, None)) is not None
+        }
         mask = self.kept.get(artist.id)
-        parts = [(f"[{mask}]" if mask else "", {}, common)]
-        if mask:
-            apart = {
-                "color": _str(artist.left_out_color or LEFT_OUT_COLOR),
-                "marker": _str(
-                    artist.left_out_marker or getattr(artist, "marker", None) or "o"
-                ),
-            }
-            alone = {k: v for k, v in common.items() if k != "label"}
-            parts.append((f"[~{mask}]", apart, alone))
-        for rows, style, options in parts:
-            if style:
-                self.emit("# The rows left out, apart and without a legend entry.")
-            x, y = self.column(artist.x) + rows, self.column(artist.y) + rows
+        shown = f"np.where({mask}, {y}, np.nan)" if mask else y
+        self._part(ax, artist, x, shown, errors, {}, common)
+        if not mask:
+            return
+        color = _str(artist.left_out_color or LEFT_OUT_COLOR)
+        apart = {k: v for k, v in common.items() if k != "label"}
+        linestyle = like_the_plot(artist, "linestyle")
+        if linestyle not in NO_LINE:
+            steps = f"{mask}_steps"
+            self.emit(
+                "# The line runs on through the rows left out, in their color.",
+                f"{steps} = ~({mask}[:-1] & {mask}[1:])",
+            )
+            pieces = [
+                f"np.column_stack([{v}[:-1], {v}[1:], np.full({v}.size - 1, np.nan)])"
+                f"[{steps}].ravel()"
+                for v in (x, y)
+            ]
+            kwargs = {"color": color, "linestyle": _str(linestyle)}
             if isinstance(artist, LinePlot):
-                kwargs = (
-                    {"color": style["color"]} if style else _some(color=artist.color)
-                )
-                kwargs["linestyle"] = '"none"' if style else _str(artist.linestyle)
                 kwargs["linewidth"] = _num(artist.linewidth)
-                marker = style.get("marker") or (
-                    _str(artist.marker) if artist.marker is not None else None
-                )
-                if marker is not None:
-                    kwargs |= {"marker": marker, "markersize": _num(artist.markersize)}
-                self.call(f"{ax}.plot", x, y, **kwargs, **options)
-            elif isinstance(artist, ScatterPlot):
-                kwargs = {"s": _num(artist.size)}
-                kwargs |= (
-                    {"color": style["color"]} if style else _some(color=artist.color)
-                )
-                kwargs["marker"] = style.get("marker") or _str(artist.marker)
-                kwargs |= _some(edgecolors=artist.edgecolor)
-                self.call(f"{ax}.scatter", x, y, **kwargs, **options)
-            else:
-                kwargs = {}
-                if artist.xerr is not None:
-                    kwargs["xerr"] = self.column(artist.xerr) + rows
-                if artist.yerr is not None:
-                    kwargs["yerr"] = self.column(artist.yerr) + rows
-                kwargs |= (
-                    {"color": style["color"]} if style else _some(color=artist.color)
-                )
-                kwargs |= {
-                    "linestyle": '"none"' if style else _str(artist.linestyle),
-                    "marker": style.get("marker") or _str(artist.marker),
-                    "markersize": _num(artist.markersize),
-                    "capsize": _num(artist.capsize),
-                    "elinewidth": _num(artist.elinewidth),
-                }
-                self.call(f"{ax}.errorbar", x, y, **kwargs, **options)
+            self.call(f"{ax}.plot", *pieces, **kwargs, **apart)
+        marker = like_the_plot(artist, "marker")
+        if marker is None and not isinstance(artist, ErrorbarPlot):
+            return
+        self.emit("# The rows left out, apart and without a legend entry.")
+        out = {name: f"{column}[~{mask}]" for name, column in errors.items()}
+        style = {"color": color, "marker": _str(marker or "none")}
+        self._part(ax, artist, f"{x}[~{mask}]", f"{y}[~{mask}]", out, style, apart)
+
+    def _part(self, ax, artist, x, y, errors, style, options) -> None:
+        """One call that draws points as the plot does, `style` over its own."""
+        color = {"color": style["color"]} if style else _some(color=artist.color)
+        if isinstance(artist, LinePlot):
+            kwargs = color | {
+                "linestyle": '"none"' if style else _str(artist.linestyle),
+                "linewidth": _num(artist.linewidth),
+            }
+            marker = style.get("marker") or (
+                _str(artist.marker) if artist.marker is not None else None
+            )
+            if marker is not None:
+                kwargs |= {"marker": marker, "markersize": _num(artist.markersize)}
+            self.call(f"{ax}.plot", x, y, **kwargs, **options)
+        elif isinstance(artist, ScatterPlot):
+            kwargs = {"s": _num(artist.size)} | color
+            kwargs["marker"] = style.get("marker") or _str(artist.marker)
+            kwargs |= _some(edgecolors=artist.edgecolor)
+            self.call(f"{ax}.scatter", x, y, **kwargs, **options)
+        else:
+            kwargs = dict(errors) | color
+            kwargs |= {
+                "linestyle": '"none"' if style else _str(artist.linestyle),
+                "marker": style.get("marker") or _str(artist.marker),
+                "markersize": _num(artist.markersize),
+                "capsize": _num(artist.capsize),
+                "elinewidth": _num(artist.elinewidth),
+            }
+            self.call(f"{ax}.errorbar", x, y, **kwargs, **options)
 
     def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
         if fit.id not in self.fits:

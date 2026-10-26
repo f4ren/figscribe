@@ -144,6 +144,7 @@ FIELD_NAMES = {
     "left_out": "Rows left out",
     "left_out_color": "Left-out color",
     "left_out_marker": "Left-out marker",
+    "left_out_linestyle": "Left-out line style",
     "left_out_note": "Why left out",
     "result": "Result",
     "uncertainties": "Uncertainties (1σ)",

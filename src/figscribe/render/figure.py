@@ -40,6 +40,7 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
 )
+from figscribe.model.artists import LIKE_THE_PLOT
 from figscribe.model.validate import FITTABLE, unequal_columns
 from figscribe.render.labels import axis_label
 from figscribe.render.layout import (
@@ -314,9 +315,11 @@ LEFT_OUT_COLOR = "0.7"
 
 
 def _draw_points(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
-    """A line, scatter or error bar plot: the kept points as styled, then the
-    left-out ones apart in their own color, without a legend entry. Each
-    drawn part carries `rows`, the data rows it shows, for clicks."""
+    """A line, scatter or error bar plot. With rows left out: the kept rows as
+    styled, the line broken at the left-out ones; the line running on through
+    them in their color; then their markers and error bars, without a legend
+    entry. Each part that shows points carries `rows`, its data rows, for
+    clicks."""
     from figscribe.fit import FitError, kept
 
     columns = {
@@ -329,56 +332,95 @@ def _draw_points(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
         shown = kept(count, artist.left_out)
     except FitError as exc:
         raise DataError(f"{artist.label or artist.kind}: {exc}") from None
-    parts = [(shown, {}, common)]
     if artist.left_out:
-        apart = {
-            "color": artist.left_out_color or LEFT_OUT_COLOR,
-            "marker": artist.left_out_marker or getattr(artist, "marker", None) or "o",
-        }
-        parts.append((~shown, apart, {**common, "label": "_nolegend_"}))
-    for rows, style, options in parts:
-        values = {name: column[rows] for name, column in columns.items()}
-        if isinstance(artist, LinePlot):
-            drawn = ax.plot(
-                values["x"],
-                values["y"],
-                color=style.get("color", artist.color),
-                linestyle="none" if style else artist.linestyle,
-                linewidth=artist.linewidth,
-                marker=style.get("marker", artist.marker),
-                markersize=artist.markersize,
-                **options,
-            )[0]
-        elif isinstance(artist, ScatterPlot):
-            drawn = ax.scatter(
-                values["x"],
-                values["y"],
-                s=artist.size,
-                color=style.get("color", artist.color),
-                marker=style.get("marker", artist.marker),
-                edgecolors=artist.edgecolor,
-                **options,
-            )
-        else:
-            container = ax.errorbar(
-                values["x"],
-                values["y"],
-                xerr=values.get("xerr"),
-                yerr=values.get("yerr"),
-                color=style.get("color", artist.color),
-                linestyle="none" if style else artist.linestyle,
-                marker=style.get("marker", artist.marker),
-                markersize=artist.markersize,
-                capsize=artist.capsize,
-                elinewidth=artist.elinewidth,
-                **options,
-            )
-            # A container has no gid of its own; tag every part so a click on
-            # a cap or a bar maps back to the artist as well.
-            for part in container.get_children():
-                part.set_gid(artist.id)
-            drawn = container.lines[0]
-        drawn.rows = np.flatnonzero(rows)
+        columns["y"] = np.where(shown, columns["y"], np.nan)
+    _draw_part(artist, ax, columns, {}, common).rows = np.arange(count)
+    if not artist.left_out:
+        return
+    color = artist.left_out_color or LEFT_OUT_COLOR
+    apart = {**common, "label": "_nolegend_"}
+    linestyle = like_the_plot(artist, "linestyle")
+    if linestyle not in NO_LINE:
+        x, y = columns["x"], np.asarray(data(artist.y), dtype=float)
+        touching = ~(shown[:-1] & shown[1:])
+        width = {"linewidth": artist.linewidth} if hasattr(artist, "linewidth") else {}
+        ax.plot(
+            _segments(x)[touching].ravel(),
+            _segments(y)[touching].ravel(),
+            color=color,
+            linestyle=linestyle,
+            **width,
+            **apart,
+        )
+    marker = like_the_plot(artist, "marker")
+    if marker is None and not isinstance(artist, ErrorbarPlot):
+        return  # nothing to show of the points themselves
+    out = ~shown
+    values = {name: column[out] for name, column in columns.items()}
+    values["y"] = np.asarray(data(artist.y), dtype=float)[out]
+    style = {"color": color, "marker": marker or "none", "linestyle": "none"}
+    _draw_part(artist, ax, values, style, apart).rows = np.flatnonzero(out)
+
+
+NO_LINE = (None, "none", "None", "", " ")
+"""Line styles that draw no line."""
+
+
+def like_the_plot(artist, name: str):
+    """The left-out points' `name` ("marker", "linestyle"): the plot's own
+    when set to "same"."""
+    value = getattr(artist, f"left_out_{name}", "none")
+    return getattr(artist, name, None) if value == LIKE_THE_PLOT else value
+
+
+def _segments(values: np.ndarray) -> np.ndarray:
+    """Each step from one row to the next as (from, to, NaN), one per row."""
+    gap = np.full(values.size - 1, np.nan)
+    return np.column_stack([values[:-1], values[1:], gap])
+
+
+def _draw_part(artist, ax: MplAxes, values: dict, style: dict, options: dict):
+    """Draw `values` as the plot does, with `style` over its own; return the
+    Matplotlib artist that shows the points."""
+    if isinstance(artist, LinePlot):
+        return ax.plot(
+            values["x"],
+            values["y"],
+            color=style.get("color", artist.color),
+            linestyle=style.get("linestyle", artist.linestyle),
+            linewidth=artist.linewidth,
+            marker=style.get("marker", artist.marker),
+            markersize=artist.markersize,
+            **options,
+        )[0]
+    if isinstance(artist, ScatterPlot):
+        return ax.scatter(
+            values["x"],
+            values["y"],
+            s=artist.size,
+            color=style.get("color", artist.color),
+            marker=style.get("marker", artist.marker),
+            edgecolors=artist.edgecolor,
+            **options,
+        )
+    container = ax.errorbar(
+        values["x"],
+        values["y"],
+        xerr=values.get("xerr"),
+        yerr=values.get("yerr"),
+        color=style.get("color", artist.color),
+        linestyle=style.get("linestyle", artist.linestyle),
+        marker=style.get("marker", artist.marker),
+        markersize=artist.markersize,
+        capsize=artist.capsize,
+        elinewidth=artist.elinewidth,
+        **options,
+    )
+    # A container has no gid of its own; tag every part so a click on a cap or
+    # a bar maps back to the artist as well.
+    for part in container.get_children():
+        part.set_gid(artist.id)
+    return container.lines[0]
 
 
 COORDS = {"data": "data", "axes": "axes fraction"}
