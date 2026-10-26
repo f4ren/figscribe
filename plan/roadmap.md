@@ -827,6 +827,21 @@ template to an existing figure is one undo step.
 - After *Add fit*, offer *Show result in figure* and *Add residuals*.
 - Remember per file type the last import options and column choice.
 - Keyboard shortcuts for every menu action and for switching panels.
+- **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
+  **Done**: in the import dialog's look. The kinds are tiles with icons,
+  and a kind without data is disabled and says what it needs. The columns
+  read as a sentence ("Plot U against t ± dU"), by name when there is one
+  file. Only the fields of the chosen kind are shown. A column named as the
+  error of y is taken, and starts error bars. A preview draws the plot with
+  the data through the renderer. "to Panel A ▾" says where it goes, with "A
+  new panel to the right" in the same undo step. An empty panel gets its
+  axes named after the columns, as after the import. Enter adds the plot.
+  *Learned:* a focused QPushButton in a dialog becomes the default button
+  unless `autoDefault` is off, so Enter on a tile chose the tile; and a
+  button box built from Cancel alone plus a custom Accept button made
+  Cancel the default. *Follow-up:* the import dialog's "Choose columns
+  myself…" opens this dialog after the import, a second step; it could be
+  part of the import dialog instead.
 
 ---
 

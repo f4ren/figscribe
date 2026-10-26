@@ -227,6 +227,19 @@ QPushButton#choiceTile {{
 }}
 QPushButton#choiceTile:checked {{ border: 2px solid {ACCENT}; }}
 QPushButton#choiceTile:hover {{ border-color: {ACCENT}; }}
+QPushButton#kindTile {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 12px;
+    padding: 0;
+}}
+QPushButton#kindTile:hover {{ border-color: {ACCENT}; }}
+QPushButton#kindTile:checked {{
+    background: {ACCENT_SOFT}; border: 2px solid {ACCENT};
+}}
+QPushButton#kindTile:disabled {{ background: {GROUND}; border-color: {BORDER}; }}
+QLabel#plotPreview {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px;
+    color: {MUTED};
+}}
 QTableWidget#dataTable {{
     border: 1px solid {BORDER}; border-radius: 10px; gridline-color: #F0F0EB;
 }}
@@ -353,6 +366,10 @@ _ICONS = {
     "span": '<rect x="4.5" y="1.5" width="7" height="13" fill="{c}" opacity="0.4"/>',
     "image": '<rect x="2" y="2" width="12" height="12" fill="{c}" opacity="0.35"/>'
     '<rect x="2" y="2" width="6" height="6" fill="{c}"/>',
+    "colormesh": '<rect x="2" y="2" width="6" height="6" fill="{c}" opacity="0.3"/>'
+    '<rect x="8" y="2" width="6" height="6" fill="{c}" opacity="0.75"/>'
+    '<rect x="2" y="8" width="6" height="6" fill="{c}"/>'
+    '<rect x="8" y="8" width="6" height="6" fill="{c}" opacity="0.5"/>',
     "chat": '<path d="M2.5 3.5 H13.5 V10.5 H7 L4 13 V10.5 H2.5 Z" fill="none" '
     'stroke="{c}" stroke-width="1.4" stroke-linejoin="round"/>',
     "code": '<path d="M6 4 L2 8 L6 12 M10 4 L14 8 L10 12" stroke="{c}" '
@@ -368,7 +385,7 @@ ARTIST_ICONS = {
     "annotation": "annotation",
     "histogram": "histogram",
     "image": "image",
-    "colormesh": "image",
+    "colormesh": "colormesh",
     "refline": "refline",
     "span": "span",
 }

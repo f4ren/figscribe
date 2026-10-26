@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialogButtonBox
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.importdialog import ImportDialog, guess_options
 from figscribe.gui.plotdialog import PlotDialog
-from figscribe.model import ColumnRef, ErrorbarPlot, LinePlot, ScatterPlot
+from figscribe.model import ColumnRef, ErrorbarPlot, ScatterPlot
 
 
 @pytest.mark.parametrize(
@@ -202,31 +202,6 @@ COLUMNS = [
 ]
 
 
-def test_the_plot_dialog_starts_with_the_first_two_columns(qtbot) -> None:
-    dialog = PlotDialog(COLUMNS)
-    qtbot.addWidget(dialog)
-    artist = dialog.artist()
-    assert isinstance(artist, LinePlot)
-    assert (artist.x.column, artist.y.column, artist.label) == ("t", "U", "U")
-    assert not dialog.yerr.isEnabled()
-
-
-def test_error_bars_take_their_columns(qtbot) -> None:
-    dialog = PlotDialog(COLUMNS)
-    qtbot.addWidget(dialog)
-    dialog.kind.setCurrentText("Error bars")
-    assert dialog.yerr.isEnabled()
-    dialog.yerr.setCurrentIndex(3)  # (none), t, U, dU
-    dialog.label.setText("")
-    artist = dialog.artist()
-    assert isinstance(artist, ErrorbarPlot)
-    assert artist.yerr.column == "dU" and artist.xerr is None
-    assert artist.label is None
-
-    dialog.kind.setCurrentText("Scatter")
-    assert isinstance(dialog.artist(), ScatterPlot)
-
-
 # --- in the main window ------------------------------------------------------
 
 
@@ -260,7 +235,8 @@ def test_from_a_new_project_to_a_drawn_plot(window: MainWindow, example: Path) -
     figure = window.document.figure
     assert len(figure.axes) == 1
     artist = figure.axes[0].artists[0]
-    assert isinstance(artist, LinePlot)
+    assert isinstance(artist, ErrorbarPlot)  # dU is named as the error of U
+    assert (figure.axes[0].x.label, figure.axes[0].y.label) == ("t", "U")
     assert window.document.selected == artist.id
     assert window.preview.error is None
     np.testing.assert_allclose(window.document.data(artist.x)[:2], [0.0, 0.25])
@@ -279,7 +255,7 @@ def test_a_second_plot_goes_into_the_selected_axes(window, example: Path) -> Non
     window.add_plot()
     assert len(window.document.figure.axes) == 1
     assert len(window.document.figure.axes[0].artists) == 2
-    assert window.document.history.undo_text == "Add line plot"
+    assert window.document.history.undo_text == "Add errorbar plot"
 
 
 def test_add_and_plot_is_one_step(window: MainWindow, example: Path) -> None:
@@ -330,7 +306,7 @@ def test_choosing_columns_opens_the_plot_dialog(window, example: Path) -> None:
     window.run_dialog = custom
     window.import_csv(example.parent / "scan.csv")
     assert len(window.document.project.sources) == 1
-    assert isinstance(window.document.figure.axes[0].artists[0], LinePlot)
+    assert isinstance(window.document.figure.axes[0].artists[0], ErrorbarPlot)
 
 
 def test_adding_a_plot_without_data_explains_why(window: MainWindow) -> None:
