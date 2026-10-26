@@ -449,4 +449,4 @@ def test_the_result_tells_the_residuals_and_can_be_copied(
     copied = QApplication.clipboard().text()
     assert copied.startswith("peak: Gaussian fit to ")
     assert "mu = 4.96" in copied and "Residual RMS" in copied
-    assert "40 of 41 points" in copied
+    assert "Points fitted = 40 of 41" in copied

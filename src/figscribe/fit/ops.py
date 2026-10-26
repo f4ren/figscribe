@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 
 from figscribe.commands import CommandError, InsertItem, Macro, SetField, find
 from figscribe.fit.expression import FitError
 from figscribe.fit.run import (
+    evaluate,
     in_range,
     initial_guess,
     kept,
@@ -138,6 +140,47 @@ def set_left_out(
         again.apply(staging)
         steps += again.steps
     return Macro(description, steps)
+
+
+@dataclass(frozen=True)
+class Residuals:
+    """How a fit meets the points it was fitted to."""
+
+    used: int
+    """Points fitted: finite, in the fit range, not left out."""
+    total: int
+    """Rows of the plot's data."""
+    rms: float
+    """Root mean square of data minus fit, in the unit of y."""
+    largest: float
+    """The residual farthest from zero, with its sign."""
+    row: int
+    """Its data row, counted from 0."""
+
+
+def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | None:
+    """The residuals of a fit that has been run; None before."""
+    fit = _get(project, fit_id)
+    if not isinstance(fit, FitCurve) or fit.result is None:
+        return None
+    if not set(parameter_names(fit.model)) <= set(fit.result.parameters):
+        return None  # a result from a file that lacks some parameters
+    target = _get(project, fit.target)
+    x = np.asarray(data(target.x), dtype=float)
+    y = np.asarray(data(target.y), dtype=float)
+    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
+    used &= np.isfinite(x) & np.isfinite(y)
+    if not used.any():
+        return None
+    off = y[used] - evaluate(fit.model, fit.result.parameters, x[used])
+    farthest = int(np.argmax(np.abs(off)))
+    return Residuals(
+        used=int(used.sum()),
+        total=len(x),
+        rms=float(np.sqrt(np.mean(off**2))),
+        largest=float(off[farthest]),
+        row=int(np.flatnonzero(used)[farthest]),
+    )
 
 
 RESIDUAL_HEIGHT_MM = 20.0
