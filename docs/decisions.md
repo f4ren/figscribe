@@ -1228,7 +1228,7 @@ render in CI before anyone has seen the result.
 
 ---
 
-## 0030 — Points left out of a plot
+## 0031 — Points left out of a plot
 
 **Date:** 2026-10-26
 **Status:** accepted
