@@ -15,11 +15,15 @@ import pytest
 from PySide6.QtCore import QSettings
 
 from figscribe.assistant import endpoint
-from figscribe.assistant.mcpserver import NOT_RUNNING, forward, to_result
 from figscribe.assistant.toolserver import ToolServer
 from figscribe.gui import Document, MainWindow
 
-pytest.importorskip("mcp")
+try:  # the mcp extra; the endpoint file and the tool server work without it
+    from figscribe.assistant.mcpserver import NOT_RUNNING, forward, to_result
+except ImportError:
+    NOT_RUNNING = forward = to_result = None
+
+needs_mcp = pytest.mark.skipif(forward is None, reason="needs the mcp extra")
 
 
 @pytest.fixture(autouse=True)
@@ -141,6 +145,7 @@ def test_requests_over_the_socket(server, qtbot) -> None:
 # --- figscribe mcp ----------------------------------------------------------------
 
 
+@needs_mcp
 def test_forward_without_a_running_figscribe() -> None:
     assert asyncio.run(forward("get_project", {})) == {
         "ok": False,
@@ -148,6 +153,7 @@ def test_forward_without_a_running_figscribe() -> None:
     }
 
 
+@needs_mcp
 def test_results_become_mcp_content() -> None:
     ok = to_result({"ok": True, "result": {"id": "abc"}})
     assert not ok.is_error and json.loads(ok.content[0].text) == {"id": "abc"}
@@ -187,6 +193,7 @@ def _run_mcp_client(state_dir: Path, calls: list[tuple[str, dict]], out: list) -
         out.append(exc)
 
 
+@needs_mcp
 def test_an_mcp_client_drives_the_window(qtbot, example: Path, state_dir: Path) -> None:
     window = MainWindow(Document.open(example))
     qtbot.addWidget(window)
@@ -217,6 +224,7 @@ def test_an_mcp_client_drives_the_window(qtbot, example: Path, state_dir: Path) 
     assert window.undo_action.text() == "&Undo Set name"
 
 
+@needs_mcp
 def test_figscribe_mcp_reports_a_closed_application(qtbot, state_dir: Path) -> None:
     out: list = []
     thread = threading.Thread(
@@ -295,6 +303,7 @@ async def _serve_once(reply: bytes | None, delay: float = 0.0):
     return server
 
 
+@needs_mcp
 @pytest.mark.parametrize(
     ("reply", "message"),
     [(None, "closed the connection"), (b"not json\n", "lost the connection")],
@@ -309,6 +318,7 @@ def test_forward_turns_a_broken_answer_into_an_error(reply, message) -> None:
     assert response["ok"] is False and message in response["error"]
 
 
+@needs_mcp
 def test_forward_gives_up_after_the_timeout(monkeypatch) -> None:
     import figscribe.assistant.mcpserver as bridge
 
@@ -323,6 +333,7 @@ def test_forward_gives_up_after_the_timeout(monkeypatch) -> None:
     assert "did not answer" in response["error"]
 
 
+@needs_mcp
 def test_a_stale_endpoint_file_reads_as_not_running() -> None:
     with socket.socket() as s:  # a port nobody listens on once closed
         s.bind(("127.0.0.1", 0))

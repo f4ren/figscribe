@@ -29,11 +29,15 @@ from figscribe.model import (
     Figure,
     FitCurve,
     GridLayout,
+    Histogram,
     Legend,
     LinePlot,
+    PanelLabels,
     PredefinedFit,
     Project,
+    ReferenceLine,
     ScatterPlot,
+    ShadedSpan,
     loads,
 )
 from figscribe.render import export
@@ -123,6 +127,131 @@ def test_fit_and_residuals(tmp_path: Path) -> None:
     script = _assert_same(project, tmp_path)
     assert "curve_fit(" in script and "sharex=ax_a" in script
     assert 'ax_a.tick_params(axis="x"' in script
+
+
+def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"c": 0.0},
+        fixed=["c"],
+        parameter_bounds={"sigma": (0.5, None)},
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "bounds=" in script and "c is held at 0" in script
+
+
+def test_a_histogram_of_one_value(tmp_path: Path) -> None:
+    """np.loadtxt gives one row of one column as a number, not an array."""
+    (tmp_path / "one.csv").write_text("x,y\n1.0,2.0\n", encoding="utf-8")
+    source = csv_source(tmp_path / "one.csv", tmp_path, header_row=0, skip_rows=0)
+    values = ColumnRef(source=source.id, column="y")
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=72, axes=[Axes(artists=[Histogram(values=values)])])],
+    )
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("extend", [False, True])
+def test_a_fit_over_part_of_the_data(tmp_path: Path, extend: bool) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(2.5, 7.5),
+        extend_curve=extend,
+    )
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "in_range = (t >= 2.5) & (t <= 7.5)" in script
+
+
+def test_points_left_out_of_a_plot_and_its_fit(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        left_out=[3, 20],
+        left_out_note="more than 3σ off the Gaussian fit",
+    )
+    line = LinePlot(x=ref["t"], y=ref["t2"], left_out=[5, 6, 9])
+    dashed = LinePlot(
+        x=ref["t"],
+        y=ref["U"],
+        marker="o",
+        left_out=[12],
+        left_out_linestyle="--",
+        left_out_marker=None,
+    )
+    points = ScatterPlot(
+        x=ref["t"], y=ref["U"], left_out=[7], left_out_color="red", left_out_marker="x"
+    )
+    project.figures = [
+        Figure(
+            dpi=150,
+            layout=GridLayout(rows=1, cols=2),
+            axes=[
+                Axes(legend=Legend(visible=True), artists=[data]),
+                Axes(col=1, artists=[line, dashed, points]),
+            ],
+        )
+    ]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "kept_1[[3, 20]] = False" in script
+    assert "np.where(kept_2, t2, np.nan)" in script
+    assert "more than 3σ off the Gaussian fit" in script
+
+
+def test_an_errorbar_line_wider_than_its_bars(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        linestyle="--",
+        linewidth=3.0,
+        elinewidth=0.5,
+        left_out=[4],
+    )
+    points = ErrorbarPlot(x=ref["t"], y=ref["t2"], yerr=ref["dU"], linewidth=3.0)
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data, points])])]
+    script = _assert_same(project, tmp_path)
+    # The line and its left-out steps; the points without a line have no width.
+    assert script.count("linewidth=3,") == 2
+    assert "elinewidth=0.5," in script
+
+
+def test_points_outside_the_fit_range_drawn_like_left_out(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"], y=ref["U"], yerr=ref["dU"], linestyle="-", left_out=[18]
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="gaussian"),
+        fit_range=(2.5, 7.5),
+        outside_as_left_out=True,
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "shown = kept & in_range" in script
 
 
 def test_many_settings(tmp_path: Path) -> None:
@@ -246,6 +375,20 @@ def test_font_sizes_ticks_and_grid(tmp_path: Path) -> None:
     assert 'ax.grid(True, which="both", axis="y")' in script
 
 
+def test_a_tick_step_too_small_is_left_to_matplotlib(tmp_path: Path) -> None:
+    # The renderer falls back to automatic ticks; the script must do the same,
+    # for a fixed range and for one that follows the data.
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(limits=(0, 10_000), major_step=1),
+        y=AxisSpec(major_step=0.0001),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=100, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert "MultipleLocator" not in script
+
+
 def test_font_size_with_a_style_sheet(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     axes = Axes(x=AxisSpec(label="t"), artists=[ScatterPlot(x=ref["t"], y=ref["U"])])
@@ -253,6 +396,23 @@ def test_font_size_with_a_style_sheet(tmp_path: Path) -> None:
         Figure(dpi=100, stylesheet="seaborn-v0_8-talk", font_size=9, axes=[axes])
     ]
     _assert_same(project, tmp_path)
+
+
+def test_a_windows_file_keeps_its_encoding(tmp_path: Path) -> None:
+    text = "t;I (µA)\n0;1,5\n1;2,5\n2;2\n"
+    (tmp_path / "old.csv").write_bytes(text.encode("cp1252"))
+    source = csv_source(
+        tmp_path / "old.csv", tmp_path, delimiter=";", decimal=",", encoding="cp1252"
+    )
+    ref = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    axes = Axes(artists=[LinePlot(x=ref["t"], y=ref["I (µA)"])])
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[axes])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert 'encoding="cp1252"' in script
 
 
 def test_histograms_and_notes(tmp_path: Path) -> None:
@@ -273,6 +433,11 @@ def test_histograms_and_notes(tmp_path: Path) -> None:
                 label="t",
             ),
             Annotation(text="counts", position=(0.05, 0.9), coords="axes"),
+            Annotation(
+                text="$y = a x + b$\nwith $\\mu$ fitted",
+                position=(0.05, 0.6),
+                coords="axes",
+            ),
         ],
     )
     right = Axes(
@@ -404,3 +569,166 @@ def test_images_meshes_and_colour_bars(tmp_path: Path) -> None:
     assert 'scan_counts = np.load(scan_path)["counts"].astype(float)' in script
     assert 'fig.colorbar(image, ax=ax_a, label="intensity")' in script
     assert "norm=LogNorm(vmin=0.01)" in script
+
+
+def test_ticks_inside_on_all_sides_with_prefixes(tmp_path: Path) -> None:
+    """A spectrum as journals print it: kHz on x, a stepped y range with four
+    minor ticks, ticks inside on all four sides; the right axis and an inset
+    get the same tick style."""
+    project, ref = _scan(tmp_path)
+    spectrum = Axes(
+        x=AxisSpec(label="t", unit="s", prefix="m", major_step=2.5),
+        y=AxisSpec(
+            label="U", unit="V", limits=(0, 1.2), major_step=0.4, minor_divisions=5
+        ),
+        y_right=AxisSpec(label="P", prefix="k"),
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"]),
+            ScatterPlot(x=ref["t"], y=ref["dU"], axis="right"),
+        ],
+    )
+    project.figures = [
+        Figure(dpi=110, tick_direction="in", ticks_all_sides=True, axes=[spectrum])
+    ]
+    script = _assert_same(project, tmp_path)
+    assert '"xtick.direction": "in"' in script and '"ytick.right": True' in script
+    assert 'f"{v * 1e3:g}"' in script and 'f"{v / 1e3:g}"' in script
+    assert '"t (ms)"' in script
+
+
+def test_a_stepped_log_axis_keeps_its_minor_ticks(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(
+            label="t",
+            scale="log",
+            limits=(1.3, 1.4),
+            major_step=0.05,
+            minor_divisions=5,
+        ),
+        y=AxisSpec(label="U", scale="log", prefix="m"),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=110, tick_direction="inout", axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert "MultipleLocator(0.01)" in script  # 0.05 in five parts
+    assert "AutoMinorLocator" not in script
+    assert "NullFormatter()" in script
+
+
+def test_a_grid_in_its_own_color(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(label="t"),
+        grid=True,
+        grid_color="dimgray",
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=110, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert 'ax.grid(True, color="dimgray")' in script
+
+
+def test_wide_frame_long_ticks_and_a_dotted_grid(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        grid=True,
+        grid_which="both",
+        grid_linewidth=0.4,
+        grid_linestyle=":",
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [
+        Figure(
+            dpi=110,
+            frame_width=1.5,
+            tick_width=1.2,
+            tick_length=6.0,
+            minor_tick_width=0.8,
+            minor_tick_length=3.0,
+            axes=[axes],
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert '"axes.linewidth": 1.5' in script
+    assert '"xtick.major.size": 6' in script and '"ytick.minor.width": 0.8' in script
+    assert 'ax.grid(True, which="both", linewidth=0.4, linestyle=":")' in script
+
+
+def test_panel_labels_outside_with_an_inset_lettered(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    first = Axes(
+        x=AxisSpec(label="$t$", unit="s"),
+        y=AxisSpec(label="$U$", unit="V"),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [
+        Figure(
+            dpi=100,
+            width_mm=120,
+            axes=[first],
+            panel_labels=PanelLabels(style="a)", bold=True, insets=True),
+        )
+    ]
+    for side in ("right", "below", "inset"):
+        add_panel(project, first.id, side)[0].apply(project)
+    script = _assert_same(project, tmp_path)
+    assert (
+        'for ax, label in [(ax_a, "a)"), (ax_d, "b)"), (ax_b, "c)"), (ax_c, "d)")]:'
+        in script
+    )
+    assert 'textcoords="offset fontsize"' in script
+    assert 'fontweight="bold"' in script
+
+
+def test_a_panel_label_inside_one_panel(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    project.figures = [
+        Figure(
+            dpi=100,
+            axes=[Axes(artists=[LinePlot(x=ref["t"], y=ref["U"])])],
+            panel_labels=PanelLabels(style="A", placement="inside", fontsize=13),
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert "ax.annotate(\n" in script and '"A",' in script
+    assert "fontsize=13" in script and "for ax, label" not in script
+
+
+def test_reference_lines_and_shaded_spans(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(label="$t$", unit="s"),
+        y=AxisSpec(label="$U$", unit="V", scale="log", limits=(0.01, 2)),
+        y_right=AxisSpec(label="$t^2$", unit="s2"),
+        legend=Legend(visible=True),
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"], label="data"),
+            ScatterPlot(x=ref["t"], y=ref["t2"], axis="right"),
+            ReferenceLine(at=5.0, label="centre"),
+            ReferenceLine(
+                orientation="horizontal",
+                at=60.0,
+                axis="right",
+                color="C3",
+                linestyle="-.",
+                linewidth=2.0,
+            ),
+            ShadedSpan(start=3.5, end=6.5, label="peak", zorder=3.0),
+            ShadedSpan(orientation="horizontal", start=0.5, end=1.0, color="C2"),
+        ],
+    )
+    project.figures = [Figure(dpi=100, width_mm=110, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert (
+        'ax.axvline(5, color="gray", linestyle="--", linewidth=1, label="centre")'
+        in (script)
+    )
+    assert "ax_right.axhline(60," in script
+    assert (
+        'ax.axvspan(3.5, 6.5, color="gray", linewidth=0, label="peak", zorder=3, '
+        "alpha=0.2)" in script
+    )
+    assert 'ax.axhspan(0.5, 1, color="C2", linewidth=0, zorder=0.5, alpha=0.2)' in (
+        script
+    )

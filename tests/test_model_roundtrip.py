@@ -33,6 +33,11 @@ def test_roundtrip_is_idempotent(project: Project) -> None:
     assert dumps(loads(once)) == once
 
 
+def test_roundtrip_keeps_the_encoding_of_a_source(project: Project) -> None:
+    project.sources[0].encoding = "cp1252"
+    assert loads(dumps(project)).sources[0].encoding == "cp1252"
+
+
 def test_roundtrip_restores_concrete_artist_types(project: Project) -> None:
     axes = loads(dumps(project)).figures[0].axes
     assert [type(a) for a in axes[0].artists] == [ErrorbarPlot, FitCurve]
@@ -84,6 +89,14 @@ def test_figure_size_must_be_positive() -> None:
     for field in ("width_mm", "height_mm", "dpi"):
         with pytest.raises(ValidationError):
             Figure(**{field: 0.0})
+
+
+@pytest.mark.parametrize("value", [math.inf, math.nan])
+def test_sizes_and_ranges_must_be_finite(value: float) -> None:
+    with pytest.raises(ValidationError):
+        Figure(width_mm=value)
+    with pytest.raises(ValidationError):
+        Axes(x={"limits": (0.0, value)})
 
 
 def test_sha256_must_look_like_a_digest() -> None:
@@ -152,3 +165,57 @@ def test_bin_count_must_be_positive(project: Project) -> None:
     ref = project.figures[0].axes[0].artists[0].x
     with pytest.raises(ValidationError):
         Histogram(values=ref, bins=0)
+
+
+def test_a_fit_bound_must_be_a_range() -> None:
+    from pydantic import ValidationError
+
+    from figscribe.model import FitCurve, PredefinedFit
+
+    model = PredefinedFit(name="linear")
+    FitCurve(
+        target="t", model=model, parameter_bounds={"a": (None, 1.0), "b": (0.0, None)}
+    )
+    with pytest.raises(ValidationError, match="lower bound"):
+        FitCurve(target="t", model=model, parameter_bounds={"a": (2.0, 1.0)})
+
+
+def test_a_fit_range_has_a_lower_and_an_upper_end() -> None:
+    from pydantic import ValidationError
+
+    from figscribe.model import FitCurve, PredefinedFit
+
+    model = PredefinedFit(name="linear")
+    assert FitCurve(target="t", model=model, fit_range=(1.0, 2.0)).fit_range
+    with pytest.raises(ValidationError, match="lower end"):
+        FitCurve(target="t", model=model, fit_range=(2.0, 1.0))
+
+
+def test_panel_labels_roundtrip(project: Project) -> None:
+    from figscribe.model import PanelLabels
+
+    labels = PanelLabels(style="a)", bold=True, placement="inside", fontsize=9.0)
+    project.figures[0].panel_labels = labels
+    assert loads(dumps(project)).figures[0].panel_labels == labels
+    with pytest.raises(ValidationError):
+        PanelLabels(style="i)")
+    with pytest.raises(ValidationError):
+        PanelLabels(fontsize=0.0)
+
+
+def test_reference_lines_and_spans_roundtrip(project: Project) -> None:
+    from figscribe.model import ReferenceLine, ShadedSpan
+
+    line = ReferenceLine(orientation="horizontal", at=0.5, label="threshold")
+    span = ShadedSpan(start=2.0, end=3.5, color="C1")
+    project.figures[0].axes[0].artists += [line, span]
+    back = loads(dumps(project)).figures[0].axes[0].artists
+    assert back[-2:] == [line, span]
+    assert isinstance(back[-1], ShadedSpan)
+    assert (span.alpha, span.zorder, line.linestyle) == (0.2, 0.5, "--")
+    with pytest.raises(ValidationError, match="two different ends"):
+        ShadedSpan(start=1.0, end=1.0)
+    with pytest.raises(ValidationError, match="two different ends"):
+        span.start = 3.5
+    with pytest.raises(ValidationError):
+        ReferenceLine(at=math.inf)

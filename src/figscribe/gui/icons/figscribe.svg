@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- The application icon: a pen writing a figure, the Gaussian of the start
+       page's mark, on the accent blue of gui/theme.py. The shape follows the
+       macOS grid (824 of 1024 px). Up to 48 px figscribe-small.svg is used.
+       Rebuild the packaging icons with packaging/make_icons.py. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2F66E3"/>
+      <stop offset="1" stop-color="#1A43A8"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#ground)"/>
+  <!-- axes -->
+  <path d="M170 220 V810 H830" fill="none" stroke="#FFFFFF" stroke-opacity="0.45"
+        stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the curve, written up to the pen's tip -->
+  <path d="M220 681 C227 672 247 651 260 629 C273 607 287 579 300 549
+           C313 519 327 483 340 450 C353 418 367 382 380 356 C393 331 407 308 420 298
+           C433 288 447 288 460 298 C473 308 487 331 500 356 C513 382 527 418 540 450
+           C553 483 567 519 580 549 C593 579 613 615 620 629"
+        fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round"/>
+  <!-- the pen: a nib drawn pointing down with its tip at 0 0, then turned -->
+  <g transform="translate(620 629) rotate(45) scale(0.8)">
+    <path d="M0 0 C34 -64 84 -128 84 -200 L84 -262 H-84 L-84 -200 C-84 -128 -34 -64 0 0 Z"
+          fill="#FFA931" stroke="#1A43A8" stroke-width="16" stroke-linejoin="round"/>
+    <path d="M0 -26 V-150" stroke="#1A43A8" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="0" cy="-160" r="20" fill="#1A43A8"/>
+    <rect x="-104" y="-330" width="208" height="84" rx="20" fill="#FFFFFF"
+          stroke="#1A43A8" stroke-width="16"/>
+  </g>
+</svg>

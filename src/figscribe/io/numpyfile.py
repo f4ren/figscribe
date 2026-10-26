@@ -38,8 +38,8 @@ def numpy_source(
         sha256=sha256_of(path),
         array=array,
     )
-    read_numpy(source, raw, path.name)  # refuse what cannot be plotted now
-    return source
+    values = read_numpy(source, raw, path.name)  # refuse what cannot be plotted
+    return source.model_copy(update={"row_count": values.shape[0]})
 
 
 def array_names(raw: bytes, name: str) -> list[str]:

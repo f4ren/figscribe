@@ -161,6 +161,23 @@ def test_a_header_wider_than_the_data_is_refused(qtbot, tmp_path: Path) -> None:
     assert "3 columns" in dialog.error.text()
 
 
+def test_a_windows_file_is_detected_and_read(qtbot, tmp_path: Path) -> None:
+    path = tmp_path / "old.csv"
+    path.write_bytes("t,I (µA)\n0,1\n1,2\n".encode("cp1252"))
+    dialog = ImportDialog(path, tmp_path)
+    qtbot.addWidget(dialog)
+    assert _ok(dialog)
+    assert dialog.source().encoding == "cp1252"
+    assert dialog.source().columns == ["t", "I (µA)"]
+    chips = [
+        dialog.chips.itemAt(i).widget().text() for i in range(dialog.chips.count())
+    ]
+    assert any("Windows" in chip for chip in chips)
+
+    dialog.encoding.setCurrentIndex(dialog.encoding.findData("utf-8-sig"))
+    assert not _ok(dialog) and "encoding" in dialog.error.text()
+
+
 def test_an_unsaved_project_stores_the_absolute_path(qtbot, example: Path) -> None:
     csv = example.parent / "scan.csv"
     dialog = ImportDialog(csv, None)

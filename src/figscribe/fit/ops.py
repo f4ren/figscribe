@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 
 from figscribe.commands import CommandError, InsertItem, Macro, SetField, find
 from figscribe.fit.expression import FitError
-from figscribe.fit.run import initial_guess, parameter_names, run_fit
+from figscribe.fit.run import (
+    evaluate,
+    in_range,
+    initial_guess,
+    kept,
+    parameter_names,
+    run_fit,
+    within,
+)
 from figscribe.model import (
     Axes,
     AxisSpec,
@@ -46,11 +55,18 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
     yerr = (
         data(target.yerr) if isinstance(target, ErrorbarPlot) and target.yerr else None
     )
+    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
+    x, y = np.asarray(x, dtype=float)[used], np.asarray(y, dtype=float)[used]
+    yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
 
     names = parameter_names(fit.model)
     stored = {k: v for k, v in fit.initial_values.items() if k in names}
-    p0 = {**initial_guess(fit.model, x, y), **stored}
-    result = run_fit(fit.model, p0, x, y, yerr)
+    # A guess may fall outside a bound the user set; a stored value may not.
+    guessed = within(initial_guess(fit.model, x, y), fit.parameter_bounds)
+    p0 = {**guessed, **stored}
+    result = run_fit(
+        fit.model, p0, x, y, yerr, fixed=fit.fixed, bounds=fit.parameter_bounds
+    )
 
     label = "expression" if isinstance(fit.model, ExpressionFit) else fit.model.name
     return Macro(
@@ -59,6 +75,111 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
             SetField(fit_id, ("initial_values",), p0),
             SetField(fit_id, ("result",), result),
         ],
+    )
+
+
+EDITABLE = (
+    "model",
+    "initial_values",
+    "fixed",
+    "parameter_bounds",
+    "fit_range",
+    "extend_curve",
+    "outside_as_left_out",
+    "result",
+    "label",
+)
+"""What the fit dialog changes on a fit that is already there."""
+
+
+def update_fit(project: Project, fit_id: str, changed: FitCurve) -> Macro:
+    """Give the fit `fit_id` the model, start values, held parameters, bounds,
+    result and label of `changed`, as one step."""
+    fit = _get(project, fit_id)
+    if not isinstance(fit, FitCurve):
+        raise FitError(f"{fit_id!r} is not a fit")
+    return Macro(
+        "Change the fit",
+        [
+            SetField(fit_id, (name,), getattr(changed, name))
+            for name in EDITABLE
+            if getattr(changed, name) != getattr(fit, name)
+        ],
+    )
+
+
+def set_left_out(
+    project: Project, plot_id: str, rows: list[int], data: DataProvider
+) -> Macro:
+    """Leave out `rows` of the plot `plot_id` (counted from 0), and fit every
+    fit of the plot again, as one step. A FitError, changing nothing, if a fit
+    cannot be run without them."""
+    plot = _get(project, plot_id)
+    if not isinstance(plot, FITTABLE):
+        raise FitError(f"{plot_id!r} is not a plot of points")
+    rows = sorted(set(rows))
+    added, back = set(rows) - set(plot.left_out), set(plot.left_out) - set(rows)
+    if len(added) == 1 and not back:
+        description = f"Leave out row {min(added) + 1}"
+    elif len(back) == 1 and not added:
+        description = f"Take row {min(back) + 1} back in"
+    else:
+        description = "Change the rows left out"
+    staging = project.model_copy(deep=True)
+    steps = [SetField(plot_id, ("left_out",), rows)]
+    steps[0].apply(staging)
+    fits = [
+        artist.id
+        for figure in staging.figures
+        for axes in figure.axes
+        for artist in axes.artists
+        if isinstance(artist, FitCurve) and artist.target == plot_id
+    ]
+    for fit_id in fits:
+        again = refit(staging, fit_id, data)
+        again.apply(staging)
+        steps += again.steps
+    return Macro(description, steps)
+
+
+@dataclass(frozen=True)
+class Residuals:
+    """How a fit meets the points it was fitted to."""
+
+    used: int
+    """Points fitted: finite, in the fit range, not left out."""
+    total: int
+    """Rows of the plot's data."""
+    rms: float
+    """Root mean square of data minus fit, in the unit of y."""
+    largest: float
+    """The residual farthest from zero, with its sign."""
+    row: int
+    """Its data row, counted from 0."""
+
+
+def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | None:
+    """The residuals of a fit that has been run; None before."""
+    fit = _get(project, fit_id)
+    if not isinstance(fit, FitCurve) or fit.result is None:
+        return None
+    if not set(parameter_names(fit.model)) <= set(fit.result.parameters):
+        return None  # a result from a file that lacks some parameters
+    target = _get(project, fit.target)
+    x = np.asarray(data(target.x), dtype=float)
+    y = np.asarray(data(target.y), dtype=float)
+    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
+    used &= np.isfinite(x) & np.isfinite(y)
+    if not used.any():
+        return None
+    off = y[used] - evaluate(fit.model, fit.result.parameters, x[used])
+    farthest = int(np.argmax(np.abs(off)))
+    return Residuals(
+        used=int(used.sum()),
+        total=len(x),
+        rms=float(np.sqrt(np.mean(off**2))),
+        largest=float(off[farthest]),
+        row=int(np.flatnonzero(used)[farthest]),
     )
 
 

@@ -6,7 +6,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, QStandardPaths, Qt, QUrl
+from PySide6.QtCore import QEvent, QSettings, QSize, QStandardPaths, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -41,18 +41,23 @@ from figscribe.commands import (
     Macro,
     SetField,
     add_panel,
+    find,
     remove_artist,
     remove_axes,
+    remove_source,
 )
 from figscribe.commands.core import walk
 from figscribe.examples import bundled_example
-from figscribe.fit import FitError, add_fit
-from figscribe.gui import theme
+from figscribe.fit import FitError, add_fit, set_left_out, update_fit
+from figscribe.gui import markings, theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
-from figscribe.gui.document import Document
+from figscribe.gui.databar import DataBar
+from figscribe.gui.document import Document, axis_id, split_axis
+from figscribe.gui.errors import explain
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
+from figscribe.gui.names import artist_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
 from figscribe.gui.plotdialog import PlotDialog, add_plot
 from figscribe.gui.preview import Preview
@@ -143,9 +148,16 @@ class MainWindow(QMainWindow):
         self.code = CodePanel(self.document)
         self.code.save_requested.connect(self._script_dialog)
         self.code.hide()
+        self.data_bar = DataBar(self.document)
+        figure_area = QWidget()
+        column = QVBoxLayout(figure_area)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(self.data_bar)
+        column.addWidget(self.preview, 1)
         self.workspace = QSplitter(Qt.Orientation.Vertical)
         self.workspace.setChildrenCollapsible(False)
-        self.workspace.addWidget(self.preview)
+        self.workspace.addWidget(figure_area)
         self.workspace.addWidget(self.chat)
         self.workspace.addWidget(self.code)
         self.workspace.setStretchFactor(0, 3)
@@ -160,6 +172,8 @@ class MainWindow(QMainWindow):
         self.outline = Outline(self.document)
         self.problems = Problems(self.document)
         self.properties = PropertyPanel(self.document)
+        self.properties.axis_range = self.preview.axis_limits
+        self.properties.drawn_color = self.preview.drawn_color
         self.outline.add_requested.connect(self._add_plot_to)
         self.outline.import_requested.connect(lambda: self.import_csv())
         self.outline.panel_requested.connect(
@@ -167,12 +181,17 @@ class MainWindow(QMainWindow):
         )
         self.outline.delete_requested.connect(self._delete)
         self.outline.note_requested.connect(self.add_note)
+        self.outline.marking_requested.connect(
+            lambda oid, kind, orientation: self.add_marking(kind, orientation, oid)
+        )
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
         self.properties_dock = self._dock(
             "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
         )
+        self.properties.edit_fit = self.edit_fit
+        self.preview.show_error = self.show_error
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
@@ -528,7 +547,7 @@ class MainWindow(QMainWindow):
         arrays = self.document.array_choices()
         figure = self.document.figure
         if not (columns or arrays) or figure is None:
-            self.show_error("Nothing to plot", ValueError("Import a data file first."))
+            self.show_error("Nothing to plot", "Import a data file first.")
             return
         dialog = PlotDialog(columns, self, arrays=arrays)
         if not self.run_dialog(dialog):
@@ -540,6 +559,9 @@ class MainWindow(QMainWindow):
     def _target_axes(self, figure) -> str | None:
         """The selected axes, the axes of the selected plot, or the first one."""
         selected = self.document.selected
+        axis = split_axis(selected)
+        if axis is not None:
+            selected = axis[0]  # an axis stands for its panel
         for axes in figure.axes:
             if axes.id == selected or any(a.id == selected for a in axes.artists):
                 return axes.id
@@ -549,9 +571,7 @@ class MainWindow(QMainWindow):
         """Fit a model to the selected plot (or the only one) and add it."""
         target = self._fit_target()
         if target is None:
-            self.show_error(
-                "Nothing to fit", ValueError("Select the plot to fit, then try again.")
-            )
+            self.show_error("Nothing to fit", "Select the plot to fit, then try again.")
             return
         figure = self.document.figure
         axes = next(a for a in figure.axes if target in a.artists)
@@ -569,11 +589,50 @@ class MainWindow(QMainWindow):
         fit = dialog.fit()
         try:
             command = add_fit(self.document.project, fit, dialog.residuals.isChecked())
+            command = self._with_outliers(command, dialog)
         except FitError as exc:
             self.show_error("Cannot fit", exc)
             return
         self._push(command)
         self.document.select(fit.id)
+
+    def edit_fit(self, fit_id: str) -> None:
+        """Open the fit dialog on the fit `fit_id` and take what it changes,
+        as one undo step."""
+        try:
+            fit = find(self.document.project, fit_id)
+            target = find(self.document.project, fit.target)
+            dialog = FitDialog(target, self.document.data, parent=self, fit=fit)
+        except Exception as exc:  # gone, or the data cannot be read
+            self.show_error("Cannot change the fit", exc)
+            return
+        if not self.run_dialog(dialog) or dialog.fit() is None:
+            return
+        try:
+            command = update_fit(self.document.project, fit_id, dialog.fit())
+            command = self._with_outliers(command, dialog)
+        except FitError as exc:
+            self.show_error("Cannot change the fit", exc)
+            return
+        self._push(command)
+
+    def _with_outliers(self, command: Macro, dialog: FitDialog) -> Macro:
+        """`command`, and the outliers the user confirmed in the dialog left
+        out of the plot, with the plot's fits fitted again: one step."""
+        rows = dialog.left_out_rows()
+        if rows is None:
+            return command
+        staging = self.document.project.model_copy(deep=True)
+        command.apply(staging)
+        plot_id = dialog.target.id
+        leave = set_left_out(staging, plot_id, rows, self.document.data)
+        note = SetField(plot_id, ("left_out_note",), dialog.left_out_note())
+        count = len(dialog.pending)
+        return Macro(
+            f"{command.description} and leave out {count} outlier"
+            + ("s" * (count != 1)),
+            [*command.steps, *leave.steps, note],
+        )
 
     def add_note(self, oid: str | None = None) -> None:
         """Add a note in the middle of a panel; drag it in the preview."""
@@ -582,17 +641,42 @@ class MainWindow(QMainWindow):
             return
         target = oid if oid is not None else self._target_axes(figure)
         if target is None:
-            self.show_error("No panel", ValueError("Add a panel or a plot first."))
+            self.show_error("No panel", "Add a panel or a plot first.")
             return
-        text = self.ask_text("Add note", "Text (LaTeX allowed, e.g. $\\mu$):")
+        text = self.ask_text(
+            "Add note",
+            "Text, over several lines if you like (LaTeX allowed, e.g. $\\mu$):",
+        )
         if not text:
             return
         note = Annotation(text=text, position=(0.5, 0.5), coords="axes")
         self._push(InsertItem(target, "artists", note))
         self.document.select(note.id)
 
+    def add_marking(self, kind: str, orientation: str, oid: str | None = None) -> None:
+        """Add a reference line or a shaded range in the middle of what a
+        panel shows; its value is then typed in the property panel, or it is
+        placed by right-clicking the preview."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        target = oid if oid is not None else self._target_axes(figure)
+        axes = next((a for a in figure.axes if a.id == target), None)
+        if axes is None:
+            self.show_error("No panel", "Add a panel or a plot first.")
+            return
+        field = "x" if orientation == "vertical" else "y"
+        spec = getattr(axes, field)
+        shown = self.preview.axis_limits(axis_id(axes.id, field))
+        low, high = sorted(shown or spec.limits or (0.0, 1.0))
+        log = spec.scale == "log" and low > 0
+        made = markings.marking(kind, orientation, low, high, log=log)
+        self._push(markings.add(axes.id, made))
+        self.document.select(made.id)
+
     def _ask_text(self, title: str, prompt: str) -> str | None:
-        text, ok = QInputDialog.getText(self, title, prompt)
+        """Several lines of text; None if cancelled."""
+        text, ok = QInputDialog.getMultiLineText(self, title, prompt)
         return text.strip() if ok else None
 
     def _fit_target(self):
@@ -688,7 +772,27 @@ class MainWindow(QMainWindow):
                 self._push(remove_artist(self.document.project, oid))
             elif isinstance(obj, Axes):
                 self._push(remove_axes(self.document.project, oid))
+            elif field == "sources":
+                self._remove_source(oid)
             return
+
+    def _remove_source(self, oid: str) -> None:
+        """Remove a data file; first ask, naming them, if plots draw from it."""
+        project = self.document.project
+        command = remove_source(project, oid)
+        going = [
+            artist_name(find(project, step.item_id))
+            for step in reversed(command.steps)
+            if step.field == "artists"
+        ]
+        name = Path(find(project, oid).path).name
+        if going and not self.ask(
+            "Remove data file",
+            f"{name} is used by: {', '.join(going)}.\n\nRemove it together with "
+            "them? The file itself stays on disk; Undo brings everything back.",
+        ):
+            return
+        self._push(command)
 
     def _push(self, command) -> None:
         try:
@@ -702,6 +806,7 @@ class MainWindow(QMainWindow):
         document.allow_preview = self.document.allow_preview
         self.document = document
         views = (
+            self.data_bar,
             self.preview,
             self.outline,
             self.problems,
@@ -714,8 +819,16 @@ class MainWindow(QMainWindow):
         self._connect(document)
         self.show_workspace()
 
-    def show_error(self, title: str, error: Exception) -> None:
-        QMessageBox.warning(self, title, str(error))
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 - Qt naming
+        super().changeEvent(event)
+        # A data file may have been changed in another program meanwhile.
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            self.data_bar.rebuild()
+
+    def show_error(self, title: str, error: Exception | str) -> None:
+        """Tell what went wrong: a message, or an error explained in plain words."""
+        text = error if isinstance(error, str) else explain(error)
+        QMessageBox.warning(self, title, text)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt naming
         if not self.confirm_discard():
@@ -748,7 +861,10 @@ class MainWindow(QMainWindow):
         self.redo_action.setText(
             f"&Redo {history.redo_text}" if history.can_redo else "&Redo"
         )
-        self.delete_action.setEnabled(self.document.selected is not None)
+        selected = self.document.selected
+        self.delete_action.setEnabled(
+            selected is not None and split_axis(selected) is None
+        )
         path = self.document.path
         self._project_name.setText(path.stem if path is not None else "Untitled")
         if not history.is_clean:
@@ -837,6 +953,12 @@ class MainWindow(QMainWindow):
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
         self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
+        self.marking_menu = insert.addMenu("Add &Line or Range")
+        for text, kind, orientation in markings.ENTRIES:
+            action = self.marking_menu.addAction(text)
+            action.triggered.connect(
+                lambda _=False, k=kind, o=orientation: self.add_marking(k, o)
+            )
         self.panel_menu = insert.addMenu("Add Pa&nel")
         self.panel_actions = {}
         for side, text in PANEL_SIDES:
@@ -894,13 +1016,11 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         bar.addWidget(spacer)
 
-        for action, text in ((self.import_action, "Data"), (self.plot_action, "Plot")):
-            action.setIcon(theme.icon("plus"))
-            action.setIconText(text)
-            bar.addAction(action)
-        self.fit_action.setIcon(theme.icon("fit"))
-        self.fit_action.setIconText("Fit")
-        bar.addAction(self.fit_action)
+        # What can be added, in the order a figure is built: data, then what
+        # holds what. Figure joins after Data once a project has several.
+        self.import_action.setIcon(theme.icon("plus"))
+        self.import_action.setIconText("Data")
+        bar.addAction(self.import_action)
         panel = QToolButton()
         panel.setText("Panel")
         panel.setIcon(theme.icon("plus"))
@@ -909,6 +1029,15 @@ class MainWindow(QMainWindow):
         panel.setMenu(self.panel_menu)
         panel.setToolTip("Add a panel beside or inside the selected one")
         bar.addWidget(panel)
+        self.plot_action.setIcon(theme.icon("plus"))
+        self.plot_action.setIconText("Plot")
+        bar.addAction(self.plot_action)
+        self.fit_action.setIcon(theme.icon("fit"))
+        self.fit_action.setIconText("Fit")
+        bar.addAction(self.fit_action)
+        self.note_action.setIcon(theme.icon("plus"))
+        self.note_action.setIconText("Note")
+        bar.addAction(self.note_action)
         bar.addSeparator()
         for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):
             action.setIcon(theme.icon(name))

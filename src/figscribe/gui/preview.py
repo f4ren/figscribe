@@ -7,21 +7,28 @@ only the resolution is chosen to fit the widget, and Agg draws it the same
 way `export` writes a PNG. Clicks are mapped back through Matplotlib's own
 hit testing, so selection works on exactly what is drawn.
 
-The wheel zooms and dragging pans a panel; that view lives only here, until
-"Use as axis range" writes it into the model. Dragging a legend moves it,
-one undo step on release.
+The wheel zooms and dragging pans a panel; in an axis' frame, as drawn
+around it when selected, they zoom and pan that axis alone. That view lives
+only here, until "Use as axis range" writes it into the model. Dragging a
+legend moves it, one undo step on release.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 from matplotlib.artist import Artist as MplArtist
 from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.collections import Collection
+from matplotlib.colors import to_hex
 from matplotlib.figure import Figure as MplFigure
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+from matplotlib.transforms import Bbox
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -35,17 +42,22 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QWidget,
 )
 
 from figscribe.commands import CommandError, Macro, SetField, find
+from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
-from figscribe.gui.document import Document
+from figscribe.gui.document import Document, axis_id, split_axis
+from figscribe.gui.errors import explain
+from figscribe.gui.markings import ENTRIES, add, marking
 from figscribe.gui.names import size_text
 from figscribe.render import render
-from figscribe.render.figure import MM_PER_INCH, style_context
+from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
+from figscribe.render.ticks import ticks_that_fit
 
 MARGIN = 28
 """Logical pixels kept free around the figure."""
@@ -59,6 +71,15 @@ DRAG_THRESHOLD = 4
 """Logical pixels the mouse moves before a press becomes a drag."""
 ZOOM_STEP = 1.25
 """Zoom factor of one wheel step."""
+AXIS_STRIP = 8.0
+"""Pixels along a panel's edge that count as its axis when clicked."""
+FRAME_MARGIN = 3
+"""Logical pixels between a selected object and the frame drawn around it;
+in an axis' frame the wheel and dragging act on that axis."""
+
+SETTLE_MS = 300
+"""Quiet time after the last zoom or pan step before the view is rendered
+again exactly; shorter, and a slow mouse waits for renders between steps."""
 
 Limits = tuple[tuple[float, float], tuple[float, float]]
 
@@ -71,6 +92,8 @@ class _Press:
     last: QPointF
     axes_id: str | None = None
     """The panel under the press, which a drag pans."""
+    axis: str = "both"
+    """"x" or "y" when the press is in an axis' frame: a drag pans only it."""
     legend: object = None
     """The Matplotlib legend under the press, which a drag moves."""
     note: object = None
@@ -104,6 +127,18 @@ class Preview(QWidget):
         self._origin = QPointF()
         self.error: str | None = None
         """Why the figure could not be drawn, shown instead of it."""
+        self.show_error: Callable[[str, str], None] = lambda title, message: None
+        """Tells the user why a change was refused; the window shows it."""
+        self._ranges: dict[tuple[str, str], tuple[float, float]] = {}
+        """The range of each axis, by (gid, "x" | "y"), when last drawn."""
+        self._redraw = QTimer(self)
+        self._redraw.setSingleShot(True)
+        self._redraw.setInterval(0)  # once the moves waiting now are applied
+        self._redraw.timeout.connect(self._draw_view)
+        self._settle = QTimer(self)
+        self._settle.setSingleShot(True)
+        self._settle.setInterval(SETTLE_MS)
+        self._settle.timeout.connect(self.refresh)
         self.set_document(document)
 
     def set_document(self, document: Document) -> None:
@@ -117,6 +152,8 @@ class Preview(QWidget):
 
     def refresh(self) -> None:
         """Render the current figure again, at a resolution that fits."""
+        self._redraw.stop()
+        self._settle.stop()
         self._figure, self._image, self.error = None, None, None
         model = self.document.figure
         if model is None:
@@ -125,7 +162,7 @@ class Preview(QWidget):
             try:
                 self._figure, self._image = self._draw(model)
             except Exception as exc:  # any failure is shown, never fatal
-                self.error = f"Cannot draw the figure\n{exc}"
+                self.error = f"Cannot draw the figure\n{explain(exc)}"
         self.update()
 
     def preview_dpi(self) -> float:
@@ -142,26 +179,71 @@ class Preview(QWidget):
         )
         return max(fit, 10.0)
 
+    @property
+    def redraw_pending(self) -> bool:
+        """Whether a zoomed or panned view still waits to be drawn as exported."""
+        return self._redraw.isActive() or self._settle.isActive()
+
     def _draw(self, model) -> tuple[MplFigure, QImage]:
-        fig = render(model, self.document.data)
+        fig = render(model, self.document.data, view=self.view)
         known = {ax.get_gid() for ax in _all_axes(fig)}
         self.view = {oid: lim for oid, lim in self.view.items() if oid in known}
-        for ax in _all_axes(fig):
-            if ax.get_gid() in self.view:
-                xlim, ylim = self.view[ax.get_gid()]
-                ax.set_xlim(xlim)
-                ax.set_ylim(ylim)
         fig.set_dpi(self.preview_dpi())
+        return fig, self._paint(fig, model)
+
+    def _draw_view(self) -> None:
+        """Show the zoomed or panned view quickly on the figure drawn already,
+        with the panels where they are; once the moves stop, render it again.
+
+        Drawn twice, Matplotlib's layout moves a figure with a color bar by a
+        few pixels, so only a new render looks exactly like the export. A tick
+        step that no longer fits the new range, or fits again, needs one too.
+        """
+        model = self.document.figure
+        if self._figure is None or model is None or not self._ticks_hold(model):
+            self.refresh()
+            return
+        self._figure.set_layout_engine("none")  # half the time of a draw
+        self._image = self._paint(self._figure, model)
+        self.update()
+        self._settle.start()
+
+    def _ticks_hold(self, model) -> bool:
+        for axes in model.axes:
+            for gid, name, spec in (
+                (axes.id, "x", axes.x),
+                (axes.id, "y", axes.y),
+                (f"{axes.id}{RIGHT}", "y", axes.y_right),
+            ):
+                if spec is None or (
+                    spec.major_step is None and spec.minor_divisions is None
+                ):
+                    continue
+                drawn = self._ranges.get((gid, name))
+                ax = self._axes(gid)
+                if drawn is None or ax is None:
+                    return False
+                now = ax.get_xlim() if name == "x" else ax.get_ylim()
+                if ticks_that_fit(spec, drawn) != ticks_that_fit(spec, now):
+                    return False
+        return True
+
+    def _paint(self, fig: MplFigure, model) -> QImage:
         canvas = FigureCanvasAgg(fig)
         with style_context(model):
             canvas.draw()
+        self._ranges = {
+            (ax.get_gid(), name): ax.get_xlim() if name == "x" else ax.get_ylim()
+            for ax in _all_axes(fig)
+            for name in ("x", "y")
+        }
         buffer = np.asarray(canvas.buffer_rgba())
         height, width, _ = buffer.shape
         image = QImage(
             buffer.tobytes(), width, height, 4 * width, QImage.Format.Format_RGBA8888
         )
         image.setDevicePixelRatio(self.devicePixelRatioF())
-        return fig, image
+        return image
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         super().resizeEvent(event)
@@ -267,32 +349,114 @@ class Preview(QWidget):
                     hits.append((artist.get_zorder(), gid))
             if hits:
                 return max(hits)[1]
+        axis = self.axis_at(point)
+        if axis is not None:
+            return axis
         for ax in _all_axes(self._figure):
             if ax.get_gid() and ax.contains(event)[0]:
                 return ax.get_gid()
         return None
+
+    def axis_at(self, point: QPointF) -> str | None:
+        """Selection id of the axis whose numbers or label lie at `point`."""
+        if self._figure is None:
+            return None
+        x, y = self._to_display(point)
+        for oid, boxes in self._axis_boxes():
+            if any(box.contains(x, y) for box in boxes):
+                return oid
+        return None
+
+    def drawn_color(self, oid: str) -> str | None:
+        """The color the plot `oid` is drawn in now, also when the color cycle
+        chose it; None if it is not drawn."""
+        if self._figure is None:
+            return None
+        for artist in self._figure.findobj(lambda a: a.get_gid() == oid):
+            if isinstance(artist, Line2D):
+                return to_hex(artist.get_color())
+            if isinstance(artist, Collection | Patch) and len(artist.get_facecolor()):
+                face = artist.get_facecolor()
+                return to_hex(face if isinstance(artist, Patch) else face[0])
+        return None
+
+    def axis_limits(self, oid: str) -> tuple[float, float] | None:
+        """The range an axis shows right now, automatic or not."""
+        for ax, field in self._model_axes():
+            if axis_id(_host(ax), field) == oid:
+                axis = ax.xaxis if field == "x" else ax.yaxis
+                low, high = axis.get_view_interval()
+                return (min(low, high), max(low, high))
+        return None
+
+    def _model_axes(self):
+        """(Matplotlib axes, field) for every axis of a model panel."""
+        if self._figure is None or self.document.figure is None:
+            return
+        panels = {a.id for a in self.document.figure.axes}
+        for ax in _all_axes(self._figure):
+            gid = ax.get_gid() or ""
+            if _host(ax) not in panels:
+                continue
+            if gid.endswith(RIGHT):
+                yield ax, "y_right"
+            else:
+                yield ax, "x"
+                yield ax, "y"
+
+    def _axis_boxes(self):
+        """(axis selection id, boxes of its numbers, label and edge strip)."""
+        renderer = self._figure.canvas.get_renderer()
+        for ax, field in self._model_axes():
+            axis = ax.xaxis if field == "x" else ax.yaxis
+            box = ax.bbox
+            strip = AXIS_STRIP
+            if field == "x":
+                edge = Bbox([[box.x0, box.y0 - strip], [box.x1, box.y0]])
+            elif field == "y":
+                edge = Bbox([[box.x0 - strip, box.y0], [box.x0, box.y1]])
+            else:
+                edge = Bbox([[box.x1, box.y0], [box.x1 + strip, box.y1]])
+            boxes = [edge]
+            if axis.label.get_visible() and axis.label.get_text():
+                boxes.append(axis.label.get_window_extent(renderer))
+            low, high = sorted(axis.get_view_interval())
+            span = (high - low) * 1e-9
+            for tick in axis.get_major_ticks():
+                if not low - span <= tick.get_loc() <= high + span:
+                    continue  # placed by the locator, but not drawn
+                for text in (tick.label1, tick.label2):
+                    if text.get_visible() and text.get_text():
+                        boxes.append(text.get_window_extent(renderer))
+            yield axis_id(_host(ax), field), boxes
 
     def selection_rect(self) -> QRectF | None:
         """Outline of the selected object, in widget coordinates."""
         oid = self.document.selected
         if self._figure is None or oid is None:
             return None
-        boxes = [
-            a.get_window_extent()
-            for ax in _all_axes(self._figure)
-            for a in (ax, *_children(ax))
-            if a.get_gid() == oid and a.get_visible()
-        ]
+        if split_axis(oid) is not None:
+            boxes = next((b for a, b in self._axis_boxes() if a == oid), [])
+        else:
+            boxes = [
+                a.get_window_extent()
+                for ax in _all_axes(self._figure)
+                for a in (ax, *_children(ax))
+                if a.get_gid() == oid and a.get_visible()
+            ]
+        frame = self._frame(boxes)
+        if frame is None:
+            return None
+        return QRectF(
+            self._to_widget(frame.x0, frame.y1), self._to_widget(frame.x1, frame.y0)
+        )
+
+    def _frame(self, boxes) -> Bbox | None:
+        """The outline drawn around `boxes` when selected, in display units."""
         boxes = [b for b in boxes if np.all(np.isfinite(b.extents)) and b.width >= 0]
         if not boxes:
             return None
-        x0 = min(b.x0 for b in boxes)
-        x1 = max(b.x1 for b in boxes)
-        y0 = min(b.y0 for b in boxes)
-        y1 = max(b.y1 for b in boxes)
-        top_left = self._to_widget(x0, y1)
-        bottom_right = self._to_widget(x1, y0)
-        return QRectF(top_left, bottom_right).adjusted(-3, -3, 3, 3)
+        return Bbox.union(boxes).padded(FRAME_MARGIN * self.devicePixelRatioF())
 
     # --- zoom, pan and the legend ---------------------------------------------
 
@@ -310,8 +474,11 @@ class Preview(QWidget):
 
     def zoom(self, point: QPointF, factor: float, axis: str = "both") -> None:
         """Zoom the panel under `point` by `factor` (> 1 zooms in), keeping
-        the spot under the cursor in place; `axis` limits it to "x" or "y"."""
+        the spot under the cursor in place; `axis` limits it to "x" or "y".
+        Over an axis' numbers or label, only that axis zooms."""
         ax = self.axes_at(point)
+        if ax is None and axis == "both":
+            ax, axis = self._axis_under(point)
         if ax is None:
             return
         x, y = self._to_display(point)
@@ -324,12 +491,37 @@ class Preview(QWidget):
             ys = (box.y0, box.y1)
         self._set_view(ax, xs, ys)
 
-    def pan(self, axes_id: str, dx: float, dy: float) -> None:
+    def _axis_under(self, point: QPointF):
+        """(Matplotlib axes, "x" or "y") of the axis whose frame, as drawn
+        around it when selected, is under `point`; (None, "both") if none."""
+        if self._figure is None:
+            return None, "both"
+        x, y = self._to_display(point)
+        oid = next(
+            (
+                oid
+                for oid, boxes in self._axis_boxes()
+                if (frame := self._frame(boxes)) is not None and frame.contains(x, y)
+            ),
+            None,
+        )
+        if oid is None:
+            return None, "both"
+        axes_id, field = split_axis(oid)
+        if field == "y_right":
+            return self._axes(axes_id + RIGHT), "y"
+        return self._axes(axes_id), field
+
+    def pan(self, axes_id: str, dx: float, dy: float, axis: str = "both") -> None:
         """Move the view of panel `axes_id` with the mouse by (dx, dy) logical
-        pixels: the data follows the cursor."""
+        pixels: the data follows the cursor; `axis` limits it to "x" or "y"."""
         ax = self._axes(axes_id)
         if ax is None:
             return
+        if axis == "x":
+            dy = 0
+        elif axis == "y":
+            dx = 0
         ratio = self.devicePixelRatioF()
         box = ax.bbox
         dx, dy = dx * ratio, -dy * ratio  # display y grows upwards
@@ -339,7 +531,9 @@ class Preview(QWidget):
         """Back to the limits in the model, as exported."""
         if self.view:
             self.view = {}
-            self._view_changed()
+            self.refresh()  # the model's ranges may be automatic: render them
+            self.view_changed.emit()
+            self._place_view_bar()
 
     def adopt_view(self) -> None:
         """Write the zoomed or panned view into the model as axis ranges."""
@@ -384,10 +578,11 @@ class Preview(QWidget):
         inverse = ax.transData.inverted()
         (x0, y0), (x1, y1) = inverse.transform([(xs[0], ys[0]), (xs[1], ys[1])])
         self.view[ax.get_gid()] = ((float(x0), float(x1)), (float(y0), float(y1)))
-        self._view_changed()
-
-    def _view_changed(self) -> None:
-        self.refresh()
+        # At once on the drawn figure, so that the next move starts from here;
+        # drawing it waits until the moves already queued are applied too.
+        ax.set_xlim(x0, x1)
+        ax.set_ylim(y0, y1)
+        self._redraw.start()
         self.view_changed.emit()
         self._place_view_bar()
 
@@ -428,12 +623,15 @@ class Preview(QWidget):
         if self._figure is None:
             self.document.select(None)
             return
-        ax = self.axes_at(point)
+        ax, axis = self.axes_at(point), "both"
+        if ax is None:
+            ax, axis = self._axis_under(point)
         legend = self._legend_at(point)
         self._press = _Press(
             point,
             point,
             axes_id=ax.get_gid() if ax is not None else None,
+            axis=axis,
             legend=legend,
             note=self._note_at(point) if legend is None else None,
         )
@@ -450,7 +648,7 @@ class Preview(QWidget):
             press.dragging = True
         if press.moving is None and press.axes_id is not None:
             delta = point - press.last
-            self.pan(press.axes_id, delta.x(), delta.y())
+            self.pan(press.axes_id, delta.x(), delta.y(), press.axis)
         press.last = point
         self.update()
 
@@ -467,6 +665,94 @@ class Preview(QWidget):
             moved = event.position() - press.start
             self.move_note(press.note.get_gid(), moved.x(), moved.y())
         self.update()
+
+    def point_at(self, point: QPointF) -> tuple[str, int] | None:
+        """(plot id, data row) of the point drawn nearest to `point`, within
+        the pick radius, or None."""
+        if self._figure is None:
+            return None
+        x, y = self._to_display(point)
+        event = MouseEvent("button_press_event", self._figure.canvas, x, y)
+        found = []  # (distance, plot id, row)
+        for ax in _all_axes(self._figure):
+            for drawn in (*ax.lines, *ax.collections):
+                rows = getattr(drawn, "rows", None)
+                if rows is None or not drawn.get_visible():
+                    continue
+                hit, details = drawn.contains(event)
+                near = details.get("ind", [])
+                if not hit or not len(near):
+                    continue
+                if hasattr(drawn, "get_xydata"):  # a line, else a scatter
+                    places = drawn.get_transform().transform(drawn.get_xydata())
+                else:
+                    places = drawn.get_offset_transform().transform(drawn.get_offsets())
+                for index in near:
+                    distance = float(np.hypot(*(places[index] - (x, y))))
+                    found.append((distance, drawn.get_gid(), int(rows[index])))
+        if not found:
+            return None
+        _, plot_id, row = min(found)
+        return plot_id, row
+
+    def context_menu(self, point: QPointF) -> QMenu | None:
+        """What can be done at `point`: leave the point there out of its plot
+        and the plot's fits, or take it back in; and, in a panel, add a
+        reference line or a shaded range there."""
+        menu = QMenu(self)
+        found = self.point_at(point)
+        if found is not None:
+            plot_id, row = found
+            left_out = list(find(self.document.project, plot_id).left_out)
+            if row in left_out:
+                text, rows = (
+                    f"Take row {row + 1} back in",
+                    [r for r in left_out if r != row],
+                )
+            else:
+                text, rows = f"Leave out row {row + 1}", [*left_out, row]
+            menu.addAction(text, lambda: self._leave_out(plot_id, rows))
+        ax = self.axes_at(point)
+        if ax is not None:
+            if menu.actions():
+                menu.addSeparator()
+            self._marking_entries(menu, ax, point)
+        return menu if menu.actions() else None
+
+    def _marking_entries(self, menu: QMenu, ax, point: QPointF) -> None:
+        """A line or a range at the clicked spot of the panel `ax`."""
+        x, y = ax.transData.inverted().transform(self._to_display(point))
+        places = {
+            "vertical": (x, ax.get_xlim(), ax.get_xscale(), "x"),
+            "horizontal": (y, ax.get_ylim(), ax.get_yscale(), "y"),
+        }
+        for _, kind, orientation in ENTRIES:
+            at, shown, scale, name = places[orientation]
+            made = marking(kind, orientation, *sorted(shown), log=scale == "log", at=at)
+            if kind == "refline":
+                text = f"{orientation.capitalize()} line at {name} = {made.at:g}"
+            else:
+                text = f"Shade {'an' if name == 'x' else 'a'} {name} range here"
+            menu.addAction(text, lambda m=made: self._add_marking(ax.get_gid(), m))
+
+    def _add_marking(self, axes_id: str, made) -> None:
+        self.document.push(add(axes_id, made))
+        self.document.select(made.id)
+
+    def _leave_out(self, plot_id: str, rows: list[int]) -> None:
+        try:
+            command = set_left_out(
+                self.document.project, plot_id, rows, self.document.data
+            )
+        except (FitError, CommandError) as exc:
+            self.show_error("Cannot leave the point out", str(exc))
+            return
+        self.document.push(command)
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        menu = self.context_menu(QPointF(event.pos()))
+        if menu is not None:
+            menu.exec(event.globalPos())
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt naming
         if event.key() == Qt.Key.Key_Escape and self.view:
@@ -531,6 +817,12 @@ class Preview(QWidget):
         return QPointF(
             self._origin.x() + x / ratio, self._origin.y() + (height - y) / ratio
         )
+
+
+def _host(ax) -> str:
+    """The model panel id of a Matplotlib axes, also of its right twin."""
+    gid = ax.get_gid() or ""
+    return gid[: -len(RIGHT)] if gid.endswith(RIGHT) else gid
 
 
 def _all_axes(fig: MplFigure) -> list:

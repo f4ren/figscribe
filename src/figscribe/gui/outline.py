@@ -25,7 +25,8 @@ from PySide6.QtWidgets import (
 
 from figscribe.commands import CommandError, SetField, find
 from figscribe.gui import theme
-from figscribe.gui.document import Document
+from figscribe.gui.document import Document, split_axis
+from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
 from figscribe.gui.widgets import FlowLayout, chip
 from figscribe.model import Axes, Figure
@@ -56,6 +57,9 @@ class Outline(QTreeWidget):
     """Add a panel beside or inside the panel with this id: (id, side)."""
     delete_requested = Signal(str)
     note_requested = Signal(str)
+    marking_requested = Signal(str, str, str)
+    """A reference line or shaded range for a panel: (panel id, kind,
+    orientation), as `markings.ENTRIES` has them."""
     """Add a note to the panel with this id."""
 
     def __init__(self, document: Document, parent: QWidget | None = None):
@@ -107,6 +111,25 @@ class Outline(QTreeWidget):
             self.document.push(SetField(oid, ("visible",), visible))
         except CommandError:
             pass  # the plot is gone; the next rebuild drops its row
+
+    def set_order(self, oid: str, front: bool) -> None:
+        """Draw the plot `oid` above (`front`) or below every other plot of its
+        panel, as one undo step."""
+        others = [a.zorder for a in self._drawing_order(oid) if a.id != oid]
+        if not others:
+            return
+        zorder = max(others) + 1 if front else min(others) - 1
+        text = "Bring to front" if front else "Send to back"
+        self.document.push(SetField(oid, ("zorder",), float(zorder), text))
+
+    def _drawing_order(self, oid: str) -> list:
+        """The plots of the panel holding `oid`, in the order they are drawn:
+        by z-order, and as Matplotlib does on a tie, as they were added."""
+        for figure in self.document.project.figures:
+            for axes in figure.axes:
+                if any(a.id == oid for a in axes.artists):
+                    return sorted(axes.artists, key=lambda a: a.zorder)
+        return []
 
     # --- rows -----------------------------------------------------------------
 
@@ -235,6 +258,14 @@ class Outline(QTreeWidget):
                     )
                 menu.addSeparator()
             menu.addAction("Add note…", lambda: self.note_requested.emit(oid))
+            lines = menu.addMenu("Add line or range")
+            for text, kind, orientation in ENTRIES:
+                lines.addAction(
+                    text,
+                    lambda k=kind, o=orientation: self.marking_requested.emit(
+                        oid, k, o
+                    ),
+                )
             menu.addSeparator()
             menu.addAction("Delete panel", lambda: self.delete_requested.emit(oid))
         elif isinstance(obj, Figure):
@@ -244,11 +275,18 @@ class Outline(QTreeWidget):
                 )
             else:
                 return None
+        elif any(source.id == oid for source in self.document.project.sources):
+            menu.addAction("Remove data file", lambda: self.delete_requested.emit(oid))
         elif hasattr(obj, "visible") and hasattr(obj, "kind"):
             menu.addAction(
                 "Hide" if obj.visible else "Show",
                 lambda: self.set_visible(oid, not obj.visible),
             )
+            drawn = self._drawing_order(oid)
+            front = menu.addAction("Bring to front", lambda: self.set_order(oid, True))
+            front.setEnabled(drawn[-1] is not obj)
+            back = menu.addAction("Send to back", lambda: self.set_order(oid, False))
+            back.setEnabled(drawn[0] is not obj)
             menu.addSeparator()
             menu.addAction("Delete", lambda: self.delete_requested.emit(oid))
         else:
@@ -277,6 +315,9 @@ class Outline(QTreeWidget):
     def _show_selection(self, oid: str | None) -> None:
         self._syncing = True
         try:
+            axis = split_axis(oid)
+            if axis is not None:
+                oid = axis[0]  # an axis is shown as its panel's row
             item = self.item_for(oid) if oid is not None else None
             self.setCurrentItem(item) if item else self.clearSelection()
         finally:

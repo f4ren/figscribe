@@ -14,8 +14,14 @@ import numpy as np
 from matplotlib.axes import Axes as MplAxes
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure as MplFigure
-from matplotlib.ticker import AutoMinorLocator, MultipleLocator
+from matplotlib.ticker import (
+    AutoMinorLocator,
+    FuncFormatter,
+    MultipleLocator,
+    NullFormatter,
+)
 
+from figscribe.io.errors import DataError
 from figscribe.model import (
     Annotation,
     ArrayRef,
@@ -31,16 +37,27 @@ from figscribe.model import (
     ImagePlot,
     Legend,
     LinePlot,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
 )
-from figscribe.model.validate import FITTABLE
-from figscribe.render.labels import axis_label
+from figscribe.model.artists import LIKE_THE_PLOT
+from figscribe.model.validate import FITTABLE, unequal_columns
+from figscribe.render.labels import axis_label, panel_label_options, panel_labels
 from figscribe.render.layout import (
     creation_order,
     hidden_tick_labels,
     inset_parent,
     share_partner,
+)
+from figscribe.render.ticks import (
+    minor_ticks,
+    scaling,
+    shown,
+    silent_minor_labels,
+    tick_style,
+    ticks_that_fit,
 )
 
 DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
@@ -48,15 +65,19 @@ DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
 files is not our job."""
 
 MM_PER_INCH = 25.4
+
+View = Mapping[str, tuple[tuple[float, float], tuple[float, float]]]
+"""Ranges (x, y) by the gid of a Matplotlib axes."""
 RIGHT = "#right"
 """Appended to an axes id to name the Matplotlib axes of its right y axis."""
 
 
-def render(figure: Figure, data: DataProvider) -> MplFigure:
+def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplFigure:
     """Build the Matplotlib figure for `figure`.
 
     Every drawn artist gets its model id as gid, so the GUI can map a click on
-    a Matplotlib artist back to the model object.
+    a Matplotlib artist back to the model object. `view` shows some axes, by
+    gid, at other ranges than the model's, as the preview does while zoomed.
     """
     with style_context(figure):
         fig = MplFigure(
@@ -76,6 +97,7 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
 
         artists = {a.id: a for axes in figure.axes for a in axes.artists}
         axs: dict[int, MplAxes] = {}
+        ticked: list[tuple[MplAxes, str, AxisSpec]] = []
         for i in creation_order(figure):
             axes = figure.axes[i]
             if axes.inset is not None:
@@ -92,8 +114,25 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
                     sharey=axs[partners[1]] if partners[1] is not None else None,
                 )
             ax.set_gid(axes.id)
-            _draw_axes(axes, ax, data, figure.unit_format, artists)
+            ticked += _draw_axes(axes, ax, data, figure.unit_format, artists)
             axs[i] = ax
+
+        # Only now are the automatic ranges known that decide whether a tick
+        # step fits. A style with axes.autolimit_mode "round_numbers" rounds
+        # the range to the ticks, so there it is worked out again with the new
+        # ones, as the script does when it draws. Elsewhere it must not be:
+        # done early, it gives empty panels another range than drawing does.
+        for ax, _, _ in ticked:
+            if view and ax.get_gid() in view:
+                xlim, ylim = view[ax.get_gid()]
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+        rounded = matplotlib.rcParams["axes.autolimit_mode"] == "round_numbers"
+        for ax, name, spec in ticked:
+            interval = ax.get_xlim() if name == "x" else ax.get_ylim()
+            _apply_ticks(ax, name, ticks_that_fit(spec, interval))
+            if rounded:
+                ax.autoscale_view(scalex=name == "x", scaley=name == "y")
 
         for i, (hide_x, hide_y) in enumerate(hidden_tick_labels(figure)):
             ax = axs[i]
@@ -101,7 +140,42 @@ def render(figure: Figure, data: DataProvider) -> MplFigure:
                 ax.xaxis.set_tick_params(which="both", labelbottom=False)
             if hide_y:
                 ax.yaxis.set_tick_params(which="both", labelleft=False)
+
+        # No gid: a panel label is not a note to drag.
+        for i, text in panel_labels(figure).items():
+            axs[i].annotate(text, **panel_label_options(figure.panel_labels))
     return fig
+
+
+def tick_ranges(
+    figure: Figure, data: DataProvider | None
+) -> dict[tuple[str, str], tuple[float, float]]:
+    """The range of each axis with its own tick step or divisions, by
+    (Axes.id, "x", "y" or "y_right"): what the renderer counts ticks over.
+
+    An automatic range is only known by drawing, so the figure is drawn when
+    there is one and `data` is given; without data such axes are left out.
+    """
+    specs = {
+        (axes.id, field): spec
+        for axes in figure.axes
+        for field in ("x", "y", "y_right")
+        if (spec := getattr(axes, field)) is not None
+        and (spec.major_step is not None or spec.minor_divisions is not None)
+    }
+    ranges = {key: s.limits for key, s in specs.items() if s.limits is not None}
+    if len(ranges) == len(specs) or data is None:
+        return ranges
+    for ax in render(figure, data).findobj(MplAxes):
+        gid = ax.get_gid()
+        if gid is None:
+            continue
+        if gid.endswith(RIGHT):
+            drawn = {(gid.removesuffix(RIGHT), "y_right"): ax.get_ylim()}
+        else:
+            drawn = {(gid, "x"): ax.get_xlim(), (gid, "y"): ax.get_ylim()}
+        ranges.update({key: r for key, r in drawn.items() if key in specs})
+    return ranges
 
 
 def style_context(figure: Figure):
@@ -111,6 +185,8 @@ def style_context(figure: Figure):
         styles.append(figure.stylesheet)
     if figure.font_size is not None:
         styles.append({"font.size": figure.font_size})
+    if tick_style(figure):
+        styles.append(tick_style(figure))
     return matplotlib.style.context(styles) if styles else nullcontext()
 
 
@@ -120,7 +196,8 @@ def _draw_axes(
     data: DataProvider,
     unit_format: str,
     artists: Mapping[str, Artist],
-) -> None:
+) -> list[tuple[MplAxes, str, AxisSpec]]:
+    """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
         size = {"fontsize": axes.title_size} if axes.title_size else {}
         ax.set_title(axes.title, **size)
@@ -132,7 +209,16 @@ def _draw_axes(
         right.set_gid(f"{axes.id}{RIGHT}")
         _apply_axis(right, "y", axes.y_right, unit_format)
     if axes.grid:
-        ax.grid(True, which=axes.grid_which, axis=axes.grid_axis)
+        style = {
+            key: value
+            for key, value in (
+                ("color", axes.grid_color),
+                ("linewidth", axes.grid_linewidth),
+                ("linestyle", axes.grid_linestyle),
+            )
+            if value is not None
+        }
+        ax.grid(True, which=axes.grid_which, axis=axes.grid_axis, **style)
 
     for artist in axes.artists:
         # Without a right axis, a plot meant for it is drawn against the left
@@ -142,6 +228,11 @@ def _draw_axes(
 
     if axes.legend.visible:
         _draw_legend(axes.legend, ax, right).set_gid(axes.id)
+
+    ticked = [(ax, "x", axes.x), (ax, "y", axes.y)]
+    if axes.y_right is not None:
+        ticked.append((right, "y", axes.y_right))
+    return ticked
 
 
 def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> None:
@@ -163,14 +254,27 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         set_lim(*spec.limits)
     if spec.ticks is not None:
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
-    elif spec.major_step is not None:
+
+
+def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec) -> None:
+    """The tick step, minor ticks and tick numbers, once the range is known."""
+    axis = ax.xaxis if name == "x" else ax.yaxis
+    if spec.ticks is None and spec.major_step is not None:
         axis.set_major_locator(MultipleLocator(spec.major_step))
-    if spec.minor_ticks and spec.minor_divisions is not None:
-        axis.set_minor_locator(AutoMinorLocator(spec.minor_divisions))
-    elif spec.minor_ticks:
+    how, value = minor_ticks(spec)
+    if how == "parts":
+        axis.set_minor_locator(AutoMinorLocator(value))
+    elif how == "step":
+        axis.set_minor_locator(MultipleLocator(value))
+    elif how == "on":
         axis.minorticks_on()
     else:
         axis.minorticks_off()
+    scaled = scaling(spec)
+    if scaled is not None:
+        axis.set_major_formatter(FuncFormatter(lambda v, _: shown(v, scaled)))
+    if silent_minor_labels(spec):
+        axis.set_minor_formatter(NullFormatter())
     if spec.tick_size is not None:
         ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
 
@@ -187,46 +291,12 @@ def _draw_artist(
         "alpha": artist.alpha,
         "gid": artist.id,
     }
+    # Matplotlib would say "x and y must have same first dimension".
+    if isinstance(artist, FITTABLE) and (why := unequal_columns(artist, data)):
+        raise DataError(f"{artist.label or artist.kind}: {why}")
 
-    if isinstance(artist, LinePlot):
-        ax.plot(
-            data(artist.x),
-            data(artist.y),
-            color=artist.color,
-            linestyle=artist.linestyle,
-            linewidth=artist.linewidth,
-            marker=artist.marker,
-            markersize=artist.markersize,
-            **common,
-        )
-    elif isinstance(artist, ScatterPlot):
-        ax.scatter(
-            data(artist.x),
-            data(artist.y),
-            s=artist.size,
-            color=artist.color,
-            marker=artist.marker,
-            edgecolors=artist.edgecolor,
-            **common,
-        )
-    elif isinstance(artist, ErrorbarPlot):
-        container = ax.errorbar(
-            data(artist.x),
-            data(artist.y),
-            xerr=data(artist.xerr) if artist.xerr is not None else None,
-            yerr=data(artist.yerr) if artist.yerr is not None else None,
-            color=artist.color,
-            linestyle=artist.linestyle,
-            marker=artist.marker,
-            markersize=artist.markersize,
-            capsize=artist.capsize,
-            elinewidth=artist.elinewidth,
-            **common,
-        )
-        # A container has no gid of its own; tag every part so a click on a cap
-        # or a bar maps back to the artist as well.
-        for part in container.get_children():
-            part.set_gid(artist.id)
+    if isinstance(artist, FITTABLE):
+        _draw_points(artist, ax, data, common, artists)
     elif isinstance(artist, Histogram):
         values = np.asarray(data(artist.values), dtype=float)
         # np.histogram cannot place NaN or inf; they are left out, like in a fit.
@@ -242,6 +312,19 @@ def _draw_artist(
             patch.set_gid(artist.id)
     elif isinstance(artist, Annotation):
         _draw_annotation(artist, ax, common)
+    elif isinstance(artist, ReferenceLine):
+        draw = ax.axvline if artist.orientation == "vertical" else ax.axhline
+        draw(
+            artist.at,
+            color=artist.color,
+            linestyle=artist.linestyle,
+            linewidth=artist.linewidth,
+            **common,
+        )
+    elif isinstance(artist, ShadedSpan):
+        draw = ax.axvspan if artist.orientation == "vertical" else ax.axhspan
+        # No edge: in the band's own color it would draw a darker outline.
+        draw(artist.start, artist.end, color=artist.color, linewidth=0, **common)
     elif isinstance(artist, ImagePlot | ColorMesh):
         _draw_2d(artist, ax, data, common)
     elif isinstance(artist, FitCurve):
@@ -252,6 +335,141 @@ def _draw_artist(
         raise NotImplementedError(
             f"rendering {artist.kind!r} artists is not implemented yet"
         )
+
+
+LEFT_OUT_COLOR = "0.7"
+"""Light grey: left-out points stay visible, but stand back."""
+
+
+def _draw_points(
+    artist, ax: MplAxes, data: DataProvider, common: dict, artists: Mapping
+) -> None:
+    """A line, scatter or error bar plot. With rows left out: the kept rows as
+    styled, the line broken at the left-out ones; the line running on through
+    them in their color; then their markers and error bars, without a legend
+    entry. Each part that shows points carries `rows`, its data rows, for
+    clicks."""
+    from figscribe.fit import FitError, kept
+
+    columns = {
+        name: np.asarray(data(ref), dtype=float)
+        for name in ("x", "y", "xerr", "yerr")
+        if (ref := getattr(artist, name, None)) is not None
+    }
+    count = len(columns["x"])
+    try:
+        shown = kept(count, artist.left_out)
+    except FitError as exc:
+        raise DataError(f"{artist.label or artist.kind}: {exc}") from None
+    shown &= _inside_fits(artist, artists, columns["x"])
+    if not shown.all():
+        columns["y"] = np.where(shown, columns["y"], np.nan)
+    _draw_part(artist, ax, columns, {}, common).rows = np.arange(count)
+    if shown.all():
+        return
+    color = artist.left_out_color or LEFT_OUT_COLOR
+    apart = {**common, "label": "_nolegend_"}
+    linestyle = like_the_plot(artist, "linestyle")
+    if linestyle not in NO_LINE:
+        x, y = columns["x"], np.asarray(data(artist.y), dtype=float)
+        touching = ~(shown[:-1] & shown[1:])
+        width = {"linewidth": artist.linewidth} if hasattr(artist, "linewidth") else {}
+        ax.plot(
+            _segments(x)[touching].ravel(),
+            _segments(y)[touching].ravel(),
+            color=color,
+            linestyle=linestyle,
+            **width,
+            **apart,
+        )
+    marker = like_the_plot(artist, "marker")
+    if marker is None and not isinstance(artist, ErrorbarPlot):
+        return  # nothing to show of the points themselves
+    out = ~shown
+    values = {name: column[out] for name, column in columns.items()}
+    values["y"] = np.asarray(data(artist.y), dtype=float)[out]
+    style = {"color": color, "marker": marker or "none", "linestyle": "none"}
+    _draw_part(artist, ax, values, style, apart).rows = np.flatnonzero(out)
+
+
+def _inside_fits(artist, artists: Mapping, x: np.ndarray) -> np.ndarray:
+    """Which points lie inside the range of every fit of the plot that draws
+    the points outside like left-out ones."""
+    from figscribe.fit import in_range
+
+    inside = np.ones(x.shape, dtype=bool)
+    for fit in artists.values():
+        if (
+            isinstance(fit, FitCurve)
+            and fit.target == artist.id
+            and fit.outside_as_left_out
+            and fit.fit_range is not None
+            and fit.result is not None
+        ):
+            inside &= in_range(x, fit.fit_range)
+    return inside
+
+
+NO_LINE = (None, "none", "None", "", " ")
+"""Line styles that draw no line."""
+
+
+def like_the_plot(artist, name: str):
+    """The left-out points' `name` ("marker", "linestyle"): the plot's own
+    when set to "same"."""
+    value = getattr(artist, f"left_out_{name}", "none")
+    return getattr(artist, name, None) if value == LIKE_THE_PLOT else value
+
+
+def _segments(values: np.ndarray) -> np.ndarray:
+    """Each step from one row to the next as (from, to, NaN), one per row."""
+    gap = np.full(values.size - 1, np.nan)
+    return np.column_stack([values[:-1], values[1:], gap])
+
+
+def _draw_part(artist, ax: MplAxes, values: dict, style: dict, options: dict):
+    """Draw `values` as the plot does, with `style` over its own; return the
+    Matplotlib artist that shows the points."""
+    if isinstance(artist, LinePlot):
+        return ax.plot(
+            values["x"],
+            values["y"],
+            color=style.get("color", artist.color),
+            linestyle=style.get("linestyle", artist.linestyle),
+            linewidth=artist.linewidth,
+            marker=style.get("marker", artist.marker),
+            markersize=artist.markersize,
+            **options,
+        )[0]
+    if isinstance(artist, ScatterPlot):
+        return ax.scatter(
+            values["x"],
+            values["y"],
+            s=artist.size,
+            color=style.get("color", artist.color),
+            marker=style.get("marker", artist.marker),
+            edgecolors=artist.edgecolor,
+            **options,
+        )
+    container = ax.errorbar(
+        values["x"],
+        values["y"],
+        xerr=values.get("xerr"),
+        yerr=values.get("yerr"),
+        color=style.get("color", artist.color),
+        linestyle=style.get("linestyle", artist.linestyle),
+        linewidth=artist.linewidth,
+        marker=style.get("marker", artist.marker),
+        markersize=artist.markersize,
+        capsize=artist.capsize,
+        elinewidth=artist.elinewidth,
+        **options,
+    )
+    # A container has no gid of its own; tag every part so a click on a cap or
+    # a bar maps back to the artist as well.
+    for part in container.get_children():
+        part.set_gid(artist.id)
+    return container.lines[0]
 
 
 COORDS = {"data": "data", "axes": "axes fraction"}
@@ -331,7 +549,8 @@ def _draw_fit(
     artists: Mapping[str, Artist],
     common: dict,
 ) -> None:
-    """The fitted model across the range of its data; nothing before a fit."""
+    """The fitted model across its fit range, where there is data, or across
+    all the data; nothing before a fit."""
     from figscribe.fit import evaluate
 
     target = _referenced(artists, fit.target, FITTABLE, "fit")
@@ -341,7 +560,12 @@ def _draw_fit(
     x = x[np.isfinite(x)]
     if x.size == 0:
         return
-    xs = np.linspace(x.min(), x.max(), CURVE_POINTS)
+    low, high = float(x.min()), float(x.max())
+    if fit.fit_range is not None and not fit.extend_curve:
+        low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
+        if not low < high:
+            return
+    xs = np.linspace(low, high, CURVE_POINTS)
     ys = evaluate(fit.model, fit.result.parameters, xs)
     ax.plot(
         xs,
@@ -360,9 +584,9 @@ def _draw_residuals(
     artists: Mapping[str, Artist],
     common: dict,
 ) -> None:
-    """Data minus fit at every data point, with the data's y errors, around a
-    dashed zero line."""
-    from figscribe.fit import evaluate
+    """Data minus fit at every fitted point, with the data's y errors, around
+    a dashed zero line."""
+    from figscribe.fit import evaluate, in_range, kept
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
     target = _referenced(artists, fit.target, FITTABLE, "fit")
@@ -376,6 +600,10 @@ def _draw_residuals(
         if isinstance(target, ErrorbarPlot) and target.yerr is not None
         else None
     )
+    if fit.fit_range is not None or target.left_out:
+        used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
+        x, y = x[used], y[used]
+        yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
     container = ax.errorbar(
         x,
         y - evaluate(fit.model, fit.result.parameters, x),

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from figscribe.commands import find
 from figscribe.model import ErrorbarPlot, LinePlot, dumps, loads
 from figscribe.tools import TOOLS, ProjectWorkspace, Toolbox, ToolError
 
@@ -56,7 +57,7 @@ def test_get_project_shows_structure_but_no_file_locations(tools, workspace) -> 
     assert source["path"] == "scan.csv"
     assert "sha256" not in source
     assert source["columns"] == ["t", "U", "dU"]
-    assert result["problems"] == []
+    assert result["problems"] == ["scan.csv is missing; the user can locate it"]
     assert result["shown_figure"] == workspace.project.figures[0].id
     json.dumps(result)  # plain JSON all the way down
 
@@ -128,10 +129,73 @@ def test_set_field_is_strict(tools, workspace) -> None:
     figure, *_ = _ids(workspace)
     with pytest.raises(ToolError, match="valid number"):
         tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": "300"})
-    with pytest.raises(ToolError, match="greater than 0"):
+    with pytest.raises(ToolError, match="greater than or equal to 72"):
         tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": -1})
     tools.call("set_field", {"object_id": figure, "path": ["dpi"], "value": 150})
     assert workspace.project.figures[0].dpi == 150.0
+
+
+def test_the_assistant_letters_the_panels(tools, workspace) -> None:
+    figure, *_ = _ids(workspace)
+    schema = tools.call("get_schema", {})
+    assert "reading order" in json.dumps(schema)
+    labels = {"style": "A", "bold": True}
+    tools.call(
+        "set_field", {"object_id": figure, "path": ["panel_labels"], "value": labels}
+    )
+    tools.call(
+        "set_field",
+        {"object_id": figure, "path": ["panel_labels", "placement"], "value": "inside"},
+    )
+    shown = workspace.project.figures[0].panel_labels
+    assert (shown.style, shown.bold, shown.placement) == ("A", True, "inside")
+    assert (
+        'textcoords="offset fontsize"' in tools.call("get_python_script", {})["script"]
+    )
+    with pytest.raises(ToolError, match="panel_labels.style"):
+        tools.call(
+            "set_field",
+            {"object_id": figure, "path": ["panel_labels", "style"], "value": "i"},
+        )
+
+
+def test_a_tick_step_that_would_freeze_the_figure_is_refused(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    before = dumps(workspace.project)
+    # The data's t runs from 0 to 10, so every 0.001 means thousands of ticks.
+    with pytest.raises(ToolError, match="at most 50"):
+        tools.call(
+            "set_field",
+            {"object_id": axes, "path": ["x", "major_step"], "value": 0.001},
+        )
+    step = {"op": "set_field", "object_id": axes, "path": ["x", "major_step"]}
+    wide = {"op": "set_field", "object_id": axes, "path": ["x", "limits"]}
+    with pytest.raises(ToolError, match="at most 50"):
+        tools.call(
+            "apply_changes",
+            {
+                "description": "Ticks",
+                "operations": [{**step, "value": 1}, {**wide, "value": [0, 10_000]}],
+            },
+        )
+    assert dumps(workspace.project) == before
+    tools.call(
+        "set_field", {"object_id": axes, "path": ["x", "major_step"], "value": 2}
+    )
+    assert workspace.project.figures[0].axes[0].x.major_step == 2.0
+
+
+def test_a_tick_problem_from_the_file_does_not_block_other_changes(
+    tools, workspace
+) -> None:
+    from figscribe.model import AxisSpec
+
+    axes = workspace.project.figures[0].axes[0]
+    axes.x = AxisSpec(limits=(0.0, 10_000.0), major_step=1.0)  # as loaded
+    result = tools.call(
+        "set_field", {"object_id": axes.id, "path": ["y", "label"], "value": "U"}
+    )
+    assert any("major ticks" in problem for problem in result["problems"])
 
 
 @pytest.mark.parametrize(
@@ -153,12 +217,29 @@ def test_set_field_refuses_bad_addresses(
 
 
 def test_problems_are_reported_after_a_change(tools, workspace) -> None:
-    _, axes, _, _ = _ids(workspace)
-    result = tools.call("set_field", {"object_id": axes, "path": ["row"], "value": 4})
+    figure, *_ = _ids(workspace)
+    path = ["layout", "width_ratios"]  # two ratios for one column
+    result = tools.call(
+        "set_field", {"object_id": figure, "path": path, "value": [1.0, 2.0]}
+    )
     assert result["problems"] and "grid" in result["problems"][0]
 
 
+def test_a_panel_outside_the_grid_is_refused(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    with pytest.raises(ToolError, match="outside the grid"):
+        tools.call("set_field", {"object_id": axes, "path": ["row"], "value": 4})
+
+
 # --- insert, remove, move ------------------------------------------------------
+
+
+def test_a_style_string_matplotlib_refuses_is_refused(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    with pytest.raises(ToolError, match="'blu' is not a color"):
+        tools.call(
+            "set_field", {"object_id": artist, "path": ["color"], "value": "blu"}
+        )
 
 
 def test_insert_a_plot(tools, workspace) -> None:
@@ -175,6 +256,22 @@ def test_insert_a_plot(tools, workspace) -> None:
     added = workspace.project.figures[0].axes[0].artists[-1]
     assert isinstance(added, LinePlot) and added.id == result["id"]
     assert result["undo_step"] == "Add line plot"
+
+
+def test_insert_a_reference_line_and_a_shaded_range(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    line = {"kind": "refline", "orientation": "horizontal", "at": 0.5}
+    result = tools.call(
+        "insert", {"parent_id": axes, "field": "artists", "object": line}
+    )
+    assert result["undo_step"] == "Add reference line"
+    span = {"kind": "span", "start": 3, "end": 6, "label": "pulse"}
+    tools.call("insert", {"parent_id": axes, "field": "artists", "object": span})
+    added = workspace.project.figures[0].axes[0].artists[-2:]
+    assert [a.kind for a in added] == ["refline", "span"]
+    assert "ax.axhline(0.5" in tools.call("get_python_script", {})["script"]
+    with pytest.raises(ToolError, match="two different ends"):
+        tools.call("set_field", {"object_id": added[1].id, "path": ["end"], "value": 3})
 
 
 @pytest.mark.parametrize(
@@ -217,10 +314,14 @@ def test_remove_takes_dependents_along(tools, workspace) -> None:
     assert workspace.project.figures[0].axes[0].artists == []
 
 
-def test_sources_and_unknown_ids_are_not_removed(tools, workspace) -> None:
-    *_, source = _ids(workspace)
-    with pytest.raises(ToolError, match="cannot be removed"):
-        tools.call("remove", {"object_id": source})
+def test_a_data_file_is_removed_with_its_plots(tools, workspace) -> None:
+    *_, data, source = _ids(workspace)
+    result = tools.call("remove", {"object_id": source})
+    assert set(result["removed"]) == {source, data}
+    assert workspace.project.sources == []
+
+
+def test_unknown_ids_are_not_removed(tools) -> None:
     with pytest.raises(ToolError, match="no object"):
         tools.call("remove", {"object_id": "nope"})
 
@@ -535,3 +636,90 @@ def test_reading_the_tool_list_stays_light() -> None:
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_a_changed_data_file_can_be_taken_as_it_is_now(
+    tools, workspace, example: Path
+) -> None:
+    from figscribe.io import sha256_of
+
+    csv = example.parent / "scan.csv"
+    csv.write_text(csv.read_text(encoding="utf-8") + "10.25,0.01,0.04\n", "utf-8")
+    problems = tools.call("get_project", {})["problems"]
+    assert any("scan.csv has changed" in problem for problem in problems)
+
+    source = workspace.project.sources[0].id
+    result = tools.call("use_new_data_version", {"source_id": source})
+    assert workspace.project.sources[0].sha256 == sha256_of(csv)
+    assert workspace.project.sources[0].row_count == 42
+    assert result["undo_step"] == "Use the new version of scan.csv"
+    assert result["problems"] == []
+    with pytest.raises(ToolError, match="has not changed"):
+        tools.call("use_new_data_version", {"source_id": source})
+
+
+def test_a_reading_option_reads_the_file_or_is_refused(tools, workspace) -> None:
+    source = workspace.project.sources[0]
+    with pytest.raises(ToolError, match="cannot read"):
+        tools.call(
+            "set_field", {"object_id": source.id, "path": ["delimiter"], "value": "2"}
+        )
+    assert workspace.project.sources[0] == source
+    tools.call("set_field", {"object_id": source.id, "path": ["comment"], "value": "%"})
+    assert workspace.project.sources[0].comment == "%"
+    assert workspace.history.undo_text.startswith("Read ")
+
+
+def test_apply_changes_reads_the_file_as_set_field_does(tools, workspace) -> None:
+    source = workspace.project.sources[0]
+    change = {"op": "set_field", "object_id": source.id, "path": ["delimiter"]}
+    with pytest.raises(ToolError, match="cannot read"):
+        tools.call(
+            "apply_changes",
+            {"description": "Separator", "operations": [{**change, "value": "2"}]},
+        )
+    assert workspace.project.sources[0] == source
+
+
+def test_a_fit_can_hold_and_bound_parameters(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "fit",
+        {
+            "target_id": artist,
+            "model": {"kind": "predefined", "name": "gaussian"},
+            "initial_values": {"c": 0.0},
+            "fixed": ["c"],
+            "bounds": {"sigma": [0.1, None]},
+        },
+    )
+    assert result["result"]["parameters"]["c"] == 0.0
+    fit = find(workspace.project, result["id"])
+    assert fit.fixed == ["c"] and fit.parameter_bounds == {"sigma": (0.1, None)}
+
+
+def test_a_fit_can_use_part_of_the_data(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "fit",
+        {
+            "target_id": artist,
+            "model": {"kind": "predefined", "name": "gaussian"},
+            "fit_range": [2.0, 8.0],
+        },
+    )
+    assert find(workspace.project, result["id"]).fit_range == (2.0, 8.0)
+
+
+def test_leaving_points_out_fits_the_plot_again(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    fitted = tools.call(
+        "fit",
+        {"target_id": artist, "model": {"kind": "predefined", "name": "gaussian"}},
+    )
+    before = find(workspace.project, fitted["id"]).result
+    tools.call(
+        "set_field", {"object_id": artist, "path": ["left_out"], "value": [0, 1, 2]}
+    )
+    assert find(workspace.project, artist).left_out == [0, 1, 2]
+    assert find(workspace.project, fitted["id"]).result != before

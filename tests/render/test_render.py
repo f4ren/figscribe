@@ -6,9 +6,13 @@ field reaches the right Matplotlib property.
 
 from __future__ import annotations
 
+import io
+import time
+
 import numpy as np
 import pytest
 from matplotlib.collections import PathCollection
+from matplotlib.ticker import MultipleLocator
 
 from figscribe.model import (
     Annotation,
@@ -107,6 +111,17 @@ def test_errorbar_plot(data, columns, ref) -> None:
     assert np.array_equal(data_line.get_ydata(), columns["U"])
     assert len(caplines) == 2  # one lower and one upper cap line
     assert {part.get_gid() for part in container.get_children()} == {bars.id}
+
+
+def test_errorbar_line_and_bars_have_their_own_widths(data, ref) -> None:
+    bars = ErrorbarPlot(
+        x=ref("t"), y=ref("U"), yerr=ref("dU"), linestyle="-", linewidth=3.0
+    )
+    ax = render(Figure(axes=[Axes(artists=[bars])]), data).axes[0]
+    (container,) = ax.containers
+    data_line, _, (bar_lines,) = container.lines
+    assert data_line.get_linewidth() == 3.0
+    assert list(bar_lines.get_linewidths()) == [1.0]  # elinewidth, as before
 
 
 def test_unlabelled_artists_stay_out_of_the_legend(data, ref) -> None:
@@ -234,6 +249,15 @@ def test_unshared_axes_keep_their_tick_labels(data) -> None:
     figure = Figure(layout=GridLayout(rows=2), axes=[Axes(row=0), Axes(row=1)])
     top = render(figure, data).axes[0]
     assert top.xaxis.get_tick_params()["labelbottom"]
+
+
+def test_columns_of_unequal_length_are_a_data_error(ref) -> None:
+    from figscribe.io import DataError
+
+    columns = {"t": np.arange(4.0), "U": np.arange(3.0)}
+    axes = Axes(artists=[LinePlot(x=ref("t"), y=ref("U"))])
+    with pytest.raises(DataError, match=r"y \(U\) has 3 values, x \(t\) has 4"):
+        render(Figure(axes=[axes]), lambda r: columns[r.column])
 
 
 def test_share_all_joins_every_axes(data) -> None:
@@ -379,3 +403,258 @@ def test_a_colour_mesh_on_its_grid(source) -> None:
     (quad,) = ax.collections
     assert quad.get_gid() == mesh.id and quad.norm.vmax == 2.0
     assert ax.dataLim.x1 > 3.0  # cells around the given centres
+
+
+def test_tick_style_and_prefixes(data, ref) -> None:
+    from figscribe.model import Axes, AxisSpec, Figure, LinePlot
+    from figscribe.render import render
+
+    axes = Axes(
+        x=AxisSpec(label="f", unit="Hz", prefix="k", limits=(0, 225e3)),
+        y=AxisSpec(
+            label="A",
+            scale="log",
+            limits=(1300, 1400),
+            major_step=50,
+            minor_divisions=5,
+        ),
+        artists=[LinePlot(x=ref("t"), y=ref("U"))],
+    )
+    figure = Figure(tick_direction="in", ticks_all_sides=True, axes=[axes])
+    fig = render(figure, data)
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    assert ax.get_xlabel() == "f (kHz)"
+    labels = [t.get_text() for t in ax.get_xticklabels() if t.get_text()]
+    assert labels[:3] == ["0", "50", "100"]
+    assert list(ax.get_yticks()) == [1250, 1300, 1350, 1400, 1450]
+    assert [t.get_text() for t in ax.get_yticklabels()][1:4] == ["1300", "1350", "1400"]
+    minor = ax.yaxis.get_minorticklocs()
+    assert any(abs(m - 1310) < 1e-6 for m in minor)  # four between 1300 and 1350
+    tick = ax.xaxis.get_major_ticks()[1]
+    assert tick.tick2line.get_visible()  # on the top edge too
+    assert not tick.label2.get_visible()  # but numbers only at the bottom
+    assert tick._tickdir == "in"
+
+
+def test_frame_ticks_and_grid_lines_have_widths(data, ref) -> None:
+    axes = Axes(
+        grid=True,
+        grid_linewidth=0.4,
+        grid_linestyle=":",
+        artists=[LinePlot(x=ref("t"), y=ref("U"))],
+    )
+    figure = Figure(
+        frame_width=1.2,
+        tick_width=1.0,
+        tick_length=5.0,
+        minor_tick_width=0.7,
+        minor_tick_length=2.5,
+        axes=[axes],
+    )
+    fig = render(figure, data)
+    fig.canvas.draw()
+    ax = fig.axes[0]
+    assert {spine.get_linewidth() for spine in ax.spines.values()} == {1.2}
+    major = ax.xaxis.get_major_ticks()[0].tick1line
+    minor = ax.yaxis.get_minor_ticks()[0].tick1line
+    assert (major.get_markeredgewidth(), major.get_markersize()) == (1.0, 5.0)
+    assert (minor.get_markeredgewidth(), minor.get_markersize()) == (0.7, 2.5)
+    line = ax.xaxis.get_major_ticks()[0].gridline
+    assert (line.get_linewidth(), line.get_linestyle()) == (0.4, ":")
+
+
+def _drawn(fig) -> float:
+    """Seconds to draw `fig` as the preview does, ticks and all."""
+    start = time.perf_counter()
+    fig.savefig(io.BytesIO(), format="png")
+    return time.perf_counter() - start
+
+
+def test_a_tick_step_far_too_small_falls_back_to_automatic_ticks(data) -> None:
+    # Every 1 from 0 to 10 000 took over 20 s per redraw (roadmap B1).
+    axes = Axes(x=AxisSpec(limits=(0.0, 10_000.0), major_step=1.0))
+    fig = render(Figure(axes=[axes]), data)
+    assert _drawn(fig) < 1.0
+    ax = fig.axes[0]
+    assert not isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+
+
+def test_the_tick_limit_applies_to_an_automatic_range(data) -> None:
+    # The data run from 0 to 10; the range is not fixed.
+    fig = render(Figure(axes=[Axes(x=AxisSpec(major_step=0.001))]), data)
+    assert _drawn(fig) < 1.0
+    assert not isinstance(fig.axes[0].xaxis.get_major_locator(), MultipleLocator)
+
+
+def test_a_view_is_shown_and_its_ticks_fit_it(data) -> None:
+    # Every 0.01 fits the panel's range of 0 to 0.4, not the view of 0 to 10.
+    axes = Axes(x=AxisSpec(limits=(0.0, 0.4), major_step=0.01))
+    fig = render(Figure(axes=[axes]), data, view={axes.id: ((0.0, 10.0), (0.0, 1.0))})
+    ax = fig.axes[0]
+    assert ax.get_xlim() == (0.0, 10.0)
+    assert not isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+
+
+def test_too_many_minor_ticks_keep_the_major_step(data) -> None:
+    # 41 major ticks are fine; ten parts between each give 400 minor ticks.
+    axes = Axes(x=AxisSpec(limits=(0.0, 40.0), major_step=1.0, minor_divisions=10))
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    assert np.allclose(np.diff(ax.get_xticks()), 1.0)
+    assert len(ax.xaxis.get_minorticklocs()) <= 250
+
+
+def test_a_tick_step_that_fits_is_kept(data) -> None:
+    axes = Axes(x=AxisSpec(limits=(0.0, 40.0), major_step=1.0, minor_divisions=5))
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    assert isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+    assert len(ax.xaxis.get_minorticklocs()) == 40 * 4  # four between each pair
+
+
+@pytest.mark.parametrize(
+    ("fit_range", "extend", "span"),
+    [
+        (None, False, (0.0, 10.0)),
+        ((2.0, 7.0), False, (2.0, 7.0)),
+        ((2.0, 7.0), True, (0.0, 10.0)),
+        ((-5.0, 4.0), False, (0.0, 4.0)),  # no curve where there is no data
+    ],
+)
+def test_a_fit_is_drawn_over_its_range(data, ref, fit_range, extend, span) -> None:
+    from figscribe.model import FitCurve, FitResult, PredefinedFit, ResidualPlot
+
+    points = ErrorbarPlot(x=ref("t"), y=ref("U"), yerr=ref("dU"))
+    fit = FitCurve(
+        target=points.id,
+        model=PredefinedFit(name="linear"),
+        fit_range=fit_range,
+        extend_curve=extend,
+        result=FitResult(parameters={"a": 0.1, "b": 0.0}, uncertainties={}),
+    )
+    residuals = ResidualPlot(target=fit.id)
+    figure = Figure(
+        layout=GridLayout(rows=2),
+        axes=[Axes(artists=[points, fit]), Axes(row=1, artists=[residuals])],
+    )
+    drawn = render(figure, data)
+    [curve] = [a for a in drawn.axes[0].lines if a.get_gid() == fit.id]
+    assert (curve.get_xdata().min(), curve.get_xdata().max()) == span
+    [shown] = [a for a in drawn.axes[1].lines if a.get_gid() == residuals.id]
+    low, high = fit_range or (0.0, 10.0)
+    assert shown.get_xdata().min() >= low and shown.get_xdata().max() <= high
+
+
+def _letters(fig) -> dict[str, list]:
+    """The panel labels drawn, by the gid of their axes."""
+    from matplotlib.text import Annotation as MplAnnotation
+
+    return {
+        ax.get_gid(): [t for t in ax.texts if isinstance(t, MplAnnotation)]
+        for ax in fig.findobj(lambda a: hasattr(a, "texts") and a.get_gid())
+    }
+
+
+def test_panel_labels_are_drawn_on_each_panel_but_not_on_insets(data) -> None:
+    from figscribe.model import Inset, PanelLabels
+
+    left, right = Axes(), Axes(col=1)
+    inset = Axes(inset=Inset(parent=left.id))
+    figure = Figure(layout=GridLayout(cols=2), axes=[left, right, inset])
+    assert all(texts == [] for texts in _letters(render(figure, data)).values())
+    figure.panel_labels = PanelLabels()
+    drawn = _letters(render(figure, data))
+    assert [t.get_text() for t in drawn[left.id]] == ["(a)"]
+    assert [t.get_text() for t in drawn[right.id]] == ["(b)"]
+    assert drawn[inset.id] == []
+    (label,) = drawn[left.id]
+    # Outside the top left corner, not a note: no gid, so it cannot be dragged.
+    assert label.xy == (0, 1) and label.xycoords == "axes fraction"
+    assert (label.get_ha(), label.get_va()) == ("right", "bottom")
+    assert label.get_gid() is None
+    assert label.get_fontweight() == "normal"
+
+
+def test_panel_labels_inside_bold_and_sized(data) -> None:
+    from figscribe.model import PanelLabels
+
+    figure = Figure(
+        axes=[Axes()],
+        panel_labels=PanelLabels(placement="inside", bold=True, fontsize=14.0),
+    )
+    fig = render(figure, data)
+    ((label,),) = _letters(fig).values()
+    assert (label.get_ha(), label.get_va()) == ("left", "top")
+    assert label.get_fontweight() == "bold" and label.get_fontsize() == 14.0
+    fig.draw_without_rendering()  # lays the panels out
+    box, frame = label.get_window_extent(), fig.axes[0].bbox
+    assert frame.x0 < box.x0 and box.y1 < frame.y1  # inside the corner
+
+
+def test_an_outside_panel_label_gets_room_from_the_layout(data) -> None:
+    from figscribe.model import PanelLabels
+
+    figure = Figure(axes=[Axes()], panel_labels=PanelLabels(fontsize=20.0))
+    fig = render(figure, data)
+    fig.draw_without_rendering()  # lays the panels out
+    ((label,),) = _letters(fig).values()
+    box = label.get_window_extent()
+    assert box.x0 >= 0 and box.y1 <= fig.bbox.y1
+
+
+def test_reference_lines_span_the_panel(data, ref) -> None:
+    from figscribe.model import ReferenceLine
+
+    vertical = ReferenceLine(at=4.0, label="onset")
+    horizontal = ReferenceLine(
+        orientation="horizontal", at=0.5, color="C3", linestyle=":", linewidth=2.0
+    )
+    axes = Axes(
+        legend=Legend(visible=True),
+        artists=[LinePlot(x=ref("t"), y=ref("U")), vertical, horizontal],
+    )
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    drawn = {line.get_gid(): line for line in ax.lines}
+    v, h = drawn[vertical.id], drawn[horizontal.id]
+    assert list(v.get_xdata()) == [4.0, 4.0] and list(v.get_ydata()) == [0, 1]
+    assert list(h.get_ydata()) == [0.5, 0.5] and list(h.get_xdata()) == [0, 1]
+    assert (v.get_color(), v.get_linestyle(), v.get_linewidth()) == ("gray", "--", 1.0)
+    assert (h.get_color(), h.get_linestyle(), h.get_linewidth()) == ("C3", ":", 2.0)
+    assert [t.get_text() for t in ax.get_legend().get_texts()] == ["onset"]
+
+
+def test_shaded_spans_lie_behind_the_data(data, ref) -> None:
+    from figscribe.model import ShadedSpan
+
+    band = ShadedSpan(start=3.0, end=6.0, label="pulse")
+    across = ShadedSpan(orientation="horizontal", start=0.2, end=0.4, color="C2")
+    axes = Axes(artists=[LinePlot(x=ref("t"), y=ref("U")), band, across])
+    fig = render(Figure(axes=[axes]), data)
+    ax = fig.axes[0]
+    patches = {p.get_gid(): p for p in ax.patches}
+    shaded, flat = patches[band.id], patches[across.id]
+    assert shaded.get_zorder() == 0.5 < ax.lines[0].get_zorder()
+    assert shaded.get_alpha() == 0.2 and shaded.get_linewidth() == 0
+
+    def corners(patch):
+        return patch.get_patch_transform().transform(patch.get_path().vertices)
+
+    assert {round(x, 9) for x, _ in corners(shaded)} == {3.0, 6.0}
+    assert {round(y, 9) for _, y in corners(flat)} == {0.2, 0.4}
+
+
+def test_a_horizontal_line_goes_with_the_right_axis(data, ref) -> None:
+    from figscribe.model import ReferenceLine
+
+    line = ReferenceLine(orientation="horizontal", at=50.0, axis="right")
+    axes = Axes(
+        y_right=AxisSpec(limits=(0.0, 100.0)),
+        artists=[LinePlot(x=ref("t"), y=ref("U")), line],
+    )
+    fig = render(Figure(axes=[axes]), data)
+    right = next(ax for ax in fig.axes if ax.get_gid().endswith("#right"))
+    assert [ln.get_gid() for ln in right.lines] == [line.id]

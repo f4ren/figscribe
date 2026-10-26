@@ -83,10 +83,12 @@ def test_every_simple_field_gets_an_editor(
     assert not absent & set(panel.editors)
 
 
-def test_axes_nest_their_axis_and_legend(panel: PropertyPanel, document) -> None:
+def test_a_panel_links_its_axes_and_nests_its_legend(panel, document) -> None:
     document.select(_axes(document).id)
-    assert {("x", "label"), ("y", "scale"), ("legend", "visible")} <= set(panel.editors)
-    assert ("y_right", "label") not in panel.editors
+    assert ("legend", "visible") in panel.editors
+    assert ("x", "label") not in panel.editors  # each axis has its own form
+    assert set(panel.axis_links) == {"x", "y"}
+    assert panel.axis_links["x"].text().startswith("X axis\nt (s) · linear")
 
 
 def test_a_number_commits_as_one_undo_step(panel: PropertyPanel, document) -> None:
@@ -126,6 +128,15 @@ def test_text_that_is_no_number_is_reported(panel: PropertyPanel, document) -> N
     assert not document.history.can_undo
 
 
+def test_numbers_typed_with_a_decimal_comma(panel: PropertyPanel, document) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("height_mm",), "62,5")
+    assert _figure(document).height_mm == 62.5
+    _type(panel, ("height_mm",), "inf")
+    assert "'inf'" in panel.error
+    assert _figure(document).height_mm == 62.5
+
+
 def test_empty_text_clears_an_optional_field(panel: PropertyPanel, document) -> None:
     artist = _artist(document)
     document.select(artist.id)
@@ -135,12 +146,21 @@ def test_empty_text_clears_an_optional_field(panel: PropertyPanel, document) -> 
     assert _artist(document).label == "data"
 
 
+def test_a_color_matplotlib_does_not_know_is_reported(
+    panel: PropertyPanel, document
+) -> None:
+    document.select(_artist(document).id)
+    _type(panel, ("color",), "blu")
+    assert "'blu' is not a color" in panel.error
+    assert _artist(document).color is None
+
+
 def test_literals_are_a_choice(panel: PropertyPanel, document) -> None:
     document.select(_axes(document).id)
-    combo = panel.editors[("y", "scale")].widget
+    combo = panel.editors[("legend", "location")].widget
     assert isinstance(combo, QComboBox)
-    combo.activated.emit(combo.findText("log"))
-    assert _axes(document).y.scale == "log"
+    combo.activated.emit(combo.findText("upper left"))
+    assert _axes(document).legend.location == "upper left"
 
 
 def test_booleans_are_a_checkbox(panel: PropertyPanel, document) -> None:
@@ -153,17 +173,12 @@ def test_booleans_are_a_checkbox(panel: PropertyPanel, document) -> None:
 
 def test_pairs_and_lists_of_numbers(panel: PropertyPanel, document) -> None:
     document.select(_axes(document).id)
-    _type(panel, ("x", "limits"), "0, 12.5")
-    assert _axes(document).x.limits == (0.0, 12.5)
-    _type(panel, ("x", "limits"), "3")
+    _type(panel, ("legend", "position"), "0.1, 0.9")
+    assert _axes(document).legend.position == (0.1, 0.9)
+    _type(panel, ("legend", "position"), "3")
     assert "two numbers" in panel.error
-    _type(panel, ("x", "limits"), "")
-    assert _axes(document).x.limits is None
-
-    _type(panel, ("x", "ticks"), "0, 5, 10")
-    assert _axes(document).x.ticks == [0.0, 5.0, 10.0]
-    _type(panel, ("x", "tick_labels"), "a, b, c")
-    assert _axes(document).x.tick_labels == ["a", "b", "c"]
+    _type(panel, ("legend", "position"), "")
+    assert _axes(document).legend.position is None
 
 
 def test_whole_numbers(panel: PropertyPanel, document) -> None:
@@ -172,6 +187,184 @@ def test_whole_numbers(panel: PropertyPanel, document) -> None:
     assert _figure(document).layout.rows == 2
     _type(panel, ("layout", "rows"), "1.5")
     assert "whole number" in panel.error
+
+
+def test_rows_columns_and_lines_are_counted_from_one(
+    panel: PropertyPanel, document
+) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("layout", "rows"), "2")
+    document.select(_axes(document).id)
+    assert panel.editors[("row",)].line.text() == "1"  # the model's row 0
+    _type(panel, ("row",), "2")
+    assert _axes(document).row == 1
+    _type(panel, ("row",), "0")
+    assert "counted from 1" in panel.error
+    assert _axes(document).row == 1
+
+    source = document.project.sources[0]
+    document.select(source.id)
+    assert panel.editors[("header_row",)].line.text() == "2"  # the model's line 1
+
+
+def test_points_take_their_marker_size_in_pt_like_lines(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.gui.names import field_name
+    from figscribe.model import ScatterPlot
+
+    line = _artist(document)
+    points = ScatterPlot(x=line.x, y=line.y, size=20.0)  # Matplotlib's area, pt²
+    document.push(InsertItem(_axes(document).id, "artists", points))
+    document.select(points.id)
+    assert field_name("size") == field_name("markersize") == "Marker size (pt)"
+    assert panel.editors[("size",)].line.text() == "4.472136"
+    _type(panel, ("size",), "5")
+    assert _axes(document).artists[-1].size == 25.0
+    _type(panel, ("size",), "-5")
+    assert "-5" in panel.error and _axes(document).artists[-1].size == 25.0
+
+
+def test_the_resolution_is_an_export_setting(panel: PropertyPanel, document) -> None:
+    from figscribe.gui.names import field_name
+
+    document.select(_figure(document).id)
+    resolution = panel.editors[("dpi",)].widget
+    assert panel.sections["Export"].isAncestorOf(resolution)
+    assert not panel.sections["Size"].isAncestorOf(resolution)
+    assert "PNG" in field_name("dpi")
+
+
+def test_the_style_sheet_is_chosen_from_a_list(
+    panel: PropertyPanel, document, tmp_path
+) -> None:
+    def combo():
+        return panel.editors[("stylesheet",)].widget
+
+    def texts() -> list[str]:
+        return [combo().itemText(i) for i in range(combo().count())]
+
+    document.select(_figure(document).id)
+    assert texts()[0] == "Matplotlib's default" and texts()[-1] == "Choose file…"
+    combo().activated.emit(texts().index("ggplot"))
+    assert _figure(document).stylesheet == "ggplot"
+
+    style = tmp_path / "journal.mplstyle"
+    style.write_text("lines.linewidth: 1\n", encoding="utf-8")
+    panel.choose_file = lambda title, pattern: style
+    combo().activated.emit(combo().count() - 1)
+    assert _figure(document).stylesheet == str(style)
+    assert combo().currentText() == "journal.mplstyle"
+    assert texts()[-1] == "Choose file…"
+
+    panel.choose_file = lambda title, pattern: None  # cancelled
+    combo().activated.emit(combo().count() - 1)
+    assert _figure(document).stylesheet == str(style)
+    assert combo().currentText() == "journal.mplstyle"
+
+
+def _fields(panel: PropertyPanel, path) -> list:
+    from PySide6.QtWidgets import QLineEdit
+
+    return panel.editors[path].widget.findChildren(QLineEdit)
+
+
+def _enter(line, text: str) -> None:
+    line.setText(text)
+    line.editingFinished.emit()
+
+
+def test_ratios_get_one_field_per_column(panel: PropertyPanel, document) -> None:
+    document.select(_figure(document).id)
+    _type(panel, ("layout", "cols"), "3")
+    width = _fields(panel, ("layout", "width_ratios"))
+    assert len(width) == 3 and all(f.placeholderText() == "1" for f in width)
+    _enter(width[0], "2")
+    assert _figure(document).layout.width_ratios == [2.0, 1.0, 1.0]
+    _enter(_fields(panel, ("layout", "width_ratios"))[0], "")
+    assert _figure(document).layout.width_ratios is None  # all equal again
+
+
+def test_an_image_extent_has_four_labelled_fields(
+    panel: PropertyPanel, document, tmp_path
+) -> None:
+    import numpy as np
+    from PySide6.QtWidgets import QLabel
+
+    from figscribe.commands import InsertItem
+    from figscribe.io.numpyfile import numpy_source
+    from figscribe.model import ImagePlot
+    from figscribe.model.data import ArrayRef
+
+    np.save(tmp_path / "map.npy", np.zeros((4, 4)))
+    source = numpy_source(tmp_path / "map.npy", tmp_path)
+    document.push(InsertItem(None, "sources", source))
+    image = ImagePlot(data=ArrayRef(source=source.id))
+    document.push(InsertItem(_axes(document).id, "artists", image))
+    document.select(image.id)
+
+    editor = panel.editors[("extent",)].widget
+    labels = [label.text() for label in editor.findChildren(QLabel)]
+    assert labels == ["left", "right", "bottom", "top"]
+    left, right, bottom, top = _fields(panel, ("extent",))
+    _enter(left, "0")
+    assert "all four" in panel.error and _axes(document).artists[-1].extent is None
+    for line, text in zip((left, right, bottom, top), "0 10 −1 1".split(), strict=True):
+        line.setText(text)
+    _enter(top, "1")
+    assert _axes(document).artists[-1].extent == (0.0, 10.0, -1.0, 1.0)
+
+
+def test_colors_offer_the_whole_cycle_of_the_style(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import SetField
+
+    document.select(_artist(document).id)
+    swatches = panel.editors[("color",)].swatches
+    assert [*swatches] == [f"C{i}" for i in range(10)] + ["black"]
+    assert swatches["C3"].toolTip() == "tab:red"
+    swatches["C7"].click()
+    assert _artist(document).color == "C7"
+
+    document.push(SetField(_figure(document).id, ("stylesheet",), "ggplot"))
+    document.select(None)
+    document.select(_artist(document).id)
+    assert len(panel.editors[("color",)].swatches) == 7 + 1  # ggplot has seven
+
+
+def test_recently_used_colors_are_offered_again(panel: PropertyPanel, document) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot
+
+    data = _artist(document)
+    line = LinePlot(x=data.x, y=data.y)
+    document.push(InsertItem(_axes(document).id, "artists", line))
+    document.select(data.id)
+    _type(panel, ("color",), "#123456")
+    document.select(line.id)
+    recent = panel.editors[("color",)].recent
+    assert [*recent] == ["#123456"]
+    recent["#123456"].click()
+    assert _axes(document).artists[-1].color == "#123456"
+
+
+def test_a_color_can_be_the_same_as_another_plots(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot
+
+    data = _artist(document)
+    line = LinePlot(x=data.x, y=data.y)
+    document.push(InsertItem(_axes(document).id, "artists", line))
+    panel.drawn_color = lambda oid: "#abcdef" if oid == data.id else None
+    document.select(line.id)
+    menu = panel.editors[("color",)].same_as.menu()
+    assert [action.text() for action in menu.actions()] == ["measurement"]
+    menu.actions()[0].trigger()
+    assert _axes(document).artists[-1].color == "#abcdef"
 
 
 def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> None:
@@ -186,8 +379,20 @@ def test_columns_are_chosen_from_the_sources(panel: PropertyPanel, document) -> 
     assert _artist(document).y == ColumnRef(source=source.id, column="dU")
 
     optional = panel.editors[("xerr",)].widget
-    assert optional.itemText(0) == "(none)"
+    assert optional.itemText(0) == "no x errors"
     assert optional.currentIndex() == 0
+
+
+def test_nested_fields_explain_themselves_in_their_own_words(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.gui.properties import tip_for
+    from figscribe.model import Colorbar, LinePlot
+
+    document.select(_axes(document).id)
+    location = panel.editors[("legend", "location")].widget
+    assert "upper right" in location.toolTip()
+    assert tip_for(Colorbar, "label") != tip_for(LinePlot, "label")
 
 
 def test_a_dangling_column_is_shown_as_missing(panel: PropertyPanel, document) -> None:
@@ -215,8 +420,10 @@ def test_data_sources_show_their_file_read_only(panel: PropertyPanel, document) 
     source = document.project.sources[0]
     document.select(source.id)
     assert ("path",) not in panel.editors and ("sha256",) not in panel.editors
+    assert ("row_count",) not in panel.editors  # recorded on import, not typed
     texts = [label.text() for label in panel.widget().findChildren(QLabel)]
     assert source.path in texts
+    assert "not recorded" in texts  # the example predates counting rows
     _type(panel, ("comment",), "%")
     assert document.project.sources[0].comment == "%"
 
@@ -273,6 +480,17 @@ def test_specs_cover_the_model(cls, fields) -> None:
         assert spec_for(name, field.annotation) is not None, f"{cls.__name__}.{name}"
 
 
+def test_a_source_offers_its_text_encoding(panel: PropertyPanel, document) -> None:
+    document.select(document.project.sources[0].id)
+    editor = panel.editors[("encoding",)]
+    combo = editor.widget
+    texts = [combo.itemText(i) for i in range(combo.count())]
+    assert texts == ["UTF-8", "Windows (cp1252)", "Latin-1 (ISO 8859-1)"]
+    assert "cp1252" in combo.toolTip()
+    combo.activated.emit(1)
+    assert document.project.sources[0].encoding == "cp1252"
+
+
 def test_font_tick_and_grid_settings_have_names(panel: PropertyPanel, document) -> None:
     document.select(_figure(document).id)
     assert ("font_size",) in panel.editors
@@ -281,10 +499,6 @@ def test_font_tick_and_grid_settings_have_names(panel: PropertyPanel, document) 
     assert _figure(document).font_size == 8.0
 
     document.select(_axes(document).id)
-    _type(panel, ("x", "major_step"), "2.5")
-    assert _axes(document).x.major_step == 2.5
-    _type(panel, ("x", "minor_divisions"), "1")
-    assert "minor_divisions" in panel.error  # at least two parts
     combo = panel.editors[("grid_axis",)].widget
     assert [combo.itemText(i) for i in range(combo.count())] == [
         "both axes",
@@ -293,3 +507,37 @@ def test_font_tick_and_grid_settings_have_names(panel: PropertyPanel, document) 
     ]
     combo.activated.emit(2)
     assert _axes(document).grid_axis == "y"
+
+
+def test_the_grid_color_is_a_color_field(panel: PropertyPanel, document) -> None:
+    document.select(_axes(document).id)
+    editor = panel.editors[("grid_color",)]
+    assert editor.line.placeholderText() == "automatic"
+    _type(panel, ("grid_color",), "#696969")
+    assert _axes(document).grid_color == "#696969"
+
+
+def test_panel_labels_are_switched_on_and_set_up(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_figure(document).id)
+    assert "Panel labels" not in panel.sections
+    panel.editors[("panel_labels",)].widget.click()
+    assert _figure(document).panel_labels is not None
+    assert document.history.undo_text == "Letter the panels"
+    assert "Panel labels" in panel.sections
+    placement = panel.editors[("panel_labels", "placement")].widget
+    placement.activated.emit(placement.findText("inside the corner"))
+    assert _figure(document).panel_labels.placement == "inside"
+    style = panel.editors[("panel_labels", "style")].widget
+    style.activated.emit(style.findText("A"))
+    assert _figure(document).panel_labels.style == "A"
+    panel.editors[("panel_labels", "bold")].widget.click()
+    assert _figure(document).panel_labels.bold
+    _type(panel, ("panel_labels", "fontsize"), "12")
+    assert _figure(document).panel_labels.fontsize == 12.0
+    panel.editors[("panel_labels",)].widget.click()
+    assert _figure(document).panel_labels is None
+    assert document.history.undo_text == "Remove the panel labels"
+    document.history.undo()
+    assert _figure(document).panel_labels.style == "A"

@@ -105,6 +105,43 @@ def test_byte_order_mark_from_excel_is_ignored(tmp_path: Path) -> None:
     assert source.columns == ["t", "U"]
 
 
+WINDOWS_TEXT = "t,I (µA)\n0,1\n1,2\n".encode("cp1252")
+"""As lab software on Windows writes it: µ is one byte, not valid UTF-8."""
+
+
+def test_a_windows_file_read_as_utf8_names_the_encoding(tmp_path: Path) -> None:
+    (tmp_path / "s.csv").write_bytes(WINDOWS_TEXT)
+    with pytest.raises(DataError, match=r"s\.csv.*encoding"):
+        csv_source(tmp_path / "s.csv", base_dir=tmp_path)
+
+
+def test_a_windows_file_reads_with_its_encoding(tmp_path: Path) -> None:
+    (tmp_path / "s.csv").write_bytes(WINDOWS_TEXT)
+    source = csv_source(tmp_path / "s.csv", base_dir=tmp_path, encoding="cp1252")
+    assert source.encoding == "cp1252"
+    assert source.columns == ["t", "I (µA)"]
+    assert list(_load(tmp_path, source, "I (µA)")) == [1.0, 2.0]
+
+    source.encoding = "utf-8-sig"  # changed afterwards, e.g. by hand
+    with pytest.raises(DataError, match="encoding"):
+        _load(tmp_path, source, "t")
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("t\n".encode("utf-8-sig"), "utf-8-sig"),
+        ("µ\n".encode(), "utf-8-sig"),
+        ("µ\n".encode("cp1252"), "cp1252"),
+        (b"\x81\xb5\n", "latin-1"),  # 0x81 is not a cp1252 character
+    ],
+)
+def test_the_encoding_is_detected(raw: bytes, expected: str) -> None:
+    from figscribe.io.csvfile import detect_encoding
+
+    assert detect_encoding(raw) == expected
+
+
 def test_single_row_still_gives_columns(tmp_path: Path) -> None:
     write(tmp_path / "s.csv", "t,U\n0,1\n")
     source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
@@ -172,3 +209,12 @@ def test_each_file_is_read_once(tmp_path: Path, monkeypatch) -> None:
 
     (tmp_path / "s.csv").unlink()
     assert list(data(ColumnRef(source=source.id, column="U"))) == [1.0]
+
+
+def test_a_file_without_rows_of_data_says_so(tmp_path: Path) -> None:
+    """Not "column 'y' is out of range: has 1 columns", which NumPy's empty
+    result made it say."""
+    write(tmp_path / "s.csv", "x,y,dy\n")
+    source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
+    with pytest.raises(DataError, match="s.csv has no rows of data"):
+        _load(tmp_path, source, "y")

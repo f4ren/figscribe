@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QLabel,
     QLayout,
     QLayoutItem,
+    QPlainTextEdit,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -123,3 +124,21 @@ class Section(QWidget):
             Qt.ArrowType.DownArrow if open_ else Qt.ArrowType.RightArrow
         )
         self.body.setVisible(open_)
+
+
+class TextBox(QPlainTextEdit):
+    """Text over several lines that says when it is done: on leaving the field,
+    or with Ctrl+Enter (Cmd+Enter on macOS), since Enter starts a new line."""
+
+    finished = Signal()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        enter = event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+        if enter and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.finished.emit()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().focusOutEvent(event)
+        self.finished.emit()

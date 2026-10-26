@@ -21,8 +21,10 @@ from figscribe.model.artists import (
     ImagePlot,
     LinePlot,
     PredefinedFit,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
 )
 from figscribe.model.axes import Axes, AxisSpec, Inset, Legend
 from figscribe.model.base import Identified, StrictModel, new_id
@@ -34,7 +36,7 @@ from figscribe.model.data import (
     Hdf5Source,
     NumpySource,
 )
-from figscribe.model.figure import Figure, GridLayout
+from figscribe.model.figure import Figure, GridLayout, PanelLabels
 from figscribe.model.project import (
     SCHEMA_VERSION,
     Project,
@@ -72,12 +74,15 @@ __all__ = [
     "Legend",
     "LinePlot",
     "NumpySource",
+    "PanelLabels",
     "PredefinedFit",
     "Project",
     "ReferenceIssue",
+    "ReferenceLine",
     "ResidualPlot",
     "SchemaVersionError",
     "ScatterPlot",
+    "ShadedSpan",
     "StrictModel",
     "dumps",
     "loads",

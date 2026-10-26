@@ -19,7 +19,7 @@ from string import ascii_lowercase
 import numpy as np
 
 from figscribe import __version__
-from figscribe.fit import numpy_source, parameter_names
+from figscribe.fit import free_parameters, numpy_source, parameter_names
 from figscribe.io.files import resolve_path
 from figscribe.model import (
     Annotation,
@@ -39,16 +39,39 @@ from figscribe.model import (
     LinePlot,
     NumpySource,
     Project,
+    ReferenceLine,
     ResidualPlot,
     ScatterPlot,
+    ShadedSpan,
 )
-from figscribe.render.figure import COORDS, CURVE_POINTS, MM_PER_INCH, DataProvider
-from figscribe.render.labels import axis_label
+from figscribe.render.figure import (
+    COORDS,
+    CURVE_POINTS,
+    LEFT_OUT_COLOR,
+    MM_PER_INCH,
+    NO_LINE,
+    DataProvider,
+    like_the_plot,
+    tick_ranges,
+)
+from figscribe.render.labels import (
+    axis_label,
+    panel_label_options,
+    panel_labels,
+    unit_shown,
+)
 from figscribe.render.layout import (
     creation_order,
     hidden_tick_labels,
     inset_parent,
     share_partner,
+)
+from figscribe.render.ticks import (
+    minor_ticks,
+    scaling,
+    silent_minor_labels,
+    tick_style,
+    ticks_that_fit,
 )
 
 WIDTH = 88
@@ -56,6 +79,7 @@ DEFAULT_ZORDER = {
     "scatter": 1.0,
     "histogram": 1.0,
     "annotation": 3.0,
+    "span": 1.0,
     "image": 0.0,
     "colormesh": 1.0,
 }
@@ -72,6 +96,7 @@ RESERVED = {
     "hashlib",
     "curve_fit",
     "popt",
+    "popt_free",
     "pcov",
     "perr",
     "name",
@@ -82,6 +107,7 @@ RESERVED = {
     "mesh",
     "handles",
     "labels",
+    "label",
     "right_handles",
     "right_labels",
 }
@@ -135,8 +161,17 @@ class _Writer:
         self.sources = {s.id: s for s in project.sources}
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
+        self.held: dict[str, str] = {}
+        """{fit id: name of the model with its fixed parameters held}."""
+        self.ranges: dict[str, str] = {}
+        """{fit id: name of the mask of the points within its fit range}."""
+        self._masks: set[str] = set()
+        """Masks defined while drawing, so that each gets a name of its own."""
+        self.kept = self._name_kept()
+        """{plot id: name of the mask of its rows that are not left out}."""
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
+        self.axis_specs = self._ticks_that_fit()
 
     # --- naming -----------------------------------------------------------------
 
@@ -206,6 +241,22 @@ class _Writer:
                     names[key] = name
         return names
 
+    def _name_kept(self) -> dict[str, str]:
+        plots = [
+            a
+            for a in self.artists.values()
+            if isinstance(a, LinePlot | ScatterPlot | ErrorbarPlot) and a.left_out
+        ]
+        taken = set(RESERVED) | set(self.columns.values())
+        names = {}
+        for n, plot in enumerate(plots, start=1):
+            name = "kept" if len(plots) == 1 else f"kept_{n}"
+            while name in taken:
+                name += "_"
+            taken.add(name)
+            names[plot.id] = name
+        return names
+
     def _name_fits(self) -> dict[str, tuple[str, str]]:
         """{fit id: (model function name, parameter variable)} for drawn fits."""
         fits = [
@@ -228,6 +279,18 @@ class _Writer:
             taken.add(function)
             popt = "popt" if len(fits) == 1 else f"{function}_popt"
             found[fit.id] = (function, popt)
+            if fit.fit_range is not None:
+                mask = "in_range" if len(fits) == 1 else f"{function}_in_range"
+                while mask in taken:
+                    mask += "_"
+                taken.add(mask)
+                self.ranges[fit.id] = mask
+            if fit.fixed:
+                held = f"{function}_held"
+                while held in taken:
+                    held += "_"
+                taken.add(held)
+                self.held[fit.id] = held
         return found
 
     def _name_axes(self) -> list[str]:
@@ -262,6 +325,7 @@ class _Writer:
         self._header()
         self._imports()
         self._data(script_dir)
+        self._left_out()
         self._fit_models()
         self._fits()
         self._figure()
@@ -309,15 +373,47 @@ class _Writer:
             self.emit(f"plt.style.use({_str(self.figure.stylesheet)})")
         if self.figure.font_size is not None:
             self.emit(f'plt.rcParams["font.size"] = {_num(self.figure.font_size)}')
+        style = tick_style(self.figure)
+        if style:
+            entries = [f"{_str(k)}: {_value(v)}" for k, v in style.items()]
+            line = f"plt.rcParams.update({{{', '.join(entries)}}})"
+            if len(line) <= WIDTH:
+                self.emit(line)
+            else:
+                self.emit("plt.rcParams.update(", "    {")
+                self.emit(*(f"        {entry}," for entry in entries))
+                self.emit("    }", ")")
+
+    def _ticks_that_fit(self) -> dict[tuple[str, str], AxisSpec]:
+        """Every axis by (Axes.id, field), without a tick step or divisions the
+        renderer leaves out because they would give too many ticks."""
+        ranges = tick_ranges(self.figure, self.data)
+        return {
+            (axes.id, field): (
+                ticks_that_fit(spec, ranges[axes.id, field])
+                if (axes.id, field) in ranges
+                else spec
+            )
+            for axes in self.figure.axes
+            for field in ("x", "y", "y_right")
+            if (spec := getattr(axes, field)) is not None
+        }
 
     def _locators(self) -> list[str]:
-        """The tick locators the script needs to import."""
-        specs = [s for a in self.figure.axes for s in (a.x, a.y)]
+        """The tick locators and formatters the script needs to import."""
+        specs = list(self.axis_specs.values())
         needed = []
-        if any(s.minor_ticks and s.minor_divisions for s in specs):
+        if any(minor_ticks(s)[0] == "parts" for s in specs):
             needed.append("AutoMinorLocator")
-        if any(s.ticks is None and s.major_step for s in specs):
+        if any(scaling(s) is not None for s in specs):
+            needed.append("FuncFormatter")
+        if any(
+            (s.ticks is None and s.major_step) or minor_ticks(s)[0] == "step"
+            for s in specs
+        ):
             needed.append("MultipleLocator")
+        if any(silent_minor_labels(s) for s in specs):
+            needed.append("NullFormatter")
         return needed
 
     def _data(self, script_dir: Path) -> None:
@@ -366,7 +462,9 @@ class _Writer:
             kwargs["converters"] = (
                 f"lambda field: float(field.replace({_str(source.decimal)}, '.'))"
             )
-        if _has_bom(location):
+        if source.encoding != "utf-8-sig":
+            kwargs["encoding"] = _str(source.encoding)
+        elif _has_bom(location):
             kwargs["encoding"] = '"utf-8-sig"'
         table = self.arrays.get((source.id, None))
         if table is not None:
@@ -377,6 +475,8 @@ class _Writer:
             return
         if len(refs) == 1:
             kwargs["usecols"] = str(indices[0])
+            if self._single_row(refs, source):
+                kwargs["ndmin"] = "1"  # one value is still an array
             self.call(f"{refs[0][1]} = np.loadtxt", path, **kwargs)
             return
         if indices != list(range(len(source.columns))) or not source.columns:
@@ -422,6 +522,29 @@ class _Writer:
         values = self.data(ColumnRef(source=source.id, column=refs[0][0]))
         return len(values) == 1
 
+    def _left_out(self) -> None:
+        if not self.kept:
+            return
+        self.section("Points left out")
+        for plot_id, name in self.kept.items():
+            plot = self.artists[plot_id]
+            x = self.column(plot.x)
+            rows = [row + 1 for row in plot.left_out]
+            listed = (
+                f"row {rows[0]}"
+                if len(rows) == 1
+                else f"rows {', '.join(map(str, rows[:-1]))} and {rows[-1]}"
+            )
+            source = self.sources[plot.x.source]
+            if plot.left_out_note:
+                self.emit(f"# {_describe(plot).capitalize()}: {plot.left_out_note}")
+            self.emit(
+                f"# {_describe(plot).capitalize()}: {listed} of "
+                f"{Path(source.path).name} left out; the file is unchanged.",
+                f"{name} = np.ones({x}.size, dtype=bool)",
+                f"{name}[{plot.left_out}] = False",
+            )
+
     def _fit_models(self) -> None:
         if not self.fits:
             return
@@ -431,6 +554,17 @@ class _Writer:
             names = parameter_names(fit.model)
             self.emit("", f"def {function}(x, {', '.join(names)}):")
             self.emit(f"    return {numpy_source(fit.model)}", "")
+            if fit_id in self.held:
+                free = free_parameters(fit.model, fit.fixed)
+                values = {n: fit.initial_values.get(n, 1.0) for n in names}
+                held = ", ".join(f"{n} is held at {values[n]:g}" for n in fit.fixed)
+                arguments = [n if n in free else repr(float(values[n])) for n in names]
+                self.emit(
+                    "",
+                    f"# The fit varies {_and(free)}; {held}.",
+                    f"def {self.held[fit_id]}(x, {', '.join(free)}):",
+                    f"    return {function}(x, {', '.join(arguments)})",
+                )
 
     def _fits(self) -> None:
         for fit_id, (function, popt) in self.fits.items():
@@ -445,32 +579,62 @@ class _Writer:
             )
             names = parameter_names(fit.model)
             arrays = [a for a in (x, y, yerr) if a is not None]
+            used = []
             if self._finite(fit) is not True:
                 self.emit(
                     "# curve_fit needs finite values.",
                     "valid = " + " & ".join(f"np.isfinite({a})" for a in arrays),
                 )
-                x, y = f"{x}[valid]", f"{y}[valid]"
-                yerr = f"{yerr}[valid]" if yerr is not None else None
-            start = [fit.initial_values.get(n, 1.0) for n in names]
+                used.append("valid")
+            if fit.target in self.kept:
+                used.append(self.kept[fit.target])
+            if fit_id in self.ranges:
+                low, high = fit.fit_range
+                mask = self.ranges[fit_id]
+                self.emit(
+                    f"# The fit uses the points with {x} from {low:g} to {high:g}.",
+                    f"{mask} = ({x} >= {low!r}) & ({x} <= {high!r})",
+                )
+                used.append(mask)
+            if used:
+                points = " & ".join(used)
+                x, y = f"{x}[{points}]", f"{y}[{points}]"
+                yerr = f"{yerr}[{points}]" if yerr is not None else None
+            free = free_parameters(fit.model, fit.fixed)
+            start = [fit.initial_values.get(n, 1.0) for n in free]
             kwargs = {"p0": "[" + ", ".join(repr(float(v)) for v in start) + "]"}
+            if (bounds := _bounds(free, fit.parameter_bounds)) is not None:
+                kwargs["bounds"] = bounds
             if yerr is not None:
                 kwargs |= {"sigma": yerr, "absolute_sigma": "True"}
             pcov = "pcov" if popt == "popt" else popt.replace("popt", "pcov")
-            self.call(f"{popt}, {pcov} = curve_fit", function, x, y, **kwargs)
+            held = self.held.get(fit_id)
+            fitted = f"{popt}_free" if held else popt
+            self.call(f"{fitted}, {pcov} = curve_fit", held or function, x, y, **kwargs)
+            if held:
+                values = [
+                    f"{fitted}[{free.index(n)}]"
+                    if n in free
+                    else repr(float(fit.initial_values.get(n, 1.0)))
+                    for n in names
+                ]
+                self.emit(f"{popt} = [{', '.join(values)}]")
             result = fit.result
             if result.reduced_chi_square is not None:
                 self.emit(
                     f"# figscribe found χ²/ndf = {result.reduced_chi_square:.3g} "
                     f"for this fit."
                 )
-            labels = "[" + ", ".join(_str(n) for n in names) + "]"
+            labels = "[" + ", ".join(_str(n) for n in free) + "]"
             perr = "perr" if popt == "popt" else popt.replace("popt", "perr")
             self.emit(
                 f"{perr} = np.sqrt(np.diag({pcov}))",
-                f"for name, value, error in zip({labels}, {popt}, {perr}):",
+                f"for name, value, error in zip({labels}, {fitted}, {perr}):",
                 '    print(f"{name} = {value:.6g} ± {error:.2g}")',
             )
+            for name in fit.fixed:
+                value = fit.initial_values.get(name, 1.0)
+                self.emit(f"print({_str(f'{name} = {value:.6g} (held)')})")
 
     def _finite(self, fit: FitCurve) -> bool | None:
         """Whether all data of the fit is finite; None if unknown."""
@@ -548,6 +712,28 @@ class _Writer:
                 self.emit(
                     f'{name}.tick_params(axis="y", which="both", labelleft=False)'
                 )
+        labels = panel_labels(figure)
+        if labels:
+            self._panel_labels(labels)
+
+    def _panel_labels(self, labels: dict[int, str]) -> None:
+        options = {
+            key: _value(value)
+            for key, value in panel_label_options(self.figure.panel_labels).items()
+        }
+        if len(labels) == 1:
+            ((index, text),) = labels.items()
+            self.emit("", "# Panel label")
+            self.call(f"{self.axes_names[index]}.annotate", _str(text), **options)
+            return
+        pairs = [f"({self.axes_names[i]}, {_str(text)})" for i, text in labels.items()]
+        self.emit("", "# Panel labels, in reading order")
+        line = f"for ax, label in [{', '.join(pairs)}]:"
+        if len(line) <= WIDTH:
+            self.emit(line)
+        else:
+            self.emit("for ax, label in [", *(f"    {p}," for p in pairs), "]:")
+        self.call("ax.annotate", "label", indent="    ", **options)
 
     def _panel(self, index: int, axes: Axes) -> None:
         ax = self.axes_names[index]
@@ -561,19 +747,25 @@ class _Writer:
         if axes.title is not None:
             size = {"fontsize": _num(axes.title_size)} if axes.title_size else {}
             self.call(f"{ax}.set_title", _str(axes.title), **size)
-        self._axis(ax, "x", axes.x)
-        self._axis(ax, "y", axes.y)
+        self._axis(ax, "x", self.axis_specs[(axes.id, "x")])
+        self._axis(ax, "y", self.axis_specs[(axes.id, "y")])
         right = None
         if axes.y_right is not None:
             right = f"{ax}_right"
             self.emit(f"{right} = {ax}.twinx()")
-            self._axis(right, "y", axes.y_right)
+            self._axis(right, "y", self.axis_specs[(axes.id, "y_right")])
         if axes.grid:
             kwargs = {}
             if axes.grid_which != "major":
                 kwargs["which"] = _str(axes.grid_which)
             if axes.grid_axis != "both":
                 kwargs["axis"] = _str(axes.grid_axis)
+            if axes.grid_color is not None:
+                kwargs["color"] = _str(axes.grid_color)
+            if axes.grid_linewidth is not None:
+                kwargs["linewidth"] = _num(axes.grid_linewidth)
+            if axes.grid_linestyle is not None:
+                kwargs["linestyle"] = _str(axes.grid_linestyle)
             self.call(f"{ax}.grid", "True", **kwargs)
         for artist in axes.artists:
             on_right = artist.axis == "right" and right is not None
@@ -604,13 +796,29 @@ class _Writer:
         elif spec.major_step is not None:
             step = _num(spec.major_step)
             self.emit(f"{ax}.{name}axis.set_major_locator(MultipleLocator({step}))")
-        if spec.minor_ticks and spec.minor_divisions is not None:
-            parts = spec.minor_divisions
-            self.emit(f"{ax}.{name}axis.set_minor_locator(AutoMinorLocator({parts}))")
-        elif spec.minor_ticks:
+        how, value = minor_ticks(spec)
+        if how == "parts":
+            self.emit(f"{ax}.{name}axis.set_minor_locator(AutoMinorLocator({value}))")
+        elif how == "step":
+            self.emit(
+                f"{ax}.{name}axis.set_minor_locator(MultipleLocator({_num(value)}))"
+            )
+        elif how == "on":
             self.emit(f"{ax}.{name}axis.minorticks_on()")
         elif self.figure.stylesheet is not None:
             self.emit(f"{ax}.{name}axis.minorticks_off()")
+        scaled = scaling(spec)
+        if scaled is not None:
+            op, factor = scaled
+            number = "v" if (op, factor) == ("*", "1") else f"v {op} {factor}"
+            if spec.prefix is not None:
+                self.emit(f"# Values shown in {unit_shown(spec)}")
+            self.emit(
+                f"{ax}.{name}axis.set_major_formatter("
+                f'FuncFormatter(lambda v, _: f"{{{number}:g}}"))'
+            )
+        if silent_minor_labels(spec):
+            self.emit(f"{ax}.{name}axis.set_minor_formatter(NullFormatter())")
         if spec.tick_size is not None:
             self.call(
                 f"{ax}.tick_params",
@@ -621,41 +829,8 @@ class _Writer:
 
     def _artist(self, ax: str, artist) -> None:
         common = _common(artist, default_zorder=DEFAULT_ZORDER.get(artist.kind, 2.0))
-        if isinstance(artist, LinePlot):
-            kwargs = _some(color=artist.color)
-            kwargs |= {
-                "linestyle": _str(artist.linestyle),
-                "linewidth": _num(artist.linewidth),
-            }
-            if artist.marker is not None:
-                kwargs |= {
-                    "marker": _str(artist.marker),
-                    "markersize": _num(artist.markersize),
-                }
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.plot", x, y, **kwargs, **common)
-        elif isinstance(artist, ScatterPlot):
-            kwargs = {"s": _num(artist.size)} | _some(color=artist.color)
-            kwargs["marker"] = _str(artist.marker)
-            kwargs |= _some(edgecolors=artist.edgecolor)
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.scatter", x, y, **kwargs, **common)
-        elif isinstance(artist, ErrorbarPlot):
-            kwargs = {}
-            if artist.xerr is not None:
-                kwargs["xerr"] = self.column(artist.xerr)
-            if artist.yerr is not None:
-                kwargs["yerr"] = self.column(artist.yerr)
-            kwargs |= _some(color=artist.color)
-            kwargs |= {
-                "linestyle": _str(artist.linestyle),
-                "marker": _str(artist.marker),
-                "markersize": _num(artist.markersize),
-                "capsize": _num(artist.capsize),
-                "elinewidth": _num(artist.elinewidth),
-            }
-            x, y = self.column(artist.x), self.column(artist.y)
-            self.call(f"{ax}.errorbar", x, y, **kwargs, **common)
+        if isinstance(artist, LinePlot | ScatterPlot | ErrorbarPlot):
+            self._points(ax, artist, common)
         elif isinstance(artist, Histogram):
             values = self.column(artist.values)
             if not self._all_finite([artist.values]):
@@ -669,6 +844,26 @@ class _Writer:
             self.call(f"{ax}.hist", values, **kwargs, **common)
         elif isinstance(artist, Annotation):
             self._annotation(ax, artist, common)
+        elif isinstance(artist, ReferenceLine):
+            draw = "axvline" if artist.orientation == "vertical" else "axhline"
+            self.call(
+                f"{ax}.{draw}",
+                _num(artist.at),
+                color=_str(artist.color),
+                linestyle=_str(artist.linestyle),
+                linewidth=_num(artist.linewidth),
+                **common,
+            )
+        elif isinstance(artist, ShadedSpan):
+            draw = "axvspan" if artist.orientation == "vertical" else "axhspan"
+            self.call(
+                f"{ax}.{draw}",
+                _num(artist.start),
+                _num(artist.end),
+                color=_str(artist.color),
+                linewidth="0",
+                **common,
+            )
         elif isinstance(artist, ImagePlot | ColorMesh):
             self._two_d(ax, artist, common)
         elif isinstance(artist, FitCurve):
@@ -747,6 +942,102 @@ class _Writer:
             return False
         return all(bool(np.all(np.isfinite(self.data(r)))) for r in refs)
 
+    def _points(self, ax: str, artist, common: dict[str, str]) -> None:
+        """A line, scatter or error bar plot; the line runs on through its
+        left-out rows, in their color, and their points are drawn apart."""
+        x, y = self.column(artist.x), self.column(artist.y)
+        errors = {
+            name: self.column(ref)
+            for name in ("xerr", "yerr")
+            if (ref := getattr(artist, name, None)) is not None
+        }
+        mask = self._shown(artist)
+        shown = f"np.where({mask}, {y}, np.nan)" if mask else y
+        self._part(ax, artist, x, shown, errors, {}, common)
+        if not mask:
+            return
+        color = _str(artist.left_out_color or LEFT_OUT_COLOR)
+        apart = {k: v for k, v in common.items() if k != "label"}
+        linestyle = like_the_plot(artist, "linestyle")
+        if linestyle not in NO_LINE:
+            steps = f"{mask}_steps"
+            self.emit(
+                "# The line runs on through the rows left out, in their color.",
+                f"{steps} = ~({mask}[:-1] & {mask}[1:])",
+            )
+            pieces = [
+                f"np.column_stack([{v}[:-1], {v}[1:], np.full({v}.size - 1, np.nan)])"
+                f"[{steps}].ravel()"
+                for v in (x, y)
+            ]
+            kwargs = {"color": color, "linestyle": _str(linestyle)}
+            kwargs["linewidth"] = _num(artist.linewidth)
+            self.call(f"{ax}.plot", *pieces, **kwargs, **apart)
+        marker = like_the_plot(artist, "marker")
+        if marker is None and not isinstance(artist, ErrorbarPlot):
+            return
+        self.emit("# The rows left out, apart and without a legend entry.")
+        out = {name: f"{column}[~{mask}]" for name, column in errors.items()}
+        style = {"color": color, "marker": _str(marker or "none")}
+        self._part(ax, artist, f"{x}[~{mask}]", f"{y}[~{mask}]", out, style, apart)
+
+    def _shown(self, artist) -> str | None:
+        """The mask of the rows drawn as the plot draws them: not left out, and
+        inside the range of each fit that draws the others like left out.
+        Defined here when it joins several; None when all rows are."""
+        parts = [self.kept[artist.id]] if artist.id in self.kept else []
+        parts += [
+            self.ranges[fit.id]
+            for fit in self.artists.values()
+            if isinstance(fit, FitCurve)
+            and fit.target == artist.id
+            and fit.outside_as_left_out
+            and fit.id in self.ranges
+        ]
+        if len(parts) <= 1:
+            return parts[0] if parts else None
+        name = "shown"
+        while name in {*self.columns.values(), *self._masks}:
+            name += "_"
+        self._masks.add(name)
+        self.emit(
+            "# Drawn as the plot draws them: kept, and inside the fit range.",
+            f"{name} = {' & '.join(parts)}",
+        )
+        return name
+
+    def _part(self, ax, artist, x, y, errors, style, options) -> None:
+        """One call that draws points as the plot does, `style` over its own."""
+        color = {"color": style["color"]} if style else _some(color=artist.color)
+        if isinstance(artist, LinePlot):
+            kwargs = color | {
+                "linestyle": '"none"' if style else _str(artist.linestyle),
+                "linewidth": _num(artist.linewidth),
+            }
+            marker = style.get("marker") or (
+                _str(artist.marker) if artist.marker is not None else None
+            )
+            if marker is not None:
+                kwargs |= {"marker": marker, "markersize": _num(artist.markersize)}
+            self.call(f"{ax}.plot", x, y, **kwargs, **options)
+        elif isinstance(artist, ScatterPlot):
+            kwargs = {"s": _num(artist.size)} | color
+            kwargs["marker"] = style.get("marker") or _str(artist.marker)
+            kwargs |= _some(edgecolors=artist.edgecolor)
+            self.call(f"{ax}.scatter", x, y, **kwargs, **options)
+        else:
+            kwargs = dict(errors) | color
+            kwargs["linestyle"] = '"none"' if style else _str(artist.linestyle)
+            if not style and artist.linestyle not in NO_LINE:
+                kwargs["linewidth"] = _num(artist.linewidth)
+            kwargs |= {
+                "marker": style.get("marker") or _str(artist.marker),
+                "markersize": _num(artist.markersize),
+                "capsize": _num(artist.capsize),
+                "elinewidth": _num(artist.elinewidth),
+            }
+            self.call(f"{ax}.errorbar", x, y, **kwargs, **options)
+
     def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
         if fit.id not in self.fits:
             self.emit(f"# {_describe(fit)} is not fitted yet, so it is not drawn.")
@@ -759,6 +1050,10 @@ class _Writer:
         else:
             low = f"{x}[np.isfinite({x})].min()"
             high = f"{x}[np.isfinite({x})].max()"
+        if fit.fit_range is not None and not fit.extend_curve:
+            # Over the fit range, where there is data.
+            low = f"max({fit.fit_range[0]!r}, {low})"
+            high = f"min({fit.fit_range[1]!r}, {high})"
         self.emit(f"{xs} = np.linspace({low}, {high}, {CURVE_POINTS})")
         kwargs = _some(color=fit.color) | {
             "linestyle": _str(fit.linestyle),
@@ -782,6 +1077,16 @@ class _Writer:
         kwargs = {}
         if isinstance(target, ErrorbarPlot) and target.yerr is not None:
             kwargs["yerr"] = self.column(target.yerr)
+        masks = [
+            mask
+            for mask in (self.ranges.get(fit.id), self.kept.get(fit.target))
+            if mask is not None
+        ]
+        if masks:  # only the fitted points
+            mask = " & ".join(masks)
+            x, y = f"{x}[{mask}]", f"{y}[{mask}]"
+            if "yerr" in kwargs:
+                kwargs["yerr"] = f"{kwargs['yerr']}[{mask}]"
         kwargs |= _some(color=residuals.color) | {
             "marker": _str(residuals.marker),
             "markersize": _num(residuals.markersize),
@@ -837,6 +1142,23 @@ def _some(**values) -> dict[str, str]:
     return {k: _str(v) for k, v in values.items() if v is not None}
 
 
+def _and(names: list[str]) -> str:
+    """ "a, mu and sigma"."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _bounds(free: list[str], bounds) -> str | None:
+    """curve_fit's bounds for the free parameters, or None if there are none."""
+    pairs = [bounds.get(n, (None, None)) for n in free]
+    if all(low is None and high is None for low, high in pairs):
+        return None
+    lows = ", ".join("-np.inf" if low is None else repr(float(low)) for low, _ in pairs)
+    highs = ", ".join(
+        "np.inf" if high is None else repr(float(high)) for _, high in pairs
+    )
+    return f"([{lows}], [{highs}])"
+
+
 def _describe(artist) -> str:
     if artist.label:
         return artist.label
@@ -848,13 +1170,17 @@ def _describe(artist) -> str:
 
 
 def _str(text: str) -> str:
-    """A string literal as a person would write it: double quotes, and a raw
-    string for LaTeX."""
-    if "\\" in text and '"' not in text and not text.endswith("\\"):
-        return f'r"{text}"'
-    if '"' not in text and "\\" not in text and "\n" not in text:
-        return f'"{text}"'
-    return repr(text)
+    """A string literal as a person would write it: double quotes, a raw
+    string for LaTeX, and a line break as \\n."""
+    if "\n" not in text:
+        if "\\" in text and '"' not in text and not text.endswith("\\"):
+            return f'r"{text}"'
+        if '"' not in text and "\\" not in text:
+            return f'"{text}"'
+    if any(ord(c) < 32 for c in text.replace("\n", "")):
+        return repr(text)  # other control characters, rare enough to look odd
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
 
 
 def _num(value: float) -> str:

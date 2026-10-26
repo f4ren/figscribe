@@ -51,6 +51,7 @@ def _script(args: list[str]) -> int:
     from pathlib import Path
 
     from figscribe.codegen import generate, script_name
+    from figscribe.io import DataError, load_data
     from figscribe.model import loads
 
     if len(args) not in (1, 3) or (len(args) == 3 and args[1] != "-o"):
@@ -69,13 +70,19 @@ def _script(args: list[str]) -> int:
     target = Path(args[2]) if len(args) == 3 else None
     script_dir = target.parent if target is not None else project_path.parent
     output = f"{target.stem}.pdf" if target is not None else None
-    script = generate(
-        project,
-        figure,
-        base_dir=project_path.parent,
-        script_dir=script_dir,
-        output=output or f"{Path(script_name(figure)).stem}.pdf",
-    )
+    options = {
+        "base_dir": project_path.parent,
+        "script_dir": script_dir,
+        "output": output or f"{Path(script_name(figure)).stem}.pdf",
+    }
+    try:
+        # With the data, the script leaves out what the preview leaves out.
+        script = generate(
+            project, figure, data=load_data(project, project_path.parent), **options
+        )
+    except DataError as exc:
+        print(f"figscribe: {exc}; writing the script without it", file=sys.stderr)
+        script = generate(project, figure, **options)
     if target is None:
         sys.stdout.write(script)
     else:

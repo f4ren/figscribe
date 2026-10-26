@@ -104,7 +104,9 @@ writes them as `null`, which the strict loader then rejects, so a saved project
 could not be reopened. They are realistic, not exotic: `curve_fit` reports `inf`
 uncertainties when the covariance cannot be estimated. The cost is that project
 files are not strict RFC 8259 JSON when they contain such values; Python's
-`json` module and pydantic both read them.
+`json` module and pydantic both read them. Only fit results may hold them
+(`AnyFloat`, since 2026-10-24); every other float refuses them
+(`allow_inf_nan=False`), so an infinite width or range cannot get in.
 
 ### Alternatives considered
 
@@ -200,6 +202,14 @@ one.
   the way in, so the model never shares an object with its caller.
 - **`Macro` is all or nothing**: if a step fails, the steps already applied are
   reverted before the error propagates. A failed command is not recorded.
+- **The history refuses a command that puts a panel outside its grid**
+  (since 2026-10-25): `History.push` compares the panels beyond their grid
+  before and after the whole command and reverts it if one was added, so a
+  macro may grow the grid before moving a panel there, and a panel already
+  outside in a project file blocks nothing else. Matplotlib cannot draw such a
+  figure at all. Ratios that do not match the grid are only reported: changing
+  the number of rows with ratios set has no order of single edits without a
+  mismatch in between.
 - **One exception type**, `CommandError`, also for pydantic's validation
   errors, so the GUI has one thing to catch and show.
 - **User-level actions are functions building a `Macro`**, e.g.
@@ -312,6 +322,14 @@ the export.
   win over their axes; nothing in the renderer had to change.
 - **Errors while drawing are shown in the preview**, never raised: a missing or
   changed data file must not take the window down.
+- **Every error the GUI shows goes through `gui/errors.explain`** (since
+  2026-10-24): figscribe's own errors are written for the user and pass
+  unchanged, a file error gives its reason and path, a damaged project file
+  where it is damaged; anything else is called a bug, with its type and
+  message for a report. Problems figscribe can foresee are caught before
+  Matplotlib sees them, such as columns of unequal length, which the renderer
+  refuses with both names and lengths and `validate_references` reports when
+  given the data.
 - **PySide6 is a regular dependency**, not an extra: figscribe is a desktop
   application, and `pip install figscribe` gives the `figscribe` command.
 - **GUI tests run offscreen** with pytest-qt. Keyboard shortcuts are checked by
@@ -347,15 +365,54 @@ class would have to be kept in step with every field added to the model.
   a `ColumnRef` a choice of the sources' columns, and the fields `color` and
   `edgecolor` text plus a color picker. Text, not spin boxes, for numbers:
   scientific values such as `1e-9` and exact decimals edit without rounding.
+- **Numbers are read as people type them** (`gui/numbers.py`, since
+  2026-10-24, also in the axis form and the fit dialog): a comma is a decimal
+  mark, the minus sign − from text copied out of a PDF is a minus, and spaces
+  group thousands, but only before three digits, so that "0.5 1" is refused
+  instead of read as 0.51. A comma never groups thousands: "1,500" would mean
+  1.5 or 1500 depending on the reader. Lists are separated by ";" when one is
+  typed, so their numbers can have decimal commas, else by ",". Infinite
+  values are refused; no field the GUI edits means them. Messages quote what
+  was typed.
+- **The panel speaks the plot's terms, the model keeps Matplotlib's**
+  (since 2026-10-24, roadmap U2). `SHOWN` lists fields shown in other numbers
+  than stored: rows, columns and header lines count from 1 on screen; a
+  scatter plot's marker area (pt², as `scatter` takes it) is shown as its
+  size in pt like a line's, so the model and the script need no change.
+  Numbers that belong together get a field each (`FieldsEditor`: an image's
+  extent as left, right, bottom, top; one ratio per grid column or row). The
+  style sheet is chosen from Matplotlib's styles or an `.mplstyle` file;
+  colors offer the figure's whole color cycle under its style sheet, the
+  colors set lately, and *Same as…* another plot's drawn color. The
+  resolution sits in an *Export* section, since only PNG uses it.
 - **Each edit is one `SetField`.** Constraints live on the model only; a
   refused value shows pydantic's message above the form and the editor shows
-  the model's value again. An unchanged value pushes nothing.
+  the model's value again. An unchanged value pushes nothing. The exception
+  are style strings (colors, markers, line styles, color maps, legend
+  locations, since 2026-10-24; style sheets, since 2026-10-25, where a name
+  must be one Matplotlib has and a file must end in `.mplstyle`): the model keeps them as text because
+  Matplotlib accepts many forms, and the commands ask Matplotlib whether it
+  can draw them (`model/styles.py`), so the property panel, the dialogs and
+  the assistant all refuse "blu" with the same plain message. A model
+  validator would have made a project file with such a value impossible to
+  open and repair, and the model would depend on Matplotlib; a file's own bad
+  values are reported by `validate_references` instead.
 - **Some fields are deliberately left out**: ids, kinds, item lists (edited in
   the outline), `y_right` (not rendered yet), and fit models, start values,
   results and histogram bins, which get dedicated editors with their features.
-  `path`, `sha256` and a fit's `target` are shown read-only. A test checks
-  that every other field of the model has an editor, so a new field cannot be
-  forgotten silently.
+  `path`, `sha256` and a fit's `target` are shown read-only. Each of these
+  lists says why per field (`SKIPPED`, `READ_ONLY`, `SHOWN_WHEN_SET`), and
+  `EDITED_ELSEWHERE` names the classes edited in a place of their own (the
+  axis form, the fit dialog, the column choices).
+- **No field is forgotten** (since 2026-10-24, `tests/test_field_coverage.py`):
+  every field of every model class has a plain name, a docstring the
+  assistant reads in the JSON schema (`use_attribute_docstrings`; a constant
+  such as a plot's kind is explained by its value), and either an editor
+  with a tooltip and, if it can be empty, a text for empty, or one of the
+  reasons above. A new field fails the test until it is wired up everywhere.
+  Tooltips are looked up by `"Class.field"` before the field name, because a
+  name can mean different things (a plot's `label` is its legend entry, a
+  color bar's the text beside it), and nested fields get them too.
 - **Editors are bound to their object.** An editor torn down by a selection
   change can still report its last input; it is ignored instead of being
   applied to the newly selected object. Undo and redo refresh the values in
@@ -382,11 +439,43 @@ class would have to be kept in step with every field added to the model.
   relative path needs the project's directory, which does not exist before
   the first save. Once saved, newly imported files below the project's
   directory are stored relative to it.
+- **A data file that changed or moved is fixed from a bar above the preview**
+  (added 2026-10-24), one row per file: *Use the new version* hashes it again
+  and reads its columns and rows the way it is read now; *Locate file…* does
+  the same from where a missing file went, stored relative to the project
+  when below it; *Show what changed* compares rows and columns. Each is one
+  undo step. A version that does not parse is refused before anything
+  changes. The document hashes a file again only when its size or time stamp
+  changed, so the check runs after every edit and when the window comes to
+  the front. Plots of columns the new version lacks are listed in the bar and
+  in the problem list (`validate_references` checks named columns against
+  `columns`); the change is made anyway, since it can be undone and the plots
+  can be pointed at other columns. The number of data rows is recorded on
+  import (`row_count`) so that a change can be told in rows; projects from
+  before have none. The assistant gets *Use the new version* as a tool, not
+  *Locate*: it must not point a source at other files on the machine.
+- **Changing how a file is read reads it at once** (added 2026-10-25): a new
+  separator, decimal mark, header line, number of skipped lines, comment mark,
+  encoding or array, from the property panel or the assistant, is one undo
+  step that also takes the columns and rows the file then has, or is refused
+  with the reader's reason if the file cannot be read that way. A file that
+  changed since import is refused too: reading it again would take the new
+  version without the bar's question.
 - **Adding the first plot to a figure without axes adds the axes too**, in the
   same undo step. Later plots go into the selected axes, the axes of the
   selected plot, or the figure's first axes.
 - **Columns without names are offered by number**; the file is read once to
   count them.
+- **The text encoding is part of the source** (`CsvSource.encoding`, added
+  2026-10-24): UTF-8 (with or without Excel's byte order mark), cp1252 or
+  Latin-1. The dialog takes the first that decodes the whole file, in that
+  order, and offers the others. The two differ only in bytes 0x80–0x9F,
+  where cp1252 has €, quotes and dashes and Latin-1 control characters;
+  cp1252 comes first because Windows lab software writes it. A guesser such
+  as `chardet` was not added: a dependency for three candidates. The script
+  passes `encoding=` to `np.loadtxt` for anything but UTF-8. A file that does
+  not decode gives a `DataError` naming the file and the option. No schema
+  version bump: the field has a default, and no released file predates it.
 
 ---
 
@@ -405,7 +494,8 @@ should not need an API key or carry the cost of one.
 ### Decision
 
 - **One tool layer, `figscribe.tools`, independent of Qt and of any LLM
-  provider.** It reads the project (`get_project`, `get_schema`,
+  provider.** It reads the project (`get_project`, `get_schema`, whose fields
+  carry their docstrings as descriptions,
   `list_columns`, `render_preview`) and changes it only through commands
   (`set_field`, `insert`, `remove`, `move`, `fit`, `undo`), each one undo step;
   `apply_changes` runs several operations as one step, all or nothing.
@@ -670,6 +760,16 @@ user to know the model ("zorder", "elinewidth", "Axes (row 0, col 0)").
   whose legend settings it has.
 - A press selects only on release without movement, so a drag never changes
   the selection.
+- **Zooming and panning reuse the drawn figure** (since 2026-10-24): each
+  step sets the new range on it at once and draws it with the panels where
+  they are, merged with the steps queued behind it into one draw; 300 ms
+  after the last step the view is rendered again from the model. Measured on
+  the example: 150 ms per step before, 49 ms now. Rendering at rest is needed
+  because Matplotlib's layout moves a figure with a color bar by a few pixels
+  when it lays it out a second time, so only a new render matches the export;
+  a test checks that. A tick step that no longer fits the new range, or fits
+  again, renders at once. `render()` takes the view, so ticks are fitted to
+  the range shown, not the model's.
 
 ## 0018 — The Python code drawer
 
@@ -862,3 +962,457 @@ measured, and only on figscribe's own tasks.
   the common field paths (a test keeps them valid), and the `fit` tool takes
   `residuals: true` to add the residual panel as the GUI does, instead of
   four separate steps.
+
+## 0025 — Tick style, log minor ticks and SI prefixes
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Context
+
+A spectrum as journals print it could not be made: ticks inward on all four
+sides were missing, minor ticks vanished on log axes, and a frequency axis in
+Hz could not be shown in kHz.
+
+### Decision
+
+- **Tick style per figure** (`tick_direction`: in, out, inout or the style's
+  default; `ticks_all_sides`), because it is a house style rather than a
+  property of one panel. It goes into the rcParams while the figure is
+  built, so insets and right axes follow; the script sets the same rcParams
+  at its top.
+- **Log axes with a fixed major step** get their minor ticks from
+  `MultipleLocator(step / divisions)`, since AutoMinorLocator refuses log
+  scales, and plain numbers (`1350`, not `1.35×10³`); minor tick labels are
+  switched off there.
+- **`AxisSpec.prefix`** (p … T) divides the shown numbers by the power of
+  ten and puts the prefix before the unit (`Hz` → `kHz`; without a unit the
+  label gets `×10³`). Data, limits, ticks and steps stay in the data's unit,
+  so fits and files are untouched. The script uses a `FuncFormatter` with
+  the same arithmetic, written as `v / 1e3` or `v * 1e3`.
+- The decisions live in `render/ticks.py`, used by renderer and generator
+  alike; the equivalence test covers them.
+
+### Alternatives
+
+- `EngFormatter` (a prefix at every tick, "50 kHz"): for data sheets more
+  than for journals; may come later as an option.
+- Scaling the data instead: would change fit parameters and residuals.
+
+## 0026 — An axis has its own form
+
+**Date:** 2026-10-20
+**Status:** accepted
+
+### Context
+
+A panel's form listed every field of the panel and of both axes, named as in
+the model (`major_step`, `minor_divisions`, `limits` as one pair). Setting up
+an axis meant knowing the model: four minor ticks had to be entered as five
+divisions, and a range in kHz in Hz.
+
+### Decision
+
+- **An axis is selectable** with the id `<panel id>/x`, `/y` or `/y_right`:
+  by clicking its numbers, its label or the strip along its edge in the
+  preview, or from the panel's form, which now shows one line per axis
+  ("t (s) · linear · automatic range ›") instead of their fields. The outline
+  shows the panel's row; Delete does nothing for an axis.
+- **The axis form** (`gui/axisform.py`) is written by hand, not generated:
+  Label (text, unit, *show values in* with the resulting units), Range (scale,
+  from … to with the current range in grey, the symlog threshold only for
+  symlog), Major ticks (automatically / every … / at these values, with
+  labels), Minor ticks (none / automatically / *n* between majors, stored as
+  n + 1 divisions), Text size. Each change is one undo step, "Change the x
+  axis".
+- **Numbers are typed in the shown unit**: with values shown in kHz, ranges,
+  steps and tick values are entered in kHz and stored in Hz. An empty end of a
+  range keeps the one drawn now.
+- Fields in the generated forms get explanations as tooltips, and LaTeX in
+  summaries is shown as plain text (`$\Delta t$` as Δ t).
+
+### Alternatives
+
+- Better names in the generated form only: would keep pairs like `limits`
+  and the divisions-versus-ticks confusion, which need a different input.
+
+---
+
+## 0027 — A limit on tick counts
+
+**Date:** 2026-10-24
+**Status:** accepted
+
+### Context
+
+A tick step that is small for the range, such as every 1 from 0 to 10 000,
+makes Matplotlib place every one of those ticks: it only warns about counts
+above `Locator.MAXTICKS`. Each tick costs about 3 ms per redraw (minor ticks
+about 1.4 ms), and the automatic minor ticks multiply the count by five, so
+that example took minutes. The preview redraws on every change, so the window
+froze, and a project file with such a step could not be opened usefully.
+
+### Decision
+
+- **At most 50 major and 250 minor ticks per axis**, counted within the range
+  the axis shows (`render/ticks.py`, `too_many_ticks`). 50 ticks on a 175 mm
+  double-column axis are 3.5 mm apart, closer than tick numbers fit; 250 minor
+  ticks are 0.7 mm apart, beyond which they merge into a grey band. Together
+  they cost about half a second per axis. Only the step and the divisions set
+  in the model are counted: Matplotlib's own choices stay few, and explicit
+  tick values are taken as given.
+- **The renderer falls back to automatic ticks** for whatever exceeds the
+  limit: first the step, then the divisions (`ticks_that_fit`). This needs the
+  range, and an automatic range is only known once the data are drawn, so the
+  step and minor ticks are now set after all panels are drawn. With a style
+  that rounds automatic ranges to the ticks (`axes.autolimit_mode:
+  round_numbers`, e.g. `classic`), the range is worked out again afterwards,
+  as the script does when it draws.
+- **The code generator leaves out the same settings.** For an automatic range
+  it draws the figure to learn the range (`tick_ranges`), only when an axis
+  has a step or divisions and no fixed range, and only when it has the data.
+  `figscribe script` and the assistant's script tool now pass the data; when
+  the data cannot be read, the command line writes the script without them,
+  steps included as set.
+- **Where the change is made, it is refused**: the axis form shows the reason
+  and keeps what was typed; the assistant tools refuse a change that would add
+  such a problem, with the reason, and change nothing. A problem already in
+  the project does not block other changes.
+- **`validate_references` reports it** for a fixed range. It has no data, so
+  an automatic range is not checked there; the renderer falls back anyway.
+
+### Consequences
+
+- A project file with a too small step opens and draws at normal speed; the
+  problem list says why its ticks are automatic.
+- The script and the preview agree, except at the edge of the limit under a
+  `round_numbers` style, where the range the code generator reads after
+  drawing can be one step wider than the one the renderer counted over.
+
+### Alternatives
+
+- **Limit the model fields** (e.g. `minor_divisions <= 20`): cannot express a
+  limit that depends on the range, and would refuse to load older files.
+- **Only refuse in the GUI**: a loaded file or an assistant edit would still
+  freeze the window.
+- **Count major ticks only**, as first planned: the default minor ticks alone
+  made the repro five times slower than the major ones.
+
+---
+
+## 0028 — Tests run in parallel with pytest-xdist
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+The tests that operate every field and action of the GUI (roadmap task B8)
+draw the whole figure after each change: about two and a half minutes on a
+laptop, nine on a CI runner, against half a minute for everything else. Run
+on one job only, they still made every pull request wait about ten minutes.
+
+### Decision
+
+- **`pytest-xdist` is a dev dependency**, and CI runs the tests with
+  `-n auto --dist worksteal`: idle workers take tests from busy ones, which
+  matters because a few tests take far longer than the rest. Locally the
+  whole suite drops from about 2.5 minutes to under one.
+- **The slow tests are split so they can spread**: one test per object for
+  the fields, per menu for the actions, per panel for the outline's menus.
+  A list is tried for at most six other entries, as a person would.
+- **The slow tests still run on one CI job** (Ubuntu, Python 3.13); they test
+  figscribe's logic, which does not differ by platform, while crashes such as
+  that of B8.1 have their own fast tests that run everywhere.
+
+### Alternatives considered
+
+**Rendering less in the tests**, such as without the layout engine: saves
+about a third, and the layout settings could then no longer be tested.
+**Fewer objects in the test project**: the point of the project is to have
+every kind. **Running the slow tests nightly** instead of per pull request:
+a problem would then reach `develop` before anyone sees it.
+
+---
+
+## 0029 — Fit parameters held fixed or kept within bounds
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+A fit could only vary every parameter of its model. Scientists hold some at
+a known value (a background, a line width from the instrument) and keep
+others physical (a width above zero), and the generated script has to give
+the same result.
+
+### Decision
+
+- **`FitCurve.fixed`** lists parameters held at their start value, and
+  **`FitCurve.parameter_bounds`** gives others a (lower, upper) range with
+  None for an open end. Not `bounds`: the property panel lists fields by name,
+  and an inset already has `bounds`.
+- **A held parameter is not fitted at all**: curve_fit sees a function of
+  the free parameters only. Its uncertainty is 0, it is shown as "held", and
+  it does not count as a degree of freedom in χ²ᵣ. The script defines that
+  function by name (`gaussian_held`), with a comment saying what is held.
+- **Bounds go to `curve_fit(bounds=...)`**, which then uses its bounded
+  method ("trf") instead of Levenberg–Marquardt; without bounds nothing
+  changes, so existing fits give the same numbers.
+- **A fit range** (`fit_range`, added 2026-10-26) fits only the points with
+  x within it; the curve is drawn over the range where there is data, or
+  across all the data with `extend_curve`, and the residuals show the
+  fitted points only. A range is a property of the fit, not of the plot:
+  another fit of the same data may need another range.
+- **A start value outside its bounds is refused** if the user gave it, and
+  moved in if it was guessed from the data: the user never saw that guess.
+  So are every parameter held, a lower bound not below the upper, and names
+  the model does not have; `validate_references` reports such names in a
+  project file.
+
+### Alternatives considered
+
+**Equal lower and upper bounds for a held parameter**: curve_fit refuses
+them, and nearly equal ones distort the covariance. **A held parameter as a
+literal in the model's expression**: the script would no longer show the
+model as it is named, and freeing the parameter again would need a new
+expression.
+
+---
+
+## 0030 — The application icon
+
+**Date:** 2026-10-25
+**Status:** accepted
+
+### Context
+
+figscribe had no icon: the window showed the platform's default and the macOS
+Dock Python's rocket. The installers of roadmap task R4.2 will need `.icns`
+for macOS and `.ico` for Windows.
+
+### Decision
+
+- **A pen writing a figure**: a gold nib drawing the Gaussian of the start
+  page's mark in white, on the accent blue, with faint axes. The name is
+  figure and scribe, and the icon shows both without letters: figscribe
+  writes the figure down, as a script.
+- **Two SVG drawings in `gui/icons`, every size made from them.** The full one
+  follows the macOS grid (824 of 1024 px with a margin). Up to 48 px
+  `figscribe-small.svg` is used instead: the whole square, no axes, a bolder
+  curve and a larger pen, which stays recognisable down to 32 px.
+- **`theme.apply` sets the window icon**, rendered once per size from 16 to
+  1024 px, so the Dock and taskbar show it also when figscribe runs from a
+  Python environment rather than an installer.
+- **`packaging/make_icons.py` writes `.icns`, `.ico` and a 1024 px PNG** to
+  `packaging/icons`, with Qt's SVG renderer and Pillow, which Matplotlib
+  already depends on; no new dependency. The files are committed so R4.2 can
+  use them as they are; the script is rerun after a change to the drawing.
+  The `.icns` uses the full drawing at every size, as macOS icons keep their
+  margin even in lists; the `.ico` uses the small one up to 48 px, as the
+  window icon does. Pillow writes no 16 and 32 px entries without Retina
+  scale into `.icns`; macOS scales them from 32 and 64 px.
+
+### Alternatives considered
+
+**Data points with the fit through them** (the first draft): a scientific
+figure, but nothing of the "scribe". **A speech bubble** at the plot: reads
+as a chat application and puts the assistant first, which is an extra; the
+toolbar already uses it for the chat. **A plot over lines of code**: says
+exactly what figscribe does, but looks like a document and is hard to read
+at 16 px. **Letters ("fs")**: need a font in the drawing and say less.
+**One drawing for every size**: at 16 px the margin leaves a blue speck. **Making the platform files at
+release time only**: the installers would then depend on Qt being able to
+render in CI before anyone has seen the result.
+
+---
+
+## 0031 — Points left out of a plot
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Outliers and detector glitches must stay out of a fit, but a paper must not
+hide that they were there, and the data file must stay as measured.
+
+### Decision
+
+- **Rows left out are stored on the plot** (`left_out`, counted from 0), so
+  every fit of it skips them; a fit range stays a property of the fit.
+- **They are drawn apart, in light grey by default**, with their error bars
+  and without a legend entry; color and marker can be set
+  (`left_out_color`, `left_out_marker`: "same" as the plot by default, None
+  for no marker). An explicit color leaves the color cycle alone, so the
+  other plots keep their colors.
+- **A line runs on through them** (asked for by the user): the kept rows are
+  drawn with NaN at the left-out ones, so the line breaks there, and the
+  steps to and from each left-out row are drawn in its color and
+  `left_out_linestyle` ("same" as the plot, "none" for a gap). Joining the
+  kept points across them, as at first, hid where the line was measured.
+- **Leaving out or taking back fits the plot's fits again** in the same undo
+  step, and is refused if a fit would have too few points; a row the data
+  lacks is reported by `validate_references`.
+- **The script keeps the file as it is** and names a mask, `kept`, with a
+  comment listing the rows as they are counted on screen.
+- **Outliers found automatically are proposed, not applied** (decided with
+  the user): points beyond k·σ of the fit without them, σ being the error
+  bar or 1.4826 × the median absolute deviation, fitted again until the set
+  settles. Once confirmed they join the same list, and `left_out_note` says
+  how they were found; the note is the user's to edit.
+
+---
+
+## 0032 — Gemini as a server by name, and its own key
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The user asked whether the assistant works with a subscription or a free
+model. A Claude or ChatGPT subscription gives no API access, and Anthropic's
+terms limit its sign-in to Claude.ai and Claude Code. Free models were
+already possible locally (LM Studio, Ollama); of the hosted APIs, Google's
+Gemini API has a free tier and an OpenAI-compatible endpoint
+(`https://generativelanguage.googleapis.com/v1beta/openai/`, still marked
+beta by Google), with tools, streaming, images and a model list.
+
+### Decision
+
+- **"Google Gemini" is offered by name** next to ChatGPT, through the
+  existing OpenAI-compatible path; no new dependency. Its models see
+  images, so choosing it ticks that box as ChatGPT does.
+- **Its key comes from `GEMINI_API_KEY`** when none is typed in, the name
+  Google's documentation uses. An `OPENAI_API_KEY` from the environment is
+  no longer sent to Google; any other server still takes it, as before.
+- **Model names lose Google's `models/` prefix** when listed, since the
+  chat endpoint is asked for the bare name.
+- **A tool call keeps what the server attached to it** (`extra_content`) and
+  sends it back unchanged. Gemini 3 signs the first call of a turn
+  (`extra_content.google.thought_signature`) and refuses the next round
+  without the signature; other servers attach nothing.
+- **A rate limit says how long to wait**, when the server tells
+  ("Please retry in 30.9s" in Gemini's text; it sends no `Retry-After`
+  header; "retry in 21h21m28s" for a daily limit), and that a free tier is
+  the reason; for a daily limit it suggests another model, whose limit is
+  separate. The free tier allowed 5 requests a minute and 20 a day per
+  model when tried (2026-10-26): enough to try the assistant, not to work
+  with it all day.
+- **A subscription is pointed to MCP**, not built in: Claude Desktop, Claude
+  Code or Gemini CLI drive figscribe through `figscribe mcp` with the user's
+  own plan. The README says which ways cost nothing.
+- **Each user brings their own key.** Google allows only paid services in
+  applications made available to users in the EU, EEA, Switzerland and the
+  UK; figscribe calls the API with no key of its own, on the user's behalf
+  and with the user's project. For those regions Google applies its
+  paid-service data terms also to free use; elsewhere free-tier requests may
+  be used to improve its products. The README says so.
+
+### Alternatives considered
+
+**Signing in with a Claude subscription** (OAuth): against Anthropic's
+terms for third-party applications. **A separate Gemini client** with
+Google's SDK: a new dependency for what the OpenAI-compatible endpoint
+already does. **OpenRouter, Groq or Mistral by name**: they work through
+"Other server" already; naming them adds entries to keep current, for
+providers nobody has asked for yet.
+
+---
+
+## 0033 — Panel labels
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Journals ask for a letter on each panel of a multi-panel figure, in a style
+of their own: "(a)" in physics journals, a bold "a" in Nature, a bold "A" in
+Science (roadmap F3).
+
+### Decision
+
+- **One setting per figure**, `Figure.panel_labels` (`PanelLabels`, None for
+  none), switched on with a box in the figure's *Style* section like a color
+  bar: the letters' style (`(a)`, `a)`, `a`, `A`), bold, placement, font size,
+  and whether insets get a letter. No letter of its own per panel: a figure
+  follows one journal's rule.
+- **Reading order by the cell a panel starts in**, row by row, left to right
+  (`render.labels.panel_labels`, shared by the renderer and the code
+  generator); a panel spanning two rows comes before those beside it. Insets
+  get none unless asked for, then each right after the panel it sits in.
+  After z the letters go on with aa, ab, as spreadsheet columns do.
+- **Drawn with `ax.annotate` at the panel's top left corner**, offset by half
+  the label's font size (`textcoords="offset fontsize"`, Matplotlib 3.8, the
+  version figscribe needs anyway): outside, above and left of the corner;
+  inside, just within it. The offset in font sizes keeps the look when the
+  size changes, and the constrained layout makes room for an outside label,
+  as it does for a title. The script writes them in one loop over the panels
+  and their letters.
+- **A label carries no gid**: it is not a model object, and the preview takes
+  any text with a gid for a note to drag. Clicking it selects nothing, or
+  the panel when it lies inside.
+- No schema bump: the field has a default and no released file predates it.
+
+### Alternatives considered
+
+**`ax.set_title(loc="left")`**, the other way Matplotlib's gallery shows:
+the layout handles it as well, but it only works outside, takes the title's
+size and weight from the style sheet, and would need another call inside.
+**`fig.text` at a computed position**: the position would be worked out
+before the layout places the panels, and the script would carry numbers
+nobody could read. **The letter left of the y label**, as some journals
+print it: it needs the width of the tick labels, known only after drawing;
+the placement can get a third choice if asked for.
+
+---
+
+## 0034 — Reference lines and shaded ranges
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Measured data is often read against a value that is not in the data: a
+threshold, a literature value, the time a field was switched on, a region
+of interest (roadmap F4.1). Matplotlib has `axvline`/`axhline` and
+`axvspan`/`axhspan` for it, which span the whole panel whatever its range.
+
+### Decision
+
+- **Two artist kinds**, `ReferenceLine` (`"refline"`, at one value) and
+  `ShadedSpan` (`"span"`, between `start` and `end`), each with
+  `orientation` "vertical" (an x value or range) or "horizontal" (a y
+  value or range). Two kinds rather than one with an optional second end:
+  each has only the fields that mean something for it, and the assistant
+  writes `{"kind": "refline", "at": 5}` without guessing.
+- **Grey by default, not from the color cycle**: a reference is not data and
+  should not take the next data color. The line is dashed and 1 pt; the
+  range has an opacity of 0.2 and a drawing order of 0.5, below the grid
+  lines (1.5) and every plot, so that it stays behind the data whatever
+  order things were added in. Its edge is not drawn (`linewidth=0`): in the
+  band's own color it would show as a darker outline.
+- **Against the left or right y axis** like any plot (`axis`); a horizontal
+  line or range then uses that axis' values.
+- **Added from three places**: *Insert > Add Line or Range* and a panel's
+  context menu in the outline put one in the middle of what the panel shows
+  (a range over a fifth of it); a right-click in a panel of the preview
+  offers one at the clicked spot ("Vertical line at x = 4.2"). Values are
+  rounded to a hundredth of the shown range, or to two significant digits on
+  a log axis, where the middle and the width are taken in decades
+  (`gui/markings.py`). The exact value is then typed in the property panel.
+- **A value a log axis cannot show** (at or below zero) is a problem in the
+  list, as data at or below zero is (B7.1); it needs no data to tell.
+
+### Alternatives considered
+
+**`ax.plot` over the current range**: the line would end where the data
+ends, and a later change of range would leave it short. **Asking for the
+value in a dialog** when adding: the preview's right-click already knows
+where the user means, and the menu's middle is a start that the panel
+corrects in one field. **Dragging in the preview** is left for later, like
+the notes' dragging was added after notes.

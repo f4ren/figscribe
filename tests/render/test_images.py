@@ -25,7 +25,10 @@ from figscribe.model import (
     GridLayout,
     Legend,
     LinePlot,
+    PanelLabels,
+    ReferenceLine,
     ScatterPlot,
+    ShadedSpan,
 )
 from figscribe.render import export
 
@@ -104,10 +107,49 @@ def _figures(ref) -> dict[str, Figure]:
                 ),
             ],
         ),
+        "panel_labels": Figure(
+            dpi=100.0,
+            width_mm=120.0,
+            layout=GridLayout(cols=2),
+            panel_labels=PanelLabels(bold=True),
+            axes=[
+                Axes(**labelled, artists=[LinePlot(x=ref("t"), y=ref("U"))]),
+                Axes(
+                    col=1,
+                    **labelled,
+                    title="Noise",
+                    artists=[ScatterPlot(x=ref("t"), y=ref("dU"))],
+                ),
+            ],
+        ),
+        "reference_lines": Figure(
+            dpi=100.0,
+            axes=[
+                Axes(
+                    **labelled,
+                    grid=True,
+                    legend=Legend(visible=True),
+                    artists=[
+                        ErrorbarPlot(x=ref("t"), y=ref("U"), yerr=ref("dU")),
+                        ReferenceLine(at=5.0, label="centre"),
+                        ReferenceLine(
+                            orientation="horizontal", at=0.5, color="C3", linestyle=":"
+                        ),
+                        ShadedSpan(start=3.5, end=6.5, label="peak"),
+                        ShadedSpan(
+                            orientation="horizontal", start=0.8, end=1.0, color="C2"
+                        ),
+                    ],
+                )
+            ],
+        ),
     }
 
 
-@pytest.mark.parametrize("name", ["line", "scatter", "errorbar", "two_panels"])
+@pytest.mark.parametrize(
+    "name",
+    ["line", "scatter", "errorbar", "two_panels", "panel_labels", "reference_lines"],
+)
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:
     figure = _figures(ref)[name]
     expected = BASELINE / f"{name}.png"

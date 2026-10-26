@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from figscribe.io.csvfile import ENCODING, read_csv
+from figscribe.io.csvfile import read_csv
 from figscribe.io.errors import DataChangedError, DataError
 from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import read_numpy
@@ -19,7 +20,9 @@ from figscribe.model import (
     NumpySource,
     Project,
 )
-from figscribe.render import DataProvider
+
+if TYPE_CHECKING:  # the renderer raises DataError, so it imports this package
+    from figscribe.render import DataProvider
 
 
 def load_data(project: Project, base_dir: str | Path) -> DataProvider:
@@ -73,7 +76,7 @@ def _load(source: DataSource, base_dir: str | Path, key: str | None) -> np.ndarr
         raise DataChangedError(f"{path} has changed since it was imported")
     if isinstance(source, NumpySource):
         return read_numpy(source, raw, str(path), key)
-    return read_csv(source, raw.decode(ENCODING), str(path))
+    return read_csv(source, raw, str(path))
 
 
 def _column_index(source: DataSource, column: str | int, width: int) -> int:

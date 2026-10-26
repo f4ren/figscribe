@@ -34,10 +34,17 @@ from figscribe.commands import (
     find,
     remove_artist,
     remove_axes,
+    remove_source,
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
-from figscribe.fit import FitError, add_fit, refit
+from figscribe.fit import FitError, add_fit, refit, set_left_out
 from figscribe.io import DataError
+from figscribe.io.refresh import (
+    read_differently,
+    reading_options,
+    source_state,
+    use_new_version,
+)
 from figscribe.model import (
     Axes,
     DataSource,
@@ -49,10 +56,11 @@ from figscribe.model import (
 )
 from figscribe.model.artists import Artist
 from figscribe.render import render
-from figscribe.render.figure import style_context
+from figscribe.render.figure import style_context, tick_ranges
+from figscribe.render.ticks import too_many_ticks
 from figscribe.tools.workspace import Workspace, column_choices
 
-PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns"})
+PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns", "row_count"})
 """Set by importing a file in figscribe; a tool must not point a source
 elsewhere on the machine. How a file is read (delimiter, header...) may change."""
 
@@ -154,9 +162,12 @@ class Toolbox:
             raise ToolError("the project has no figure")
         try:
             script = generate(
-                self.workspace.project, figure, base_dir=self.workspace.base_dir
+                self.workspace.project,
+                figure,
+                base_dir=self.workspace.base_dir,
+                data=self.workspace.data,
             )
-        except (NotImplementedError, ValueError) as exc:
+        except (NotImplementedError, ValueError, DataError) as exc:
             raise ToolError(f"cannot write the script: {exc}") from exc
         return {"script": script}
 
@@ -165,8 +176,27 @@ class Toolbox:
     def tool_set_field(
         self, object_id: str | None, path: list[str], value: Any
     ) -> dict[str, Any]:
-        command = _set_field(self.workspace.project, object_id, path, value)
+        command = self._set_field(self.workspace.project, object_id, path, value)
         return self._push(command, {})
+
+    def _set_field(
+        self, project: Project, object_id: str | None, path: list[str], value: Any
+    ) -> Command:
+        command = _set_field(project, object_id, path, value)
+        if path == ["left_out"]:
+            try:  # the plot's fits are fitted again without those rows
+                data = self.workspace.data
+                return set_left_out(project, object_id, list(command.value), data)
+            except FitError as exc:
+                raise ToolError(str(exc)) from exc
+        if len(path) == 1 and path[0] in reading_options(find(project, object_id)):
+            try:  # the file is read that way at once, with its new columns
+                return read_differently(
+                    project, object_id, path[0], command.value, self.workspace.base_dir
+                )
+            except DataError as exc:
+                raise ToolError(str(exc)) from exc
+        return command
 
     def tool_insert(
         self,
@@ -200,6 +230,9 @@ class Toolbox:
         label: str | None = None,
         initial_values: dict[str, float] | None = None,
         residuals: bool = False,
+        fixed: list[str] | None = None,
+        bounds: dict[str, tuple[float | None, float | None]] | None = None,
+        fit_range: tuple[float, float] | None = None,
     ) -> dict[str, Any]:
         command, fit_id = _fit(
             self.workspace.project,
@@ -209,6 +242,9 @@ class Toolbox:
             label,
             initial_values,
             residuals,
+            fixed,
+            bounds,
+            fit_range,
         )
         info = self._push(command, {"id": fit_id})
         info["result"] = find(self.workspace.project, fit_id).result.model_dump()
@@ -238,6 +274,21 @@ class Toolbox:
         info["ids"] = ids
         return info
 
+    def tool_use_new_data_version(self, source_id: str) -> dict[str, Any]:
+        source = find(self.workspace.project, source_id)
+        if not _is_source(source):
+            raise ToolError(f"{source_id!r} is not a data source")
+        name = Path(source.path).name
+        state = source_state(source, self.workspace.base_dir)
+        if state == "ok":
+            raise ToolError(f"{name} has not changed since it was imported")
+        if state == "missing":
+            raise ToolError(f"{name} is missing; only the user can locate it")
+        command = use_new_version(
+            self.workspace.project, source_id, self.workspace.base_dir
+        )
+        return self._push(command, {})
+
     def tool_undo(self) -> dict[str, Any]:
         history = self.workspace.history
         if not history.can_undo:
@@ -253,7 +304,7 @@ class Toolbox:
     ) -> tuple[Command, str | None]:
         op = operation.pop("op", None)
         builders = {
-            "set_field": lambda **a: (_set_field(project, **a), None),
+            "set_field": lambda **a: (self._set_field(project, **a), None),
             "insert": lambda **a: _insert(project, **a),
             "remove": lambda **a: (_remove(project, **a), None),
             "move": lambda **a: (_move(project, **a), None),
@@ -273,11 +324,56 @@ class Toolbox:
         return builders[op](**arguments)
 
     def _push(self, command: Command, info: dict[str, Any]) -> dict[str, Any]:
+        self._refuse_too_many_ticks(command)
         self.workspace.push(command)
         return {**info, "undo_step": command.description, "problems": self._problems()}
 
+    def _refuse_too_many_ticks(self, command: Command) -> None:
+        """Refuse a change whose tick step or divisions would freeze the
+        figure. Such ticks already in the project stay a problem to report,
+        not a reason to refuse other changes."""
+        project = self.workspace.project
+        changed = project.model_copy(deep=True)
+        command.apply(changed)
+        before = self._tick_problems(project)
+        for key, message in self._tick_problems(changed).items():
+            if key not in before:
+                raise ToolError(message)
+
+    def _tick_problems(self, project: Project) -> dict[tuple[str, str], str]:
+        problems = {}
+        for figure in project.figures:
+            try:
+                ranges = tick_ranges(figure, self.workspace.data)
+            except Exception:  # what cannot be drawn cannot freeze either
+                continue
+            for axes in figure.axes:
+                for field in ("x", "y", "y_right"):
+                    spec = getattr(axes, field)
+                    if (axes.id, field) not in ranges:
+                        continue
+                    problem = too_many_ticks(spec, ranges[axes.id, field])
+                    if problem is not None:
+                        problems[axes.id, field] = f"{field} axis: {problem[1]}"
+        return problems
+
     def _problems(self) -> list[str]:
-        return [str(issue) for issue in validate_references(self.workspace.project)]
+        workspace = self.workspace
+        problems = [
+            str(issue)
+            for issue in validate_references(workspace.project, workspace.data)
+        ]
+        for source in workspace.project.sources:
+            name = Path(source.path).name
+            state = source_state(source, workspace.base_dir)
+            if state == "changed":
+                problems.append(
+                    f"{name} has changed since it was imported; "
+                    "use_new_data_version takes it as it is now"
+                )
+            elif state == "missing":
+                problems.append(f"{name} is missing; the user can locate it")
+        return problems
 
 
 # --- building commands ---------------------------------------------------------
@@ -331,7 +427,7 @@ def _remove(project: Project, object_id: str) -> Command:
             return remove_axes(project, object_id)
         if field == "figures":
             return RemoveItem(None, "figures", object_id)
-        raise ToolError("data sources cannot be removed here")
+        return remove_source(project, object_id)
     raise ToolError(f"no object with id {object_id!r}")
 
 
@@ -350,6 +446,9 @@ def _fit(
     label: str | None = None,
     initial_values: dict[str, float] | None = None,
     residuals: bool = False,
+    fixed: list[str] | None = None,
+    bounds: dict[str, tuple[float | None, float | None]] | None = None,
+    fit_range: tuple[float, float] | None = None,
 ) -> tuple[Macro, str]:
     """A FitCurve on `target_id`, in the target's axes, fitted at once; with
     `residuals` also their panel below, as the GUI's fit dialog makes it."""
@@ -368,6 +467,11 @@ def _fit(
         model=_validate(FitModel, model, "model"),
         label=label,
         initial_values=initial_values or {},
+        fixed=fixed or [],
+        parameter_bounds=_validate(
+            dict[str, tuple[float | None, float | None]], bounds or {}, "bounds"
+        ),
+        fit_range=_validate(tuple[float, float] | None, fit_range, "fit_range"),
     )
     placed = add_fit(project, fit, residuals)
     staging = project.model_copy(deep=True)

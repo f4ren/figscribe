@@ -17,11 +17,15 @@ SCHEMA_VERSION = 1
 
 class Project(StrictModel):
     schema_version: int = Field(SCHEMA_VERSION, ge=1)
+    """Version of this file format; older files are migrated when they are read."""
     figscribe_version: str = ""
     """Version that wrote the file; recorded for reproducibility, not for logic."""
     created: datetime | None = None
+    """When the project was first saved; None if unknown."""
     sources: list[DataSource] = Field(default_factory=list)
+    """The data files the figures plot from."""
     figures: list[Figure] = Field(default_factory=list)
+    """The figures of the project."""
 
 
 class SchemaVersionError(ValueError):

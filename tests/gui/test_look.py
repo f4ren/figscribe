@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
-from PySide6.QtGui import QDropEvent, QFontDatabase
+from PySide6.QtCore import QMimeData, QPointF, QSize, Qt, QUrl
+from PySide6.QtGui import QDropEvent, QFontDatabase, QIcon
 from PySide6.QtWidgets import QApplication, QLabel, QToolButton
 
 from figscribe.commands import InsertItem, SetField
@@ -72,6 +72,26 @@ def test_apply_styles_the_application(qapp: QApplication) -> None:
         assert "chevron-down.svg" in qapp.styleSheet()
     finally:
         qapp.setStyleSheet("")
+
+
+def test_apply_gives_the_application_its_icon(qapp: QApplication) -> None:
+    theme.apply(qapp)
+    try:
+        sizes = qapp.windowIcon().availableSizes()
+        assert QSize(16, 16) in sizes and QSize(512, 512) in sizes
+    finally:
+        qapp.setStyleSheet("")
+        qapp.setWindowIcon(QIcon())
+
+
+def test_small_icons_fill_their_square(qapp) -> None:
+    """Up to 48 px the drawing has no margin, so it stays legible."""
+    icon = theme.app_icon()
+    small = icon.pixmap(QSize(16, 16)).toImage()
+    large = icon.pixmap(QSize(512, 512)).toImage()
+    assert small.size() == QSize(16, 16) and large.size() == QSize(512, 512)
+    assert small.pixelColor(8, 1).alpha() == 255
+    assert large.pixelColor(256, 20).alpha() == 0
 
 
 @pytest.mark.parametrize(
@@ -203,13 +223,7 @@ def test_fields_are_grouped_in_sections(panel: PropertyPanel, document) -> None:
     assert panel._title.text() == "measurement"
 
     document.select(document.figure.axes[0].id)
-    assert list(panel.sections)[:5] == [
-        "Panel",
-        "Position",
-        "X axis",
-        "Y axis",
-        "Legend",
-    ]
+    assert list(panel.sections)[:4] == ["Panel", "Axes", "Position", "Legend"]
 
 
 def test_an_opened_section_stays_open(panel: PropertyPanel, document) -> None:
@@ -227,10 +241,13 @@ def test_swatches_and_marker_buttons_commit(panel: PropertyPanel, document) -> N
     assert document.figure.axes[0].artists[0].color == "C1"
     assert panel.editors[("color",)].swatches["C1"].isChecked()
 
-    panel.editors[("marker",)].buttons["s"].click()
+    combo = panel.editors[("marker",)].widget
+    texts = [combo.itemText(i) for i in range(combo.count())]
+    combo.activated.emit(texts.index("Square"))
     assert document.figure.axes[0].artists[0].marker == "s"
-    assert panel.editors[("marker",)].buttons["s"].isChecked()
-    assert None not in panel.editors[("marker",)].buttons  # a marker is required
+    combo = panel.editors[("marker",)].widget
+    assert combo.currentText() == "Square"
+    assert "No marker" in texts  # "none": the error bars alone
 
 
 def test_line_styles_have_names(panel: PropertyPanel, document) -> None:
@@ -273,8 +290,8 @@ def test_the_toolbar_names_the_project(window: MainWindow) -> None:
 
 def test_problems_show_only_when_there_are_some(window: MainWindow) -> None:
     assert window.problems_dock.isHidden()
-    axes = window.document.figure.axes[0]
-    window.document.push(SetField(axes.id, ("row",), 3))
+    figure = window.document.figure  # two ratios for one column
+    window.document.push(SetField(figure.id, ("layout", "width_ratios"), [1.0, 2.0]))
     assert not window.problems_dock.isHidden()
     window.document.undo()
     assert window.problems_dock.isHidden()
@@ -306,3 +323,36 @@ def test_dropping_a_project_opens_it(window: MainWindow, example: Path) -> None:
     window.new_project()
     _drop(window, example)
     assert window.document.path == example
+
+
+def _contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio of two #RRGGBB colors."""
+
+    def luminance(color: str) -> float:
+        channels = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [
+            c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+            for c in channels
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_check_boxes_can_be_seen() -> None:
+    """A control needs 3:1 against what is around it (WCAG 1.4.11); the
+    style's own check box had a 1.45:1 edge and was hard to find."""
+    for ground in (theme.SURFACE, theme.GROUND):
+        assert _contrast(theme.CHECK_BORDER, ground) >= 3
+        assert _contrast(theme.ACCENT, ground) >= 3
+    assert "QCheckBox::indicator" in theme.STYLE_SHEET
+
+
+def test_the_toolbar_adds_things_in_the_order_of_a_figure(window: MainWindow) -> None:
+    """Data first, then what holds what: panel, plot, fit, note."""
+    bar = window.toolbar
+    shown = [bar.widgetForAction(a) for a in bar.actions()]
+    texts = [w.text() for w in shown if isinstance(w, QToolButton) and w.text()]
+    adding = [t for t in texts if t in ("Data", "Panel", "Plot", "Fit", "Note")]
+    assert adding == ["Data", "Panel", "Plot", "Fit", "Note"]

@@ -239,3 +239,94 @@ def test_guess_works_on_flat_or_tiny_data() -> None:
             guess = initial_guess(model, x, y)
             assert set(guess) == set(parameter_names(model))
             assert all(math.isfinite(v) for v in guess.values())
+
+
+# --- fixed parameters and bounds ----------------------------------------------
+
+
+def _gaussian_data():
+    model = PredefinedFit(name="gaussian")
+    true = {"a": 3.0, "mu": 1.2, "sigma": 0.6, "c": 0.4}
+    x = np.linspace(-3, 5, 120)
+    y, yerr = _noisy(model, true, x, 0.05)
+    return model, true, x, y, yerr
+
+
+def test_a_fixed_parameter_keeps_its_start_value() -> None:
+    model, true, x, y, yerr = _gaussian_data()
+    start = {**initial_guess(model, x, y), "sigma": 0.55}
+    result = run_fit(model, start, x, y, yerr, fixed=["sigma"])
+    assert result.parameters["sigma"] == 0.55
+    assert result.uncertainties["sigma"] == 0.0
+    assert result.parameters["mu"] == pytest.approx(true["mu"], abs=0.05)
+    residuals = (y - evaluate(model, result.parameters, x)) / yerr
+    free = 3  # the degrees of freedom count only what was fitted
+    assert result.reduced_chi_square == pytest.approx(
+        np.sum(residuals**2) / (x.size - free)
+    )
+
+
+def test_bounds_keep_a_parameter_in_its_range() -> None:
+    model, true, x, y, yerr = _gaussian_data()
+    start = {**initial_guess(model, x, y), "a": 2.0}
+    result = run_fit(model, start, x, y, yerr, bounds={"a": (None, 2.5)})
+    assert result.converged
+    assert result.parameters["a"] <= 2.5
+    assert result.parameters["a"] == pytest.approx(2.5, abs=1e-3)  # it wants 3
+
+
+def test_an_open_bound_is_no_bound() -> None:
+    model, true, x, y, yerr = _gaussian_data()
+    start = initial_guess(model, x, y)
+    free = run_fit(model, start, x, y, yerr)
+    bounded = run_fit(model, start, x, y, yerr, bounds={"sigma": (0.0, None)})
+    assert bounded.parameters["sigma"] == pytest.approx(
+        free.parameters["sigma"], rel=1e-4
+    )
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        ({"bounds": {"a": (5.0, None)}}, "start value of a, 3, lies outside"),
+        ({"bounds": {"a": (2.0, 1.0)}}, "lower bound of a is not below"),
+        ({"fixed": ["a", "mu", "sigma", "c"]}, "every parameter is fixed"),
+        ({"fixed": ["k"]}, "unknown parameter 'k'"),
+        ({"bounds": {"k": (0.0, 1.0)}}, "unknown parameter 'k'"),
+    ],
+)
+def test_fixed_and_bounds_are_checked(options, message) -> None:
+    model, true, x, y, yerr = _gaussian_data()
+    with pytest.raises(FitError, match=message):
+        run_fit(model, true, x, y, yerr, **options)
+
+
+# --- outliers -------------------------------------------------------------------
+
+
+def _with_glitches(yerr: bool):
+    model = PredefinedFit(name="linear")
+    x = np.linspace(0, 10, 41)
+    rng = np.random.default_rng(RNG_SEED)
+    y = 2.0 * x + 1.0 + rng.normal(0, 0.05, x.size)  # well inside the errors
+    y[[7, 30]] += [3.0, -4.0]
+    return model, x, y, (np.full(x.size, 0.1) if yerr else None)
+
+
+@pytest.mark.parametrize("errors", [True, False])
+def test_outliers_are_found_by_their_residuals(errors: bool) -> None:
+    from figscribe.fit import outliers
+
+    model, x, y, yerr = _with_glitches(errors)
+    start = initial_guess(model, x, y)
+    found = outliers(model, start, x, y, yerr, k=3.0)
+    assert list(np.flatnonzero(found)) == [7, 30]
+
+
+def test_without_outliers_none_are_found() -> None:
+    from figscribe.fit import outliers
+
+    model, x, _, yerr = _with_glitches(True)
+    y = 2.0 * x + 1.0
+    found = outliers(model, {"a": 1.0, "b": 0.0}, x, y + 0.01 * np.sin(x), yerr)
+    assert not found.any()

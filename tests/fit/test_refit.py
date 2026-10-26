@@ -97,3 +97,54 @@ def test_refit_refuses_a_target_without_data(project: Project, data) -> None:
     _fit(project).target = note.id
     with pytest.raises(FitError, match="annotation"):
         refit(project, _fit(project).id, data)
+
+
+def test_refit_holds_fixed_parameters_and_keeps_bounds(project: Project, data) -> None:
+    fit = _fit(project)
+    fit.initial_values = {"sigma": 0.7}
+    fit.fixed = ["sigma"]
+    fit.parameter_bounds = {"a": (None, 2.0)}
+    History(project).push(refit(project, fit.id, data))
+    result = _fit(project).result
+    assert result.parameters["sigma"] == 0.7
+    assert result.parameters["a"] <= 2.0
+
+
+def test_a_fit_is_changed_in_one_step(project: Project, data) -> None:
+    from figscribe.fit import update_fit
+
+    fit = _fit(project)
+    history = History(project)
+    history.push(refit(project, fit.id, data))
+    before = dumps(project)
+    changed = _fit(project).model_copy(
+        update={
+            "fixed": ["c"],
+            "parameter_bounds": {"a": (0.0, None)},
+            "label": "new",
+            "fit_range": (-2.0, 2.0),
+            "extend_curve": True,
+        }
+    )
+    history.push(update_fit(project, fit.id, changed))
+    assert _fit(project).fixed == ["c"] and _fit(project).label == "new"
+    assert _fit(project).fit_range == (-2.0, 2.0) and _fit(project).extend_curve
+    assert history.undo_text == "Change the fit"
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_refit_uses_only_the_fit_range(project: Project) -> None:
+    """Outside the range the data follow another line, which must not pull
+    the fit."""
+    t = np.linspace(0, 10, 101)
+    u = np.where(t <= 5, 2.0 * t + 1.0, 50.0 - t)
+    columns = {"t": t, "U": u, "dU": np.full(t.size, 0.1)}
+    fit = _fit(project)
+    fit.model = PredefinedFit(name="linear")
+    fit.initial_values = {}
+    fit.fit_range = (0.0, 5.0)
+    History(project).push(refit(project, fit.id, lambda ref: columns[ref.column]))
+    result = _fit(project).result
+    assert result.parameters["a"] == pytest.approx(2.0)
+    assert result.parameters["b"] == pytest.approx(1.0)

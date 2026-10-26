@@ -1,9 +1,8 @@
-"""figscribe - scientific plots via a GUI, exported as standalone Python code.
+"""figscribe - scientific figures built in a GUI, exported as standalone Python code.
 
-Early development: the plot model, its JSON persistence, the renderer for
-line, scatter and errorbar plots, CSV import, undoable commands, curve fitting
-and a first GUI exist; the code generator does not yet. See the project
-repository for the plan.
+The plot model (figscribe.model) is the single source of truth; the renderer,
+the code generator and the GUI read it, and change it only through undoable
+commands. See https://github.com/f4ren/figscribe for documentation and plans.
 """
 
-__version__ = "0.0.2"
+__version__ = "0.1.0"

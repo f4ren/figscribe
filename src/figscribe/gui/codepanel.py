@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from figscribe.codegen import generate, script_name
 from figscribe.gui import theme
 from figscribe.gui.document import Document
+from figscribe.gui.errors import explain
 from figscribe.gui.widgets import label
 
 DELAY_MS = 250
@@ -103,7 +104,7 @@ class CodePanel(QWidget):
                 data=document.data,
             )
         except Exception as exc:  # shown in the drawer, never fatal
-            return f"# The script cannot be written yet:\n# {exc}"
+            return f"# The script cannot be written yet:\n# {explain(exc)}"
 
     def copy_to_clipboard(self) -> None:
         QApplication.clipboard().setText(self.text.toPlainText())

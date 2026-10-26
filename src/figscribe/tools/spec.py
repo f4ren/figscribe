@@ -58,6 +58,31 @@ _FIT_FIELDS = {
         "additionalProperties": {"type": "number"},
         "description": "Start values; guessed from the data when omitted",
     },
+    "fixed": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Parameters held at their start value instead of fitted; "
+        "give that value in initial_values",
+    },
+    "fit_range": {
+        "type": ["array", "null"],
+        "items": {"type": "number"},
+        "minItems": 2,
+        "maxItems": 2,
+        "description": "[lower, upper] of x: only the points within are fitted; "
+        "omitted fits all",
+    },
+    "bounds": {
+        "type": "object",
+        "additionalProperties": {
+            "type": "array",
+            "items": {"type": ["number", "null"]},
+            "minItems": 2,
+            "maxItems": 2,
+        },
+        "description": "[lower, upper] by parameter, null for an open end; the "
+        "fitted value stays within them",
+    },
     "residuals": {
         "type": "boolean",
         "description": "Also show the residuals in a panel below the plot, "
@@ -131,8 +156,9 @@ TOOLS: list[ToolSpec] = [
         "insert",
         "Add a figure, an axes (a panel in the figure's grid, or an inset with "
         '"inset": {"parent": axes id, "bounds": [x0, y0, w, h]}) or an artist '
-        '(plot, annotation, residuals) given as JSON. Returns its id. For "kind" '
-        "values and fields see get_schema. One undo step.",
+        "(plot, annotation, residuals, reference line, shaded range) given as "
+        'JSON. Returns its id. For "kind" values and fields see get_schema. One '
+        "undo step.",
         {
             "type": "object",
             "properties": _OBJECT_FIELDS,
@@ -143,8 +169,9 @@ TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         "remove",
-        "Remove a plot, an axes or a figure. Fits on a removed plot and their "
-        "residuals go with it. One undo step.",
+        "Remove a plot, an axes, a figure or a data source. Fits on a removed "
+        "plot and their residuals go with it; a data source takes the plots "
+        "that draw from it along, and its file stays on disk. One undo step.",
         {
             "type": "object",
             "properties": {"object_id": {"type": "string"}},
@@ -238,6 +265,20 @@ TOOLS: list[ToolSpec] = [
                 },
             },
             "required": ["description", "operations"],
+            "additionalProperties": False,
+        },
+        changes_project=True,
+    ),
+    ToolSpec(
+        "use_new_data_version",
+        "Take a data file that changed since it was imported as it is now: "
+        "figscribe hashes it again and reads its columns and rows, keeping how "
+        "it is read. Only for a file get_project lists as changed; plots of "
+        "columns the new version lacks come back as problems.",
+        {
+            "type": "object",
+            "properties": {"source_id": {"type": "string"}},
+            "required": ["source_id"],
             "additionalProperties": False,
         },
         changes_project=True,

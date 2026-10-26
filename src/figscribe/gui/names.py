@@ -17,6 +17,8 @@ KIND_NAMES = {
     "fit": "Fit",
     "residual": "Residuals of the fit",
     "annotation": "Note",
+    "refline": "Reference line",
+    "span": "Shaded range",
 }
 
 FIELD_NAMES = {
@@ -36,7 +38,7 @@ FIELD_NAMES = {
     "linewidth": "Line width (pt)",
     "marker": "Marker",
     "markersize": "Marker size (pt)",
-    "size": "Marker area (pt²)",
+    "size": "Marker size (pt)",
     "capsize": "Cap size (pt)",
     "elinewidth": "Error bar width (pt)",
     "histtype": "Style",
@@ -57,7 +59,7 @@ FIELD_NAMES = {
     "name": "Name",
     "width_mm": "Width (mm)",
     "height_mm": "Height (mm)",
-    "dpi": "Resolution (dpi)",
+    "dpi": "PNG resolution (dpi)",
     "unit_format": "Units in labels",
     "stylesheet": "Style sheet",
     "font_size": "Font size (pt)",
@@ -68,10 +70,22 @@ FIELD_NAMES = {
     "minor_divisions": "Minor divisions",
     "grid_axis": "Grid lines for",
     "grid_which": "Grid lines at",
+    "grid_color": "Grid color",
+    "grid_linewidth": "Grid line width (pt)",
+    "grid_linestyle": "Grid line style",
     "layout": "Layout",
     "rows": "Rows",
     "cols": "Columns",
     "share_x": "Share x axis",
+    "y_right": "Right y axis",
+    "tick_direction": "Tick marks point",
+    "ticks_all_sides": "Ticks on all sides",
+    "frame_width": "Frame width (pt)",
+    "tick_width": "Tick width (pt)",
+    "tick_length": "Tick length (pt)",
+    "minor_tick_width": "Minor tick width (pt)",
+    "minor_tick_length": "Minor tick length (pt)",
+    "prefix": "Show values in",
     "share_y": "Share y axis",
     "width_ratios": "Width ratios",
     "height_ratios": "Height ratios",
@@ -99,16 +113,71 @@ FIELD_NAMES = {
     "frame": "Frame",
     "ncols": "Columns",
     "colorbar": "Color bar",
+    "panel_labels": "Panel labels",
+    "orientation": "Direction",
+    "at": "At",
+    "start": "From",
+    "end": "To",
+    "style": "Letters",
+    "bold": "Bold",
+    "placement": "Placement",
+    "insets": "Insets too",
     "path": "File",
     "sha256": "Fingerprint",
+    "row_count": "Rows of data",
     "delimiter": "Separator",
     "decimal": "Decimal mark",
-    "header_row": "Header line (first = 0)",
+    "header_row": "Header line",
     "skip_rows": "Lines skipped",
     "comment": "Comment mark",
+    "encoding": "Text encoding",
     "dataset": "Dataset",
     "array": "Array",
+    "id": "Id",
+    "kind": "Type",
+    "format": "File type",
+    "schema_version": "File format version",
+    "figscribe_version": "Saved by",
+    "created": "Created",
+    "sources": "Data files",
+    "figures": "Figures",
+    "axes": "Panels",
+    "artists": "Plots",
+    "columns": "Columns",
+    "source": "Data file",
+    "column": "Column",
+    "key": "Array",
+    "data": "Data",
+    "origin": "First row at",
+    "aspect": "Pixel shape",
+    "model": "Fit function",
+    "degree": "Degree",
+    "expression": "Formula",
+    "parameters": "Parameters",
+    "initial_values": "Start values",
+    "fixed": "Held fixed",
+    "parameter_bounds": "Parameter bounds",
+    "fit_range": "Fit range",
+    "extend_curve": "Curve over all the data",
+    "outside_as_left_out": "Points outside the range like left out",
+    "left_out": "Rows left out",
+    "left_out_color": "Left-out color",
+    "left_out_marker": "Left-out marker",
+    "left_out_linestyle": "Left-out line style",
+    "left_out_note": "Why left out",
+    "result": "Result",
+    "uncertainties": "Uncertainties (1σ)",
+    "reduced_chi_square": "Reduced χ²",
+    "converged": "Converged",
 }
+
+
+ENCODINGS = [
+    ("UTF-8", "utf-8-sig"),
+    ("Windows (cp1252)", "cp1252"),
+    ("Latin-1 (ISO 8859-1)", "latin-1"),
+]
+"""The text encodings of CSV files, as offered for choice."""
 
 
 def field_name(name: str) -> str:
@@ -124,8 +193,15 @@ def artist_name(artist) -> str:
         if model.kind == "predefined":
             return f"{model.name.capitalize()} fit"
         return f"Fit: {model.expression}"
+    if artist.kind in ("refline", "span"):
+        axis = "x" if artist.orientation == "vertical" else "y"
+        if artist.kind == "refline":
+            return f"Line at {axis} = {artist.at:g}"
+        low, high = sorted((artist.start, artist.end))
+        return f"Range of {axis} from {low:g} to {high:g}"
     if artist.kind == "annotation":
-        return f"Note: {artist.text}"
+        first, *more = artist.text.split("\n")
+        return f"Note: {first} …" if more else f"Note: {first}"
     return KIND_NAMES.get(artist.kind, artist.kind)
 
 
