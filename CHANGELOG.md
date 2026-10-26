@@ -12,6 +12,8 @@ release open in every later one.
 **Fixed**
 - A color the panel refused no longer breaks the panel the next time it is
   built.
+- The script names the encoding of a UTF-8 data file with letters beyond
+  ASCII, so that it also reads the file on Windows.
 
 ## 0.1.0 — 2026-10-26
 

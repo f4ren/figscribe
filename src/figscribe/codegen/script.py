@@ -467,8 +467,8 @@ class _Writer:
             )
         if source.encoding != "utf-8-sig":
             kwargs["encoding"] = _str(source.encoding)
-        elif _has_bom(location):
-            kwargs["encoding"] = '"utf-8-sig"'
+        elif (encoding := _utf8_flavour(location)) is not None:
+            kwargs["encoding"] = _str(encoding)
         table = self.arrays.get((source.id, None))
         if table is not None:
             # The whole table is plotted as an image; columns are slices of it.
@@ -1257,9 +1257,19 @@ def _relative(path: Path, script_dir: Path) -> str:
         return str(path)
 
 
-def _has_bom(path: Path) -> bool:
+def _utf8_flavour(path: Path) -> str | None:
+    """How a UTF-8 file is to be read: "utf-8-sig" with a byte order mark,
+    "utf-8" with other than ASCII, None for plain ASCII (or no file), which
+    every encoding reads. Without encoding=, NumPy takes the system's: cp1252
+    on Windows, which cannot decode every UTF-8 byte."""
     try:
         with open(path, "rb") as file:
-            return file.read(3) == b"\xef\xbb\xbf"
+            if file.read(3) == b"\xef\xbb\xbf":
+                return "utf-8-sig"
+            file.seek(0)
+            while chunk := file.read(1 << 20):
+                if not chunk.isascii():
+                    return "utf-8"
     except OSError:
-        return False
+        pass
+    return None
