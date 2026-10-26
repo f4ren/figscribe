@@ -21,6 +21,8 @@ release open in every later one.
   tooltip says why.
 
 **Fixed**
+- With openai 3.38 or later, the assistant again says why Gemini refused a
+  request and how long to wait at a rate limit.
 - A color the panel refused no longer breaks the panel the next time it is
   built.
 - The script names the encoding of a UTF-8 data file with letters beyond
