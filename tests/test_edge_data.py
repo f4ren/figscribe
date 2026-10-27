@@ -29,6 +29,7 @@ from figscribe.model import (
     ArrayRef,
     Axes,
     ColumnRef,
+    Conversion,
     ErrorbarPlot,
     Figure,
     FitCurve,
@@ -42,6 +43,7 @@ from figscribe.model import (
 )
 from figscribe.render import export
 from figscribe.render.figure import render
+from figscribe.units import set_conversion, set_range
 
 OWN = (DataError, FitError, CommandError)
 """Refusals that carry a message written for the user."""
@@ -64,18 +66,27 @@ CASES: dict[str, dict] = {
     "integers": {"x": list(range(8)), "y": [3, 1, 4, 1, 5, 9, 2, 6]},
     "reversed range": {"x": _X, "y": [1.0, 2.0] * 4, "limits": (10.0, 0.0)},
     "equal range": {"x": _X, "y": [1.0, 2.0] * 4, "limits": (5.0, 5.0)},
+    "converted from the start": {"x": _X, "y": [1.0, 2.0] * 4, "convert": "x"},
+    "only NaN, converted": {"x": _X, "y": [math.nan] * 8, "convert": "y"},
+    "a range without rows": {"x": _X, "y": [1.0, 2.0] * 4, "range": (100.0, 200.0)},
 }
 
 KINDS = ["line", "points", "error bars", "histogram", "Allan deviation", "fit"]
 
 SAID = {
     "only NaN": "has no values to draw",
+    "only NaN, converted": "has no values to draw",
+    "a range without rows": "lies within the range",
     "zero and below on a log axis": "are zero or below",
     "zero and below with a log scale": "are zero or below",
 }
 """Cases that draw, but not everything: the problem list must say what."""
 
-SAID_OF_ALLAN = {"only NaN": "needs an unbroken series"}
+SAID_OF_ALLAN = {
+    "only NaN": "needs an unbroken series",
+    "only NaN, converted": "needs an unbroken series",
+    "a range without rows": "lies within the range",
+}
 """An Allan deviation says it in its own words."""
 
 
@@ -126,6 +137,16 @@ def _build(folder: Path, kind: str, case: dict) -> Project:
         fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
         history.push(add_fit(project, fit))
         history.push(refit(project, fit.id, load_data(project, folder)))
+    if "convert" in case:
+        # A histogram or an Allan deviation converts only x, its values or τ.
+        has_y = "y_conversion" in type(plot).model_fields
+        axis = case["convert"] if has_y else "x"
+        minutes = Conversion(factor=1 / 60, from_start=True, unit="min")
+        data = load_data(project, folder)
+        history.push(set_conversion(project, plot.id, axis, minutes, data))
+    if "range" in case:
+        data = load_data(project, folder)
+        history.push(set_range(project, plot.id, case["range"], data))
     return project
 
 

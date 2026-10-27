@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from figscribe.units import set_conversion, set_range
 
 from figscribe.commands import History
 from figscribe.fit import FitError, refit
@@ -26,8 +25,11 @@ from figscribe.model import (
     ShadedSpan,
     dumps,
 )
+from figscribe.units import set_conversion, set_range
 
-SOURCE = CsvSource(path="run.csv", sha256="0" * 64, columns=["t", "U", "dU", "V"])
+SOURCE = CsvSource(
+    path="run.csv", sha256="0" * 64, columns=["t", "U", "dU", "V", "gap"]
+)
 T = 1000.0 + 360.0 * np.arange(41)  # s, every 6 min for 4 h, starting at 1000 s
 COLUMNS = {
     "t": T,
@@ -151,3 +153,48 @@ def test_a_range_fits_again_and_is_refused_with_too_few_points() -> None:
     assert dumps(project) == before
     history.push(set_range(project, plot.id, None, data))
     assert history.undo_text == "Use every row"
+
+
+# --- the problem list ---------------------------------------------------------
+
+
+def _problems(*artists) -> list[str]:
+    from figscribe.model import validate_references
+
+    project = Project(
+        sources=[SOURCE], figures=[Figure(axes=[Axes(artists=list(artists))])]
+    )
+    return [str(issue) for issue in validate_references(project, data)]
+
+
+def test_a_fit_range_beyond_the_plots_range_is_a_problem() -> None:
+    plot = LinePlot(x=col("t"), y=col("U"), x_range=(3600.0, 7200.0))
+    fit = FitCurve(
+        target=plot.id, model=PredefinedFit(name="linear"), fit_range=(1000.0, 5000.0)
+    )
+    (problem,) = [p for p in _problems(plot, fit) if "fit_range" in p]
+    assert "reaches beyond the plot's range 3600 to 7200" in problem
+
+
+def test_a_range_with_nothing_in_it_is_a_problem() -> None:
+    from figscribe.model import Histogram
+
+    plot = LinePlot(x=col("t"), y=col("U"), x_range=(0.0, 10.0))
+    counts = Histogram(values=col("U"), x_range=(5.0, 6.0))
+    problems = _problems(plot, counts)
+    assert any("no row lies within the range 0 to 10" in p for p in problems)
+    assert any("no value lies within the range 5 to 6" in p for p in problems)
+
+
+def test_an_allan_deviation_needs_an_unbroken_range() -> None:
+    from figscribe.model import AllanDeviationPlot
+
+    COLUMNS["gap"] = np.where(np.arange(41) == 30, np.nan, 1e-12)
+    early = AllanDeviationPlot(values=col("gap"), time=col("t"), x_range=(0.0, 7200.0))
+    late = AllanDeviationPlot(
+        values=col("gap"), time=col("t"), x_range=(7200.0, 14400.0)
+    )
+    assert _problems(early) == []  # the gap at row 30 lies after 2 h
+    assert any("needs an unbroken series" in p for p in _problems(late))
+    nothing = AllanDeviationPlot(values=col("gap"), time=col("t"), x_range=(9e9, 1e10))
+    assert any("no sample lies within" in p for p in _problems(nothing))

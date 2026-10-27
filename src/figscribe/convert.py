@@ -48,7 +48,7 @@ def convert(values, conversion: Conversion | None) -> np.ndarray:
     if conversion is None:
         return values
     if conversion.from_start:
-        values = values - np.nanmin(values)
+        values = values - start(values, conversion)
     return _apply(values, conversion.factor)
 
 
@@ -62,7 +62,9 @@ def start(values, conversion: Conversion | None) -> float:
     """The raw value shown as 0 by a conversion counting from the start."""
     if conversion is None or not conversion.from_start:
         return 0.0
-    return float(np.nanmin(np.asarray(values, dtype=float)))
+    values = np.asarray(values, dtype=float)
+    # A column of nothing but NaN has no start; its values stay NaN anyway.
+    return float(np.nanmin(values)) if np.isfinite(values).any() else 0.0
 
 
 def expression(name: str, conversion: Conversion) -> str:
