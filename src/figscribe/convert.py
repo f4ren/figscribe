@@ -68,13 +68,21 @@ def start(values, conversion: Conversion | None) -> float:
 def expression(name: str, conversion: Conversion) -> str:
     """The script's expression for the column `name` as shown, e.g.
     "(t - np.nanmin(t)) / 3600"; the same operations as `convert`."""
-    text = f"{name} - np.nanmin({name})" if conversion.from_start else name
-    how = operation(conversion.factor)
+    if not conversion.from_start:
+        return scaled(name, conversion.factor)
+    shifted = f"{name} - np.nanmin({name})"
+    if operation(conversion.factor) is None:
+        return shifted
+    return scaled(f"({shifted})", conversion.factor)
+
+
+def scaled(text: str, factor: float) -> str:
+    """The script's expression `text` scaled by `factor`, as `scale` does it:
+    "dU * 1000", "m * tau0 / 60"."""
+    how = operation(factor)
     if how is None:
         return text
     op, number = how
-    if conversion.from_start:
-        text = f"({text})"
     short = f"{number:g}"
     # The short form only where it is the very same number: 1000, not 1e+03.
     written = short if float(short) == number and "e" not in short else repr(number)

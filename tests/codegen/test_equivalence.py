@@ -899,7 +899,7 @@ def _run_csv(folder: Path) -> tuple[Project, dict[str, ColumnRef]]:
     t = 1.7e9 + 360.0 * np.arange(41)
     rng = np.random.default_rng(5)
     u = np.exp(-(((t - t[20]) / 3600) ** 2)) + rng.normal(0, 0.03, t.size)
-    rows = "\n".join(f"{a!r},{b:.5f},0.030" for a, b in zip(t, u, strict=True))
+    rows = "\n".join(f"{float(a)!r},{b:.5f},0.030" for a, b in zip(t, u, strict=True))
     (folder / "run.csv").write_text(f"t,U,dU\n{rows}\n", encoding="utf-8")
     source = csv_source(folder / "run.csv", folder, header_row=0)
     refs = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
