@@ -55,6 +55,8 @@ note the platform, the screen scaling and the theme in the pull request.
 5. **Import**: import a CSV with a semicolon and decimal commas, and one in
    cp1252 with µ in the header. The dialog proposes the right reading.
 6. **Fit**: add a Gaussian fit with residuals; the result shows in the panel.
+   Show x in h with "Start at 0" and use only part of x: the axis, its range
+   and the fit follow, and the fit's parameters are in h.
 7. **A changed file**: edit the CSV in another program and come back; the
    bar offers the new version.
 8. **Export**: PDF, PNG and the Python script; run the script, and its figure

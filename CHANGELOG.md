@@ -19,6 +19,10 @@ release open in every later one.
   preview with the data, and which panel the plot goes to.
 - Settings that do nothing in the current state are greyed out, and their
   tooltip says why.
+- Units and a range per plot: show values in min, h, days, ms or by any
+  factor, counted from the start if wanted, and draw, count and fit only the
+  rows within a range of x. The axis, its marks and the plot's fits follow;
+  the script converts with one line of NumPy per column.
 
 **Finding things**
 - A search above the property panel (Ctrl+F) keeps the settings whose name
