@@ -20,11 +20,11 @@ from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import matplotlib.style
 from matplotlib.colors import TABLEAU_COLORS, to_hex
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -69,11 +69,13 @@ from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
 from figscribe.io.refresh import read_differently, reading_options
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     Axes,
     AxisSpec,
     Colorbar,
     ColumnRef,
+    Conversion,
     ErrorBand,
     ExpressionFit,
     Figure,
@@ -86,6 +88,7 @@ from figscribe.model import (
 from figscribe.model.styles import style_problem
 from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
+from figscribe.units import CONVERTIBLE, set_conversion, set_range
 
 SKIPPED = {
     "id": "an identity, never edited",
@@ -164,6 +167,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         return Spec("bins")
     if name in OPTIONAL_PARTS:
         return Spec("part", model=OPTIONAL_PARTS[name])
+    if name in CONVERSIONS:
+        return Spec("conversion", optional=True)
     optional = False
     args = typing.get_args(annotation)
     if _is_union(annotation) and type(None) in args:
@@ -172,6 +177,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         if len(rest) != 1:
             return None
         annotation = rest[0]
+    if typing.get_origin(annotation) is Annotated:  # a checked type, e.g. Range
+        annotation = typing.get_args(annotation)[0]
     origin = typing.get_origin(annotation)
     args = typing.get_args(annotation)
 
@@ -203,6 +210,9 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 
 SECTIONS = {
+    "x_conversion": "Data",
+    "y_conversion": "Data",
+    "x_range": "Data",
     "x": "Data",
     "y": "Data",
     "xerr": "Data",
@@ -362,6 +372,7 @@ PLACEHOLDERS = {
     "array": "the first",
     "width_ratios": "1",
     "height_ratios": "1",
+    "x_range": "all",
 }
 
 TIPS = {
@@ -528,6 +539,26 @@ TIPS = {
     "comment": "Lines starting with this are ignored; empty for none.",
     "dataset": "Where the data lies inside the HDF5 file, e.g. /run3/voltage.",
     "array": "Which array of the .npz archive to plot.",
+    "x_conversion": "Show x in another unit: min, h or days for times measured in s, "
+    "ms, or another factor. The axis, the plot's range, its fits and the lines and "
+    "notes on the axis follow.",
+    "y_conversion": "Show y in another unit, e.g. mV with another factor of 1000. The "
+    "axis, the fits and the lines and notes on the axis follow.",
+    "Histogram.x_conversion": "Count the values in another unit: min, h or days "
+    "for times in s, ms, or another factor.",
+    "AllanDeviationPlot.x_conversion": "Show τ in another unit: min, h or days, ms, "
+    "or another factor.",
+    "from_start": "Count from the smallest value, so that the values start at 0: "
+    "hours since the start of the measurement rather than since 1970.",
+    "factor": "What each value is multiplied by, e.g. 1000 for V in mV or 0.001 for "
+    "mV in V.",
+    "Conversion.unit": "The unit of the shown values; the axis takes it.",
+    "x_range": "Use only the rows with x from … to …, in the unit shown; the others "
+    "are not drawn, fitted or counted. Both empty use every row.",
+    "Histogram.x_range": "Count only the values from … to …, in the unit shown; the "
+    "bins span this range.",
+    "AllanDeviationPlot.x_range": "Use only the samples taken from … to … after the "
+    "first, in the unit τ is shown in; τ0 stays that of the whole series.",
 }
 """Explanations shown when the mouse rests on a field, by field name, or by
 "Class.field" where the same name means something else there."""
@@ -548,6 +579,22 @@ SHARED = (
 )
 """What several plots chosen together can have set at once, where every one
 of them has it."""
+
+CONVERSIONS = ("x_conversion", "y_conversion")
+UNITS = [
+    ("min (÷ 60)", 1 / 60, "min"),
+    ("h (÷ 3600)", 1 / 3600, "h"),
+    ("days (÷ 86 400)", 1 / 86400, "days"),
+    ("ms (× 1000)", 1000.0, "ms"),
+]
+"""The units a plot's values are most often shown in: times measured in s."""
+OTHER_FACTOR = "another factor"
+
+CAPTIONS = {
+    ("Histogram", "x_range"): "Use only values",
+    ("AllanDeviationPlot", "x_range"): "Use only times",
+}
+"""Captions for a field whose plain name says something else in this class."""
 
 
 class _Several:
@@ -878,7 +925,7 @@ class PropertyPanel(QScrollArea):
             if _get(obj, path) == value:
                 return
             self.document.push(self._command(obj, path, value))
-        except (CommandError, DataError) as exc:
+        except (CommandError, DataError, FitError) as exc:
             self.report(str(exc))
             self.refresh()
         else:
@@ -886,8 +933,23 @@ class PropertyPanel(QScrollArea):
 
     def _command(self, obj: BaseModel, path: Path, value: Any):
         """The change for one field; a right y axis comes and goes with the
-        plots drawn against it, and a data file is read again when how it is
-        read changes."""
+        plots drawn against it, a data file is read again when how it is
+        read changes, and units and a range keep the plot's axis and fits in
+        step."""
+        if path[0] in CONVERSIONS and isinstance(obj, CONVERTIBLE):
+            conversion = value
+            if len(path) == 2:
+                current = getattr(obj, path[0]).model_dump()
+                try:
+                    conversion = Conversion.model_validate({**current, path[1]: value})
+                except ValidationError as exc:
+                    reason = "; ".join(e["msg"] for e in exc.errors())
+                    raise CommandError(f"{field_name(path[1])}: {reason}") from None
+            data = self.document.data
+            axis = path[0][0]
+            return set_conversion(self.document.project, obj.id, axis, conversion, data)
+        if path == ("x_range",) and isinstance(obj, CONVERTIBLE):
+            return set_range(self.document.project, obj.id, value, self.document.data)
         if len(path) == 1 and path[0] in reading_options(obj):
             return read_differently(
                 self.document.project, obj.id, path[0], value, self.document.base_dir
@@ -1109,13 +1171,21 @@ class PropertyPanel(QScrollArea):
         editor = make_editor(spec, path, self)
         editor.show(value)
         self.editors[path] = editor
-        caption = _form_label(name)
+        text = CAPTIONS.get((type(obj).__name__, name))
+        caption = _caption(text) if text else _form_label(name)
         tip = tip_for(type(obj), name)
         self._captions[path] = (caption, tip)
         if tip is not None:
             caption.setToolTip(tip)
             editor.widget.setToolTip(tip)
         form.addRow(caption, editor.widget)
+        if name in CONVERSIONS and value is not None:
+            # τ of an Allan deviation starts at τ0 whatever: nothing to start.
+            if not isinstance(obj, AllanDeviationPlot):
+                self._row(form, value, (*path, "from_start"))
+            if _unit_of_the_list(value) is None:
+                self._row(form, value, (*path, "factor"))
+                self._row(form, value, (*path, "unit"))
 
     def _axis_links(self, form: QFormLayout, axes: Axes) -> None:
         """One line per axis; clicking it opens the axis's own form."""
@@ -1403,6 +1473,8 @@ CHOICES["tick_direction"] = [
 ]
 NONE_TEXT = {
     "stylesheet": "Matplotlib's default",
+    "x_conversion": "as in the file",
+    "y_conversion": "as in the file",
     "tick_direction": "style default",
     "time": "the sample interval below",
     "grid_linestyle": "style default",
@@ -1607,6 +1679,67 @@ def _ratios(values: list[float | None]) -> list[float] | None:
     return ratios
 
 
+class ConversionEditor(Editor):
+    """The unit a plot's x or y is shown in: as in the file, one of the
+    common units, or another factor, which is then typed below."""
+
+    def __init__(self, spec, path, panel):
+        super().__init__(spec, path, panel)
+        self.choices: list[tuple[str, Any]] = [
+            (NONE_TEXT[path[-1]], None),
+            *((text, (factor, unit)) for text, factor, unit in UNITS),
+            (OTHER_FACTOR, OTHER_FACTOR),
+        ]
+        self.widget = QComboBox()
+        for text, _ in self.choices:
+            self.widget.addItem(text)
+        self.widget.activated.connect(self._chosen)
+
+    def show(self, value: Conversion | None) -> None:
+        self.value = value
+        if value is None:
+            index = 0
+        else:
+            listed = _unit_of_the_list(value)
+            texts = [text for text, _ in self.choices]
+            index = texts.index(listed) if listed else len(texts) - 1
+        self.widget.blockSignals(True)
+        self.widget.setCurrentIndex(index)
+        self.widget.blockSignals(False)
+
+    def _chosen(self, index: int) -> None:
+        _, choice = self.choices[index]
+        current = self.value
+        start = current.from_start if current is not None else False
+        if choice is None:
+            self.commit(None)
+        elif choice == OTHER_FACTOR:
+            if current is not None and _unit_of_the_list(current) is None:
+                return  # already another factor
+            factor = current.factor if current is not None else 1.0
+            # The factor stays as it was; the unit is typed with the new one.
+            self.commit(Conversion(factor=factor, from_start=start))
+        else:
+            factor, unit = choice
+            self.commit(Conversion(factor=factor, from_start=start, unit=unit))
+
+
+def _unit_of_the_list(conversion: Conversion) -> str | None:
+    """The entry of UNITS a conversion is, by factor and unit; None if none."""
+    for text, factor, unit in UNITS:
+        if conversion.unit == unit and math.isclose(conversion.factor, factor):
+            return text
+    return None
+
+
+def _range_ends(values: list[float | None]) -> tuple[float, float] | None:
+    if all(v is None for v in values):
+        return None
+    if any(v is None for v in values):
+        raise ValueError("fill in both ends, or neither to use every row")
+    return (values[0], values[1])
+
+
 class StyleEditor(ChoiceEditor):
     """Matplotlib's style sheets by name, or an .mplstyle file from disk,
     chosen through the last entry."""
@@ -1663,6 +1796,11 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return ChoiceEditor(spec, path, panel, choices, missing="")
     if name == "stylesheet":
         return StyleEditor(spec, path, panel)
+    if name in CONVERSIONS:
+        return ConversionEditor(spec, path, panel)
+    if name == "x_range":
+        ends = ["from", "to"]
+        return FieldsEditor(spec, path, panel, ends, PLACEHOLDERS[name], _range_ends)
     if name == "extent":
         sides = ["left", "right", "bottom", "top"]
         return FieldsEditor(spec, path, panel, sides, PLACEHOLDERS[name], _extent)
@@ -1792,7 +1930,13 @@ def _shape(obj: BaseModel) -> tuple:
     )
     layout = getattr(obj, "layout", None)
     grid = (layout.rows, layout.cols) if layout is not None else None
-    return (obj.id, type(obj), parts, grid)
+    units = tuple(
+        "none"
+        if (c := getattr(obj, name, None)) is None
+        else _unit_of_the_list(c) or OTHER_FACTOR
+        for name in CONVERSIONS
+    )
+    return (obj.id, type(obj), parts, grid, units)
 
 
 def _axes_of(project, artist_id: str) -> Axes | None:

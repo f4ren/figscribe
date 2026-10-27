@@ -81,7 +81,7 @@ def test_another_factor_is_typed_with_its_unit(panel, document) -> None:
     assert _plot(document).y_conversion == Conversion(factor=1000.0, unit="mV")
     assert document.figure.axes[0].y.unit == "mV"
     _type(panel, ("y_conversion", "factor"), "0")
-    assert "factor" in panel.error and _plot(document).y_conversion.factor == 1000
+    assert "Factor" in panel.error and _plot(document).y_conversion.factor == 1000
 
 
 def test_a_range_takes_both_ends_and_says_why_it_is_refused(panel, document) -> None:

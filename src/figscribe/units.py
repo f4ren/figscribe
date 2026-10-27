@@ -135,7 +135,8 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
         for a in axes.artists
     )
     changes: dict = {}
-    old_unit = old.unit if old is not None else spec.unit
+    # What the axis shows for the old setting: its unit, unless that gave one.
+    old_unit = old.unit if old is not None and old.unit is not None else spec.unit
     if new is None:
         if old is not None and old.unit is not None and spec.unit == old.unit:
             changes["unit"] = None  # the file's unit is not known here
