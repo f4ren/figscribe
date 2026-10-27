@@ -20,6 +20,7 @@ from matplotlib.testing.compare import compare_images
 from figscribe.model import (
     Axes,
     AxisSpec,
+    Conversion,
     ErrorBand,
     ErrorbarPlot,
     Figure,
@@ -144,6 +145,26 @@ def _figures(ref) -> dict[str, Figure]:
                 )
             ],
         ),
+        "converted": Figure(
+            dpi=100.0,
+            axes=[
+                Axes(
+                    x=AxisSpec(label="$t$", unit="min"),
+                    y=AxisSpec(label="$U$", unit="mV"),
+                    artists=[
+                        ErrorbarPlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            yerr=ref("dU"),
+                            x_conversion=Conversion(factor=1 / 60, unit="min"),
+                            y_conversion=Conversion(factor=1000.0, unit="mV"),
+                            x_range=(0.03, 0.15),
+                            left_out=[8],
+                        ),
+                    ],
+                )
+            ],
+        ),
         "error_band": Figure(
             dpi=100.0,
             axes=[
@@ -178,6 +199,7 @@ def _figures(ref) -> dict[str, Figure]:
         "panel_labels",
         "reference_lines",
         "error_band",
+        "converted",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:
