@@ -892,3 +892,88 @@ def test_an_error_band_beside_x_error_bars_in_the_cycle_color(tmp_path: Path) ->
     script = _assert_same(project, tmp_path)
     assert "line, _, _ = ax.errorbar(" in script
     assert "color=line.get_color()" in script
+
+
+def _run_csv(folder: Path) -> tuple[Project, dict[str, ColumnRef]]:
+    """A measurement with timestamps in s, every 6 min for 4 h."""
+    t = 1.7e9 + 360.0 * np.arange(41)
+    rng = np.random.default_rng(5)
+    u = np.exp(-(((t - t[20]) / 3600) ** 2)) + rng.normal(0, 0.03, t.size)
+    rows = "\n".join(f"{a!r},{b:.5f},0.030" for a, b in zip(t, u, strict=True))
+    (folder / "run.csv").write_text(f"t,U,dU\n{rows}\n", encoding="utf-8")
+    source = csv_source(folder / "run.csv", folder, header_row=0)
+    refs = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    return Project(figscribe_version="test", sources=[source]), refs
+
+
+def test_units_and_a_range_with_a_band_and_a_fit(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, ErrorBand
+
+    project, ref = _run_csv(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        linestyle="-",
+        band=ErrorBand(),
+        x_conversion=Conversion(factor=1 / 3600, from_start=True, unit="h"),
+        y_conversion=Conversion(factor=1000.0, unit="mV"),
+        x_range=(0.5, 3.5),
+        left_out=[2, 30],  # row 2 lies outside the range
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    assert project.figures[0].axes[0].artists[1].result.parameters["mu"] == (
+        pytest.approx(2.0, abs=0.05)  # in h, as the axis shows it
+    )
+    script = _assert_same(project, tmp_path)
+    assert "t_h = (t - np.nanmin(t)) / 3600  # h since the start" in script
+    assert "U_mV = U * 1000  # in mV" in script
+    assert "dU_mV = dU * 1000" in script
+    assert "used = (t_h >= 0.5) & (t_h <= 3.5)" in script
+
+
+def test_a_histogram_over_a_range(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, Histogram
+
+    project, ref = _run_csv(tmp_path)
+    counts = Histogram(
+        values=ref["U"],
+        bins=8,
+        x_conversion=Conversion(factor=1000.0, unit="mV"),
+        x_range=(100.0, 900.0),
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[counts])])]
+    script = _assert_same(project, tmp_path)
+    assert "range=(100, 900)" in script
+
+
+def test_an_allan_deviation_in_minutes_over_a_range(tmp_path: Path) -> None:
+    from figscribe.model import AllanDeviationPlot, Conversion
+
+    rng = np.random.default_rng(11)
+    y = rng.normal(scale=2e-12, size=400)
+    rows = "\n".join(f"{0.5 * i!r},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "clock.csv").write_text(f"t,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    minutes = Conversion(factor=1 / 60, unit="min")
+    plots = [
+        AllanDeviationPlot(
+            values=col["y"], time=col["t"], x_conversion=minutes, x_range=(0.0, 1.5)
+        ),
+        AllanDeviationPlot(
+            values=col["y"], sample_interval=0.5, x_conversion=minutes, x_range=(1, 3)
+        ),
+    ]
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[Axes(**log, artists=plots)])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "/ 60" in script
