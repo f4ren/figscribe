@@ -464,6 +464,12 @@ def test_frame_ticks_and_grid_lines_have_widths(data, ref) -> None:
     assert (line.get_linewidth(), line.get_linestyle()) == (0.4, ":")
 
 
+DRAW_LIMIT = 5.0
+"""Seconds a figure may take to draw here: the freeze it guards against took
+over 20 s, while a limit of 1 s failed now and then in a parallel run on a
+loaded machine."""
+
+
 def _drawn(fig) -> float:
     """Seconds to draw `fig` as the preview does, ticks and all."""
     start = time.perf_counter()
@@ -475,7 +481,7 @@ def test_a_tick_step_far_too_small_falls_back_to_automatic_ticks(data) -> None:
     # Every 1 from 0 to 10 000 took over 20 s per redraw (roadmap B1).
     axes = Axes(x=AxisSpec(limits=(0.0, 10_000.0), major_step=1.0))
     fig = render(Figure(axes=[axes]), data)
-    assert _drawn(fig) < 1.0
+    assert _drawn(fig) < DRAW_LIMIT
     ax = fig.axes[0]
     assert not isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
 
@@ -483,7 +489,7 @@ def test_a_tick_step_far_too_small_falls_back_to_automatic_ticks(data) -> None:
 def test_the_tick_limit_applies_to_an_automatic_range(data) -> None:
     # The data run from 0 to 10; the range is not fixed.
     fig = render(Figure(axes=[Axes(x=AxisSpec(major_step=0.001))]), data)
-    assert _drawn(fig) < 1.0
+    assert _drawn(fig) < DRAW_LIMIT
     assert not isinstance(fig.axes[0].xaxis.get_major_locator(), MultipleLocator)
 
 
