@@ -170,6 +170,26 @@ def validate_references(
                                 "which is not in this axes",
                             )
                         )
+                    elif (
+                        artist.fit_range is not None
+                        and isinstance(target, FITTABLE)
+                        and target.x_range is not None
+                        and not (
+                            target.x_range[0] <= artist.fit_range[0]
+                            and artist.fit_range[1] <= target.x_range[1]
+                        )
+                    ):
+                        low, high = artist.fit_range
+                        plot_low, plot_high = target.x_range
+                        issues.append(
+                            ReferenceIssue(
+                                f"{tpath}.fit_range",
+                                artist.id,
+                                f"the fit range {low:g} to {high:g} reaches beyond "
+                                f"the plot's range {plot_low:g} to {plot_high:g}; only "
+                                "the points within both are fitted",
+                            )
+                        )
                     elif not isinstance(target, FITTABLE):
                         issues.append(
                             ReferenceIssue(
@@ -317,6 +337,8 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
     found = []
     if isinstance(artist, AllanDeviationPlot):
         return _allan_not_drawn(artist, data)
+    if isinstance(artist, (*FITTABLE, Histogram)) and artist.x_range is not None:
+        found += _nothing_in_range(artist, data)
     if isinstance(artist, FITTABLE) and artist.left_out:
         try:
             count = len(data(artist.x))
@@ -361,16 +383,45 @@ def data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
     return refs
 
 
+def _nothing_in_range(artist, data) -> list[str]:
+    """A range that keeps no row draws nothing."""
+    from figscribe.convert import convert, plot_data, within
+    from figscribe.io.errors import DataError
+
+    try:
+        if isinstance(artist, Histogram):
+            values = convert(data(artist.values), artist.x_conversion)
+            what = "value"
+        else:
+            values = plot_data(artist, data).x
+            what = "row"
+    except DataError:
+        return []
+    if values.size and not within(values, artist.x_range).any():
+        low, high = artist.x_range
+        return [
+            f"no {what} lies within the range {low:g} to {high:g}, so none is drawn"
+        ]
+    return []
+
+
 def _allan_not_drawn(artist: AllanDeviationPlot, data) -> list[str]:
     """A series with gaps is not drawn; one too short has nothing to show."""
     import numpy as np
 
+    from figscribe.allan import samples
     from figscribe.io.errors import DataError
 
     try:
-        values = np.asarray(data(artist.values), dtype=float).ravel()
+        values, _ = samples(artist, data)
     except DataError:
-        return []
+        return []  # the preview says why
+    if artist.x_range is not None and not values.size:
+        low, high = artist.x_range
+        return [
+            f"no sample lies within the range {low:g} to {high:g} after the "
+            "first, so nothing is drawn"
+        ]
     what = f"values ({artist.values.column})"
     gaps = int(np.count_nonzero(~np.isfinite(values)))
     if gaps:

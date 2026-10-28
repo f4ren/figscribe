@@ -19,7 +19,10 @@ from string import ascii_lowercase
 import numpy as np
 
 from figscribe import __version__
+from figscribe.allan import samples
+from figscribe.convert import expression, scaled
 from figscribe.fit import free_parameters, numpy_source, parameter_names
+from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
 from figscribe.model import (
     AllanDeviationPlot,
@@ -29,6 +32,7 @@ from figscribe.model import (
     AxisSpec,
     ColorMesh,
     ColumnRef,
+    Conversion,
     CsvSource,
     ErrorbarPlot,
     ExpressionFit,
@@ -179,6 +183,12 @@ class _Writer:
         self.sources = {s.id: s for s in project.sources}
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
+        self.unit_lines: list[tuple[str, str, str]] = []
+        """(variable, expression, comment) of each converted column, in order."""
+        self.units = self._name_converted()
+        """{(plot id, field): variable of the column as the plot shows it}."""
+        self.used = self._name_used()
+        """{plot id: name of the mask of the rows within the plot's range}."""
         self.held: dict[str, str] = {}
         """{fit id: name of the model with its fixed parameters held}."""
         self.ranges: dict[str, str] = {}
@@ -261,13 +271,74 @@ class _Writer:
                     names[key] = name
         return names
 
+    def _taken(self) -> set[str]:
+        """Names given so far, which a new name must not repeat."""
+        return {
+            *RESERVED,
+            *self.columns.values(),
+            *getattr(self, "units", {}).values(),
+            *getattr(self, "used", {}).values(),
+        }
+
+    def _name_converted(self) -> dict[tuple[str, str], str]:
+        """One variable per column and conversion, named after both: t_h,
+        U_mV, or t_scaled without a unit; numbered on a clash."""
+        names: dict[tuple[str, str], str] = {}
+        defined: dict[tuple, str] = {}
+        taken = self._taken()
+        for artist in self.artists.values():
+            for field, conversion, error in _converted_fields(artist):
+                ref = getattr(artist, field, None)
+                if ref is None or conversion is None:
+                    continue
+                raw = self.column(ref)
+                key = (raw, conversion.factor, conversion.from_start, error)
+                if key not in defined:
+                    unit = re.sub(r"\W+", "_", conversion.unit or "").strip("_")
+                    base = f"{raw}_{unit or 'scaled'}"
+                    name, number = base, 2
+                    while name in taken:
+                        name, number = f"{base}{number}", number + 1
+                    taken.add(name)
+                    defined[key] = name
+                    text = (
+                        scaled(raw, conversion.factor)
+                        if error
+                        else expression(raw, conversion)
+                    )
+                    self.unit_lines.append(
+                        (name, text, _unit_comment(conversion, error))
+                    )
+                names[(artist.id, field)] = defined[key]
+        return names
+
+    def _name_used(self) -> dict[str, str]:
+        plots = [
+            a
+            for a in self.artists.values()
+            if isinstance(a, LinePlot | ScatterPlot | ErrorbarPlot) and a.x_range
+        ]
+        taken = self._taken()
+        names = {}
+        for n, plot in enumerate(plots, start=1):
+            name = "used" if len(plots) == 1 else f"used_{n}"
+            while name in taken:
+                name += "_"
+            taken.add(name)
+            names[plot.id] = name
+        return names
+
+    def shown(self, plot, field: str) -> str:
+        """The variable of the plot's column `field` as the plot shows it."""
+        return self.units.get((plot.id, field)) or self.column(getattr(plot, field))
+
     def _name_kept(self) -> dict[str, str]:
         plots = [
             a
             for a in self.artists.values()
             if isinstance(a, LinePlot | ScatterPlot | ErrorbarPlot) and a.left_out
         ]
-        taken = set(RESERVED) | set(self.columns.values())
+        taken = self._taken()
         names = {}
         for n, plot in enumerate(plots, start=1):
             name = "kept" if len(plots) == 1 else f"kept_{n}"
@@ -282,7 +353,7 @@ class _Writer:
         fits = [
             a for a in self.artists.values() if isinstance(a, FitCurve) and a.result
         ]
-        taken = set(RESERVED) | set(self.columns.values())
+        taken = self._taken()
         found = {}
         for fit in fits:
             base = (
@@ -316,16 +387,22 @@ class _Writer:
     def _name_allan(self) -> dict[str, dict[str, str]]:
         """Names for each Allan deviation that is drawn: one with gaps is
         not (as the renderer does not), when the data is known."""
-        taken = set(RESERVED) | set(self.columns.values()) | {"overlapping_adev"}
+        taken = self._taken() | {"overlapping_adev"}
         found: dict[str, dict[str, str]] = {}
         plots = [a for a in self.artists.values() if isinstance(a, AllanDeviationPlot)]
         for number, plot in enumerate(plots, start=1):
-            if self.data is not None and not np.all(
-                np.isfinite(np.asarray(self.data(plot.values), dtype=float))
-            ):
-                continue
+            if self.data is not None:
+                try:
+                    values, _ = samples(plot, self.data)
+                except DataError:
+                    values = np.zeros(1)  # the preview says why; written anyway
+                if not np.all(np.isfinite(values)):
+                    continue
             names = {}
-            for base in ("tau0", "phase", "m", "adev"):
+            bases = ("tau0", "phase", "m", "adev")
+            if plot.x_range is not None:
+                bases += ("since", "samples")
+            for base in bases:
                 name = base if number == 1 else f"{base}_{number}"
                 while name in taken:
                     name += "_"
@@ -366,6 +443,7 @@ class _Writer:
         self._header()
         self._imports()
         self._data(script_dir)
+        self._units()
         self._left_out()
         self._fit_models()
         self._fits()
@@ -564,6 +642,22 @@ class _Writer:
         values = self.data(ColumnRef(source=source.id, column=refs[0][0]))
         return len(values) == 1
 
+    def _units(self) -> None:
+        if not self.unit_lines and not self.used:
+            return
+        self.section("Units and ranges" if self.used else "Units")
+        for name, text, comment in self.unit_lines:
+            self.emit(f"{name} = {text}  # {comment}")
+        for plot_id, mask in self.used.items():
+            plot = self.artists[plot_id]
+            x = self.shown(plot, "x")
+            low, high = plot.x_range
+            self.emit(
+                f"# {_describe(plot).capitalize()}: only the rows with {x} from "
+                f"{low:g} to {high:g} are drawn and fitted.",
+                f"{mask} = ({x} >= {_num(low)}) & ({x} <= {_num(high)})",
+            )
+
     def _left_out(self) -> None:
         if not self.kept:
             return
@@ -615,7 +709,7 @@ class _Writer:
         self.emit(*OVERLAPPING_ADEV.splitlines(), "")
         for plot_id, names in self.allan.items():
             plot = self.artists[plot_id]
-            tau0, phase, m, adev = names.values()
+            tau0, phase, m, adev = (names[n] for n in ("tau0", "phase", "m", "adev"))
             values = self.column(plot.values)
             kind = "phase in s" if plot.data_type == "phase" else "fractional frequency"
             self.emit("", f"# {_describe(plot)}: {values} is {kind}.")
@@ -627,6 +721,24 @@ class _Writer:
                 )
             else:
                 self.emit(f"{tau0} = {float(plot.sample_interval)!r}  # s")
+            if plot.x_range is not None:
+                since, kept = names["since"], names["samples"]
+                elapsed = (
+                    f"({self.column(plot.time)} - {self.column(plot.time)}[0])"
+                    if plot.time is not None
+                    else f"np.arange({values}.size) * {tau0}"
+                )
+                factor = plot.x_conversion.factor if plot.x_conversion else 1.0
+                unit = plot.x_conversion.unit if plot.x_conversion else None
+                low, high = plot.x_range
+                self.emit(
+                    f"# Only the samples from {low:g} to {high:g} {unit or 's'} "
+                    "after the first.",
+                    f"{since} = {scaled(elapsed, factor)}",
+                    f"{kept} = {values}[({since} >= {_num(low)}) & ({since} <= "
+                    f"{_num(high)})]",
+                )
+                values = kept
             if plot.data_type == "phase":
                 self.emit(f"{phase} = {values}")
             else:
@@ -652,7 +764,8 @@ class _Writer:
                 "Allan deviation is not drawn."
             )
             return
-        tau0, phase, m, adev = self.allan[plot.id].values()
+        names = self.allan[plot.id]
+        tau0, phase, m, adev = (names[n] for n in ("tau0", "phase", "m", "adev"))
         kwargs = {}
         if plot.error_bars:
             kwargs["yerr"] = f"{adev} / np.sqrt({phase}.size - 2 * {m})"
@@ -663,16 +776,18 @@ class _Writer:
             "linestyle": _str(plot.linestyle),
             "linewidth": _num(plot.linewidth),
         }
-        self.call(f"{ax}.errorbar", f"{m} * {tau0}", adev, **kwargs, **common)
+        factor = plot.x_conversion.factor if plot.x_conversion else 1.0
+        taus = scaled(f"{m} * {tau0}", factor)
+        self.call(f"{ax}.errorbar", taus, adev, **kwargs, **common)
 
     def _fits(self) -> None:
         for fit_id, (function, popt) in self.fits.items():
             fit = self.artists[fit_id]
             target = self.artists[fit.target]
             self.section(f"Fit: {_describe(fit)} to {_describe(target)}")
-            x, y = self.column(target.x), self.column(target.y)
+            x, y = self.shown(target, "x"), self.shown(target, "y")
             yerr = (
-                self.column(target.yerr)
+                self.shown(target, "yerr")
                 if isinstance(target, ErrorbarPlot) and target.yerr is not None
                 else None
             )
@@ -687,6 +802,8 @@ class _Writer:
                 used.append("valid")
             if fit.target in self.kept:
                 used.append(self.kept[fit.target])
+            if fit.target in self.used:
+                used.append(self.used[fit.target])
             if fit_id in self.ranges:
                 low, high = fit.fit_range
                 mask = self.ranges[fit_id]
@@ -931,10 +1048,16 @@ class _Writer:
         if isinstance(artist, LinePlot | ScatterPlot | ErrorbarPlot):
             self._points(ax, artist, common)
         elif isinstance(artist, Histogram):
-            values = self.column(artist.values)
-            if not self._all_finite([artist.values]):
-                values = f"{values}[np.isfinite({values})]"
+            values = self.shown(artist, "values")
             kwargs = {"bins": _value(artist.bins)}
+            if artist.x_range is not None:
+                low, high = (_num(end) for end in artist.x_range)
+                # NaN lies outside any range, so this drops it too.
+                values = f"{values}[({values} >= {low}) & ({values} <= {high})]"
+                if isinstance(artist.bins, int):
+                    kwargs["range"] = f"({low}, {high})"
+            elif not self._all_finite([artist.values]):
+                values = f"{values}[np.isfinite({values})]"
             if artist.density:
                 kwargs["density"] = "True"
             if artist.histtype != "bar":
@@ -1057,14 +1180,15 @@ class _Writer:
     def _points(self, ax: str, artist, common: dict[str, str]) -> None:
         """A line, scatter or error bar plot; the line runs on through its
         left-out rows, in their color, and their points are drawn apart."""
-        x, y = self.column(artist.x), self.column(artist.y)
+        x, y = self.shown(artist, "x"), self.shown(artist, "y")
         errors = {
-            name: self.column(ref)
+            name: self.shown(artist, name)
             for name in ("xerr", "yerr")
-            if (ref := getattr(artist, name, None)) is not None
+            if getattr(artist, name, None) is not None
         }
         spread = errors.pop("yerr") if banded(artist) else None
         mask = self._shown(artist)
+        used = self.used.get(artist.id)
         shown = f"np.where({mask}, {y}, np.nan)" if mask else y
         # The band takes the line's color; one from the color cycle is known
         # only once the line is drawn.
@@ -1072,16 +1196,17 @@ class _Writer:
         self._part(ax, artist, x, shown, errors, {}, common, "line" if named else None)
         if spread is not None:
             self._band(ax, artist, x, y, spread, mask)
-        if not mask:
-            return
+        if mask is None or mask == used:
+            return  # no row is drawn apart
         color = _str(artist.left_out_color or LEFT_OUT_COLOR)
         apart = {k: v for k, v in common.items() if k != "label"}
         linestyle = like_the_plot(artist, "linestyle")
         if linestyle not in NO_LINE:
             steps = f"{mask}_steps"
+            within = f" & {used}[:-1] & {used}[1:]" if used else ""
             self.emit(
                 "# The line runs on through the rows left out, in their color.",
-                f"{steps} = ~({mask}[:-1] & {mask}[1:])",
+                f"{steps} = ~({mask}[:-1] & {mask}[1:]){within}",
             )
             pieces = [
                 f"np.column_stack([{v}[:-1], {v}[1:], np.full({v}.size - 1, np.nan)])"
@@ -1095,9 +1220,10 @@ class _Writer:
         if marker is None and not isinstance(artist, ErrorbarPlot):
             return
         self.emit("# The rows left out, apart and without a legend entry.")
-        out = {name: f"{column}[~{mask}]" for name, column in errors.items()}
+        rows = f"{used} & ~{mask}" if used else f"~{mask}"
+        out = {name: f"{column}[{rows}]" for name, column in errors.items()}
         style = {"color": color, "marker": _str(marker or "none")}
-        self._part(ax, artist, f"{x}[~{mask}]", f"{y}[~{mask}]", out, style, apart)
+        self._part(ax, artist, f"{x}[{rows}]", f"{y}[{rows}]", out, style, apart)
 
     def _band(self, ax: str, artist, x: str, y: str, spread: str, mask) -> None:
         """The y errors as a band, just behind the points and their line."""
@@ -1113,12 +1239,17 @@ class _Writer:
         self.call(f"{ax}.fill_between", x, low, high, **kwargs)
 
     def _shown(self, artist) -> str | None:
-        """The mask of the rows drawn as the plot draws them: not left out, and
-        inside the range of each fit that draws the others like left out.
-        Defined here when it joins several; None when all rows are."""
-        parts = [self.kept[artist.id]] if artist.id in self.kept else []
+        """The mask of the rows drawn as the plot draws them: not left out,
+        within its range, and inside the range of each fit that draws the
+        others like left out. Defined here when it joins several; None when
+        all rows are."""
+        parts = []
+        if artist.id in self.kept:
+            parts.append((self.kept[artist.id], "not left out"))
+        if artist.id in self.used:
+            parts.append((self.used[artist.id], "in its range"))
         parts += [
-            self.ranges[fit.id]
+            (self.ranges[fit.id], "inside the fit range")
             for fit in self.artists.values()
             if isinstance(fit, FitCurve)
             and fit.target == artist.id
@@ -1126,14 +1257,14 @@ class _Writer:
             and fit.id in self.ranges
         ]
         if len(parts) <= 1:
-            return parts[0] if parts else None
+            return parts[0][0] if parts else None
         name = "shown"
-        while name in {*self.columns.values(), *self._masks}:
+        while name in {*self._taken(), *self._masks}:
             name += "_"
         self._masks.add(name)
         self.emit(
-            "# Drawn as the plot draws them: kept, and inside the fit range.",
-            f"{name} = {' & '.join(parts)}",
+            f"# Drawn as the plot draws them: {_and([why for _, why in parts])}.",
+            f"{name} = {' & '.join(mask for mask, _ in parts)}",
         )
         return name
 
@@ -1177,9 +1308,13 @@ class _Writer:
             self.emit(f"# {_describe(fit)} is not fitted yet, so it is not drawn.")
             return
         function, popt = self.fits[fit.id]
-        x = self.column(self.artists[fit.target].x)
-        xs = f"{x}_fit" if f"{x}_fit" not in self.columns.values() else f"{x}_fit_"
-        if self._finite(fit):
+        target = self.artists[fit.target]
+        x = self.shown(target, "x")
+        xs = f"{x}_fit" if f"{x}_fit" not in self._taken() else f"{x}_fit_"
+        if target.id in self.used:  # NaN lies outside the range too
+            low = f"{x}[{self.used[target.id]}].min()"
+            high = f"{x}[{self.used[target.id]}].max()"
+        elif self._finite(fit):
             low, high = f"{x}.min()", f"{x}.max()"
         else:
             low = f"{x}[np.isfinite({x})].min()"
@@ -1207,13 +1342,17 @@ class _Writer:
             return
         function, popt = self.fits[fit.id]
         target = self.artists[fit.target]
-        x, y = self.column(target.x), self.column(target.y)
+        x, y = self.shown(target, "x"), self.shown(target, "y")
         kwargs = {}
         if isinstance(target, ErrorbarPlot) and target.yerr is not None:
-            kwargs["yerr"] = self.column(target.yerr)
+            kwargs["yerr"] = self.shown(target, "yerr")
         masks = [
             mask
-            for mask in (self.ranges.get(fit.id), self.kept.get(fit.target))
+            for mask in (
+                self.ranges.get(fit.id),
+                self.kept.get(fit.target),
+                self.used.get(fit.target),
+            )
             if mask is not None
         ]
         if masks:  # only the fitted points
@@ -1304,6 +1443,32 @@ def _bounds(free: list[str], bounds) -> str | None:
         "np.inf" if high is None else repr(float(high)) for _, high in pairs
     )
     return f"([{lows}], [{highs}])"
+
+
+def _converted_fields(artist) -> list[tuple[str, Conversion | None, bool]]:
+    """(field, conversion, whether it is an error) for each column of a plot
+    that its conversions may change; errors are scaled, never shifted."""
+    if isinstance(artist, LinePlot | ScatterPlot | ErrorbarPlot):
+        return [
+            ("x", artist.x_conversion, False),
+            ("xerr", artist.x_conversion, True),
+            ("y", artist.y_conversion, False),
+            ("yerr", artist.y_conversion, True),
+        ]
+    if isinstance(artist, Histogram):
+        return [("values", artist.x_conversion, False)]
+    return []
+
+
+def _unit_comment(conversion: Conversion, error: bool) -> str:
+    unit, factor = conversion.unit, f"{conversion.factor:g}"
+    if conversion.from_start and not error:
+        if unit:
+            return f"{unit} since the start"
+        return "counted from the start" + (
+            f", scaled by {factor}" if conversion.factor != 1 else ""
+        )
+    return f"in {unit}" if unit else f"scaled by {factor}"
 
 
 def _describe(artist) -> str:

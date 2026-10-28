@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe.convert import plot_data
 from figscribe.fit import (
     FitError,
     free_names,
@@ -70,13 +71,12 @@ class FitDialog(QDialog):
         super().__init__(parent)
         self.target = target
         self.existing = fit
-        self.x = data(target.x)
-        self.y = data(target.y)
-        self.yerr = (
-            data(target.yerr)
-            if isinstance(target, ErrorbarPlot) and target.yerr is not None
-            else None
-        )
+        # In the units the plot shows, as the parameters will be read.
+        shown = plot_data(target, data)
+        self.x, self.y = shown.x, shown.y
+        self.yerr = shown.yerr if isinstance(target, ErrorbarPlot) else None
+        self.in_plot = shown.used
+        """Which rows lie within the plot's range; the others are never fitted."""
         self.result = None
         self.start: dict[str, QLineEdit] = {}
         self.fixed: dict[str, QCheckBox] = {}
@@ -450,7 +450,7 @@ class FitDialog(QDialog):
         except FitError:
             used = in_range(self.x, None)
         left_out = [*self.target.left_out, *(self.pending if pending else [])]
-        return used & kept(len(self.x), left_out)
+        return used & kept(len(self.x), left_out) & self.in_plot
 
     def left_out_rows(self) -> list[int] | None:
         """The plot's rows to leave out with this fit; None if unchanged."""

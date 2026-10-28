@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from figscribe.convert import scale, within
 from figscribe.io.errors import DataError
-from figscribe.model import AxisSpec
+from figscribe.model import AllanDeviationPlot, AxisSpec
 
 SPACING_LIMIT = 62
 """Octaves tried for the averaging factors: 2**61, the last, is more points
@@ -65,6 +66,30 @@ def sample_interval(times) -> float:
             f"to {worst:g} s; an Allan deviation needs even sampling"
         )
     return tau0
+
+
+def samples(plot: AllanDeviationPlot, data) -> tuple[np.ndarray, float]:
+    """The plot's values within its range, and τ0, from its time column or
+    its sample interval. The range is in time since the first sample, in τ's
+    shown unit; τ0 stays that of the whole series. A DataError for times
+    that do not fit the values."""
+    values = np.asarray(data(plot.values), dtype=float)
+    tau0 = plot.sample_interval
+    since = None
+    if plot.time is not None:
+        times = np.asarray(data(plot.time), dtype=float)
+        if len(times) != len(values):
+            raise DataError(
+                f"time ({plot.time.column}) has {len(times)} values, values "
+                f"({plot.values.column}) has {len(values)}"
+            )
+        tau0 = sample_interval(times)
+        since = times - times[0]
+    if plot.x_range is not None:
+        if since is None:
+            since = np.arange(values.size) * tau0
+        values = values[within(scale(since, plot.x_conversion), plot.x_range)]
+    return values, tau0
 
 
 def allan_axes() -> dict[str, AxisSpec]:

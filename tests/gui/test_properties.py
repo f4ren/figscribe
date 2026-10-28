@@ -597,7 +597,16 @@ def test_the_basic_settings_come_first_the_rest_under_more(
     fields = _section_fields(panel)
     assert fields["Look"] == ["color", "marker", "linestyle", "capsize"]
     assert fields["Legend"] == ["label"]
-    assert fields["Data"] == ["axis", "x", "y", "xerr", "yerr"]  # all data stays
+    assert fields["Data"] == [
+        "axis",
+        "x",
+        "y",
+        "xerr",
+        "yerr",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+    ]  # all data stays
     assert "markersize" in fields["More"] and "band" in fields["More"]
     assert fields["More"][-2:] == ["visible", "zorder"]
     assert not panel.sections["More"].expanded

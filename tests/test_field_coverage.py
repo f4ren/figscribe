@@ -96,7 +96,7 @@ def test_every_field_that_can_be_empty_says_what_empty_means() -> None:
     # text field offered as a list; a text field shows it greyed out while
     # nothing is typed.
     def told(name: str, kind: str) -> bool:
-        listed = kind in ("choice", "column", "array") or "marker" in name
+        listed = kind in ("choice", "column", "array", "conversion") or "marker" in name
         listed = listed or name in CHOICES
         return name in (NONE_TEXT if listed else PLACEHOLDERS)
 

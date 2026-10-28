@@ -112,6 +112,9 @@ script.
   outliers and leave them out once you confirm. The data file stays as it
   is: the points are drawn apart, in light grey or a color and marker of
   your choice, and the script leaves out the same rows, with the reason.
+- Show a plot's values in other units, e.g. seconds as hours since the
+  start of the measurement or volts as mV, and draw it from part of its data
+  only. The axis, its marks and the fits follow in the same step.
 
 **Layout and style**
 - Several figures in one project, as tabs above the figure: add one with

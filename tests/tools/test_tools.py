@@ -751,3 +751,33 @@ def test_leaving_points_out_fits_the_plot_again(tools, workspace) -> None:
     )
     assert find(workspace.project, artist).left_out == [0, 1, 2]
     assert find(workspace.project, fitted["id"]).result != before
+
+
+def test_units_and_a_range_keep_the_axis_and_fits_in_step(tools, workspace) -> None:
+    _, axes, artist, _ = _ids(workspace)
+    fitted = tools.call(
+        "fit",
+        {"target_id": artist, "model": {"kind": "predefined", "name": "gaussian"}},
+    )
+    before = find(workspace.project, fitted["id"]).result
+    hours = {"factor": 1 / 3600, "unit": "h"}
+    result = tools.call(
+        "set_field", {"object_id": artist, "path": ["x_conversion"], "value": hours}
+    )
+    assert result["undo_step"] == "Show x in h"
+    assert workspace.project.figures[0].axes[0].x.unit == "h"
+    assert find(workspace.project, fitted["id"]).result != before
+    tools.call(
+        "set_field",
+        {"object_id": artist, "path": ["x_conversion", "from_start"], "value": True},
+    )
+    assert find(workspace.project, artist).x_conversion.from_start
+    with pytest.raises(ToolError, match="greater than 0"):
+        tools.call(
+            "set_field",
+            {"object_id": artist, "path": ["x_conversion", "factor"], "value": 0},
+        )
+    with pytest.raises(ToolError, match="lower end"):
+        tools.call(
+            "set_field", {"object_id": artist, "path": ["x_range"], "value": [2, 1]}
+        )

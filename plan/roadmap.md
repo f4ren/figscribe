@@ -906,6 +906,18 @@ zero, and the range is given in x values.
    them.
 10. **Docs.** CHANGELOG, README, the manual checklist in `docs/testing.md`.
 
+**Done** (2026-10-27, decision 0041): `convert.py` holds the arithmetic,
+`units.py` the commands `set_conversion` and `set_range`, which the panel
+and the assistant's `set_field` both use; equivalence cases for error bars,
+a histogram and an Allan deviation, a baseline image `converted`, edge cases
+and a line in `everything.py` with a factor of its own and a range. Unlike
+item 1, "Start at 0" is not offered for an Allan deviation rather than
+greyed: no state would make it count, and a greying rule needs one.
+*Learned:* the axis's unit can only follow when it is known what it showed
+before, so a conversion without a unit counts the axis's own; the script
+needs the range as a mask apart from `kept`, which also marks the rows drawn
+apart.
+
 *Follow-ups, only if asked:* the conversion in the plot dialog; dragging
 the range in the preview; a row range; converted positions of a color
 mesh; date axes (F5.5) for timestamps instead of hours since the start.

@@ -1744,3 +1744,23 @@ column formulas, which the brief excludes. **A row range** ("rows 100 to
 2000"): exact, but not how a figure is read; it can follow if asked for.
 **Keeping fits in the file's units** and only drawing them converted: the
 parameters would not match the axis they are read against.
+
+### Settled while building it
+
+- `figscribe/convert.py` holds the arithmetic and `figscribe/units.py` the
+  commands; the panel and the assistant both call `set_conversion` and
+  `set_range`, so neither can change a conversion without its axis and fits.
+- **Start values** of a fit that are not held are dropped on a conversion:
+  in the old units they would mislead the fit. Held values stay as typed.
+- **The unit text** follows when the axis showed the old conversion's unit,
+  or the axis's own unit when the old setting gave none; taking a
+  conversion with a unit back empties the axis's unit, since figscribe does
+  not know the file's unit.
+- A symlog axis's linear range is scaled with its step, like a width.
+- **"Start at 0" is not offered for an Allan deviation** rather than greyed
+  out: τ starts at τ0 whatever, so no state of the plot would make the box
+  count, and a greying rule needs one (`tests/gui/test_without_effect.py`).
+- The script keeps the range as its own mask, `used = (t_h >= 2) & (t_h
+  <= 10)`, instead of folding it into `kept`: `kept` also says which rows
+  are drawn apart as left out, and those outside the range are not drawn
+  at all. The two are joined where the plot is drawn and fitted.

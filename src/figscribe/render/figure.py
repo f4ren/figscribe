@@ -21,6 +21,7 @@ from matplotlib.ticker import (
     NullFormatter,
 )
 
+from figscribe.convert import convert, plot_data, scale, within
 from figscribe.io.errors import DataError
 from figscribe.model import (
     AllanDeviationPlot,
@@ -299,14 +300,17 @@ def _draw_artist(
     if isinstance(artist, FITTABLE):
         _draw_points(artist, ax, data, common, artists)
     elif isinstance(artist, Histogram):
-        values = np.asarray(data(artist.values), dtype=float)
+        values = convert(data(artist.values), artist.x_conversion)
         # np.histogram cannot place NaN or inf; they are left out, like in a fit.
+        values = values[np.isfinite(values) & within(values, artist.x_range)]
+        spans = artist.x_range is not None and isinstance(artist.bins, int)
         _, _, patches = ax.hist(
-            values[np.isfinite(values)],
+            values,
             bins=artist.bins,
             density=artist.density,
             histtype=artist.histtype,
             color=artist.color,
+            **({"range": artist.x_range} if spans else {}),
             **common,
         )
         for patch in patches:
@@ -354,10 +358,11 @@ def _draw_points(
     clicks."""
     from figscribe.fit import FitError, kept
 
+    converted = plot_data(artist, data)
     columns = {
-        name: np.asarray(data(ref), dtype=float)
+        name: values
         for name in ("x", "y", "xerr", "yerr")
-        if (ref := getattr(artist, name, None)) is not None
+        if (values := getattr(converted, name)) is not None
     }
     # Errors drawn as a band are not drawn as bars, of the left-out rows neither.
     spread = columns.pop("yerr") if banded(artist) else None
@@ -366,7 +371,9 @@ def _draw_points(
         shown = kept(count, artist.left_out)
     except FitError as exc:
         raise DataError(f"{artist.label or artist.kind}: {exc}") from None
-    shown &= _inside_fits(artist, artists, columns["x"])
+    # Rows outside the plot's range are not drawn at all, not even apart.
+    used = converted.used
+    shown &= _inside_fits(artist, artists, columns["x"]) & used
     y = columns["y"]
     if not shown.all():
         columns["y"] = np.where(shown, y, np.nan)
@@ -380,8 +387,8 @@ def _draw_points(
     apart = {**common, "label": "_nolegend_"}
     linestyle = like_the_plot(artist, "linestyle")
     if linestyle not in NO_LINE:
-        x, y = columns["x"], np.asarray(data(artist.y), dtype=float)
-        touching = ~(shown[:-1] & shown[1:])
+        x = columns["x"]
+        touching = ~(shown[:-1] & shown[1:]) & used[:-1] & used[1:]
         width = {"linewidth": artist.linewidth} if hasattr(artist, "linewidth") else {}
         ax.plot(
             _segments(x)[touching].ravel(),
@@ -394,9 +401,9 @@ def _draw_points(
     marker = like_the_plot(artist, "marker")
     if marker is None and not isinstance(artist, ErrorbarPlot):
         return  # nothing to show of the points themselves
-    out = ~shown
+    out = ~shown & used
     values = {name: column[out] for name, column in columns.items()}
-    values["y"] = np.asarray(data(artist.y), dtype=float)[out]
+    values["y"] = y[out]
     style = {"color": color, "marker": marker or "none", "linestyle": "none"}
     _draw_part(artist, ax, values, style, apart).rows = np.flatnonzero(out)
 
@@ -594,35 +601,20 @@ def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:
 
     A series with gaps is not drawn; validate_references says why.
     """
-    from figscribe.allan import (
-        averaging_factors,
-        overlapping_adev,
-        phase_of,
-        sample_interval,
-    )
+    from figscribe.allan import averaging_factors, overlapping_adev, phase_of, samples
 
-    values = np.asarray(data(artist.values), dtype=float)
+    try:
+        values, tau0 = samples(artist, data)
+    except DataError as exc:
+        raise DataError(f"{artist.label or 'the Allan deviation'}: {exc}") from None
     if not np.all(np.isfinite(values)):
         return
-    tau0 = artist.sample_interval
-    if artist.time is not None:
-        times = data(artist.time)
-        if len(times) != len(values):
-            raise DataError(
-                f"{artist.label or 'the Allan deviation'}: time "
-                f"({artist.time.column}) has {len(times)} values, values "
-                f"({artist.values.column}) has {len(values)}"
-            )
-        try:
-            tau0 = sample_interval(times)
-        except DataError as exc:
-            raise DataError(f"{artist.label or 'the Allan deviation'}: {exc}") from None
     phase = phase_of(values, artist.data_type, tau0)
     m = averaging_factors(phase.size, artist.taus)
     adev = overlapping_adev(phase, tau0, m)
     yerr = adev / np.sqrt(phase.size - 2 * m) if artist.error_bars else None
     container = ax.errorbar(
-        m * tau0,
+        scale(m * tau0, artist.x_conversion),
         adev,
         yerr=yerr,
         color=artist.color,
@@ -665,8 +657,8 @@ def _draw_fit(
     target = _referenced(artists, fit.target, FITTABLE, "fit")
     if fit.result is None:
         return
-    x = np.asarray(data(target.x), dtype=float)
-    x = x[np.isfinite(x)]
+    shown = plot_data(target, data)
+    x = shown.x[np.isfinite(shown.x) & shown.used]
     if x.size == 0:
         return
     low, high = float(x.min()), float(x.max())
@@ -702,17 +694,12 @@ def _draw_residuals(
     ax.axhline(0.0, color="0.6", linewidth=0.8, linestyle="--", zorder=1)
     if fit.result is None:
         return
-    x = np.asarray(data(target.x), dtype=float)
-    y = np.asarray(data(target.y), dtype=float)
-    yerr = (
-        data(target.yerr)
-        if isinstance(target, ErrorbarPlot) and target.yerr is not None
-        else None
-    )
-    if fit.fit_range is not None or target.left_out:
-        used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
+    shown = plot_data(target, data)
+    x, y, yerr = shown.x, shown.y, shown.yerr
+    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out) & shown.used
+    if not used.all():
         x, y = x[used], y[used]
-        yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
+        yerr = None if yerr is None else yerr[used]
     container = ax.errorbar(
         x,
         y - evaluate(fit.model, fit.result.parameters, x),
