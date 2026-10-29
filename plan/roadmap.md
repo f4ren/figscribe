@@ -1052,6 +1052,10 @@ Decided with the user:
   count as **absolute** (`absolute_sigma=True`): they are uncertainties
   estimated from the data, so the parameters' uncertainties follow from
   them and χ²ᵣ keeps its meaning.
+- **Which plots**: error bar plots, with the derived errors drawn, and line
+  plots, for when the errors do not matter: a line is reduced the same way
+  but draws no error. Points plots were not asked for; ask when F12 is
+  started.
 - **The median gets no error bar**, and the panel says so (1.2533 · std /
   √n is a poor estimate just where the median is chosen, with outliers).
 - **A group of one row** has no scatter: it keeps its existing error, else
@@ -1071,8 +1075,6 @@ Decided with the user:
 
 To settle while building it, with a proposal each (record them in the
 decision):
-- **Which plots**: line, points and error bars. Proposed: an error only
-  where a plot draws error bars, so a line or points plot is just averaged.
 - **The order** of the steps, following F11's single place for the
   arithmetic (`convert.py`): conversion, range, left-out rows (removed or
   replaced), non-finite values, then the reduction. A module beside it, used
@@ -1280,7 +1282,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
-| F12 | Which plots get derived errors; leaving points out disabled while a plot is reduced; the error of a group with a replaced row? |
+| F12 | Points plots reduced too? Leaving points out disabled while a plot is reduced? The error of a group with a replaced row? (Answered when F12 is started.) |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
