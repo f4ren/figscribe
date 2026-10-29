@@ -117,6 +117,11 @@ QLineEdit, QComboBox, QSpinBox {{
     selection-color: {INK};
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {ACCENT}; }}
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {{
+    background: {GROUND}; border-color: {BORDER}; color: #A0A0A6;
+}}
+QLabel:disabled, QLabel#caption:disabled {{ color: #B4B4B9; }}
+QToolButton:disabled {{ color: #A0A0A6; border-color: {BORDER}; }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
 QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: 0; }}
 QCheckBox {{ spacing: 8px; }}
@@ -227,6 +232,19 @@ QPushButton#choiceTile {{
 }}
 QPushButton#choiceTile:checked {{ border: 2px solid {ACCENT}; }}
 QPushButton#choiceTile:hover {{ border-color: {ACCENT}; }}
+QPushButton#kindTile {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 12px;
+    padding: 0;
+}}
+QPushButton#kindTile:hover {{ border-color: {ACCENT}; }}
+QPushButton#kindTile:checked {{
+    background: {ACCENT_SOFT}; border: 2px solid {ACCENT};
+}}
+QPushButton#kindTile:disabled {{ background: {GROUND}; border-color: {BORDER}; }}
+QLabel#plotPreview {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px;
+    color: {MUTED};
+}}
 QTableWidget#dataTable {{
     border: 1px solid {BORDER}; border-radius: 10px; gridline-color: #F0F0EB;
 }}
@@ -316,12 +334,6 @@ def plot_color(color: str | None, index: int) -> str:
 
 _ICONS = {
     "swatch": '<circle cx="8" cy="8" r="7" fill="{c}"/>',
-    "marker-o": '<circle cx="8" cy="8" r="4.5" fill="{c}"/>',
-    "marker-s": '<rect x="4" y="4" width="8" height="8" fill="{c}"/>',
-    "marker-^": '<path d="M8 3 L13 12 H3 Z" fill="{c}"/>',
-    "marker-v": '<path d="M8 13 L13 4 H3 Z" fill="{c}"/>',
-    "marker-D": '<path d="M8 2.5 L13 8 L8 13.5 L3 8 Z" fill="{c}"/>',
-    "marker-none": '<path d="M4 8 H12" stroke="{c}" stroke-width="1.5"/>',
     "plus": '<path d="M8 3v10M3 8h10" stroke="{c}" stroke-width="1.6" '
     'stroke-linecap="round"/>',
     "undo": '<path d="M6 4 L3 7 L6 10 M3 7 H11 A3.5 3.5 0 0 1 11 14" stroke="{c}" '
@@ -359,6 +371,14 @@ _ICONS = {
     "span": '<rect x="4.5" y="1.5" width="7" height="13" fill="{c}" opacity="0.4"/>',
     "image": '<rect x="2" y="2" width="12" height="12" fill="{c}" opacity="0.35"/>'
     '<rect x="2" y="2" width="6" height="6" fill="{c}"/>',
+    "allan": '<path d="M2 3 L6 7.5 L10 10.5 L14 11.5" stroke="{c}" stroke-width="1.5" '
+    'fill="none"/><circle cx="2.5" cy="3.5" r="1.6" fill="{c}"/>'
+    '<circle cx="6" cy="7.5" r="1.6" fill="{c}"/><circle cx="10" cy="10.5" r="1.6" '
+    'fill="{c}"/><circle cx="14" cy="11.5" r="1.6" fill="{c}"/>',
+    "colormesh": '<rect x="2" y="2" width="6" height="6" fill="{c}" opacity="0.3"/>'
+    '<rect x="8" y="2" width="6" height="6" fill="{c}" opacity="0.75"/>'
+    '<rect x="2" y="8" width="6" height="6" fill="{c}"/>'
+    '<rect x="8" y="8" width="6" height="6" fill="{c}" opacity="0.5"/>',
     "chat": '<path d="M2.5 3.5 H13.5 V10.5 H7 L4 13 V10.5 H2.5 Z" fill="none" '
     'stroke="{c}" stroke-width="1.4" stroke-linejoin="round"/>',
     "code": '<path d="M6 4 L2 8 L6 12 M10 4 L14 8 L10 12" stroke="{c}" '
@@ -366,13 +386,6 @@ _ICONS = {
 }
 
 ARTIST_ICONS = {
-    "swatch": '<circle cx="8" cy="8" r="7" fill="{c}"/>',
-    "marker-o": '<circle cx="8" cy="8" r="4.5" fill="{c}"/>',
-    "marker-s": '<rect x="4" y="4" width="8" height="8" fill="{c}"/>',
-    "marker-^": '<path d="M8 3 L13 12 H3 Z" fill="{c}"/>',
-    "marker-v": '<path d="M8 13 L13 4 H3 Z" fill="{c}"/>',
-    "marker-D": '<path d="M8 2.5 L13 8 L8 13.5 L3 8 Z" fill="{c}"/>',
-    "marker-none": '<path d="M4 8 H12" stroke="{c}" stroke-width="1.5"/>',
     "line": "line",
     "scatter": "scatter",
     "errorbar": "errorbar",
@@ -381,7 +394,8 @@ ARTIST_ICONS = {
     "annotation": "annotation",
     "histogram": "histogram",
     "image": "image",
-    "colormesh": "image",
+    "colormesh": "colormesh",
+    "allan": "allan",
     "refline": "refline",
     "span": "span",
 }

@@ -138,8 +138,11 @@ TOOLS: list[ToolSpec] = [
         "set_field",
         "Set one field of an object, e.g. a figure's width_mm, an axis label "
         '(path ["x", "label"]), a plot\'s color or an axis range (path '
-        '["x", "limits"], value [0, 10]). One undo step. For more than one '
-        "change, prefer apply_changes.",
+        '["x", "limits"], value [0, 10]). A plot\'s x_conversion or '
+        "y_conversion (a factor, e.g. 1/3600 for hours, from_start to count "
+        "from the first value, and a unit) and its x_range (in the units shown) "
+        "keep its axis, marks and fits in step. One undo step. For more than "
+        "one change, prefer apply_changes.",
         {
             "type": "object",
             "properties": {

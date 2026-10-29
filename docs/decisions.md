@@ -1416,3 +1416,428 @@ value in a dialog** when adding: the preview's right-click already knows
 where the user means, and the menu's middle is a start that the panel
 corrects in one field. **Dragging in the preview** is left for later, like
 the notes' dragging was added after notes.
+
+## 0035 — Error bands
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Dense data with y errors, a spectrum or a long time series, turns into a
+wall of error bars. Papers draw the errors as a shaded band around the line
+instead (roadmap F4.2); Matplotlib has `fill_between` for it.
+
+### Decision
+
+- **A way of drawing an error bar plot's y errors, not a plot of its own**:
+  `ErrorbarPlot.band`, an optional `ErrorBand` with `color` (None takes the
+  plot's) and `alpha` (0.25, times the plot's own). The data, the left-out
+  rows and the fits stay as they are, a fit is still weighted by the y
+  errors, and bars and band are one check box apart. A separate kind would
+  have needed its own columns, its own left-out rows and its own place among
+  the plots a fit can target.
+- **Only the y errors**: x errors stay bars, drawn by `errorbar` as before.
+  Without x errors the points and their line are drawn by `plot`, which is
+  what a person would write; capsize and error bar width then do nothing.
+- **Just behind the plot**: the band is drawn after the line, since a
+  color from the color cycle is known only then (`line, = ax.plot(...)`,
+  `color=line.get_color()` in the script), with a drawing order 0.1 below
+  the plot's, so that the line stays on top. Without an edge, as a shaded
+  range has none (0034).
+- **Left-out rows leave a gap** in the band (`where=` the shown rows), as
+  they break the line; their points are drawn apart, without an error, since
+  a band of one point has no width.
+- **No legend entry of its own**: the plot's entry stands for both.
+- **A band without y errors** is a problem in the list rather than refused,
+  so that the band can be switched on before the column is chosen.
+- An added field with a default: files of 0.1.0 read unchanged, so no schema
+  version and no migration.
+
+### Alternatives considered
+
+**`errors_as: "bars" | "band"` with the band's settings beside it**: they
+would show, and do nothing, while bars are drawn; the optional part shows
+them only when there is a band. **Drawing the band first**: it would need
+the color before the line takes one from the cycle, which only Matplotlib's
+private API gives. **A band in the legend** (a patch behind the line, as
+`(line, patch)` handles): left for later.
+
+## 0036 — Analysis as derived plots, not a statistics suite
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The brief rules out a statistics suite, and roadmap F10 asks for every
+analysis tool to be decided on its own. The first one asked for is the
+Allan deviation, the standard figure for the stability of clocks, lasers,
+gyroscopes and other sensors. figscribe already computes two plots from
+the data: a histogram counts a column into bins, and a fit runs
+`curve_fit` in the renderer and in the script alike.
+
+### Decision
+
+An analysis belongs in figscribe when all three hold:
+
+1. It is a **standard figure** of some field, not a number or a test result.
+2. It is computed from a few columns in **a few lines of NumPy or SciPy**,
+   which the generated script writes out as a readable function, so the
+   script stays standalone and needs no new dependency.
+3. It is described as **a plot with a few settings**. The model stores what
+   is computed (columns, rates, the variant), never the result; the
+   renderer and the script compute it alike, and the pixel equivalence test
+   holds them together.
+
+The Allan deviation meets all three and becomes a plot type (roadmap
+F4.9). Hypothesis tests, ANOVA, regression tables and the like do not:
+they produce numbers rather than figures, and stay out. Smoothing, peak
+finding and scale/offset per column (F10) are judged by the same three
+points when they come up.
+
+### Alternatives considered
+
+**`allantools` as a dependency**: complete, but the script would need it
+too, and overlapping ADEV is about ten lines with `cumsum`; the tests can
+check against published reference values instead. **A general transform
+step** (any column through any function before plotting): that is the
+column-formula language the brief excludes. **Computing outside**: works
+today (import τ, σ and its error as a CSV and draw error bars on log axes),
+but the figure then no longer says how it came from the measurement.
+
+## 0037 — Several figures in one project
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The model held a list of figures from the start, but the GUI and `figscribe
+script` used only the first, and there was no way to add one (roadmap F8).
+A scientist's project typically has several plots of the same data: the
+measurement, a detail, the fit's residuals for the supplement.
+
+### Decision
+
+- **Tabs above the preview, and the outline**, as the user chose: the tabs
+  show only while there is more than one figure, so that a project of one
+  looks as before. Choosing a tab, or anything of a figure in the outline,
+  shows that figure; `Document.figure_changed` tells the preview and the code
+  drawer, which until then redrew only when the model changed.
+- **A new figure takes the look of the shown one**, size, fonts, ticks and
+  panel letters, since a project's figures go into the same paper; it gets
+  one empty panel and the name "Figure N" after its place. *Figure* sits in
+  the toolbar after *Data*, in the order a figure is built, as the user
+  proposed.
+- **A duplicate has ids of its own**: its fits, residuals and insets point at
+  its own plots and panels, its plots at the same data files.
+- **One menu for a figure**, in the tabs and the outline: rename, duplicate,
+  move, delete. Dragging a tab moves the figure once the button is released,
+  as one undo step, not one per tab passed.
+- **A project keeps at least one figure**: deleting the last is refused with
+  a message, in the GUI and in the assistant's remove.
+- **Export all** writes every figure, as PDF, SVG, PNG or its script, into a
+  folder, named after the figures; `figscribe script --all` does the same for
+  scripts, `--figure NAME` picks one. Two figures whose names give the same
+  file name get a number (`scan`, `scan-2`), so no file overwrites another.
+
+### Alternatives considered
+
+**Tabs only, or the outline only**: the outline already listed the figures,
+but which one is shown could then be seen only from the selection; tabs
+alone would hide the other figures' contents. **A new figure from the
+defaults**: every journal setting would have to be made again. **Moving a
+figure with each tab passed while dragging**: one undo step per tab, for one
+intended move.
+
+## 0038 — Finding a setting: a search and a command palette
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The property panel shows every field of the model, which is the point of
+it, and a plot has some thirty; a figure as many again. Finding "the one
+for the tick length" means knowing which section it is in (roadmap U3).
+
+### Decision
+
+- **A search field above the property panel** (Ctrl+F), fixed while the
+  form scrolls. Every typed word must occur in a field's caption, in its
+  tooltip, or in its section's title; the rest of the rows and the sections
+  left empty are hidden, and a folded section with a match opens. The
+  field's value is not searched: "tick" should not find a label that says
+  "ticks". The search stays when another object is selected, so that the
+  same setting can be found on the next plot, and Esc clears it. A section
+  the search opened is not remembered as opened by the user.
+- **The form is built anew for each search**, 150 ms after the last key,
+  and the rows are hidden after building. Showing them again would have to
+  know which rows the forms hide themselves (the axis form shows the step
+  only with "every"), and building takes a few milliseconds.
+- **A command palette** (Ctrl+K): every enabled menu action, with the menus
+  it is in, and every field of the selection, as "Setting · section".
+  Words are matched as in the search; entries starting with the first word
+  come first. Up and Down move, Enter chooses. A setting is shown: the
+  search cleared, its section opened, scrolled to and focused. The chosen
+  action runs after the palette closed, so that a dialog it opens (Add
+  Plot…) is not inside the palette's.
+
+### Alternatives considered
+
+**Fuzzy matching** (letters in order, "lnw" for line width): unexpected
+results for short queries, and the words people type are the ones in the
+captions and tooltips. **The palette also listing the objects of the
+project** ("go to the residuals"): the outline already does that.
+
+## 0039 — Basic settings first, and several plots at once
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+The rest of roadmap U3: a plot's "Look" had thirteen fields, a figure's
+"Style" eleven, most of them rarely changed; and a change meant for every
+plot of a panel had to be made once per plot.
+
+### Decision
+
+- **Per kind of object, the basic settings stay in their sections, the rest
+  goes to the folded "More"** (`BASIC` in `gui/properties.py`). They were
+  chosen from the assistant's benchmark, which holds the requests users
+  make most (color, marker, error bar caps, legend, size, font size, title,
+  grid), and by judgement where it has none: a plot's color, marker, line
+  and legend entry; a figure's name, size, font size and panel letters; a
+  panel's title, grid and right axis. Mostly five, as the roadmap asked,
+  fewer where there are not five worth it. Sections that say what is
+  plotted and where (data, position, the axes, the file and how it is read)
+  stay whole, and so does the PNG resolution, kept apart from the size
+  (0006). The search and the palette (0038) find what is folded away.
+- **Several plots are chosen together** in the outline with Ctrl or Shift
+  and a click; with a panel or a figure among them, only the row clicked
+  last is chosen. `Document.selection` holds them, `selected` stays the
+  last, so that everything that acts on one object goes on working.
+- **The panel shows the settings they share** (`SHARED`: color, marker,
+  marker size, edge color, line, width, caps, opacity, visible), where each
+  of the chosen plots has the field with an editor of the same kind. A value
+  they agree on is shown; otherwise the field says "several" (a partly
+  checked box, an empty line). A change sets it on all of them as one undo
+  step, "Change 2 plots". Delete removes them all, each with its fits and
+  residuals, once.
+- Check boxes in the panel commit on `clicked`, not `toggled`: a partly
+  checked box becomes checked on a click without toggling.
+
+### Alternatives considered
+
+**"More" by usage counts gathered from the user's own work**: nothing is
+recorded, and a panel that rearranges itself is harder to learn. **Several
+objects of any kind together**: what a figure and a plot share is a name at
+most. **Several selected in the preview**: a click there picks one thing;
+the outline lists everything, so it is the place to pick many.
+
+## 0040 — Changing things where they are drawn
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Roadmap U4: a label, a title, the size of an inset or of a column were
+changed in the property panel, away from where they are seen; the plot
+under the mouse had no menu of its own.
+
+### Decision
+
+- **A double-click edits a text in place**: an axis label, a panel's title,
+  a legend entry or a note. A field opens over it, holding what the model
+  holds, all selected: an axis label without the unit it is drawn with, a
+  note with its lines (Ctrl+Enter ends it, as in the panel). Enter or
+  leaving the field sets it as one undo step, Esc leaves it. An emptied
+  legend entry takes the plot out of the legend; an emptied note stays as it
+  was, since a note without text would vanish, and Delete does that.
+  A legend entry is mapped to its plot through the handles the legend was
+  built from, not by its text, which two plots may share.
+- **Dragging resizes**, one undo step on release like the legend and notes:
+  an inset's corner (the opposite one stays; at least a twentieth of the
+  panel each way), and the gap between two columns or rows, which shares
+  their room differently: the two keep the sum of their ratios, each at
+  least a tenth of it, rounded to two digits. The cursor shows what a drag
+  would resize; a click there still selects. The grab zone of a gap is a
+  few pixels around its middle, so that dragging the numbers of an axis
+  next to it still pans.
+- **A right-click on a plot** offers *Style like* (each other plot of the
+  figure that looks different; what both have and the target can take:
+  "no marker" of a line is not a marker for error bars), *Bring to front*,
+  *Send to back*, *Fit…* and *Hide*, before what the point under the mouse
+  and the panel offer.
+
+### Alternatives considered
+
+**Dragging an inset to move it**: a drag inside it pans it, which is used
+more. **Ratios from exact panel widths**: constrained layout puts the labels
+into the gaps, so what a column gets from a ratio is not proportional to
+it; the release shows the result at once, and a second drag corrects it.
+
+## 0041 — Unit conversion and a range per plot
+
+**Date:** 2026-10-26
+**Status:** accepted
+
+### Context
+
+Times are measured in s but shown in min, h or days, and often counted from
+the start of the measurement rather than from a timestamp. "Show values in"
+(decision 0025) only relabels the ticks with a power of ten: the ticks are
+still placed in the data's unit, so a factor of 3600 would put them at 0,
+5000, 10 000 s and label them 1.39, 2.78 h, and limits and steps would still
+have to be typed in s. Separately, a plot sometimes should use only part of
+its data, e.g. the stable hours of a measurement. Axis limits do not do
+that: they crop the view, while histogram bins, an Allan deviation, fits and
+autoscaling still see every row. Roadmap F10 asked whether scale and offset
+per column are in scope; F2 left a range per plot open.
+
+### Decision
+
+Asked and answered by the user: the conversion acts on the data, not on the
+labels; it can start the values at zero; the range is given in x values.
+
+- **A conversion per plot and axis**, `x_conversion` and `y_conversion`, of
+  a factor, an optional start at zero and the unit the result is in:
+  shown = (value − start) × factor, where the start is the smallest value of
+  the column (`np.nanmin`), so "hours since the start of the measurement"
+  works with timestamps and with unsorted data. Errors and error bands are
+  scaled with their axis, never shifted. The axis knows nothing of it: it
+  is an axis in h, and everything typed on it is in h, so limits, ticks,
+  steps, reference lines, notes, fit ranges and the plot's range need no
+  second unit. This fits the judgement of decision 0036: one line of NumPy
+  in the script, a setting of a plot, no formula language.
+- **Fits fit the converted data**, so their parameters are in the shown
+  units (a decay time in h), as a person who converted first would get.
+  Changing a conversion fits the plot's fits again in the same undo step,
+  as leaving a point out does, and converts the plot's range and its fits'
+  ranges along, so the same rows stay selected.
+- **A range per plot**, `x_range`, in shown x values, both ends included:
+  only those rows are drawn, fitted and counted. Rows outside are not
+  drawn at all, unlike left-out rows, which stay visible; a fit range lies
+  within it. For a histogram it is the range of the values, and the bins
+  of a bin count span it; for an Allan deviation it is the time since the
+  first sample (the time column, or i·τ0), and the part within must be
+  unbroken.
+- **The script** converts once and names the result after the column and
+  the unit: `t_h = (t - np.nanmin(t)) / 3600  # h since the start`, and
+  folds the range into the plot's mask: `kept = (t_h >= 2) & (t_h <= 10)`.
+  A factor whose inverse is a whole number is written as a division, as
+  the prefix formatter does, and renderer and script share that choice.
+
+### Alternatives considered
+
+**A factor on the axis**, like the SI prefix: every coordinate typed on the
+axis (limits, steps, lines, notes, ranges, fits) would need converting in
+the renderer, the script and the problem list, and the ticks would not be
+round. **On the column reference**, as F10 first suggested: x errors and y
+errors would each need the same factor set again, which is easy to forget.
+**A derived column on the data source** (`t_h = t / 3600`, used by any
+plot): shares a conversion between plots, but is the first step towards
+column formulas, which the brief excludes. **A row range** ("rows 100 to
+2000"): exact, but not how a figure is read; it can follow if asked for.
+**Keeping fits in the file's units** and only drawing them converted: the
+parameters would not match the axis they are read against.
+
+### Settled while building it
+
+- `figscribe/convert.py` holds the arithmetic and `figscribe/units.py` the
+  commands; the panel and the assistant both call `set_conversion` and
+  `set_range`, so neither can change a conversion without its axis and fits.
+- **Start values** of a fit that are not held are dropped on a conversion:
+  in the old units they would mislead the fit. Held values stay as typed.
+- **The unit text** follows when the axis showed the old conversion's unit,
+  or the axis's own unit when the old setting gave none; taking a
+  conversion with a unit back empties the axis's unit, since figscribe does
+  not know the file's unit.
+- A symlog axis's linear range is scaled with its step, like a width.
+- **"Start at 0" is not offered for an Allan deviation** rather than greyed
+  out: τ starts at τ0 whatever, so no state of the plot would make the box
+  count, and a greying rule needs one (`tests/gui/test_without_effect.py`).
+- The script keeps the range as its own mask, `used = (t_h >= 2) & (t_h
+  <= 10)`, instead of folding it into `kept`: `kept` also says which rows
+  are drawn apart as left out, and those outside the range are not drawn
+  at all. The two are joined where the plot is drawn and fitted.
+
+## 0042 — Everyday actions: duplicate, paste a style, one range, copy, show
+
+**Date:** 2026-10-29
+**Status:** accepted
+
+### Context
+
+Roadmap U5: five small actions that a scientist reaches for all the time and
+that took many clicks or a trip to the file manager. No model field changes,
+so the project file stays as it is (no schema bump).
+
+### Decision
+
+- **Duplicate (Ctrl+D) is one action that acts on the selection.** A figure
+  is copied as before (F8); a panel is copied with its plots, its fits and
+  its insets into the cell to its right, making a column if none is free
+  (`add_panel`'s rule, now `_make_room`); plots are copied right after their
+  originals, so they are drawn above them. Several chosen plots are one
+  undo step. The copy is selected.
+  - Every copy gets new ids, and what refers to a copied object follows it:
+    an inset its panel, a fit its data, residuals their fit. A reference to
+    something that was not copied stays: a fit copied alone fits the same
+    data, a panel's fit residuals (in another panel) stay with the original.
+  - A copied plot with a label is labelled "… (copy)", or the legend would
+    show two entries alike.
+  - **Not duplicated:** residuals (add them again from the fit, which keeps
+    them tied to one fit), an inset alone (a copy at the same bounds would
+    lie exactly on the original and show nothing; the panel's copy takes its
+    insets along), a data file, an axis.
+- **Copy Style / Paste Style (Ctrl+Alt+C, Ctrl+Alt+V)** keep a *snapshot* of
+  the plot, not its id: the source may be changed or deleted before the
+  paste, and what was copied is what is pasted. Paste goes to every chosen
+  plot as one step, takes what each plot can have (as *Style like* does,
+  which is the same code), and does not make an undo step when nothing
+  would change. The system clipboard is not used; it has no format for this.
+  Plain Ctrl+C and Ctrl+V are left alone: they belong to text fields.
+- **Same range in all panels** (the panel's menu in the outline and in the
+  preview, x or y) writes the range the panel *shows* into every panel of
+  the grid, as fixed limits, also into the panel itself, so that they stay
+  equal when the data changes. The range is read from the drawn axis, so an
+  automatic or zoomed range works, and a turned axis (first end the higher)
+  stays turned. Left out, and named in the status bar: insets, which have a
+  range of their own, and panels whose axis has another scale or another
+  unit text, where the same numbers would mean something else (since F11,
+  panels may show the same column in h and s).
+- **Copy Figure (Ctrl+Shift+C)** puts the shown figure on the clipboard as
+  PNG and SVG, and as a bitmap for programs that read neither (Office on
+  Windows). Both are the bytes *Export* writes: `render.export_bytes`, one
+  code path with `export`, so size, resolution and metadata are the same and
+  the clipboard cannot show another picture than the file. PDF is not put
+  there; no common program reads it from the clipboard on Windows or Linux.
+  Which of the formats another program takes depends on the system and the
+  program; the tests only read them back from Qt's own clipboard, so
+  step 12 of the manual checklist is what shows it.
+  **At the end of the program** the clipboard keeps only the bitmap: a
+  `QMimeData` made in Python is deleted by Qt after Python has shut down,
+  which crashed every process on exit (found when Python crash reports piled
+  up during the test runs). `gui/clipboard.release` swaps it for Qt's own
+  image data on `aboutToQuit`; the tests do the same after each test. The
+  SVG therefore does not outlive the program.
+- **Show in Finder / Explorer / file manager** on a data file in the outline
+  selects the file where the system can: `open -R` on macOS, `explorer
+  /select,` on Windows, with the standard library's `subprocess`; elsewhere
+  the folder is opened through Qt. A file that is not there says so and
+  points to *Locate file…* in the data bar. No new dependency.
+
+### Alternatives considered
+
+**A separate Duplicate for each kind of object**: three menu entries and
+three shortcuts for one idea. **Storing the copied style's plot id**: breaks
+when the plot is deleted, and pastes a later style than the one copied.
+**The same range taken from the model's limits**: an automatic range is
+only known after drawing, and a zoom that was not adopted is what the user
+sees. **Copying the range into panels of another unit as well**: silently
+wrong numbers. **A PDF on the clipboard**: right for Keynote and Pages, but
+not for the rest; PNG and SVG cover slides and documents everywhere.

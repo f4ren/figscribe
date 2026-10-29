@@ -8,7 +8,7 @@ import pytest
 from PySide6.QtCore import QPointF
 
 from figscribe.commands import remove_axes
-from figscribe.gui import MainWindow
+from figscribe.gui import MainWindow, reveal
 from figscribe.gui.app import create_window
 from figscribe.gui.names import panel_name
 from figscribe.gui.properties import PropertyPanel
@@ -53,6 +53,8 @@ def test_an_inset_from_the_context_menu(window: MainWindow) -> None:
         "Add inset",
         "Add note…",
         "Add line or range",
+        "Same x range in all panels",
+        "Same y range in all panels",
         "Delete panel",
     ]
     next(a for a in menu.actions() if a.text() == "Add inset").trigger()
@@ -91,7 +93,14 @@ def test_deleting_from_the_context_menu(window: MainWindow) -> None:
     window.outline.context_menu(axes.id).actions()[-1].trigger()
     assert window.document.figure.axes == []
     figure_menu = window.outline.context_menu(window.document.figure.id)
-    assert _menu_texts(figure_menu) == ["Add a panel"]
+    assert _menu_texts(figure_menu) == [
+        "Add a panel",
+        "Rename…",
+        "Duplicate",
+        "Move up",
+        "Move down",
+        "Delete figure",
+    ]
     figure_menu.actions()[0].trigger()
     assert len(window.document.figure.axes) == 1
 
@@ -102,8 +111,8 @@ def test_removing_a_data_file_asks_what_goes_with_it(window: MainWindow) -> None
     asked = []
     window.ask = lambda title, question: asked.append(question) or False
     menu = window.outline.context_menu(source.id)
-    assert _menu_texts(menu) == ["Remove data file"]
-    menu.actions()[0].trigger()
+    assert _menu_texts(menu) == [reveal.reveal_label(), "Remove data file"]
+    menu.actions()[-1].trigger()
     assert "scan.csv" in asked[0] and "measurement" in asked[0]
     assert document.project.sources == [source]  # "No" keeps everything
 
@@ -124,7 +133,7 @@ def test_an_unused_data_file_is_removed_without_asking(window: MainWindow) -> No
         document.push(remove_axes(document.project, axes.id))
     asked = []
     window.ask = lambda title, question: asked.append(question) or True
-    window.outline.context_menu(document.project.sources[0].id).actions()[0].trigger()
+    window.outline.context_menu(document.project.sources[0].id).actions()[-1].trigger()
     assert document.project.sources == [] and asked == []
 
 

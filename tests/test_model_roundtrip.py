@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -191,6 +192,20 @@ def test_a_fit_range_has_a_lower_and_an_upper_end() -> None:
         FitCurve(target="t", model=model, fit_range=(2.0, 1.0))
 
 
+def test_units_and_a_range_per_plot_survive_a_roundtrip(project: Project) -> None:
+    from figscribe.model import Conversion
+
+    plot = project.figures[0].axes[0].artists[0]
+    plot.x_conversion = Conversion(factor=1 / 3600, from_start=True, unit="h")
+    plot.y_conversion = Conversion(factor=1000.0)
+    plot.x_range = (0.5, 2.0)
+    assert loads(dumps(project)) == project
+    with pytest.raises(ValidationError):
+        plot.x_range = (2.0, 0.5)
+    with pytest.raises(ValidationError):
+        Conversion(factor=0.0)
+
+
 def test_panel_labels_roundtrip(project: Project) -> None:
     from figscribe.model import PanelLabels
 
@@ -219,3 +234,20 @@ def test_reference_lines_and_spans_roundtrip(project: Project) -> None:
         span.start = 3.5
     with pytest.raises(ValidationError):
         ReferenceLine(at=math.inf)
+
+
+def test_an_error_band_roundtrips(project: Project) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = project.figures[0].axes[0].artists[0]
+    plot.band = ErrorBand(color="0.5", alpha=0.4)
+    assert loads(dumps(project)).figures[0].axes[0].artists[0].band == plot.band
+    with pytest.raises(ValidationError):
+        ErrorBand(alpha=1.5)
+
+
+def test_a_file_without_bands_still_reads() -> None:
+    """Files of 0.1.0 have no band field; they read with bars."""
+    text = Path(__file__).parents[1] / "examples/gaussian-scan/scan.figscribe"
+    plot = loads(text.read_text(encoding="utf-8")).figures[0].axes[0].artists[0]
+    assert plot.band is None

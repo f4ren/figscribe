@@ -167,7 +167,7 @@ def test_booleans_are_a_checkbox(panel: PropertyPanel, document) -> None:
     document.select(_axes(document).id)
     box = panel.editors[("legend", "visible")].widget
     assert isinstance(box, QCheckBox) and box.isChecked()
-    box.setChecked(False)
+    box.click()
     assert _axes(document).legend.visible is False
 
 
@@ -517,6 +517,42 @@ def test_the_grid_color_is_a_color_field(panel: PropertyPanel, document) -> None
     assert _axes(document).grid_color == "#696969"
 
 
+def test_a_refused_color_is_not_offered_again(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_artist(document).id)
+    _type(panel, ("color",), "2")  # not a color: Matplotlib's greys go to 1
+    assert "not a color" in panel.error
+    document.select(_figure(document).id)
+    document.select(_artist(document).id)  # the form is built anew
+    assert "2" not in panel.recent_colors
+    _type(panel, ("color",), "0.3")
+    assert panel.recent_colors[0] == "0.3"
+
+
+def test_errors_are_shaded_as_a_band_and_drawn_as_bars_again(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_artist(document).id)
+    assert "Error band" not in panel.sections
+    panel.editors[("band",)].widget.click()
+    assert _artist(document).band is not None
+    assert document.history.undo_text == "Shade the errors"
+    assert "Error band" in panel.sections
+    color = panel.editors[("band", "color")]
+    assert color.line.placeholderText() == "the plot's"
+    _type(panel, ("band", "color"), "tab:red")
+    assert _artist(document).band.color == "tab:red"
+    _type(panel, ("band", "alpha"), "0.5")
+    assert _artist(document).band.alpha == 0.5
+    panel.editors[("band",)].widget.click()
+    assert _artist(document).band is None
+    assert document.history.undo_text == "Draw the errors as bars"
+    assert "Error band" not in panel.sections
+    document.history.undo()
+    assert _artist(document).band.alpha == 0.5
+
+
 def test_panel_labels_are_switched_on_and_set_up(
     panel: PropertyPanel, document: Document
 ) -> None:
@@ -541,3 +577,43 @@ def test_panel_labels_are_switched_on_and_set_up(
     assert document.history.undo_text == "Remove the panel labels"
     document.history.undo()
     assert _figure(document).panel_labels.style == "A"
+
+
+def _section_fields(panel: PropertyPanel) -> dict[str, list[str]]:
+    return {
+        title: [
+            ".".join(path)
+            for path, editor in panel.editors.items()
+            if section.isAncestorOf(editor.widget)
+        ]
+        for title, section in panel.sections.items()
+    }
+
+
+def test_the_basic_settings_come_first_the_rest_under_more(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_artist(document).id)  # the error bars
+    fields = _section_fields(panel)
+    assert fields["Look"] == ["color", "marker", "linestyle", "capsize"]
+    assert fields["Legend"] == ["label"]
+    assert fields["Data"] == [
+        "axis",
+        "x",
+        "y",
+        "xerr",
+        "yerr",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+    ]  # all data stays
+    assert "markersize" in fields["More"] and "band" in fields["More"]
+    assert fields["More"][-2:] == ["visible", "zorder"]
+    assert not panel.sections["More"].expanded
+
+    document.select(_figure(document).id)
+    fields = _section_fields(panel)
+    assert fields["Size"] == ["name", "width_mm", "height_mm"]
+    assert fields["Style"] == ["font_size", "panel_labels"]
+    assert "tick_length" in fields["More"]
+    assert fields["Export"] == ["dpi"]

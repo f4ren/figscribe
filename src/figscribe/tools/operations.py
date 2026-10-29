@@ -34,6 +34,7 @@ from figscribe.commands import (
     find,
     remove_artist,
     remove_axes,
+    remove_figure,
     remove_source,
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
@@ -47,6 +48,7 @@ from figscribe.io.refresh import (
 )
 from figscribe.model import (
     Axes,
+    Conversion,
     DataSource,
     Figure,
     FitCurve,
@@ -59,10 +61,14 @@ from figscribe.render import render
 from figscribe.render.figure import style_context, tick_ranges
 from figscribe.render.ticks import too_many_ticks
 from figscribe.tools.workspace import Workspace, column_choices
+from figscribe.units import CONVERTIBLE, set_conversion, set_range
 
 PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns", "row_count"})
 """Set by importing a file in figscribe; a tool must not point a source
 elsewhere on the machine. How a file is read (delimiter, header...) may change."""
+
+UNIT_FIELDS = ("x_conversion", "y_conversion", "x_range")
+"""Changed through figscribe.units, so the plot's axis and fits follow."""
 
 _REFUSED = (CommandError, FitError, DataError)
 """Errors that mean the request cannot be carried out, as opposed to bugs."""
@@ -187,6 +193,19 @@ class Toolbox:
             try:  # the plot's fits are fitted again without those rows
                 data = self.workspace.data
                 return set_left_out(project, object_id, list(command.value), data)
+            except FitError as exc:
+                raise ToolError(str(exc)) from exc
+        plot = find(project, object_id)
+        if path[0] in UNIT_FIELDS and isinstance(plot, CONVERTIBLE):
+            value = command.value
+            if len(path) == 2:  # the whole conversion is checked, factor > 0 too
+                whole = {**getattr(plot, path[0]).model_dump(), path[1]: value}
+                value = _validate(Conversion, whole, path[0])
+            try:  # the axis and the plot's fits follow, as in the panel
+                data = self.workspace.data
+                if path[0] == "x_range":
+                    return set_range(project, plot.id, value, data)
+                return set_conversion(project, plot.id, path[0][0], value, data)
             except FitError as exc:
                 raise ToolError(str(exc)) from exc
         if len(path) == 1 and path[0] in reading_options(find(project, object_id)):
@@ -426,7 +445,7 @@ def _remove(project: Project, object_id: str) -> Command:
         if field == "axes":
             return remove_axes(project, object_id)
         if field == "figures":
-            return RemoveItem(None, "figures", object_id)
+            return remove_figure(project, object_id)
         return remove_source(project, object_id)
     raise ToolError(f"no object with id {object_id!r}")
 

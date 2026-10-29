@@ -23,11 +23,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from figscribe.commands import CommandError, SetField, find
+from figscribe.commands import CommandError, SetField, drawing_order, find, to_front
 from figscribe.gui import theme
 from figscribe.gui.document import Document, split_axis
+from figscribe.gui.figures import fill_figure_menu
 from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
+from figscribe.gui.reveal import reveal_label
 from figscribe.gui.widgets import FlowLayout, chip
 from figscribe.model import Axes, Figure
 
@@ -57,7 +59,15 @@ class Outline(QTreeWidget):
     """Add a panel beside or inside the panel with this id: (id, side)."""
     delete_requested = Signal(str)
     note_requested = Signal(str)
+    same_range_requested = Signal(str, str)
+    """Give every panel the range this panel shows on an axis: (panel id,
+    "x" or "y")."""
+    reveal_requested = Signal(str)
+    """Show the data file with this id in the file manager."""
     marking_requested = Signal(str, str, str)
+    figure_requested = Signal(str, str)
+    """Something done with the figure with this id: (id, what), as
+    `figures.fill_figure_menu` asks for it."""
     """A reference line or shaded range for a panel: (panel id, kind,
     orientation), as `markings.ENTRIES` has them."""
     """Add a note to the panel with this id."""
@@ -70,6 +80,8 @@ class Outline(QTreeWidget):
         self.setItemsExpandable(False)
         self.setIndentation(0)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        # Ctrl or Shift and click choose several plots, changed together.
+        self.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
         header = self.header()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -115,21 +127,9 @@ class Outline(QTreeWidget):
     def set_order(self, oid: str, front: bool) -> None:
         """Draw the plot `oid` above (`front`) or below every other plot of its
         panel, as one undo step."""
-        others = [a.zorder for a in self._drawing_order(oid) if a.id != oid]
-        if not others:
-            return
-        zorder = max(others) + 1 if front else min(others) - 1
-        text = "Bring to front" if front else "Send to back"
-        self.document.push(SetField(oid, ("zorder",), float(zorder), text))
-
-    def _drawing_order(self, oid: str) -> list:
-        """The plots of the panel holding `oid`, in the order they are drawn:
-        by z-order, and as Matplotlib does on a tie, as they were added."""
-        for figure in self.document.project.figures:
-            for axes in figure.axes:
-                if any(a.id == oid for a in axes.artists):
-                    return sorted(axes.artists, key=lambda a: a.zorder)
-        return []
+        command = to_front(self.document.project, oid, front)
+        if command is not None:
+            self.document.push(command)
 
     # --- rows -----------------------------------------------------------------
 
@@ -266,6 +266,15 @@ class Outline(QTreeWidget):
                         oid, k, o
                     ),
                 )
+            if obj.inset is None:
+                menu.addSeparator()
+                others = self._other_panels(obj)
+                for field in ("x", "y"):
+                    action = menu.addAction(
+                        f"Same {field} range in all panels",
+                        lambda f=field: self.same_range_requested.emit(oid, f),
+                    )
+                    action.setEnabled(others)
             menu.addSeparator()
             menu.addAction("Delete panel", lambda: self.delete_requested.emit(oid))
         elif isinstance(obj, Figure):
@@ -273,16 +282,20 @@ class Outline(QTreeWidget):
                 menu.addAction(
                     "Add a panel", lambda: self.panel_requested.emit(oid, "right")
                 )
-            else:
-                return None
+                menu.addSeparator()
+            fill_figure_menu(
+                menu, self.document, oid, self.figure_requested.emit, across=False
+            )
         elif any(source.id == oid for source in self.document.project.sources):
+            menu.addAction(reveal_label(), lambda: self.reveal_requested.emit(oid))
+            menu.addSeparator()
             menu.addAction("Remove data file", lambda: self.delete_requested.emit(oid))
         elif hasattr(obj, "visible") and hasattr(obj, "kind"):
             menu.addAction(
                 "Hide" if obj.visible else "Show",
                 lambda: self.set_visible(oid, not obj.visible),
             )
-            drawn = self._drawing_order(oid)
+            drawn = drawing_order(self.document.project, oid)
             front = menu.addAction("Bring to front", lambda: self.set_order(oid, True))
             front.setEnabled(drawn[-1] is not obj)
             back = menu.addAction("Send to back", lambda: self.set_order(oid, False))
@@ -292,6 +305,13 @@ class Outline(QTreeWidget):
         else:
             return None
         return menu
+
+    def _other_panels(self, axes: Axes) -> bool:
+        """Whether the figure of `axes` has another panel in its grid."""
+        for figure in self.document.project.figures:
+            if axes in figure.axes:
+                return any(a is not axes and a.inset is None for a in figure.axes)
+        return False
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt naming
         item = self.itemAt(event.pos())
@@ -307,14 +327,42 @@ class Outline(QTreeWidget):
             self.set_visible(item.data(0, ID_ROLE), not visible)
 
     def _on_tree_selection(self) -> None:
+        """One row selects its object; several rows select their plots
+        together, or, with anything else among them, the row clicked last."""
         if self._syncing:
             return
-        items = self.selectedItems()
-        self.document.select(items[0].data(0, ID_ROLE) if items else None)
+        ids = [item.data(0, ID_ROLE) for item in self.selectedItems()]
+        ids = [oid for oid in ids if oid is not None]
+        plots = {a.id for _, a in self._plots()}
+        current = self.currentItem()
+        if len(ids) > 1 and all(oid in plots for oid in ids):
+            last = current.data(0, ID_ROLE) if current is not None else None
+            if last in ids:  # the one clicked last leads, as when it is alone
+                ids = [*(oid for oid in ids if oid != last), last]
+            self.document.select_many(ids)
+        elif len(ids) > 1 and current is not None:
+            self.document.select(current.data(0, ID_ROLE))
+            self._show_selection(self.document.selected)
+        else:
+            self.document.select(ids[0] if ids else None)
+
+    def _plots(self):
+        for figure in self.document.project.figures:
+            for axes in figure.axes:
+                for artist in axes.artists:
+                    yield axes, artist
 
     def _show_selection(self, oid: str | None) -> None:
         self._syncing = True
         try:
+            many = self.document.selection
+            if len(many) > 1:
+                self.clearSelection()
+                for each in many:
+                    item = self.item_for(each)
+                    if item is not None:
+                        item.setSelected(True)
+                return
             axis = split_axis(oid)
             if axis is not None:
                 oid = axis[0]  # an axis is shown as its panel's row

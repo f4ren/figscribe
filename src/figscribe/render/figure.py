@@ -21,8 +21,10 @@ from matplotlib.ticker import (
     NullFormatter,
 )
 
+from figscribe.convert import convert, plot_data, scale, within
 from figscribe.io.errors import DataError
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     Artist,
@@ -298,14 +300,17 @@ def _draw_artist(
     if isinstance(artist, FITTABLE):
         _draw_points(artist, ax, data, common, artists)
     elif isinstance(artist, Histogram):
-        values = np.asarray(data(artist.values), dtype=float)
+        values = convert(data(artist.values), artist.x_conversion)
         # np.histogram cannot place NaN or inf; they are left out, like in a fit.
+        values = values[np.isfinite(values) & within(values, artist.x_range)]
+        spans = artist.x_range is not None and isinstance(artist.bins, int)
         _, _, patches = ax.hist(
-            values[np.isfinite(values)],
+            values,
             bins=artist.bins,
             density=artist.density,
             histtype=artist.histtype,
             color=artist.color,
+            **({"range": artist.x_range} if spans else {}),
             **common,
         )
         for patch in patches:
@@ -327,6 +332,8 @@ def _draw_artist(
         draw(artist.start, artist.end, color=artist.color, linewidth=0, **common)
     elif isinstance(artist, ImagePlot | ColorMesh):
         _draw_2d(artist, ax, data, common)
+    elif isinstance(artist, AllanDeviationPlot):
+        _draw_allan(artist, ax, data, common)
     elif isinstance(artist, FitCurve):
         _draw_fit(artist, ax, data, artists, common)
     elif isinstance(artist, ResidualPlot):
@@ -351,28 +358,37 @@ def _draw_points(
     clicks."""
     from figscribe.fit import FitError, kept
 
+    converted = plot_data(artist, data)
     columns = {
-        name: np.asarray(data(ref), dtype=float)
+        name: values
         for name in ("x", "y", "xerr", "yerr")
-        if (ref := getattr(artist, name, None)) is not None
+        if (values := getattr(converted, name)) is not None
     }
+    # Errors drawn as a band are not drawn as bars, of the left-out rows neither.
+    spread = columns.pop("yerr") if banded(artist) else None
     count = len(columns["x"])
     try:
         shown = kept(count, artist.left_out)
     except FitError as exc:
         raise DataError(f"{artist.label or artist.kind}: {exc}") from None
-    shown &= _inside_fits(artist, artists, columns["x"])
+    # Rows outside the plot's range are not drawn at all, not even apart.
+    used = converted.used
+    shown &= _inside_fits(artist, artists, columns["x"]) & used
+    y = columns["y"]
     if not shown.all():
-        columns["y"] = np.where(shown, columns["y"], np.nan)
-    _draw_part(artist, ax, columns, {}, common).rows = np.arange(count)
+        columns["y"] = np.where(shown, y, np.nan)
+    part = _draw_part(artist, ax, columns, {}, common)
+    part.rows = np.arange(count)
+    if spread is not None:
+        _draw_band(artist, ax, columns["x"], y, spread, shown, part.get_color())
     if shown.all():
         return
     color = artist.left_out_color or LEFT_OUT_COLOR
     apart = {**common, "label": "_nolegend_"}
     linestyle = like_the_plot(artist, "linestyle")
     if linestyle not in NO_LINE:
-        x, y = columns["x"], np.asarray(data(artist.y), dtype=float)
-        touching = ~(shown[:-1] & shown[1:])
+        x = columns["x"]
+        touching = ~(shown[:-1] & shown[1:]) & used[:-1] & used[1:]
         width = {"linewidth": artist.linewidth} if hasattr(artist, "linewidth") else {}
         ax.plot(
             _segments(x)[touching].ravel(),
@@ -385,11 +401,46 @@ def _draw_points(
     marker = like_the_plot(artist, "marker")
     if marker is None and not isinstance(artist, ErrorbarPlot):
         return  # nothing to show of the points themselves
-    out = ~shown
+    out = ~shown & used
     values = {name: column[out] for name, column in columns.items()}
-    values["y"] = np.asarray(data(artist.y), dtype=float)[out]
+    values["y"] = y[out]
     style = {"color": color, "marker": marker or "none", "linestyle": "none"}
     _draw_part(artist, ax, values, style, apart).rows = np.flatnonzero(out)
+
+
+def banded(artist) -> bool:
+    """Whether the plot draws its y errors as a band."""
+    return getattr(artist, "band", None) is not None and artist.yerr is not None
+
+
+BAND_BEHIND = 0.1
+"""How far below its plot a band is drawn, so that the line stays on top."""
+
+
+def band_options(artist) -> dict[str, float]:
+    """The band's opacity and drawing order, rounded so that the script shows
+    0.2 rather than 0.20000000000000004."""
+    return {
+        "alpha": round(artist.band.alpha * artist.alpha, 6),
+        "zorder": round(artist.zorder - BAND_BEHIND, 6),
+    }
+
+
+def _draw_band(artist, ax: MplAxes, x, y, spread, shown, color) -> None:
+    """The band of y ± spread, in the plot's color unless it has its own, with
+    a gap at the rows not shown."""
+    ax.fill_between(
+        x,
+        y - spread,
+        y + spread,
+        where=None if shown.all() else shown,
+        color=artist.band.color or color,
+        linewidth=0,
+        visible=artist.visible,
+        label="_nolegend_",
+        gid=artist.id,
+        **band_options(artist),
+    )
 
 
 def _inside_fits(artist, artists: Mapping, x: np.ndarray) -> np.ndarray:
@@ -430,7 +481,7 @@ def _segments(values: np.ndarray) -> np.ndarray:
 def _draw_part(artist, ax: MplAxes, values: dict, style: dict, options: dict):
     """Draw `values` as the plot does, with `style` over its own; return the
     Matplotlib artist that shows the points."""
-    if isinstance(artist, LinePlot):
+    if isinstance(artist, LinePlot) or (banded(artist) and "xerr" not in values):
         return ax.plot(
             values["x"],
             values["y"],
@@ -508,6 +559,12 @@ def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
     values = np.asarray(
         data(artist.data if isinstance(artist, ImagePlot) else artist.c)
     )
+    if values.ndim != 2:
+        what = "an image" if isinstance(artist, ImagePlot) else "a color mesh"
+        raise DataError(
+            f"{artist.label or what} needs 2-D data, a table of values, but the "
+            f"data chosen is {values.ndim}-D"
+        )
     scaling = colour_scaling(artist)
     if isinstance(artist, ImagePlot):
         placement = {"origin": artist.origin, "aspect": artist.aspect}
@@ -516,8 +573,20 @@ def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
         mappable = ax.imshow(values, cmap=artist.cmap, **scaling, **placement, **common)
     else:
         grid = []
-        if artist.x is not None and artist.y is not None:
-            grid = [data(artist.x), data(artist.y)]
+        if artist.x is not None or artist.y is not None:
+            # Without one of them, the cells are numbered along it.
+            rows, cols = values.shape
+            x = data(artist.x) if artist.x is not None else np.arange(cols)
+            y = data(artist.y) if artist.y is not None else np.arange(rows)
+            for name, positions, count in (("x", x, cols), ("y", y, rows)):
+                if len(positions) not in (count, count + 1):
+                    raise DataError(
+                        f"{artist.label or 'the color mesh'} has {count} cells "
+                        f"along {name}, but {len(positions)} {name} positions; it "
+                        f"needs {count} (the cells' centres) or {count + 1} (their "
+                        "edges)"
+                    )
+            grid = [x, y]
         mappable = ax.pcolormesh(
             *grid, values, cmap=artist.cmap, shading="auto", **scaling, **common
         )
@@ -525,6 +594,38 @@ def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
     if bar is not None and bar.visible:
         label = {"label": bar.label} if bar.label is not None else {}
         ax.figure.colorbar(mappable, ax=ax, **label).ax.set_gid(artist.id)
+
+
+def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:
+    """σ_y(τ) against τ, computed as the script computes it (figscribe.allan).
+
+    A series with gaps is not drawn; validate_references says why.
+    """
+    from figscribe.allan import averaging_factors, overlapping_adev, phase_of, samples
+
+    try:
+        values, tau0 = samples(artist, data)
+    except DataError as exc:
+        raise DataError(f"{artist.label or 'the Allan deviation'}: {exc}") from None
+    if not np.all(np.isfinite(values)):
+        return
+    phase = phase_of(values, artist.data_type, tau0)
+    m = averaging_factors(phase.size, artist.taus)
+    adev = overlapping_adev(phase, tau0, m)
+    yerr = adev / np.sqrt(phase.size - 2 * m) if artist.error_bars else None
+    container = ax.errorbar(
+        scale(m * tau0, artist.x_conversion),
+        adev,
+        yerr=yerr,
+        color=artist.color,
+        marker=artist.marker or "none",
+        markersize=artist.markersize,
+        linestyle=artist.linestyle,
+        linewidth=artist.linewidth,
+        **common,
+    )
+    for part in container.get_children():
+        part.set_gid(artist.id)
 
 
 def colour_scaling(artist) -> dict:
@@ -556,8 +657,8 @@ def _draw_fit(
     target = _referenced(artists, fit.target, FITTABLE, "fit")
     if fit.result is None:
         return
-    x = np.asarray(data(target.x), dtype=float)
-    x = x[np.isfinite(x)]
+    shown = plot_data(target, data)
+    x = shown.x[np.isfinite(shown.x) & shown.used]
     if x.size == 0:
         return
     low, high = float(x.min()), float(x.max())
@@ -593,17 +694,12 @@ def _draw_residuals(
     ax.axhline(0.0, color="0.6", linewidth=0.8, linestyle="--", zorder=1)
     if fit.result is None:
         return
-    x = np.asarray(data(target.x), dtype=float)
-    y = np.asarray(data(target.y), dtype=float)
-    yerr = (
-        data(target.yerr)
-        if isinstance(target, ErrorbarPlot) and target.yerr is not None
-        else None
-    )
-    if fit.fit_range is not None or target.left_out:
-        used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
+    shown = plot_data(target, data)
+    x, y, yerr = shown.x, shown.y, shown.yerr
+    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out) & shown.used
+    if not used.all():
         x, y = x[used], y[used]
-        yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
+        yerr = None if yerr is None else yerr[used]
     container = ax.errorbar(
         x,
         y - evaluate(fit.model, fit.result.parameters, x),

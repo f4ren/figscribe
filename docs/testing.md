@@ -11,7 +11,13 @@ the GUI as a whole and need no upkeep when something is added:
   field must change the model, leave a figure that can be drawn, change what
   is drawn and come back with undo. A field whose right outcome is something
   else goes into `EXPECTED` with the reason; a known problem into `KNOWN`
-  with its roadmap item, and the test says when it is fixed.
+  with its roadmap item, and the test says when it is fixed. A field greyed
+  out because it does nothing in that state is skipped there.
+- **`tests/gui/test_without_effect.py`** checks each rule of
+  `gui/effect.py`, which greys such fields out, against the renderer: while
+  the rule holds, a change of the field leaves the figure as it was; once
+  the setting it waits for is made, the same change shows. A new rule needs
+  a case there, or the test fails.
 - **`tests/gui/test_every_action.py`** triggers every menu action of the main
   window and every entry of the outline's context menus. Dialogs are answered
   in the test; no action may end in an error that figscribe calls a bug.
@@ -49,6 +55,8 @@ note the platform, the screen scaling and the theme in the pull request.
 5. **Import**: import a CSV with a semicolon and decimal commas, and one in
    cp1252 with µ in the header. The dialog proposes the right reading.
 6. **Fit**: add a Gaussian fit with residuals; the result shows in the panel.
+   Show x in h with "Start at 0" and use only part of x: the axis, its range
+   and the fit follow, and the fit's parameters are in h.
 7. **A changed file**: edit the CSV in another program and come back; the
    bar offers the new version.
 8. **Export**: PDF, PNG and the Python script; run the script, and its figure
@@ -58,6 +66,13 @@ note the platform, the screen scaling and the theme in the pull request.
 10. **Theme**: switch the system to dark mode; text and lines stay readable.
 11. **Keyboard**: go through the import dialog and the property panel with
     Tab and Enter only.
+12. **Clipboard and file manager** (what no test can see): *Edit > Copy
+    Figure*, then paste into a slide (PowerPoint or Keynote) and a Word or
+    LibreOffice document; the picture has the figure's size and is sharp.
+    Paste into Inkscape or a vector program too: the SVG stays vector. In the
+    outline, right-click a data file and choose *Show in Finder* (Explorer,
+    file manager): it opens with the file selected, also when the path has
+    spaces and non-ASCII letters.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

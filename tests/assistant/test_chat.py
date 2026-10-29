@@ -587,3 +587,20 @@ def test_every_field_path_in_the_prompt_exists() -> None:
     owners = (Figure, Axes, LinePlot, ErrorbarPlot)
     missing = [p for p in paths if not any(exists(m, p) for m in owners)]
     assert missing == []
+
+
+def test_a_refusal_in_a_list_keeps_its_message() -> None:
+    """Gemini sends its errors as a list; openai from 3.38 then says only
+    "Error code: 400", and the reason is in the body."""
+    pytest.importorskip("openai")
+
+    def refuse(method, path, body):
+        error = {"code": 400, "message": "Function call is missing a thought."}
+        return json_reply(400, [{"error": error}])
+
+    with serve(refuse) as (url, _):
+        model = OpenAIModel(Provider("openai", "gemini-3.5-flash", f"{url}/v1"))
+        model.client = model.client.with_options(max_retries=0)
+        with pytest.raises(ChatError) as error:
+            model.respond(["hi"], lambda _: None)
+    assert "missing a thought" in str(error.value)

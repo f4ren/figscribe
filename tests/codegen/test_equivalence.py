@@ -25,6 +25,7 @@ from figscribe.model import (
     Axes,
     AxisSpec,
     ColumnRef,
+    ErrorBand,
     ErrorbarPlot,
     Figure,
     FitCurve,
@@ -415,6 +416,39 @@ def test_a_windows_file_keeps_its_encoding(tmp_path: Path) -> None:
     assert 'encoding="cp1252"' in script
 
 
+@pytest.mark.parametrize(
+    ("header", "bom", "expected"),
+    [
+        ("t,U (V)", False, None),
+        ("t,I (µA)", False, '"utf-8"'),
+        ("t,I (µA)", True, '"utf-8-sig"'),
+    ],
+)
+def test_a_utf8_file_names_its_encoding_unless_plain_ascii(
+    tmp_path: Path, header: str, bom: bool, expected: str | None
+) -> None:
+    """Without encoding=, NumPy reads with the system's encoding: cp1252 on
+    Windows, which cannot decode every UTF-8 byte (0x81 in "Á")."""
+    text = f"{header}\n0,1.5\n1,2.5\n2,2\n"
+    (tmp_path / "data.csv").write_bytes(
+        ("\ufeff" if bom else "").encode() + text.encode()
+    )
+    source = csv_source(tmp_path / "data.csv", tmp_path)
+    ref = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    y = next(c for c in source.columns if c != "t")
+    axes = Axes(artists=[LinePlot(x=ref["t"], y=ref[y])])
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[axes])],
+    )
+    script = _assert_same(project, tmp_path)
+    if expected is None:
+        assert "encoding=" not in script
+    else:
+        assert f"encoding={expected}" in script
+
+
 def test_histograms_and_notes(tmp_path: Path) -> None:
     from figscribe.model import Annotation, Histogram
 
@@ -569,6 +603,76 @@ def test_images_meshes_and_colour_bars(tmp_path: Path) -> None:
     assert 'scan_counts = np.load(scan_path)["counts"].astype(float)' in script
     assert 'fig.colorbar(image, ax=ax_a, label="intensity")' in script
     assert "norm=LogNorm(vmin=0.01)" in script
+
+
+def test_a_mesh_with_cell_positions_along_x_only(tmp_path: Path) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, ColorMesh
+
+    yy, xx = np.mgrid[0:5, 0:6]
+    np.savez(tmp_path / "scan.npz", counts=xx * yy + 1.0, x=np.arange(6.0) ** 1.5)
+    counts = numpy_source(tmp_path / "scan.npz", tmp_path, array="counts")
+    x_source = numpy_source(tmp_path / "scan.npz", tmp_path, array="x")
+    mesh = ColorMesh(
+        c=ArrayRef(source=counts.id), x=ColumnRef(source=x_source.id, column=0)
+    )
+    project = Project(
+        sources=[counts, x_source],
+        figures=[Figure(dpi=100, axes=[Axes(artists=[mesh])])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert ".shape[0])" in script  # the rows numbered, as the panel says
+
+
+def test_allan_deviations_of_frequency_and_phase(tmp_path: Path) -> None:
+    from figscribe.model import AllanDeviationPlot
+
+    rng = np.random.default_rng(7)
+    y = rng.normal(scale=2e-12, size=300) + np.linspace(0.0, 1e-12, 300)
+    x = np.concatenate([[0.0], np.cumsum(y) * 0.5])[:-1]
+    gap = y.copy()
+    gap[40] = np.nan
+    rows = [
+        f"{0.5 * i!r},{float(a)!r},{float(b)!r},{float(c)!r}"
+        for i, (a, b, c) in enumerate(zip(y, x, gap, strict=True))
+    ]
+    (tmp_path / "clock.csv").write_text(
+        "t,y,x,gap\n" + "\n".join(rows) + "\n", encoding="utf-8"
+    )
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+
+    def col(name: str) -> ColumnRef:
+        return ColumnRef(source=source.id, column=name)
+
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    plots = [
+        AllanDeviationPlot(values=col("y"), sample_interval=0.5, label="frequency"),
+        AllanDeviationPlot(
+            values=col("x"),
+            data_type="phase",
+            time=col("t"),
+            taus="decade",
+            error_bars=False,
+            marker="s",
+            linestyle="--",
+            label="phase",
+        ),
+        AllanDeviationPlot(values=col("gap"), label="with a gap"),
+    ]
+    project = Project(
+        sources=[source],
+        figures=[
+            Figure(
+                dpi=120,
+                axes=[Axes(legend=Legend(visible=True), artists=plots, **log)],
+            )
+        ],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "def overlapping_adev(phase, tau0, m):" in script
+    assert "tau0_2 = np.median(np.diff(t))" in script
+    assert "has gaps, so its Allan deviation is not drawn" in script
+    assert "allantools" not in script
 
 
 def test_ticks_inside_on_all_sides_with_prefixes(tmp_path: Path) -> None:
@@ -732,3 +836,144 @@ def test_reference_lines_and_shaded_spans(tmp_path: Path) -> None:
     assert 'ax.axhspan(0.5, 1, color="C2", linewidth=0, zorder=0.5, alpha=0.2)' in (
         script
     )
+
+
+def test_error_bands(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        linestyle="-",
+        marker="none",
+        label="data",
+        left_out=[12],
+        band=ErrorBand(),
+    )
+    shifted = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["t2"],
+        xerr=ref["dU"],
+        yerr=ref["U"],
+        color="C3",
+        alpha=0.8,
+        zorder=2.3,
+        band=ErrorBand(color="0.6", alpha=0.5),
+    )
+    project.figures = [
+        Figure(
+            dpi=150,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(legend=Legend(visible=True), artists=[data]),
+                Axes(col=1, artists=[shifted]),
+            ],
+        )
+    ]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "line, = ax_a.plot(" in script
+    assert "    where=kept,\n    color=line.get_color(),\n    alpha=0.25,\n" in script
+    assert "line, _, _ =" not in script  # the second plot has a color of its own
+    assert (
+        'ax_b.fill_between(t, t2 - U, t2 + U, color="0.6", alpha=0.4, zorder=2.2, '
+        "linewidth=0)" in script
+    )
+
+
+def test_an_error_band_beside_x_error_bars_in_the_cycle_color(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"], y=ref["U"], xerr=ref["dU"], yerr=ref["dU"], band=ErrorBand()
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    script = _assert_same(project, tmp_path)
+    assert "line, _, _ = ax.errorbar(" in script
+    assert "color=line.get_color()" in script
+
+
+def _run_csv(folder: Path) -> tuple[Project, dict[str, ColumnRef]]:
+    """A measurement with timestamps in s, every 6 min for 4 h."""
+    t = 1.7e9 + 360.0 * np.arange(41)
+    rng = np.random.default_rng(5)
+    u = np.exp(-(((t - t[20]) / 3600) ** 2)) + rng.normal(0, 0.03, t.size)
+    rows = "\n".join(f"{float(a)!r},{b:.5f},0.030" for a, b in zip(t, u, strict=True))
+    (folder / "run.csv").write_text(f"t,U,dU\n{rows}\n", encoding="utf-8")
+    source = csv_source(folder / "run.csv", folder, header_row=0)
+    refs = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    return Project(figscribe_version="test", sources=[source]), refs
+
+
+def test_units_and_a_range_with_a_band_and_a_fit(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, ErrorBand
+
+    project, ref = _run_csv(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        linestyle="-",
+        band=ErrorBand(),
+        x_conversion=Conversion(factor=1 / 3600, from_start=True, unit="h"),
+        y_conversion=Conversion(factor=1000.0, unit="mV"),
+        x_range=(0.5, 3.5),
+        left_out=[2, 30],  # row 2 lies outside the range
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    assert project.figures[0].axes[0].artists[1].result.parameters["mu"] == (
+        pytest.approx(2.0, abs=0.05)  # in h, as the axis shows it
+    )
+    script = _assert_same(project, tmp_path)
+    assert "t_h = (t - np.nanmin(t)) / 3600  # h since the start" in script
+    assert "U_mV = U * 1000  # in mV" in script
+    assert "dU_mV = dU * 1000" in script
+    assert "used = (t_h >= 0.5) & (t_h <= 3.5)" in script
+
+
+def test_a_histogram_over_a_range(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, Histogram
+
+    project, ref = _run_csv(tmp_path)
+    counts = Histogram(
+        values=ref["U"],
+        bins=8,
+        x_conversion=Conversion(factor=1000.0, unit="mV"),
+        x_range=(100.0, 900.0),
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[counts])])]
+    script = _assert_same(project, tmp_path)
+    assert "range=(100, 900)" in script
+
+
+def test_an_allan_deviation_in_minutes_over_a_range(tmp_path: Path) -> None:
+    from figscribe.model import AllanDeviationPlot, Conversion
+
+    rng = np.random.default_rng(11)
+    y = rng.normal(scale=2e-12, size=400)
+    rows = "\n".join(f"{0.5 * i!r},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "clock.csv").write_text(f"t,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    minutes = Conversion(factor=1 / 60, unit="min")
+    plots = [
+        AllanDeviationPlot(
+            values=col["y"], time=col["t"], x_conversion=minutes, x_range=(0.0, 1.5)
+        ),
+        AllanDeviationPlot(
+            values=col["y"], sample_interval=0.5, x_conversion=minutes, x_range=(1, 3)
+        ),
+    ]
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[Axes(**log, artists=plots)])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "/ 60" in script

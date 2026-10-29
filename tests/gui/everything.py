@@ -12,6 +12,7 @@ from figscribe.fit import add_fit, refit
 from figscribe.io import csv_source, load_data
 from figscribe.io.numpyfile import numpy_source
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     Axes,
@@ -19,6 +20,8 @@ from figscribe.model import (
     Colorbar,
     ColorMesh,
     ColumnRef,
+    Conversion,
+    ErrorBand,
     ErrorbarPlot,
     Figure,
     FitCurve,
@@ -42,10 +45,11 @@ from figscribe.model import (
 def build(folder: Path) -> Path:
     """Write the project and its files into `folder`; return the project file.
 
-    Panel A has a line, points, error bars with a fit, a note with an arrow
-    and a right y axis with a plot on it; B a histogram, a reference line, a
-    shaded range and the residuals; C
-    an image and D a color mesh, both with color bars; E is an inset in A.
+    Panel A has a line in other units over a range, points, error bars with a
+    fit, a note with an arrow and a right y axis with a plot on it; B a
+    histogram, a reference line, a shaded range and the residuals; C an image
+    and D a color mesh, both with color bars; E is an inset in A, with error
+    bars drawn as a band.
     Everything that can be switched off is on, so that its settings show.
     """
     t = np.linspace(0.0, 4.0, 21)
@@ -59,11 +63,14 @@ def build(folder: Path) -> Path:
         folder / "map.npz",
         counts=np.exp(-((x - 8.0) ** 2 + (y - 6.0) ** 2) / 20.0) + 0.01,
         background=0.1 + 0.01 * x + 0.02 * y,
-        x=np.arange(16.0),
-        y=np.arange(12.0),
+        x=np.arange(16.0) ** 1.2,  # not the cell numbers, so a change shows
+        y=np.arange(12.0) ** 1.2,
     )
     scan = csv_source(folder / "scan.csv", folder, header_row=0, skip_rows=1)
     grid = numpy_source(folder / "map.npz", folder, array="counts")
+    background = numpy_source(folder / "map.npz", folder, array="background")
+    xs = numpy_source(folder / "map.npz", folder, array="x")
+    ys = numpy_source(folder / "map.npz", folder, array="y")
 
     def col(name: str) -> ColumnRef:
         return ColumnRef(source=scan.id, column=name)
@@ -80,7 +87,15 @@ def build(folder: Path) -> Path:
         legend=Legend(visible=True),
         artists=[
             errorbars,
-            LinePlot(x=col("t"), y=col("U"), marker="x", label="line", left_out=[5]),
+            LinePlot(
+                x=col("t"),
+                y=col("U"),
+                marker="x",
+                label="line",
+                left_out=[5],
+                y_conversion=Conversion(factor=0.5),
+                x_range=(0.5, 3.5),
+            ),
             ScatterPlot(x=col("t"), y=col("U"), label="points", left_out=[7]),
             LinePlot(x=col("t"), y=col("T"), axis="right", label="temperature"),
             Annotation(text="peak", position=(2.0, 5.0), arrow_to=(2.5, 6.0)),
@@ -91,6 +106,7 @@ def build(folder: Path) -> Path:
         legend=Legend(visible=True),
         artists=[
             Histogram(values=col("U"), label="counts"),
+            AllanDeviationPlot(values=col("U"), label="stability"),
             ReferenceLine(at=5.0, label="mean"),
             ShadedSpan(start=3.0, end=4.0, label="band"),
         ],
@@ -102,7 +118,14 @@ def build(folder: Path) -> Path:
     d = Axes(
         row=1,
         col=1,
-        artists=[ColorMesh(c=ArrayRef(source=grid.id), colorbar=Colorbar())],
+        artists=[
+            ColorMesh(
+                c=ArrayRef(source=grid.id),
+                x=ColumnRef(source=xs.id, column=0),
+                y=ColumnRef(source=ys.id, column=0),
+                colorbar=Colorbar(),
+            )
+        ],
     )
     e = Axes(
         title="Detail",
@@ -112,6 +135,15 @@ def build(folder: Path) -> Path:
         artists=[
             LinePlot(x=col("t"), y=col("U"), label="detail"),
             LinePlot(x=col("t"), y=col("dU"), label="error"),
+            ErrorbarPlot(
+                x=col("t"),
+                y=col("U"),
+                xerr=col("dU"),
+                yerr=col("t"),  # wide enough to be seen in the small inset
+                label="shaded",
+                left_out=[4],
+                band=ErrorBand(),
+            ),
         ],
     )
     figure = Figure(
@@ -121,7 +153,8 @@ def build(folder: Path) -> Path:
         panel_labels=PanelLabels(),
         axes=[a, b, c, d, e],
     )
-    project = Project(sources=[scan, grid], figures=[figure])
+    sources = [scan, grid, background, xs, ys]
+    project = Project(sources=sources, figures=[figure])
 
     history = History(project)
     fit = FitCurve(

@@ -21,6 +21,7 @@ from itertools import pairwise
 from pathlib import Path
 
 from figscribe.model.artists import (
+    AllanDeviationPlot,
     ArtistBase,
     ColorMesh,
     ErrorbarPlot,
@@ -96,6 +97,7 @@ def validate_references(
         for ai, axes in enumerate(figure.axes):
             apath = f"{fpath}.axes[{ai}]"
             _check_axis_ticks(axes, apath, issues)
+            _check_minor_grid(axes, apath, issues)
 
             artists_by_id = {a.id: a for a in axes.artists}
             for field, why in style_problems(axes):
@@ -119,6 +121,14 @@ def validate_references(
                 why = _off_the_log_scale(artist, axes)
                 if why is not None:
                     issues.append(ReferenceIssue(tpath, artist.id, why))
+                if getattr(artist, "band", None) and artist.yerr is None:
+                    issues.append(
+                        ReferenceIssue(
+                            f"{tpath}.band",
+                            artist.id,
+                            "has an error band but no y errors to shade",
+                        )
+                    )
 
                 if data is not None and isinstance(artist, FITTABLE):
                     why = _unequal_or_unreadable(artist, data)
@@ -158,6 +168,26 @@ def validate_references(
                                 artist.id,
                                 f"fits artist {artist.target!r}, "
                                 "which is not in this axes",
+                            )
+                        )
+                    elif (
+                        artist.fit_range is not None
+                        and isinstance(target, FITTABLE)
+                        and target.x_range is not None
+                        and not (
+                            target.x_range[0] <= artist.fit_range[0]
+                            and artist.fit_range[1] <= target.x_range[1]
+                        )
+                    ):
+                        low, high = artist.fit_range
+                        plot_low, plot_high = target.x_range
+                        issues.append(
+                            ReferenceIssue(
+                                f"{tpath}.fit_range",
+                                artist.id,
+                                f"the fit range {low:g} to {high:g} reaches beyond "
+                                f"the plot's range {plot_low:g} to {plot_high:g}; only "
+                                "the points within both are fitted",
                             )
                         )
                     elif not isinstance(target, FITTABLE):
@@ -305,6 +335,10 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
         reference = artist.data if isinstance(artist, ImagePlot) else artist.c
         shown = [("values", reference, artist.norm)]
     found = []
+    if isinstance(artist, AllanDeviationPlot):
+        return _allan_not_drawn(artist, data)
+    if isinstance(artist, (*FITTABLE, Histogram)) and artist.x_range is not None:
+        found += _nothing_in_range(artist, data)
     if isinstance(artist, FITTABLE) and artist.left_out:
         try:
             count = len(data(artist.x))
@@ -347,6 +381,61 @@ def data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
         if isinstance(value, (ColumnRef, ArrayRef)):
             refs.append((name, value.source))
     return refs
+
+
+def _nothing_in_range(artist, data) -> list[str]:
+    """A range that keeps no row draws nothing."""
+    from figscribe.convert import convert, plot_data, within
+    from figscribe.io.errors import DataError
+
+    try:
+        if isinstance(artist, Histogram):
+            values = convert(data(artist.values), artist.x_conversion)
+            what = "value"
+        else:
+            values = plot_data(artist, data).x
+            what = "row"
+    except DataError:
+        return []
+    if values.size and not within(values, artist.x_range).any():
+        low, high = artist.x_range
+        return [
+            f"no {what} lies within the range {low:g} to {high:g}, so none is drawn"
+        ]
+    return []
+
+
+def _allan_not_drawn(artist: AllanDeviationPlot, data) -> list[str]:
+    """A series with gaps is not drawn; one too short has nothing to show."""
+    import numpy as np
+
+    from figscribe.allan import samples
+    from figscribe.io.errors import DataError
+
+    try:
+        values, _ = samples(artist, data)
+    except DataError:
+        return []  # the preview says why
+    if artist.x_range is not None and not values.size:
+        low, high = artist.x_range
+        return [
+            f"no sample lies within the range {low:g} to {high:g} after the "
+            "first, so nothing is drawn"
+        ]
+    what = f"values ({artist.values.column})"
+    gaps = int(np.count_nonzero(~np.isfinite(values)))
+    if gaps:
+        return [
+            f"{what} has {gaps} of {values.size} entries that are not numbers; an "
+            "Allan deviation needs an unbroken series, so it is not drawn"
+        ]
+    points = values.size + (1 if artist.data_type == "frequency" else 0)
+    if points < 3:
+        return [
+            f"{what} has {values.size} values, too few for an Allan deviation "
+            f"({3 - points + values.size} at the least)"
+        ]
+    return []
 
 
 def _check_unique_ids(project: Project, issues: list[ReferenceIssue]) -> None:
@@ -474,6 +563,23 @@ def _check_spans(figure: Figure, path: str, issues: list[ReferenceIssue]) -> Non
                     f"but the grid has {layout.cols}",
                 )
             )
+
+
+def _check_minor_grid(axes: Axes, path: str, issues: list[ReferenceIssue]) -> None:
+    """Grid lines only at minor ticks, on axes that have none, draw nothing."""
+    if not axes.grid or axes.grid_which != "minor":
+        return
+    names = ("x", "y") if axes.grid_axis == "both" else (axes.grid_axis,)
+    if not any(getattr(axes, name).minor_ticks for name in names):
+        which = "the axes have" if len(names) == 2 else f"the {names[0]} axis has"
+        issues.append(
+            ReferenceIssue(
+                f"{path}.grid_which",
+                axes.id,
+                f"draws grid lines at minor ticks, but {which} none; switch "
+                "them on in the axis or draw the lines at the numbered ticks",
+            )
+        )
 
 
 def _check_axis_ticks(axes: Axes, path: str, issues: list[ReferenceIssue]) -> None:

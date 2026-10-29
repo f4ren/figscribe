@@ -100,6 +100,8 @@ script.
 - Line, scatter, error bars, histograms, images and color meshes with color
   bars (linear or logarithmic), notes of one or several lines with or
   without an arrow, reference lines and shaded ranges.
+- The Allan deviation of a time series (fractional frequency or phase), on
+  log-log axes, for the stability of clocks, lasers and sensors.
 - Curve fits: linear, polynomial, Gaussian, Lorentzian, exponential, or your
   own expression such as `a*exp(-x/tau)+c`. Error bars weight the fit; the
   result shows each parameter with its 1σ uncertainty, the reduced χ² and
@@ -110,8 +112,13 @@ script.
   outliers and leave them out once you confirm. The data file stays as it
   is: the points are drawn apart, in light grey or a color and marker of
   your choice, and the script leaves out the same rows, with the reason.
+- Show a plot's values in other units, e.g. seconds as hours since the
+  start of the measurement or volts as mV, and draw it from part of its data
+  only. The axis, its marks and the fits follow in the same step.
 
 **Layout and style**
+- Several figures in one project, as tabs above the figure: add one with
+  the look of the others, duplicate, rename, reorder.
 - Several panels in a grid: add one to the right, left, above or below, or
   as an inset. Shared x and y axes, a second y axis on the right.
 - Exact figure size in mm, font sizes in pt, linear, log and symlog axes,
@@ -138,11 +145,16 @@ script.
   separated by semicolons (`0; 0,5; 1`).
 - Drag the legend and notes into place. Zoom with the mouse wheel and pan by
   dragging to look closer; *Use as axis range* keeps that view.
+- Double-click an axis label, a title, a legend entry or a note to edit it
+  where it is drawn. Drag an inset's corner to resize it, or the gap between
+  two panels to share the room between them differently. Right-click a plot
+  to style it like another, bring it to the front, fit or hide it.
 - The **Python code** drawer under the figure shows the generated script,
   live, as you edit.
 
 **Export**
-- PDF, SVG and PNG at the exact size.
+- PDF, SVG and PNG at the exact size; *File > Export All Figures…* writes
+  every figure of the project at once.
 - A standalone Python script (see below).
 - The project itself as a readable JSON file (`.figscribe`).
 
@@ -258,13 +270,19 @@ ones, `--repeat 3` evens out variation between runs.
 |---|---|
 | New, open, save, save as, quit | the system's usual keys (Ctrl+N, Ctrl+O, Ctrl+S, …) |
 | Undo, redo, delete the selection | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y, Del |
+| Duplicate the selected plots, panel or figure | Ctrl+D |
+| Copy a plot's style, paste it onto others | Ctrl+Alt+C, Ctrl+Alt+V |
+| Copy the figure to the clipboard (PNG and SVG) | Ctrl+Shift+C |
 | Import data | Ctrl+I |
+| Find a setting of the selection | Ctrl+F, then type |
+| Find any setting or menu action | Ctrl+K, then type and Enter |
 | Add plot, add fit | Ctrl+Shift+P, Ctrl+Shift+F |
 | Export figure, export Python script | Ctrl+E, Ctrl+Shift+E |
 | Show the Python code | Ctrl+Shift+Y |
 | Show the assistant | Ctrl+Shift+A |
 | Zoom a panel | mouse wheel; with Shift only x, with Ctrl or Alt only y |
 | Pan a panel | drag its background |
+| Edit a label, title, legend entry or note | double-click it |
 | Back to the axis ranges of the model | Esc |
 
 On macOS, Cmd takes the place of Ctrl.
@@ -273,7 +291,11 @@ On macOS, Cmd takes the place of Ctrl.
 
 ```
 figscribe [PROJECT.figscribe]                 open the GUI, optionally with a project
-figscribe script PROJECT.figscribe [-o FILE]  write the Python script for the first figure
+figscribe script PROJECT.figscribe [--figure NAME] [-o FILE]
+                                              write the Python script for a figure
+                                              (by default the first)
+figscribe script PROJECT.figscribe --all [-o FOLDER]
+                                              write a script for every figure
 figscribe mcp                                 serve the open project to an MCP client
 figscribe bench [--help]                      measure a model on typical assistant requests
 figscribe --version
@@ -307,7 +329,9 @@ snapping and alignment guides, installers.
 
 Deliberately out of scope: spreadsheet-style data editing, a statistics
 suite, a scripting language of its own, and reading generated or other
-Python code back in.
+Python code back in. An analysis comes in only as a standard figure of some
+field that the script can compute in a few lines, such as the Allan
+deviation (decision 0036).
 
 ## Development
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from figscribe.model.base import AnyFloat, Identified, StrictModel
 from figscribe.model.data import ArrayRef, ColumnRef
@@ -24,6 +24,32 @@ Deliberately not modelled further: Matplotlib accepts many forms, and a stricter
 type here would drift away from what the renderer actually supports. The
 commands ask Matplotlib instead (`model/styles.py`).
 """
+
+
+def _lower_below_upper(ends: tuple[float, float]) -> tuple[float, float]:
+    if not ends[0] < ends[1]:
+        raise ValueError("the lower end of the range is not below the upper")
+    return ends
+
+
+Range = Annotated[tuple[float, float], AfterValidator(_lower_below_upper)]
+"""(lower, upper), the lower below the upper."""
+
+
+class Conversion(StrictModel):
+    """Values shown in another unit, and counted from the start if asked:
+    shown = (value − start) × factor, where the start is the column's
+    smallest value with `from_start`, else 0 (decision 0041). Errors are
+    scaled by the factor, never shifted."""
+
+    factor: float = Field(gt=0.0)
+    """What every value is multiplied by, e.g. 1/3600 to show s in h."""
+    from_start: bool = False
+    """Count from the column's smallest value, so that the values start at 0:
+    hours since the start of a measurement rather than since 1970."""
+    unit: str | None = None
+    """The unit of the shown values, e.g. "h"; the axis takes it. None leaves
+    the axis' unit as it is."""
 
 
 class ArtistBase(Identified):
@@ -68,6 +94,15 @@ class LinePlot(ArtistBase):
     left_out_note: str | None = None
     """Why the rows are left out, e.g. "detector glitch"; written into the
     script. Finding outliers fills it in."""
+    x_conversion: Conversion | None = None
+    """The x values in another unit, counted from the start if asked; None
+    shows them as in the file. x errors are scaled along."""
+    y_conversion: Conversion | None = None
+    """The y values in another unit, counted from the start if asked; None
+    shows them as in the file. y errors and the band are scaled along."""
+    x_range: Range | None = None
+    """(lower, upper) of the shown x values: only the rows within it, both ends
+    included, are drawn, fitted and counted; None uses every row."""
 
 
 class ScatterPlot(ArtistBase):
@@ -94,6 +129,25 @@ class ScatterPlot(ArtistBase):
     left_out_note: str | None = None
     """Why the rows are left out, e.g. "detector glitch"; written into the
     script. Finding outliers fills it in."""
+    x_conversion: Conversion | None = None
+    """The x values in another unit, counted from the start if asked; None
+    shows them as in the file. x errors are scaled along."""
+    y_conversion: Conversion | None = None
+    """The y values in another unit, counted from the start if asked; None
+    shows them as in the file. y errors and the band are scaled along."""
+    x_range: Range | None = None
+    """(lower, upper) of the shown x values: only the rows within it, both ends
+    included, are drawn, fitted and counted; None uses every row."""
+
+
+class ErrorBand(StrictModel):
+    """The y errors as a shaded band around the line instead of as bars, for
+    dense data where the bars would crowd each other."""
+
+    color: Color | None = None
+    """A Matplotlib color; None takes the plot's."""
+    alpha: float = Field(0.25, ge=0.0, le=1.0)
+    """Opacity of the band from 0 to 1, times the plot's own."""
 
 
 class ErrorbarPlot(ArtistBase):
@@ -121,6 +175,9 @@ class ErrorbarPlot(ArtistBase):
     """Length of the caps at the ends of the error bars in pt; 0 for none."""
     elinewidth: float = Field(1.0, gt=0.0)
     """Line width of the error bars in pt."""
+    band: ErrorBand | None = None
+    """The y errors as a shaded band instead of bars; None draws bars. x
+    errors stay bars."""
     left_out: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list)
     """Rows of the data, counted from 0, drawn apart and skipped by every fit of
     this plot; the data file stays as it is."""
@@ -134,6 +191,15 @@ class ErrorbarPlot(ArtistBase):
     left_out_note: str | None = None
     """Why the rows are left out, e.g. "detector glitch"; written into the
     script. Finding outliers fills it in."""
+    x_conversion: Conversion | None = None
+    """The x values in another unit, counted from the start if asked; None
+    shows them as in the file. x errors are scaled along."""
+    y_conversion: Conversion | None = None
+    """The y values in another unit, counted from the start if asked; None
+    shows them as in the file. y errors and the band are scaled along."""
+    x_range: Range | None = None
+    """(lower, upper) of the shown x values: only the rows within it, both ends
+    included, are drawn, fitted and counted; None uses every row."""
 
 
 class Histogram(ArtistBase):
@@ -148,6 +214,53 @@ class Histogram(ArtistBase):
     """"bar" fills each bin, "step" draws the outline, "stepfilled" a filled outline."""
     color: Color | None = None
     """A Matplotlib color; None takes the next color of the color cycle."""
+    x_conversion: Conversion | None = None
+    """The values in another unit, counted from the start if asked; None
+    counts them as in the file."""
+    x_range: Range | None = None
+    """(lower, upper) of the shown values: only those are counted, and the
+    bins of a bin count span it; None uses every value."""
+
+
+class AllanDeviationPlot(ArtistBase):
+    """The overlapping Allan deviation σ_y(τ) of an evenly sampled series
+    against the averaging time τ: how stable a clock, laser or sensor is over
+    time (decision 0036). Shown on log-log axes. Renderer and script compute
+    it alike; the model stores only how."""
+
+    kind: Literal["allan"] = "allan"
+    values: ColumnRef
+    """The series: fractional frequency values, or phase in s (see
+    `data_type`), one per sample, without gaps."""
+    data_type: Literal["frequency", "phase"] = "frequency"
+    """"frequency": the values are fractional frequency y, without unit;
+    "phase": they are phase (time error) x in s."""
+    sample_interval: float = Field(1.0, gt=0.0)
+    """Time between samples τ0 in s; unused when `time` is set."""
+    time: ColumnRef | None = None
+    """Column of the sample times in s, evenly spaced; its median step is τ0.
+    None takes `sample_interval`."""
+    taus: Literal["octave", "decade", "all"] = "octave"
+    """Which τ = m·τ0 are shown: m = 1, 2, 4, 8, … ("octave"), 1, 2, 5, 10,
+    … ("decade") or every m ("all"); up to half the series."""
+    error_bars: bool = True
+    """Show σ/√(N − 2m) as error bars, a simple estimate of the uncertainty."""
+    color: Color | None = None
+    """A Matplotlib color; None takes the next color of the color cycle."""
+    marker: str | None = "o"
+    """A Matplotlib marker such as "o" or "s"; None draws none."""
+    markersize: float = Field(4.0, gt=0.0)
+    """Marker size in pt."""
+    linestyle: str = "-"
+    """"-", "--", "-.", ":", or "none" for points only."""
+    linewidth: float = Field(1.5, gt=0.0)
+    """Line width in pt."""
+    x_conversion: Conversion | None = None
+    """τ in another unit, e.g. h; only the factor counts here, τ starts at τ0
+    whatever `from_start` says. None shows τ in s."""
+    x_range: Range | None = None
+    """(lower, upper) of the time since the first sample, in τ's shown unit:
+    only the samples within it are used, τ0 stays; None uses every sample."""
 
 
 class Colorbar(StrictModel):
@@ -365,6 +478,7 @@ Artist = Annotated[
     | ScatterPlot
     | ErrorbarPlot
     | Histogram
+    | AllanDeviationPlot
     | ImagePlot
     | ColorMesh
     | FitCurve

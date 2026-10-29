@@ -100,11 +100,7 @@ EXPECTED = {
 """Fields whose right outcome in this project is not a visible change: the
 start of what the test reports, and why."""
 
-KNOWN = {
-    "ColorMesh.x": "B8 item 4: used only together with y, which says nothing",
-    "ColorMesh.y": "B8 item 4: used only together with x, which says nothing",
-    "ErrorbarPlot.linewidth": "B8 item 4: no line to widen while the style is none",
-}
+KNOWN = {}
 """Fields with a problem that is planned to be fixed: the roadmap item."""
 
 
@@ -128,10 +124,12 @@ OBJECTS: dict[str, Callable[[Project], str]] = {
     "line": _artist("line"),
     "points": _artist("scatter"),
     "error bars": _artist("errorbar"),
+    "error band": _artist("errorbar", 1),
     "fit": _artist("fit"),
     "residuals": _artist("residual"),
     "note": _artist("annotation"),
     "histogram": _artist("histogram"),
+    "Allan deviation": _artist("allan"),
     "reference line": _artist("refline"),
     "shaded range": _artist("span"),
     "image": _artist("image"),

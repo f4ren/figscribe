@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from figscribe.commands import CommandError, InsertItem, Macro, SetField, find
+from figscribe.convert import plot_data
 from figscribe.fit.expression import FitError
 from figscribe.fit.run import (
     evaluate,
@@ -22,7 +23,6 @@ from figscribe.model import (
     Axes,
     AxisSpec,
     ColumnRef,
-    ErrorbarPlot,
     ExpressionFit,
     Figure,
     FitCurve,
@@ -51,13 +51,12 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
             f"the fit's target is a {target.kind!r}, which has no x and y data"
         )
 
-    x, y = data(target.x), data(target.y)
-    yerr = (
-        data(target.yerr) if isinstance(target, ErrorbarPlot) and target.yerr else None
-    )
-    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
-    x, y = np.asarray(x, dtype=float)[used], np.asarray(y, dtype=float)[used]
-    yerr = None if yerr is None else np.asarray(yerr, dtype=float)[used]
+    # In the units the plot shows, so that the parameters are read off its axes.
+    shown = plot_data(target, data)
+    used = in_range(shown.x, fit.fit_range) & kept(len(shown.x), target.left_out)
+    used &= shown.used
+    x, y = shown.x[used], shown.y[used]
+    yerr = None if shown.yerr is None else shown.yerr[used]
 
     names = parameter_names(fit.model)
     stored = {k: v for k, v in fit.initial_values.items() if k in names}
@@ -166,9 +165,9 @@ def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | 
     if not set(parameter_names(fit.model)) <= set(fit.result.parameters):
         return None  # a result from a file that lacks some parameters
     target = _get(project, fit.target)
-    x = np.asarray(data(target.x), dtype=float)
-    y = np.asarray(data(target.y), dtype=float)
-    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out)
+    shown = plot_data(target, data)
+    x, y = shown.x, shown.y
+    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out) & shown.used
     used &= np.isfinite(x) & np.isfinite(y)
     if not used.any():
         return None

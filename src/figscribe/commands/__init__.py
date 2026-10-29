@@ -16,7 +16,23 @@ from figscribe.commands.core import (
     find,
 )
 from figscribe.commands.history import History
-from figscribe.commands.ops import add_panel, remove_artist, remove_axes, remove_source
+from figscribe.commands.ops import (
+    add_figure,
+    add_panel,
+    copy_style,
+    drawing_order,
+    duplicate_artists,
+    duplicate_axes,
+    duplicate_figure,
+    paste_style,
+    remove_artist,
+    remove_artists,
+    remove_axes,
+    remove_figure,
+    remove_source,
+    same_range,
+    to_front,
+)
 
 __all__ = [
     "Command",
@@ -28,8 +44,19 @@ __all__ = [
     "RemoveItem",
     "SetField",
     "find",
+    "add_figure",
     "add_panel",
+    "copy_style",
+    "drawing_order",
+    "duplicate_artists",
+    "duplicate_axes",
+    "duplicate_figure",
+    "paste_style",
     "remove_artist",
+    "remove_artists",
     "remove_axes",
+    "remove_figure",
     "remove_source",
+    "same_range",
+    "to_front",
 ]

@@ -34,7 +34,7 @@ def test_the_figure_sets_the_tick_style(panel, document) -> None:
     combo = panel.editors[("tick_direction",)].widget
     assert combo.currentText() == "style default"
     _choose(panel, ("tick_direction",), "inward")
-    panel.editors[("ticks_all_sides",)].widget.setChecked(True)
+    panel.editors[("ticks_all_sides",)].widget.click()
     figure = document.figure
     assert figure.tick_direction == "in" and figure.ticks_all_sides
     assert "Style" in panel.sections

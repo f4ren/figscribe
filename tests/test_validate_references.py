@@ -280,3 +280,18 @@ def test_a_line_or_range_a_log_axis_cannot_show_is_a_problem() -> None:
         hidden.id: "is at 0, which a log scale does not show",
         halfway.id: "starts at -1, which a log scale does not show",
     }
+
+
+def test_a_band_without_y_errors_is_a_problem() -> None:
+    from figscribe.model import ErrorBand, ErrorbarPlot
+
+    def ref(column: str) -> ColumnRef:
+        return ColumnRef(source="scan", column=column)
+
+    shaded = ErrorbarPlot(x=ref("t"), y=ref("U"), yerr=ref("dU"), band=ErrorBand())
+    empty = ErrorbarPlot(x=ref("t"), y=ref("U"), xerr=ref("dU"), band=ErrorBand())
+    axes = Axes(artists=[shaded, empty])
+    issues = validate_references(Project(figures=[Figure(axes=[axes])]))
+    assert [(i.object_id, i.message) for i in issues if "band" in i.message] == [
+        (empty.id, "has an error band but no y errors to shade")
+    ]

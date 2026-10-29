@@ -16,8 +16,7 @@ asking what was meant.
 - About 650 tests run in about 25 s; CI is green on Linux, Windows and macOS
   with Python 3.11 and 3.13. Decisions 0001 to 0026 are in
   [`docs/decisions.md`](../docs/decisions.md).
-- `main` is behind `develop` (last merged: PR #31). PyPI still has the 0.0.2
-  placeholder; 0.1.0 is prepared (R4).
+- 0.1.0 is released (2026-10-26, R4): `main` at PR #78, on PyPI.
 
 The findings below marked **(verified)** were reproduced on 2026-10-23; the
 reproduction is given so a session can turn it into a failing test first.
@@ -151,7 +150,9 @@ import dialog (a chip says when it is not UTF-8) and the property panel.
 no `encoding=`, and NumPy 2 then uses the system's encoding: on Windows,
 cp1252, which cannot decode some UTF-8 bytes (e.g. `0x81` in "Á"), so the
 script may fail there on a header with such letters. Write `encoding="utf-8"`
-whenever the file is not plain ASCII.
+whenever the file is not plain ASCII. **Done** (2026-10-26): the script names
+`"utf-8-sig"` for a file with a byte order mark, `"utf-8"` for one with any
+other byte than ASCII, and nothing for plain ASCII.
 
 ### B4 Raw library errors reach the user (verified) — S
 
@@ -316,6 +317,30 @@ the project. It found:
    them only as a pair. Do this after U2, which reworks the same panel code.
    The same holds for an error bar plot's line width while its line style is
    "none" (issue #71), and for the grid's line width and style (F5.8).
+   **Done** (2026-10-26): `gui/effect.py` holds the rules, each a set of
+   fields, what they wait for, and when they do nothing. The panel greys
+   such a field and its name out, and its tooltip starts with "Does nothing
+   while …". The rules cover:
+   - the grid's options while it is off;
+   - the legend's while it is hidden, and its location while it was dragged
+     into place;
+   - a line's width without a line, and its marker size without a marker;
+   - cap size and error bar width while no bars are drawn;
+   - the left-out style while no points are left out;
+   - a vertical reference line's y axis;
+   - a hidden color bar's label;
+   - a fit's curve and outside options without a fit range.
+
+   `tests/gui/test_without_effect.py` holds every rule to the renderer.
+   *Learned* from it: a vertical shaded range does depend on its y axis
+   (on the right axis it lies in another layer), so it has no rule. Grid
+   lines at minor ticks on axes without minor ticks are a combination, not
+   a dead field: they are a problem in the list instead. A color mesh's x
+   or y alone now does what its tooltip promised, numbering the cells along
+   the other. That brought up two raw Matplotlib errors, now said in words:
+   positions that do not fit the cells, and a single column chosen as an
+   image or a mesh. The field test's project has positions and a second
+   array for the mesh, and `KNOWN` is empty.
 5. **Missing API key** (verified, by hand): "Load models" in the assistant
    settings with Claude and no key anywhere prints a traceback to the terminal
    and shows nothing in the dialog. The Anthropic SDK raises a `TypeError`
@@ -479,6 +504,13 @@ in the panel alone would be wrong as soon as the size or labels change.
   outline and change color, marker size or line width for all at once (one
   undo step).
 
+**Done** (2026-10-26, decisions 0038 and 0039): the search above the
+property panel (Ctrl+F) and the command palette (Ctrl+K); the basic
+settings per kind of object first, the rest under *More*; several plots
+chosen with Ctrl or Shift in the outline, changed together or deleted as
+one undo step. *Follow-ups:* the preview marks only the last of several
+plots chosen; a right-click on one of several chosen chooses it alone.
+
 ### U4 Change things where they are drawn — M
 
 - Double-click an axis label, title, legend entry or note to edit its text in
@@ -491,6 +523,13 @@ in the panel alone would be wrong as soon as the size or labels change.
   alone. Over the panel, Shift with the wheel still zooms x only and Ctrl or
   Alt y only. Clicking in the frame's gaps still selects nothing.
 
+**Done** (2026-10-26, decision 0040): double-click editing of axis labels,
+titles, legend entries and notes; dragging an inset's corner and the gaps of
+the grid, one undo step on release; a right-click on a plot with *Style
+like*, *Bring to front*, *Send to back*, *Fit…* and *Hide*. *Follow-ups:* a
+title not set yet cannot be double-clicked, there is nothing drawn; a
+column's share from a drag is approximate under constrained layout.
+
 ### U5 Missing everyday actions — S each
 
 - **Duplicate** a plot, a panel, a figure (Ctrl+D).
@@ -498,6 +537,33 @@ in the panel alone would be wrong as soon as the size or labels change.
 - **Same range in all panels** for x or y, from the panel's context menu.
 - **Copy figure to clipboard** as PNG and SVG, for slides and documents.
 - **Reveal data file** in the file manager.
+
+**Done** (2026-10-29, decision 0042; no model field changed, so no schema
+bump): *Edit > Duplicate* (Ctrl+D) acts on the selection: plots (right after
+the originals, "… (copy)" in the legend), a panel with its plots, fits and
+insets (into the cell to its right), a figure (F8's command, now under the
+same key). *Copy Style* and *Paste Style* (Ctrl+Alt+C, Ctrl+Alt+V) keep a
+snapshot of the plot and paste it onto every chosen plot as one step; *Style
+like* from U4 runs on the same code (`paste_style`). *Same x / y range in all
+panels* is in the panel's menu in the outline and the preview. *Copy Figure*
+(Ctrl+Shift+C) puts PNG, SVG and a bitmap on the clipboard, the bytes of
+`render.export_bytes`, which `export` now writes too. A data file in the
+outline has *Show in Finder* (Explorer, file manager).
+*Learned:* the action sweep counts a disabled action as a failure, so its
+window copies a style first, or *Paste Style* would never be tried; and it
+would have opened the real file manager, so it replaces
+`reveal.show_in_file_manager`. A command stores a deep copy of what it is
+given, so a test that changes the object it pushed changes nothing in the
+model; two of the new tests did that and passed for the wrong reason until
+they took the plot from the model. *Follow-ups, only if asked:* Copy Style
+and Paste Style in the outline's and the preview's menus (the keys and
+*Style like* cover the need); a duplicated panel takes one grid cell, not
+the original's span, and leaves its residual panel with the original; a PDF
+on the clipboard for Keynote and Pages; *Same range* for the right y axis;
+a duplicated note, line or range lies on its original until it is moved or
+edited. *Not checked by a test:* what other programs take from the clipboard
+and how Explorer reads `/select,` with a path that has spaces (manual
+checklist, step 12).
 
 ---
 
@@ -576,8 +642,9 @@ again in the same undo step and is refused if a fit would lack points; the
 assistant's `set_field` on `left_out` does the same. Residuals skip them
 too; the script names the mask `kept`. *Learned:* the click must pick the
 nearest point over all drawn parts, since the kept line also lies within
-the pick radius of a left-out point. *Open:* a row range per plot; the
-panel shows which rows are left out only in the preview.
+the pick radius of a left-out point. *Open:* ~~a row range per plot~~
+(planned as F11, by x values); the panel shows which rows are left out
+only in the preview.
 
 **Finding outliers: done** (2026-10-26): "Find outliers" in the fit dialog
 proposes the points beyond k·σ (`fit.outliers`, iterated until the set
@@ -600,6 +667,7 @@ which asks for any Matplotlib marker such as `$\alpha$`. *Follow-up after U2
 is merged:* remove the old `MarkerEditor` and its four `MARKERS` from
 `gui/properties.py`, no longer used, and move the `QInputDialog` import of
 `ask_marker` up to the others; both wait because U2 changes those lines.
+**Done** (2026-10-26), with the theme's marker icons, which only it used.
 
 ### F3 Panel labels for journals — S
 
@@ -630,10 +698,20 @@ In order of demand:
    the preview, which puts one where it was clicked; values are rounded to a
    hundredth of the shown range. The problem list reports one at or below
    zero on a log axis. *Follow-ups:* drag a line or a range's edges in the
-   preview, like a note; the panel offers "y axis" for a vertical line, where
-   it does nothing (B8 item 4).
+   preview, like a note; ~~the panel offers "y axis" for a vertical line,
+   where it does nothing~~ (greyed out since B8 item 4).
 2. **Error band**: a line with a shaded ±error region (`fill_between`), for
    dense data where error bars clutter.
+   **Done** (2026-10-26, decision 0035): `ErrorbarPlot.band`, a check box
+   "Error band" in the plot's "Look", draws the y errors as a band in the
+   plot's color (or its own) just behind the line, with a gap at left-out
+   rows; x errors stay bars, fits are weighted as before. A band without y
+   errors is reported in the problem list. Typing a refused color into any
+   color field no longer breaks the panel the next time it is built (the
+   color was remembered before it was checked). *Follow-ups:* the legend
+   could show the band behind the line; ~~cap size and error bar width show
+   but do nothing while a band has no x errors beside it~~ (greyed out since
+   B8 item 4).
 3. **Hollow markers** and marker edge width; separate error bar color and cap
    thickness; *error bar on every n-th point* for dense data.
 4. **Step plot** (drawstyle) for spectra and histograms of counts.
@@ -642,6 +720,54 @@ In order of demand:
    temperatures, with a colormap across the series.
 7. **Contour lines** and filled contours for 2-D data.
 8. **Bar chart** for categories.
+9. **Allan deviation** (asked for by the user, 2026-10-26; decision 0036):
+   σ_y(τ) of a time series against τ, on log-log axes, the standard figure
+   for the stability of clocks, lasers, gyroscopes and sensors. A plot type
+   of its own, computed like a histogram is: the model stores what is
+   computed, the renderer and the script compute it with the same NumPy.
+   - **Input**: one column of fractional frequency values y, or of phase
+     x in s; the sample interval τ0 as a number, or from a column of times
+     (refused, with a message, when the times are not evenly spaced).
+   - **Variant**: overlapping ADEV first. From phase x (for frequency data
+     x = τ0 · cumsum(y), with a leading 0), N phase points and τ = m·τ0:
+     σ²(τ) = Σ (x[i+2m] − 2x[i+m] + x[i])² / (2 τ² (N − 2m)). Modified
+     ADEV, Hadamard deviation and time deviation later, as a choice.
+   - **τ values**: octaves (m = 1, 2, 4, …) by default, or decades (1, 2,
+     5, 10, …), or every m; up to m = (N − 1) // 2.
+   - **Error bars**: σ / √(N − 2m) at first; χ² confidence intervals
+     (equivalent degrees of freedom, `scipy.stats.chi2`) later.
+   - **Adding one** sets both axes of the panel to log and labels them
+     τ (s) and σ_y(τ), as adding residuals sets up their panel.
+   - **The script** defines a short function `overlapping_adev(phase, tau0,
+     m)` and calls it; no `allantools`.
+   - **Not offered**: points left out (F2), which would cut the series;
+     NaN in the column is a problem in the list, not silently skipped.
+   - **Tests**: the reference values in NIST SP 1065 (section 12, the
+     1000-point test set), white frequency noise falling as τ^(−1/2) with
+     the known level, both inputs (frequency and phase) giving the same
+     curve, and the pixel equivalence of the script.
+
+   **Done** (2026-10-26), as planned:
+   - `AllanDeviationPlot` ("allan"), computed in `figscribe/allan.py`;
+     the script defines `overlapping_adev` and repeats the steps.
+   - A tile in the plot dialog, with "Values" and an optional "Times".
+   - Added to an empty panel, the axes become log-log, τ (s) against
+     σ_y(τ).
+   - "Sample interval" is greyed while a column of times gives it.
+   - A series with gaps is not drawn, in figscribe and the script alike,
+     and the problem list says so; uneven times are refused in words.
+
+   Checked against `allantools` outside the repository: agreement to 10⁻¹⁴
+   for every spacing and for phase input. The NIST test series gives
+   0.2922319 at τ = 1 and 0.09159953 at τ = 10, as published, and its
+   mean 0.4897745 (the series starts with the seed itself).
+   *Learned:* `2 ** np.arange(64)` overflows to a negative number at 2⁶³,
+   which then passes `m <= top`; 62 octaves are enough. In the edge-data
+   matrix, values at or below zero on a log axis are no problem for an
+   Allan deviation: the axis shows σ, not the values.
+   *Follow-ups:* modified ADEV, Hadamard and time deviation as a choice;
+   χ² confidence intervals; the plot dialog could pick a column named "t"
+   or "time" as the times.
 
 ### F5 Axes for publication — M
 
@@ -721,6 +847,14 @@ and switch figures (tabs or the outline), *Export all*, and
 adds things in the order a figure is built (Data, Panel, Plot, Fit, Note,
 since 2026-10-26); *Figure* joins it after *Data*, as the user proposed.
 
+**Done** (2026-10-26, decision 0037): a tab bar above the preview while a
+project has several figures (the user's choice: tabs and the outline), the
+same menu in both (rename, duplicate, move, delete), *Insert > Add Figure*
+and *Duplicate Figure*, *Figure* in the toolbar, *File > Export All
+Figures…*, `figscribe script --figure NAME` and `--all`. A new figure takes
+the shown one's look. *Follow-ups:* the assistant's preview and script tools
+use the shown figure and cannot name another; a figure from a template.
+
 ### F9 Reading values off the figure — S
 
 A data cursor: hover shows the nearest point's x and y in the status bar; a
@@ -734,8 +868,86 @@ is still asked for when plotting measurements. Decide each before building:
 - **Scale and offset per plotted column** (unit conversion, baseline
   subtraction, normalise to maximum), stored on the column reference and
   written as one line in the script. Small, but touches the non-goal.
+  *Decided* (2026-10-26, decision 0041): a factor and a start at zero per
+  plot and axis, on the data, with a range per plot; planned as F11.
+  Baseline subtraction and normalising stay open.
 - **Smoothing** (moving average, Savitzky–Golay) as a derived plot.
 - **Peak finding** (`scipy.signal.find_peaks`) that adds notes at the peaks.
+
+*Decided in part* (2026-10-26, decision 0036): an analysis is in scope when
+it is a standard figure of a field, a few lines of NumPy or SciPy in the
+script, and a plot with a few settings; the model stores what is computed,
+never the result. The Allan deviation is the first (F4.9). The three above
+are judged by the same points when they come up.
+
+### F11 Units and a range per plot — M
+
+Asked for by the user (2026-10-26): show times in min, h or days, counted
+from the start, and draw a plot over part of its data only. Decided with
+the user in decision 0041: the conversion acts on the data, it can start at
+zero, and the range is given in x values.
+
+1. **Model.** `Conversion(factor > 0, from_start: bool, unit: str | None)`;
+   `x_conversion` and `y_conversion` (None by default) on line, points and
+   error bars, `x_conversion` on a histogram (its values) and an Allan
+   deviation (τ, factor only: `from_start` does nothing there and is greyed
+   by a B8.4 rule). `x_range: tuple[float, float] | None` on the same five,
+   ordered like `fit_range`, in shown values. Shown = (value − nanmin) ×
+   factor; errors and bands × factor. Defaults leave every 0.1.0 file as it
+   is, so no migration.
+2. **One place for the arithmetic**, used by renderer and code generator,
+   as `render/ticks.scaling` is for the prefix: the converted column, the
+   kept rows of a plot (range, then left-out rows, then non-finite x), and
+   how the script writes the factor (`/ 3600`, `* 1000`).
+3. **Renderer.** Lines, points and error bars draw only the rows in range;
+   left-out rows outside it are not drawn. A histogram counts the values in
+   range, with the bins of a bin count spanning it (`np.histogram`'s
+   `range`). An Allan deviation takes the samples whose time since the
+   first lies in range, τ0 unchanged; its τ are then converted.
+4. **Fits and residuals.** A fit and its residuals use the converted, kept
+   rows; its `fit_range` must lie within `x_range` (else a problem in the
+   list). A command for the conversion converts the plot's `x_range` and its
+   fits' `fit_range` along and fits again in the same undo step, refused
+   like leaving a point out when a fit then has too few points or fails;
+   held values and bounds stay as typed.
+5. **The axis follows**, in the same step: its unit text becomes the
+   conversion's unit when it was the old one or empty; its fixed limits,
+   ticks, step and the reference lines, ranges and notes on it are
+   converted along when no other data plot is drawn against that axis.
+6. **Code generator.** One line per converted column, named after column
+   and unit (`t_h`, `t_scaled` without a unit, numbered on a clash), with a
+   comment ("h since the start"); the range joins the plot's `kept` mask.
+   Equivalence cases: error bars with both conversions, a band and a fit;
+   a histogram with a range; an Allan deviation with a conversion and a
+   range.
+7. **Property panel.** In the plot's data section: "x in" with "as in the
+   file", "min (÷ 60)", "h (÷ 3600)", "days (÷ 86 400)", "ms (× 1000)" and
+   "another factor" (factor and unit fields); "Start at 0"; and "Use only x
+   from … to …" (for a histogram "values", for an Allan deviation "times").
+   Names, tooltips, a field-test object in `everything.py`.
+8. **Problem list and edge data.** A range with no rows in it; a fit range
+   outside the plot's range; an Allan range with a gap or too few samples;
+   a conversion of a column that is all NaN. Cases in the edge matrix.
+9. **Assistant.** `set_field` on the new fields goes through the same
+   command as the panel, so the fits are run again; `tools/spec.py` names
+   them.
+10. **Docs.** CHANGELOG, README, the manual checklist in `docs/testing.md`.
+
+**Done** (2026-10-27, decision 0041): `convert.py` holds the arithmetic,
+`units.py` the commands `set_conversion` and `set_range`, which the panel
+and the assistant's `set_field` both use; equivalence cases for error bars,
+a histogram and an Allan deviation, a baseline image `converted`, edge cases
+and a line in `everything.py` with a factor of its own and a range. Unlike
+item 1, "Start at 0" is not offered for an Allan deviation rather than
+greyed: no state would make it count, and a greying rule needs one.
+*Learned:* the axis's unit can only follow when it is known what it showed
+before, so a conversion without a unit counts the axis's own; the script
+needs the range as a mask apart from `kept`, which also marks the rows drawn
+apart.
+
+*Follow-ups, only if asked:* the conversion in the plot dialog; dragging
+the range in the preview; a row range; converted positions of a color
+mesh; date axes (F5.5) for timestamps instead of hours since the start.
 
 ---
 
@@ -784,6 +996,21 @@ template to an existing figure is one undo step.
 - After *Add fit*, offer *Show result in figure* and *Add residuals*.
 - Remember per file type the last import options and column choice.
 - Keyboard shortcuts for every menu action and for switching panels.
+- **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
+  **Done**: in the import dialog's look. The kinds are tiles with icons,
+  and a kind without data is disabled and says what it needs. The columns
+  read as a sentence ("Plot U against t ± dU"), by name when there is one
+  file. Only the fields of the chosen kind are shown. A column named as the
+  error of y is taken, and starts error bars. A preview draws the plot with
+  the data through the renderer. "to Panel A ▾" says where it goes, with "A
+  new panel to the right" in the same undo step. An empty panel gets its
+  axes named after the columns, as after the import. Enter adds the plot.
+  *Learned:* a focused QPushButton in a dialog becomes the default button
+  unless `autoDefault` is off, so Enter on a tile chose the tile; and a
+  button box built from Cancel alone plus a custom Accept button made
+  Cancel the default. *Follow-up:* the import dialog's "Choose columns
+  myself…" opens this dialog after the import, a second step; it could be
+  part of the import dialog instead.
 
 ---
 
@@ -833,6 +1060,10 @@ The version is 0.1.0, the classifier "Alpha", the release notes are in
 state installs into a fresh environment, and `figscribe script` writes a
 script from the bundled example that runs there. From now on, project files
 of a release must open in later ones (rule 9 above).
+**Released** the same day: PR #78 brought `develop` into `main`, the GitHub
+release `v0.1.0` ran `release.yml`, and `pip install "figscribe[chat]"` from
+PyPI into a fresh environment starts the window and writes a working script
+from the example.
 
 ### R5 The assistant: measure models (carried over from the brief) — M
 
@@ -907,7 +1138,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
-| F10 | Scale/offset per column, smoothing, peak finding: in scope or not? |
+| F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
 | Phase 5 | German user interface? |

@@ -10,7 +10,8 @@ hit testing, so selection works on exactly what is drawn.
 The wheel zooms and dragging pans a panel; in an axis' frame, as drawn
 around it when selected, they zoom and pan that axis alone. That view lives
 only here, until "Use as axis range" writes it into the model. Dragging a
-legend moves it, one undo step on release.
+legend moves it, one undo step on release. A double-click on a label, a
+title, a legend entry or a note edits its text where it is drawn.
 """
 
 from __future__ import annotations
@@ -48,13 +49,33 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from figscribe.commands import CommandError, Macro, SetField, find
+from figscribe.commands import (
+    CommandError,
+    Macro,
+    SetField,
+    copy_style,
+    drawing_order,
+    find,
+    to_front,
+)
 from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
+from figscribe.gui.inplace import Editable, open_editor
 from figscribe.gui.markings import ENTRIES, add, marking
-from figscribe.gui.names import size_text
+from figscribe.gui.names import artist_name, size_text
+from figscribe.gui.resize import (
+    HANDLE,
+    Corner,
+    Gap,
+    bounds,
+    corners,
+    gaps,
+    grabbed,
+    ratios,
+)
+from figscribe.model.validate import FITTABLE
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
 from figscribe.render.ticks import ticks_that_fit
@@ -67,6 +88,8 @@ EMPTY_HINT = (
 )
 CAPTION = 30
 """Room below the figure for its size and resolution."""
+TEXT_NAMES = {"text": "note", "label": "label", "title": "title"}
+"""How the undo step names the text edited where it is drawn."""
 DRAG_THRESHOLD = 4
 """Logical pixels the mouse moves before a press becomes a drag."""
 ZOOM_STEP = 1.25
@@ -98,6 +121,8 @@ class _Press:
     """The Matplotlib legend under the press, which a drag moves."""
     note: object = None
     """The Matplotlib annotation under the press, which a drag moves."""
+    handle: Corner | Gap | None = None
+    """An inset's corner or a gap of the grid, which a drag resizes."""
 
     @property
     def moving(self):
@@ -109,6 +134,11 @@ class _Press:
 class Preview(QWidget):
     view_changed = Signal()
     """The zoomed or panned view changed, or was dropped."""
+    fit_requested = Signal(str)
+    """Fit the plot with this id, from its menu; the window asks how."""
+    same_range_requested = Signal(str, str)
+    """Give every panel the range this panel shows on an axis: (panel id,
+    "x" or "y"), from its menu."""
 
     def __init__(self, document: Document, parent: QWidget | None = None):
         super().__init__(parent)
@@ -122,6 +152,7 @@ class Preview(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumSize(200, 150)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.setMouseTracking(True)  # the cursor shows what a drag would resize
         self._figure: MplFigure | None = None
         self._image: QImage | None = None
         self._origin = QPointF()
@@ -145,6 +176,7 @@ class Preview(QWidget):
         self.document = document
         self.view = {}
         document.changed.connect(self.refresh)
+        document.figure_changed.connect(self.refresh)
         document.selection_changed.connect(self.update)
         self.refresh()
 
@@ -283,6 +315,9 @@ class Preview(QWidget):
         if box is not None:
             painter.setPen(QPen(QColor(theme.ACCENT), 1.5, Qt.PenStyle.DashLine))
             painter.drawRoundedRect(box, 3, 3)
+        press = self._press
+        if press is not None and press.handle is not None and press.dragging:
+            self._paint_resize(painter, press.handle, press.last)
         moved = self._moved_legend_rect()
         if moved is not None:
             painter.setPen(QPen(QColor(theme.ACCENT), 1.5))
@@ -387,6 +422,15 @@ class Preview(QWidget):
                 axis = ax.xaxis if field == "x" else ax.yaxis
                 low, high = axis.get_view_interval()
                 return (min(low, high), max(low, high))
+        return None
+
+    def axis_range(self, oid: str) -> tuple[float, float] | None:
+        """The range an axis shows right now, as drawn: the first end may be
+        the higher one, if the axis is turned around."""
+        for ax, field in self._model_axes():
+            if axis_id(_host(ax), field) == oid:
+                low, high = ax.get_xlim() if field == "x" else ax.get_ylim()
+                return (float(low), float(high))
         return None
 
     def _model_axes(self):
@@ -535,6 +579,16 @@ class Preview(QWidget):
             self.view_changed.emit()
             self._place_view_bar()
 
+    def drop_view(self, axes_ids: list[str]) -> None:
+        """Forget the zoom of these panels, as when their ranges are set from
+        elsewhere: the drawing then shows the ranges in the model."""
+        gone = [oid for oid in axes_ids if oid in self.view]
+        for oid in gone:
+            del self.view[oid]
+        if gone:
+            self.view_changed.emit()
+            self._place_view_bar()
+
     def adopt_view(self) -> None:
         """Write the zoomed or panned view into the model as axis ranges."""
         if not self.view:
@@ -623,6 +677,10 @@ class Preview(QWidget):
         if self._figure is None:
             self.document.select(None)
             return
+        handle = self.handle_at(point)
+        if handle is not None:
+            self._press = _Press(point, point, handle=handle)
+            return
         ax, axis = self.axes_at(point), "both"
         if ax is None:
             ax, axis = self._axis_under(point)
@@ -638,15 +696,16 @@ class Preview(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         press = self._press
-        if press is None:
-            return
         point = event.position()
+        if press is None:
+            self._show_handle(point)
+            return
         if not press.dragging:
             moved = point - press.start
             if abs(moved.x()) + abs(moved.y()) < DRAG_THRESHOLD:
                 return
             press.dragging = True
-        if press.moving is None and press.axes_id is not None:
+        if press.moving is None and press.handle is None and press.axes_id is not None:
             delta = point - press.last
             self.pan(press.axes_id, delta.x(), delta.y(), press.axis)
         press.last = point
@@ -658,6 +717,8 @@ class Preview(QWidget):
             return
         if not press.dragging:
             self.document.select(self.object_at(press.start))
+        elif press.handle is not None:
+            self.resize_to(press.handle, event.position())
         elif press.legend is not None:
             moved = event.position() - press.start
             self.move_legend(press.legend.get_gid(), moved.x(), moved.y())
@@ -696,10 +757,12 @@ class Preview(QWidget):
         return plot_id, row
 
     def context_menu(self, point: QPointF) -> QMenu | None:
-        """What can be done at `point`: leave the point there out of its plot
-        and the plot's fits, or take it back in; and, in a panel, add a
-        reference line or a shaded range there."""
+        """What can be done at `point`: with the plot there, style it like
+        another, change its drawing order, fit it or hide it; leave the point
+        there out of its plot and the plot's fits, or take it back in; and,
+        in a panel, add a reference line or a shaded range there."""
         menu = QMenu(self)
+        self._plot_entries(menu, point)
         found = self.point_at(point)
         if found is not None:
             plot_id, row = found
@@ -711,13 +774,63 @@ class Preview(QWidget):
                 )
             else:
                 text, rows = f"Leave out row {row + 1}", [*left_out, row]
+            if menu.actions():
+                menu.addSeparator()
             menu.addAction(text, lambda: self._leave_out(plot_id, rows))
         ax = self.axes_at(point)
         if ax is not None:
             if menu.actions():
                 menu.addSeparator()
             self._marking_entries(menu, ax, point)
+            self._range_entries(menu, ax)
         return menu if menu.actions() else None
+
+    def _plot_entries(self, menu: QMenu, point: QPointF) -> None:
+        """What can be done with the plot at `point`, if there is one."""
+        oid = self.object_at(point)
+        try:
+            plot = find(self.document.project, oid) if oid else None
+        except CommandError:
+            return
+        if plot is None or not hasattr(plot, "kind") or plot.kind == "annotation":
+            return
+        project = self.document.project
+        others = [
+            a
+            for axes in self.document.figure.axes
+            for a in axes.artists
+            if a.id != plot.id and copy_style(project, plot.id, a.id).steps
+        ]
+        like = menu.addMenu("Style like")
+        for other in others:
+            name = artist_name(other)
+            like.addAction(name, lambda o=other: self._style_like(plot, o))
+        like.setEnabled(bool(others))
+        drawn = drawing_order(project, plot.id)
+        front = menu.addAction(
+            "Bring to front", lambda: self._push(to_front(project, plot.id, True))
+        )
+        front.setEnabled(drawn[-1] is not plot)
+        back = menu.addAction(
+            "Send to back", lambda: self._push(to_front(project, plot.id, False))
+        )
+        back.setEnabled(drawn[0] is not plot)
+        if isinstance(plot, FITTABLE):
+            menu.addAction("Fit…", lambda: self.fit_requested.emit(plot.id))
+        menu.addAction(
+            "Hide", lambda: self._push(SetField(plot.id, ("visible",), False, "Hide"))
+        )
+
+    def _style_like(self, plot, other) -> None:
+        self._push(copy_style(self.document.project, plot.id, other.id))
+
+    def _push(self, command) -> None:
+        if command is None:
+            return
+        try:
+            self.document.push(command)
+        except CommandError as exc:
+            self.show_error("The change was refused", str(exc))
 
     def _marking_entries(self, menu: QMenu, ax, point: QPointF) -> None:
         """A line or a range at the clicked spot of the panel `ax`."""
@@ -735,6 +848,21 @@ class Preview(QWidget):
                 text = f"Shade {'an' if name == 'x' else 'a'} {name} range here"
             menu.addAction(text, lambda m=made: self._add_marking(ax.get_gid(), m))
 
+    def _range_entries(self, menu: QMenu, ax) -> None:
+        """Give all panels the range of the panel `ax`, when there are others."""
+        figure = self.document.figure
+        panel = next((a for a in figure.axes if a.id == ax.get_gid()), None)
+        if panel is None or panel.inset is not None:
+            return
+        if not any(a is not panel and a.inset is None for a in figure.axes):
+            return
+        menu.addSeparator()
+        for field in ("x", "y"):
+            menu.addAction(
+                f"Same {field} range in all panels",
+                lambda f=field: self.same_range_requested.emit(panel.id, f),
+            )
+
     def _add_marking(self, axes_id: str, made) -> None:
         self.document.push(add(axes_id, made))
         self.document.select(made.id)
@@ -748,6 +876,193 @@ class Preview(QWidget):
             self.show_error("Cannot leave the point out", str(exc))
             return
         self.document.push(command)
+
+    # --- resizing an inset or the grid -------------------------------------
+
+    def handle_at(self, point: QPointF) -> Corner | Gap | None:
+        """The inset corner or the gap of the grid at `point`, if any."""
+        if self._figure is None or self.document.figure is None:
+            return None
+        x, y = self._to_display(point)
+        reach = HANDLE * self.devicePixelRatioF()
+        boxes = self._boxes()
+        for corner in corners(self.document.figure, boxes):
+            cx, cy = corner.at
+            if abs(cx - x) <= reach and abs(cy - y) <= reach:
+                return corner
+        for gap in gaps(self.document.figure, boxes):
+            if grabbed(gap, x, y, reach):
+                return gap
+        return None
+
+    def resize_to(self, handle: Corner | Gap, point: QPointF) -> None:
+        """Move the corner or the gap to `point`, as one undo step."""
+        figure = self.document.figure
+        x, y = self._to_display(point)
+        if isinstance(handle, Corner):
+            inset = find(self.document.project, handle.axes_id)
+            boxes = self._boxes()
+            parent, box = boxes.get(inset.inset.parent), boxes.get(inset.id)
+            if parent is None or box is None:
+                return
+            new = bounds(parent, box, handle.corner, x, y)
+            self._push(SetField(inset.id, ("inset", "bounds"), new, "Resize the inset"))
+            return
+        columns = handle.field == "width_ratios"
+        count = figure.layout.cols if columns else figure.layout.rows
+        current = getattr(figure.layout, handle.field)
+        new = ratios(current, count, handle, x if columns else y)
+        text = "Resize the columns" if columns else "Resize the rows"
+        self._push(SetField(figure.id, ("layout", handle.field), new, text))
+
+    def _boxes(self) -> dict[str, Bbox]:
+        """The box of each panel drawn, by its id; not of its right axis."""
+        return {
+            ax.get_gid(): ax.bbox
+            for ax in _all_axes(self._figure)
+            if ax.get_gid() and not ax.get_gid().endswith(RIGHT)
+        }
+
+    def _show_handle(self, point: QPointF) -> None:
+        """A resize cursor over what a drag would resize."""
+        handle = self.handle_at(point)
+        if isinstance(handle, Corner):
+            falling = handle.corner in ("upper left", "lower right")
+            shape = (
+                Qt.CursorShape.SizeFDiagCursor
+                if falling
+                else (Qt.CursorShape.SizeBDiagCursor)
+            )
+        elif isinstance(handle, Gap):
+            shape = (
+                Qt.CursorShape.SplitHCursor
+                if handle.field == "width_ratios"
+                else Qt.CursorShape.SplitVCursor
+            )
+        else:
+            self.unsetCursor()
+            return
+        self.setCursor(shape)
+
+    def _paint_resize(self, painter: QPainter, handle, point: QPointF) -> None:
+        """Where the inset's edges or the boundary will be on release."""
+        painter.setPen(QPen(QColor(theme.ACCENT), 1.5, Qt.PenStyle.DashLine))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        if isinstance(handle, Corner):
+            box = self._boxes().get(handle.axes_id)
+            if box is None:
+                return
+            i, j = (handle.corner.endswith("right"), handle.corner.startswith("upper"))
+            fixed = self._to_widget(box.x0 if i else box.x1, box.y0 if j else box.y1)
+            painter.drawRect(QRectF(fixed, point).normalized())
+        elif handle.field == "width_ratios":
+            low, high = handle.extent
+            top, bottom = self._to_widget(0, high).y(), self._to_widget(0, low).y()
+            painter.drawLine(QPointF(point.x(), top), QPointF(point.x(), bottom))
+        else:
+            low, high = handle.extent
+            left, right = self._to_widget(low, 0).x(), self._to_widget(high, 0).x()
+            painter.drawLine(QPointF(left, point.y()), QPointF(right, point.y()))
+
+    # --- texts edited where they are drawn ---------------------------------
+
+    def text_at(self, point: QPointF) -> Editable | None:
+        """The text at `point` that the model holds: a note, a legend entry,
+        a panel's title or an axis label; None if there is none."""
+        if self._figure is None or self.document.figure is None:
+            return None
+        x, y = self._to_display(point)
+        event = MouseEvent("button_press_event", self._figure.canvas, x, y)
+        project = self.document.project
+        panels = {a.id: a for a in self.document.figure.axes}
+        for ax in _all_axes(self._figure):
+            host = _host(ax)
+            if host not in panels:
+                continue  # a color bar
+            right = (ax.get_gid() or "").endswith(RIGHT)
+            for text in ax.texts:
+                if text.get_gid() and text.get_visible() and text.contains(event)[0]:
+                    note = find(project, text.get_gid())
+                    return self._editable(text, note.id, ("text",), note.text, True)
+            legend = ax.get_legend()
+            if legend is not None and legend.get_visible():
+                for text, oid in zip(
+                    legend.get_texts(), self._legend_ids(ax), strict=False
+                ):
+                    if oid and text.contains(event)[0]:
+                        label = find(project, oid).label or ""
+                        return self._editable(text, oid, ("label",), label)
+            if not right and _shown(ax.title) and ax.title.contains(event)[0]:
+                title = panels[host].title or ""
+                return self._editable(ax.title, host, ("title",), title)
+            fields = (
+                [("y_right", ax.yaxis)]
+                if right
+                else [
+                    ("x", ax.xaxis),
+                    ("y", ax.yaxis),
+                ]
+            )
+            for field, axis in fields:
+                drawn = axis.label
+                if _shown(drawn) and drawn.contains(event)[0]:
+                    current = getattr(panels[host], field).label or ""
+                    return self._editable(drawn, host, (field, "label"), current)
+        return None
+
+    def edit_text(self, editable: Editable) -> QWidget:
+        """A field over the text, which sets it when done."""
+        return open_editor(self, editable, lambda text: self._set_text(editable, text))
+
+    def _set_text(self, editable: Editable, text: str | None) -> None:
+        if text is None or text.strip() == editable.text.strip():
+            return
+        value: str | None = text.strip() or None
+        if editable.path == ("text",):
+            if value is None:
+                return  # a note without text would be gone; Delete does that
+            value = text.rstrip()
+        what = TEXT_NAMES.get(editable.path[-1], "text")
+        command = SetField(editable.oid, editable.path, value, f"Edit the {what}")
+        try:
+            self.document.push(command)
+        except CommandError as exc:
+            self.show_error("Cannot change the text", str(exc))
+
+    def _editable(self, text, oid: str, path, current: str, lines=False) -> Editable:
+        box = text.get_window_extent(self._figure.canvas.get_renderer())
+        rect = QRectF(self._to_widget(box.x0, box.y1), self._to_widget(box.x1, box.y0))
+        return Editable(oid, tuple(path), current, rect, lines)
+
+    def _legend_ids(self, ax) -> list[str | None]:
+        """The plot of each legend entry of `ax`, in the legend's order: its
+        own plots, then those of its right y axis."""
+        handles, _ = ax.get_legend_handles_labels()
+        twin = next(
+            (
+                other
+                for other in _all_axes(self._figure)
+                if other.get_gid() == f"{ax.get_gid()}{RIGHT}"
+            ),
+            None,
+        )
+        if twin is not None:
+            handles += twin.get_legend_handles_labels()[0]
+        ids = []
+        for handle in handles:
+            gid = handle.get_gid() if hasattr(handle, "get_gid") else None
+            if gid is None and hasattr(handle, "get_children"):
+                gid = next((c.get_gid() for c in handle.get_children()), None)
+            ids.append(gid)
+        return ids
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        editable = self.text_at(event.position())
+        if editable is None:
+            super().mouseDoubleClickEvent(event)
+            return
+        self._press = None
+        self.edit_text(editable)
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt naming
         menu = self.context_menu(QPointF(event.pos()))
@@ -817,6 +1132,11 @@ class Preview(QWidget):
         return QPointF(
             self._origin.x() + x / ratio, self._origin.y() + (height - y) / ratio
         )
+
+
+def _shown(text) -> bool:
+    """Whether a Matplotlib text is drawn, with something in it."""
+    return text.get_visible() and bool(text.get_text())
 
 
 def _host(ax) -> str:

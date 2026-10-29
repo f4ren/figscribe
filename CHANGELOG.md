@@ -3,6 +3,63 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
+## 0.2.0 — 2026-10-29
+
+**Figures**
+- Several figures in one project: tabs above the figure, *Insert > Add
+  Figure* (with the look of the shown one), duplicate, rename, reorder and
+  delete from a tab or the outline; *File > Export All Figures…*;
+  `figscribe script --figure NAME` and `--all`.
+- Error bands: an error bar plot draws its y errors as a shaded band around
+  the line, for dense data.
+- The Allan deviation: σ_y(τ) of an evenly sampled series, frequency or
+  phase, on log-log axes, for the stability of clocks, lasers and sensors.
+  The script computes it with a few lines of NumPy, no extra package.
+- The plot dialog shows the kinds as tiles, the columns as a sentence, a
+  preview with the data, and which panel the plot goes to.
+- Settings that do nothing in the current state are greyed out, and their
+  tooltip says why.
+- Units and a range per plot: show values in min, h, days, ms or by any
+  factor, counted from the start if wanted, and draw, count and fit only the
+  rows within a range of x. The axis, its marks and the plot's fits follow;
+  the script converts with one line of NumPy per column.
+
+**Finding things**
+- A search above the property panel (Ctrl+F) keeps the settings whose name
+  or explanation has the typed words.
+- A command palette (Ctrl+K) finds any menu action or setting by typing.
+- The property panel shows the settings used most first; the rest are
+  under *More*.
+- Several plots chosen with Ctrl or Shift in the outline: change their
+  color, marker or line for all at once, or delete them together.
+
+**Editing where it is drawn**
+- Double-click an axis label, title, legend entry or note to edit it in
+  place.
+- Drag an inset's corner to resize it, or the gap between two panels.
+- Right-click a plot: *Style like…*, *Bring to front*, *Send to back*,
+  *Fit…*, *Hide*.
+
+**Everyday actions**
+- *Edit > Duplicate* (Ctrl+D) copies the selected plots, panel or figure.
+  A panel comes with its plots, fits and insets, beside the original.
+- *Copy Style* and *Paste Style* (Ctrl+Alt+C, Ctrl+Alt+V) give one or
+  several plots the look of another, as one undo step.
+- *Same x range in all panels* and *Same y range in all panels*, from a
+  panel's menu in the outline or the preview.
+- *Edit > Copy Figure* (Ctrl+Shift+C) puts the figure on the clipboard as
+  PNG and SVG, for slides and documents. When figscribe closes, only the
+  bitmap stays on the clipboard.
+- *Show in Finder* (Explorer, file manager) on a data file in the outline.
+
+**Fixed**
+- With openai 3.38 or later, the assistant again says why Gemini refused a
+  request and how long to wait at a rate limit.
+- A color the panel refused no longer breaks the panel the next time it is
+  built.
+- The script names the encoding of a UTF-8 data file with letters beyond
+  ASCII, so that it also reads the file on Windows.
+
 ## 0.1.0 — 2026-10-26
 
 The first release to use: 0.0.1 and 0.0.2 only held the name on PyPI.

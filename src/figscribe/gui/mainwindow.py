@@ -6,7 +6,14 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSettings, QSize, QStandardPaths, Qt, QUrl
+from PySide6.QtCore import (
+    QEvent,
+    QSettings,
+    QSize,
+    QStandardPaths,
+    Qt,
+    QUrl,
+)
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -32,53 +39,69 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe.allan import allan_axes
 from figscribe.assistant.chat import Provider
 from figscribe.assistant.toolserver import ToolServer
-from figscribe.codegen import generate, script_name
+from figscribe.codegen import file_stems, generate, script_name
 from figscribe.commands import (
     CommandError,
     InsertItem,
     Macro,
     SetField,
+    add_figure,
     add_panel,
+    duplicate_artists,
+    duplicate_axes,
+    duplicate_figure,
     find,
+    paste_style,
     remove_artist,
+    remove_artists,
     remove_axes,
+    remove_figure,
     remove_source,
+    same_range,
 )
-from figscribe.commands.core import walk
+from figscribe.commands.core import noun, walk
 from figscribe.examples import bundled_example
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
-from figscribe.gui import markings, theme
+from figscribe.gui import clipboard, markings, reveal, theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.databar import DataBar
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
+from figscribe.gui.figures import FigureTabs, move_figure
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
-from figscribe.gui.names import artist_name
+from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
-from figscribe.gui.plotdialog import PlotDialog, add_plot
+from figscribe.gui.palette import CommandPalette, Entry, menu_entries
+from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
 from figscribe.gui.start import DOCS_URL, StartPage
 from figscribe.io import DataError, numpy_source
+from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import array_names, read_numpy
 from figscribe.model import (
+    AllanDeviationPlot,
     Annotation,
     ArrayRef,
     ArtistBase,
     Axes,
     AxisSpec,
     Colorbar,
+    ColumnRef,
+    Figure,
     FitCurve,
     Histogram,
     ImagePlot,
+    ResidualPlot,
 )
 from figscribe.model.validate import FITTABLE
-from figscribe.render import export
+from figscribe.render import export, export_bytes
 from figscribe.templates import template
 
 MCP_HELP = """\
@@ -100,6 +123,13 @@ DATA_FILTER = (
 )
 EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
 SCRIPT_FILTER = "Python script (*.py)"
+EXPORT_ALL_FORMATS = {
+    "PDF": ".pdf",
+    "SVG": ".svg",
+    "PNG": ".png",
+    "Python scripts": ".py",
+}
+"""What Export All Figures writes, each figure into a file of its own."""
 DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat", ".npy", ".npz"}
 NUMPY_SUFFIXES = {".npy", ".npz"}
 START_FILTER = (
@@ -132,6 +162,10 @@ class MainWindow(QMainWindow):
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         self.ask_text: Callable[[str, str], str | None] = self._ask_text
         """Asks for a line of text, None if cancelled; replaced in tests."""
+        self.ask_name: Callable[[str, str, str], str | None] = self._ask_name
+        """Asks for a name, given the current one; None if cancelled."""
+        self._copied_style: ArtistBase | None = None
+        """A copy of the plot whose style Copy Style took; pasted by Paste Style."""
         """Runs a dialog, True if accepted; replaced in tests."""
 
         self.preview = Preview(self.document)
@@ -149,10 +183,14 @@ class MainWindow(QMainWindow):
         self.code.save_requested.connect(self._script_dialog)
         self.code.hide()
         self.data_bar = DataBar(self.document)
+        self.figure_tabs = FigureTabs(self.document)
+        self.figure_tabs.requested.connect(self.figure_action)
+        self.figure_tabs.add_requested.connect(self.add_figure)
         figure_area = QWidget()
         column = QVBoxLayout(figure_area)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
+        column.addWidget(self.figure_tabs)
         column.addWidget(self.data_bar)
         column.addWidget(self.preview, 1)
         self.workspace = QSplitter(Qt.Orientation.Vertical)
@@ -180,18 +218,25 @@ class MainWindow(QMainWindow):
             lambda oid, side: self.add_panel(side, oid)
         )
         self.outline.delete_requested.connect(self._delete)
+        self.outline.figure_requested.connect(self.figure_action)
         self.outline.note_requested.connect(self.add_note)
         self.outline.marking_requested.connect(
             lambda oid, kind, orientation: self.add_marking(kind, orientation, oid)
         )
+        self.outline.same_range_requested.connect(self.same_range)
+        self.outline.reveal_requested.connect(self.reveal_source)
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
         self.properties_dock = self._dock(
-            "Properties", self.properties, Qt.DockWidgetArea.RightDockWidgetArea
+            "Properties",
+            _with_search(self.properties),
+            Qt.DockWidgetArea.RightDockWidgetArea,
         )
         self.properties.edit_fit = self.edit_fit
         self.preview.show_error = self.show_error
+        self.preview.fit_requested.connect(self._fit_plot)
+        self.preview.same_range_requested.connect(self.same_range)
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
@@ -407,9 +452,10 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.show_error(f"Cannot export to {path}", exc)
 
-    def export_script(self, path: str | Path) -> None:
-        """Write the Python script that draws the shown figure to `path`."""
-        figure = self.document.figure
+    def export_script(self, path: str | Path, figure=None) -> None:
+        """Write the Python script that draws `figure` (default: the shown
+        one) to `path`."""
+        figure = figure or self.document.figure
         if figure is None:
             return
         path = Path(path)
@@ -425,6 +471,50 @@ class MainWindow(QMainWindow):
             path.write_text(script, encoding="utf-8")
         except Exception as exc:
             self.show_error(f"Cannot write {path.name}", exc)
+
+    def export_all(self, folder: str | Path, suffix: str) -> list[Path]:
+        """Write every figure into `folder`, each named after it, as `suffix`
+        (".pdf", ".svg", ".png", or ".py" for its script); the paths written."""
+        folder = Path(folder)
+        written: list[Path] = []
+        for figure, path in zip(
+            self.document.project.figures,
+            export_names(self.document.project.figures, folder, suffix),
+            strict=True,
+        ):
+            try:
+                if suffix == ".py":
+                    self.export_script(path, figure)
+                else:
+                    export(figure, self.document.data, path)
+            except Exception as exc:
+                self.show_error(f"Cannot export {figure.name}", exc)
+                break
+            written.append(path)
+        return written
+
+    def _export_all_dialog(self) -> None:
+        folder = QFileDialog.getExistingDirectory(
+            self, "Export all figures into", str(self.document.project_dir or "")
+        )
+        if not folder:
+            return
+        formats = list(EXPORT_ALL_FORMATS)
+        chosen, ok = QInputDialog.getItem(
+            self, "Export all figures", "Each figure as:", formats, 0, False
+        )
+        if not ok:
+            return
+        suffix = EXPORT_ALL_FORMATS[chosen]
+        names = export_names(self.document.project.figures, Path(folder), suffix)
+        there = [p.name for p in names if p.exists()]
+        if there and not self.ask(
+            "Replace files",
+            f"{folder} already has {', '.join(there)}. Replace them?",
+        ):
+            return
+        written = self.export_all(folder, suffix)
+        self.statusBar().showMessage(f"Exported {len(written)} figures", 5000)
 
     def _script_dialog(self) -> None:
         figure = self.document.figure
@@ -474,7 +564,8 @@ class MainWindow(QMainWindow):
                 self.add_plot()
             return True
         steps = [InsertItem(None, "sources", source)]
-        steps += self._plot_steps(figure, artist, dialog)
+        axes = _axes_with_id(figure, self._target_axes(figure))
+        steps += self._plot_steps(figure, artist, axes, dialog.unit_of)
         self._push(Macro(f"Add {Path(source.path).name} and plot", steps))
         self.document.select(artist.id)
         return True
@@ -513,48 +604,85 @@ class MainWindow(QMainWindow):
         self.document.select(image.id)
         return True
 
-    def _plot_steps(self, figure, artist, dialog) -> list:
-        """Put `artist` into the target axes, naming its empty axes after the
-        plotted columns and their units."""
-        if isinstance(artist, Histogram):
+    def _plot_steps(self, figure, artist, axes: Axes | None, unit_of=None) -> list:
+        """Put `artist` into `axes`, or into a new panel if None; while the
+        panel is empty, name its axes after the plotted columns and units."""
+        unit_of = unit_of or (lambda column: None)
+        if isinstance(artist, AllanDeviationPlot):
+            labels = allan_axes()
+        elif isinstance(artist, Histogram):
             values = artist.values
             labels = {
-                "x": AxisSpec(
-                    label=str(values.column), unit=dialog.unit_of(values.column)
-                ),
+                "x": AxisSpec(label=str(values.column), unit=unit_of(values.column)),
                 "y": AxisSpec(label="Count"),
             }
-        else:
+        elif isinstance(getattr(artist, "x", None), ColumnRef):
             labels = {
-                name: AxisSpec(label=str(ref.column), unit=dialog.unit_of(ref.column))
+                name: AxisSpec(label=str(ref.column), unit=unit_of(ref.column))
                 for name, ref in (("x", artist.x), ("y", artist.y))
             }
-        axes_id = self._target_axes(figure)
-        if axes_id is None:
-            axes = Axes(artists=[artist], **labels)
-            return [InsertItem(figure.id, "axes", axes)]
-        axes = next(a for a in figure.axes if a.id == axes_id)
+        else:
+            labels = {}  # an image: its colour bar says what it shows
+        if axes is None:
+            return [InsertItem(figure.id, "axes", Axes(artists=[artist], **labels))]
         steps = [
-            SetField(axes_id, (name,), spec)
+            SetField(axes.id, (name,), spec)
             for name, spec in labels.items()
             if getattr(axes, name).label is None and not axes.artists
         ]
-        return [*steps, InsertItem(axes_id, "artists", artist)]
+        return [*steps, InsertItem(axes.id, "artists", artist)]
 
     def add_plot(self) -> None:
-        """Add a plot of the data's columns to the selected axes."""
+        """Add a plot of the data's columns, to the panel chosen in the dialog."""
         columns = self.document.column_choices()
         arrays = self.document.array_choices()
         figure = self.document.figure
         if not (columns or arrays) or figure is None:
             self.show_error("Nothing to plot", "Import a data file first.")
             return
-        dialog = PlotDialog(columns, self, arrays=arrays)
+        target = self._target_axes(figure)
+        targets = [(panel_name(figure, axes), axes.id) for axes in figure.axes]
+        if figure.axes:
+            targets.append(("A new panel to the right", NEW_PANEL))
+        dialog = PlotDialog(
+            columns,
+            self,
+            arrays=arrays,
+            targets=targets,
+            target=target,
+            data=self.document.data,
+            summary=self._data_summary(columns),
+        )
         if not self.run_dialog(dialog):
             return
         artist = dialog.artist()
-        self._push(add_plot(figure, self._target_axes(figure), artist))
+        steps = []
+        if dialog.target_id() == NEW_PANEL:
+            beside = _axes_with_id(figure, target)
+            if beside.inset is not None:
+                beside = _axes_with_id(figure, beside.inset.parent)
+            command, axes = add_panel(self.document.project, beside.id, "right")
+            steps.append(command)
+        else:
+            axes = _axes_with_id(figure, dialog.target_id())
+        steps += self._plot_steps(figure, artist, axes)
+        self._push(Macro(f"Add {noun(artist)}", steps))
         self.document.select(artist.id)
+
+    def _data_summary(self, columns) -> str:
+        """ "scan.csv · 41 rows", or how many files there are."""
+        sources = self.document.project.sources
+        if len(sources) != 1:
+            return f"{len(sources)} data files"
+        source = sources[0]
+        name = Path(source.path).name
+        rows = getattr(source, "row_count", None)
+        if rows is None and columns:
+            try:
+                rows = len(self.document.data(columns[0][1]))
+            except Exception:  # noqa: BLE001 - the summary is only a courtesy
+                return name
+        return name if rows is None else f"{name} · {rows} rows"
 
     def _target_axes(self, figure) -> str | None:
         """The selected axes, the axes of the selected plot, or the first one."""
@@ -595,6 +723,10 @@ class MainWindow(QMainWindow):
             return
         self._push(command)
         self.document.select(fit.id)
+
+    def _fit_plot(self, oid: str) -> None:
+        self.document.select(oid)
+        self.add_fit()
 
     def edit_fit(self, fit_id: str) -> None:
         """Open the fit dialog on the fit `fit_id` and take what it changes,
@@ -692,6 +824,54 @@ class MainWindow(QMainWindow):
         fittable = [a for a in plots if isinstance(a, FITTABLE)]
         return fittable[0] if len(fittable) == 1 else None
 
+    def add_figure(self) -> None:
+        """Add a figure after the shown one, with its look, and show it."""
+        shown = self.document.figure
+        after = shown.id if shown is not None else None
+        command, figure = add_figure(self.document.project, after)
+        self._push(command)
+        self.document.select(figure.id)
+
+    def duplicate_figure(self, oid: str | None = None) -> None:
+        """Copy the figure `oid` (default: the shown one) and show the copy."""
+        oid = oid or (self.document.figure.id if self.document.figure else None)
+        if oid is None:
+            return
+        command, copy = duplicate_figure(self.document.project, oid)
+        self._push(command)
+        self.document.select(copy.id)
+
+    def rename_figure(self, oid: str | None = None) -> None:
+        figure = self._figure(oid)
+        if figure is None:
+            return
+        name = self.ask_name("Rename figure", "Name of the figure:", figure.name)
+        if name and name != figure.name:
+            self._push(SetField(figure.id, ("name",), name, "Rename figure"))
+
+    def figure_action(self, oid: str, what: str) -> None:
+        """Do `what` with the figure `oid`, as the figure menu offers it."""
+        if what == "rename":
+            self.rename_figure(oid)
+        elif what == "duplicate":
+            self.duplicate_figure(oid)
+        elif what in ("earlier", "later"):
+            try:
+                move_figure(self.document, oid, -1 if what == "earlier" else 1)
+            except CommandError as exc:
+                self.show_error("Cannot move the figure", exc)
+        elif what == "delete":
+            self._delete(oid)
+
+    def _figure(self, oid: str | None):
+        if oid is None:
+            return self.document.figure
+        return next((f for f in self.document.project.figures if f.id == oid), None)
+
+    def _ask_name(self, title: str, prompt: str, current: str) -> str | None:
+        text, ok = QInputDialog.getText(self, title, prompt, text=current)
+        return text.strip() or None if ok else None
+
     def add_panel(self, side: str, oid: str | None = None) -> None:
         """Add an empty panel beside or inside the panel `oid` (default: the
         selected one, or that of the selected plot, or the first)."""
@@ -713,6 +893,34 @@ class MainWindow(QMainWindow):
                 return
             self._push(command)
         self.document.select(new.id)
+
+    def find_setting(self) -> None:
+        """Put the cursor in the search above the property panel."""
+        self.properties.search.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.properties.search.selectAll()
+
+    def open_palette(self) -> None:
+        """Find any menu action or setting of the selection by typing."""
+        entries = [
+            entry
+            for entry in menu_entries(self.menuBar())
+            if entry.run != self.palette_action.trigger
+        ]
+        entries += [
+            Entry(
+                caption,
+                f"Setting · {title}",
+                lambda c=caption, t=title: self._reveal_setting(c, t),
+            )
+            for caption, title, _ in self.properties.settings()
+        ]
+        palette = CommandPalette(entries, self)
+        if self.run_dialog(palette) and palette.chosen is not None:
+            palette.chosen.run()
+
+    def _reveal_setting(self, caption: str, title: str) -> None:
+        self.properties_dock.show()
+        self.properties.reveal(caption, title)
 
     def show_chat(self, on: bool) -> None:
         """Show or hide the built-in assistant under the preview."""
@@ -763,7 +971,12 @@ class MainWindow(QMainWindow):
     # --- edit actions -------------------------------------------------------
 
     def delete_selected(self) -> None:
-        """Remove the selected artist or axes, with what depends on it."""
+        """Remove the selected object, with what depends on it; several
+        plots chosen together go at once."""
+        several = self.document.selection
+        if len(several) > 1:
+            self._push(remove_artists(self.document.project, several))
+            return
         oid = self.document.selected
         for obj, _, field in walk(self.document.project):
             if obj.id != oid:
@@ -772,6 +985,11 @@ class MainWindow(QMainWindow):
                 self._push(remove_artist(self.document.project, oid))
             elif isinstance(obj, Axes):
                 self._push(remove_axes(self.document.project, oid))
+            elif field == "figures":
+                try:
+                    self._push(remove_figure(self.document.project, oid))
+                except CommandError as exc:
+                    self.show_error("Cannot delete the figure", exc)
             elif field == "sources":
                 self._remove_source(oid)
             return
@@ -800,12 +1018,127 @@ class MainWindow(QMainWindow):
         except CommandError as exc:
             self.show_error("The change was refused", exc)
 
+    def _chosen(self) -> list:
+        """The objects selected, leaving out an axis, which stands for no object
+        of its own."""
+        project = self.document.project
+        chosen = []
+        for oid in self.document.selection:
+            if split_axis(oid) is not None:
+                return []
+            try:
+                chosen.append(find(project, oid))
+            except CommandError:
+                return []
+        return chosen
+
+    def duplicate_selected(self) -> None:
+        """Copy what is selected and select the copy: a figure, a panel with its
+        plots (beside it), or plots (right after the originals)."""
+        chosen = self._chosen()
+        if not _can_duplicate(chosen):
+            return
+        project = self.document.project
+        if isinstance(chosen[0], Figure):
+            self.duplicate_figure(chosen[0].id)
+            return
+        try:
+            if isinstance(chosen[0], Axes):
+                command, copy = duplicate_axes(project, chosen[0].id)
+                made = [copy]
+            else:
+                command, made = duplicate_artists(project, [o.id for o in chosen])
+            self.document.push(command)
+        except CommandError as exc:
+            self.show_error("Cannot duplicate", exc)
+            return
+        self.document.select_many([each.id for each in made])
+
+    def copy_style(self) -> None:
+        """Take the look of the selected plot, for Paste Style."""
+        chosen = self._chosen()
+        if not chosen or not isinstance(chosen[-1], ArtistBase):
+            return
+        self._copied_style = chosen[-1].model_copy(deep=True)
+        self._update_state()
+        self.statusBar().showMessage(
+            f"Copied the style of {artist_name(chosen[-1])}", 4000
+        )
+
+    def paste_style(self) -> None:
+        """Give the selected plots the look Copy Style took, as one step."""
+        plots = [o.id for o in self._chosen() if isinstance(o, ArtistBase)]
+        if self._copied_style is None or not plots:
+            return
+        command = paste_style(self.document.project, plots, self._copied_style)
+        if not command.steps:
+            self.statusBar().showMessage(
+                "Nothing to change: the plot already has this style", 4000
+            )
+            return
+        self._push(command)
+
+    def same_range(self, axes_id: str, field: str) -> None:
+        """Give every panel of the figure the range that the panel `axes_id`
+        shows on its x or y axis, as one step."""
+        project = self.document.project
+        shown = self.preview.axis_range(axis_id(axes_id, field))
+        if shown is None:
+            self.show_error("Cannot read the range", "The panel is not drawn.")
+            return
+        try:
+            command, skipped = same_range(project, axes_id, field, shown)
+        except CommandError as exc:
+            self.show_error("Cannot give the panels one range", exc)
+            return
+        if command.steps:
+            # A panel zoomed in the preview shows the new range, not the zoom.
+            self.preview.drop_view([step.target for step in command.steps])
+            self._push(command)
+            message = f"All panels show the {field} range now."
+        else:
+            message = f"All panels show this {field} range already."
+        if skipped:
+            figure = self.document.figure
+            names = ", ".join(panel_name(figure, each) for each in skipped)
+            message += f" Left out, as their axis has another scale or unit: {names}."
+        self.statusBar().showMessage(message, 8000)
+
+    def copy_figure(self) -> None:
+        """Put the shown figure on the clipboard as PNG and SVG, exactly as
+        exporting would write them, for slides and documents."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        try:
+            png = export_bytes(figure, self.document.data, ".png")
+            svg = export_bytes(figure, self.document.data, ".svg")
+        except Exception as exc:
+            self.show_error("Cannot copy the figure", exc)
+            return
+        clipboard.put_figure(png, svg)
+        self.statusBar().showMessage("Copied the figure to the clipboard", 5000)
+
+    def reveal_source(self, oid: str) -> None:
+        """Show the data file in the system's file manager."""
+        source = find(self.document.project, oid)
+        path = resolve_path(source.path, self.document.base_dir)
+        if not path.exists():
+            self.show_error(
+                "Cannot show the file",
+                f"{path.name} is not at {path}. Use “Locate file…” in the bar "
+                "above the figure to find it again.",
+            )
+            return
+        reveal.show_in_file_manager(path)
+
     # --- window -------------------------------------------------------------
 
     def set_document(self, document: Document) -> None:
         document.allow_preview = self.document.allow_preview
         self.document = document
         views = (
+            self.figure_tabs,
             self.data_bar,
             self.preview,
             self.outline,
@@ -864,6 +1197,15 @@ class MainWindow(QMainWindow):
         selected = self.document.selected
         self.delete_action.setEnabled(
             selected is not None and split_axis(selected) is None
+        )
+        chosen = self._chosen()
+        self.duplicate_action.setEnabled(_can_duplicate(chosen))
+        self.copy_style_action.setEnabled(
+            bool(chosen) and isinstance(chosen[-1], ArtistBase)
+        )
+        self.paste_style_action.setEnabled(
+            self._copied_style is not None
+            and any(isinstance(obj, ArtistBase) for obj in chosen)
         )
         path = self.document.path
         self._project_name.setText(path.stem if path is not None else "Untitled")
@@ -927,6 +1269,7 @@ class MainWindow(QMainWindow):
         self.script_action = self._action(
             file, "Export &Python Script…", self._script_dialog, "Ctrl+Shift+E"
         )
+        self._action(file, "Export A&ll Figures…", self._export_all_dialog)
         file.addSeparator()
         self._action(file, "&Quit", self.close, QKeySequence.StandardKey.Quit)
 
@@ -941,11 +1284,32 @@ class MainWindow(QMainWindow):
         self.delete_action = self._action(
             edit, "&Delete", self.delete_selected, QKeySequence.StandardKey.Delete
         )
+        self.duplicate_action = self._action(
+            edit, "Du&plicate", self.duplicate_selected, "Ctrl+D"
+        )
+        edit.addSeparator()
+        self.copy_style_action = self._action(
+            edit, "Copy &Style", self.copy_style, "Ctrl+Alt+C"
+        )
+        self.paste_style_action = self._action(
+            edit, "Paste St&yle", self.paste_style, "Ctrl+Alt+V"
+        )
+        self.copy_figure_action = self._action(
+            edit, "&Copy Figure", self.copy_figure, "Ctrl+Shift+C"
+        )
+        edit.addSeparator()
+        self._action(edit, "&Find Setting", self.find_setting, "Ctrl+F")
+        self.palette_action = self._action(
+            edit, "Find Setting or &Action…", self.open_palette, "Ctrl+K"
+        )
 
         insert = self.menuBar().addMenu("&Insert")
         self.import_action = self._action(
             insert, "&Import Data…", lambda: self.import_csv(), "Ctrl+I"
         )
+        self.add_figure_action = self._action(insert, "Add Fi&gure", self.add_figure)
+        self._action(insert, "D&uplicate Figure", lambda: self.duplicate_figure())
+        insert.addSeparator()
         self.plot_action = self._action(
             insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P"
         )
@@ -1017,10 +1381,14 @@ class MainWindow(QMainWindow):
         bar.addWidget(spacer)
 
         # What can be added, in the order a figure is built: data, then what
-        # holds what. Figure joins after Data once a project has several.
+        # holds what.
         self.import_action.setIcon(theme.icon("plus"))
         self.import_action.setIconText("Data")
         bar.addAction(self.import_action)
+        self.add_figure_action.setIcon(theme.icon("plus"))
+        self.add_figure_action.setIconText("Figure")
+        self.add_figure_action.setToolTip("Add a figure after the shown one")
+        bar.addAction(self.add_figure_action)
         panel = QToolButton()
         panel.setText("Panel")
         panel.setIcon(theme.icon("plus"))
@@ -1078,6 +1446,21 @@ class MainWindow(QMainWindow):
         return action
 
 
+def _can_duplicate(chosen: list) -> bool:
+    """Whether Duplicate applies to the selected objects: a figure or a panel
+    of the grid alone, or plots (not residuals, which come with a fit)."""
+    if not chosen:
+        return False
+    if len(chosen) == 1 and isinstance(chosen[0], Figure):
+        return True
+    if len(chosen) == 1 and isinstance(chosen[0], Axes):
+        return chosen[0].inset is None
+    return all(
+        isinstance(obj, ArtistBase) and not isinstance(obj, ResidualPlot)
+        for obj in chosen
+    )
+
+
 def _ndim(raw: bytes, name: str) -> int:
     """Dimensions of the array `name` in an .npz file's bytes."""
     import io
@@ -1094,6 +1477,22 @@ def _documents() -> Path:
     return Path(folder) if folder else Path.home()
 
 
+def _with_search(panel: PropertyPanel) -> QWidget:
+    """The property panel under its search field, which stays in place while
+    the form scrolls."""
+    holder = QWidget()
+    holder.setObjectName("sidePanel")
+    column = QVBoxLayout(holder)
+    column.setContentsMargins(0, 0, 0, 0)
+    column.setSpacing(0)
+    row = QVBoxLayout()
+    row.setContentsMargins(12, 10, 12, 6)
+    row.addWidget(panel.search)
+    column.addLayout(row)
+    column.addWidget(panel, 1)
+    return holder
+
+
 def _side_panel(widget: QWidget) -> QWidget:
     panel = QWidget()
     panel.setObjectName("sidePanel")
@@ -1108,3 +1507,13 @@ def _dropped_files(event) -> list[Path]:
     if not mime.hasUrls():
         return []
     return [Path(url.toLocalFile()) for url in mime.urls() if url.isLocalFile()]
+
+
+def export_names(figures, folder: Path, suffix: str) -> list[Path]:
+    """A file in `folder` for each figure, named after it; a name two figures
+    share gets a number."""
+    return [folder / f"{stem}{suffix}" for stem in file_stems(figures)]
+
+
+def _axes_with_id(figure, oid: str | None) -> Axes | None:
+    return next((axes for axes in figure.axes if axes.id == oid), None)

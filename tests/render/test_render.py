@@ -464,6 +464,12 @@ def test_frame_ticks_and_grid_lines_have_widths(data, ref) -> None:
     assert (line.get_linewidth(), line.get_linestyle()) == (0.4, ":")
 
 
+DRAW_LIMIT = 5.0
+"""Seconds a figure may take to draw here: the freeze it guards against took
+over 20 s, while a limit of 1 s failed now and then in a parallel run on a
+loaded machine."""
+
+
 def _drawn(fig) -> float:
     """Seconds to draw `fig` as the preview does, ticks and all."""
     start = time.perf_counter()
@@ -475,7 +481,7 @@ def test_a_tick_step_far_too_small_falls_back_to_automatic_ticks(data) -> None:
     # Every 1 from 0 to 10 000 took over 20 s per redraw (roadmap B1).
     axes = Axes(x=AxisSpec(limits=(0.0, 10_000.0), major_step=1.0))
     fig = render(Figure(axes=[axes]), data)
-    assert _drawn(fig) < 1.0
+    assert _drawn(fig) < DRAW_LIMIT
     ax = fig.axes[0]
     assert not isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
 
@@ -483,7 +489,7 @@ def test_a_tick_step_far_too_small_falls_back_to_automatic_ticks(data) -> None:
 def test_the_tick_limit_applies_to_an_automatic_range(data) -> None:
     # The data run from 0 to 10; the range is not fixed.
     fig = render(Figure(axes=[Axes(x=AxisSpec(major_step=0.001))]), data)
-    assert _drawn(fig) < 1.0
+    assert _drawn(fig) < DRAW_LIMIT
     assert not isinstance(fig.axes[0].xaxis.get_major_locator(), MultipleLocator)
 
 
@@ -658,3 +664,102 @@ def test_a_horizontal_line_goes_with_the_right_axis(data, ref) -> None:
     fig = render(Figure(axes=[axes]), data)
     right = next(ax for ax in fig.axes if ax.get_gid().endswith("#right"))
     assert [ln.get_gid() for ln in right.lines] == [line.id]
+
+
+def test_an_error_band_takes_the_place_of_the_y_error_bars(data, columns, ref) -> None:
+    from matplotlib.colors import to_rgba
+
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(
+        x=ref("t"), y=ref("U"), yerr=ref("dU"), linestyle="-", band=ErrorBand()
+    )
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    assert not ax.containers  # without x errors, a plain line
+    (line,) = ax.lines
+    (band,) = ax.collections
+    assert line.get_gid() == band.get_gid() == plot.id
+    assert band.get_zorder() < line.get_zorder()  # behind the line
+    assert tuple(band.get_facecolor()[0]) == to_rgba(line.get_color(), 0.25)
+    (path,) = band.get_paths()
+    low, high = path.vertices[:, 1].min(), path.vertices[:, 1].max()
+    assert low == pytest.approx((columns["U"] - 0.05).min())
+    assert high == pytest.approx((columns["U"] + 0.05).max())
+    assert band.get_label() == "_nolegend_"
+
+
+def test_an_error_band_keeps_the_x_errors_as_bars(data, ref) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(
+        x=ref("t"),
+        y=ref("U"),
+        xerr=ref("dU"),
+        yerr=ref("dU"),
+        color="C3",
+        band=ErrorBand(color="0.5", alpha=0.5),
+        alpha=0.8,
+    )
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    (container,) = ax.containers
+    assert container.has_xerr and not container.has_yerr
+    (band,) = ax.collections[-1:]
+    assert band.get_alpha() == pytest.approx(0.4)  # the band's, times the plot's
+    assert tuple(band.get_facecolor()[0])[:3] == (0.5, 0.5, 0.5)
+
+
+def test_an_error_band_leaves_a_gap_at_left_out_rows(data, ref) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(
+        x=ref("t"),
+        y=ref("U"),
+        yerr=ref("dU"),
+        marker="s",
+        left_out=[5],
+        band=ErrorBand(),
+    )
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    (band,) = ax.collections
+    assert len(band.get_paths()) == 2  # before and after the left-out row
+    kept, out = ax.lines
+    assert out.get_marker() == "s" and list(out.get_xdata()) == [2.5]
+    assert not ax.containers  # the left-out point has no error bar either
+
+
+def test_an_error_band_without_y_errors_draws_nothing_more(data, ref) -> None:
+    from figscribe.model import ErrorBand
+
+    plot = ErrorbarPlot(x=ref("t"), y=ref("U"), band=ErrorBand())
+    ax = render(Figure(axes=[Axes(artists=[plot])]), data).axes[0]
+    assert not ax.collections and len(ax.lines) == 1
+
+
+def test_a_mesh_numbers_its_cells_along_an_axis_without_positions() -> None:
+    from figscribe.model import ArrayRef, ColorMesh, ColumnRef
+
+    grid = np.arange(12.0).reshape(3, 4)
+    columns = {"x": np.array([0.0, 1.0, 3.0, 7.0]), "short": np.arange(2.0)}
+
+    def data(ref):
+        return grid if isinstance(ref, ArrayRef) else columns[ref.column]
+
+    mesh = ColorMesh(c=ArrayRef(source="s"), x=ColumnRef(source="s", column="x"))
+    fig = render(Figure(axes=[Axes(artists=[mesh])]), data)
+    fig.canvas.draw()
+    assert fig.axes[0].get_ylim() == pytest.approx((-0.5, 2.5))  # rows 0, 1, 2
+
+    from figscribe.io import DataError
+
+    mesh.x = ColumnRef(source="s", column="short")
+    with pytest.raises(DataError, match="4 cells along x, but 2 x positions"):
+        render(Figure(axes=[Axes(artists=[mesh])]), data)
+
+
+def test_an_image_of_a_single_column_is_refused_in_words() -> None:
+    from figscribe.io import DataError
+    from figscribe.model import ArrayRef, ImagePlot
+
+    image = ImagePlot(data=ArrayRef(source="s"))
+    with pytest.raises(DataError, match="needs 2-D data"):
+        render(Figure(axes=[Axes(artists=[image])]), lambda ref: np.arange(5.0))

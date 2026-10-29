@@ -20,13 +20,13 @@ from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import matplotlib.style
 from matplotlib.colors import TABLEAU_COLORS, to_hex
-from pydantic import BaseModel
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor
+from pydantic import BaseModel, ValidationError
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
@@ -51,6 +52,7 @@ from figscribe.fit import FitError, refit, residuals
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
+from figscribe.gui.effect import without_effect
 from figscribe.gui.markers import LIKE_THE_PLOT, marker_icon
 from figscribe.gui.markers import MARKERS as ALL_MARKERS
 from figscribe.gui.names import (
@@ -67,11 +69,14 @@ from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
 from figscribe.io.refresh import read_differently, reading_options
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     Axes,
     AxisSpec,
     Colorbar,
     ColumnRef,
+    Conversion,
+    ErrorBand,
     ExpressionFit,
     Figure,
     FitCurve,
@@ -80,8 +85,10 @@ from figscribe.model import (
     PredefinedFit,
     Project,
 )
+from figscribe.model.styles import style_problem
 from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
+from figscribe.units import CONVERTIBLE, set_conversion, set_range
 
 SKIPPED = {
     "id": "an identity, never edited",
@@ -148,6 +155,7 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "y_right": AxisSpec,
     "colorbar": Colorbar,
     "panel_labels": PanelLabels,
+    "band": ErrorBand,
 }
 """Optional nested models switched on and off with a check box; when on, their
 fields get a section of their own."""
@@ -159,6 +167,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         return Spec("bins")
     if name in OPTIONAL_PARTS:
         return Spec("part", model=OPTIONAL_PARTS[name])
+    if name in CONVERSIONS:
+        return Spec("conversion", optional=True)
     optional = False
     args = typing.get_args(annotation)
     if _is_union(annotation) and type(None) in args:
@@ -167,6 +177,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         if len(rest) != 1:
             return None
         annotation = rest[0]
+    if typing.get_origin(annotation) is Annotated:  # a checked type, e.g. Range
+        annotation = typing.get_args(annotation)[0]
     origin = typing.get_origin(annotation)
     args = typing.get_args(annotation)
 
@@ -198,11 +210,18 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 
 SECTIONS = {
+    "x_conversion": "Data",
+    "y_conversion": "Data",
+    "x_range": "Data",
     "x": "Data",
     "y": "Data",
     "xerr": "Data",
     "yerr": "Data",
     "values": "Data",
+    "time": "Data",
+    "data_type": "Data",
+    "sample_interval": "Data",
+    "taus": "Data",
     "bins": "Data",
     "c": "Data",
     "target": "Data",
@@ -260,6 +279,7 @@ LOOK = [
     "linewidth",
     "capsize",
     "elinewidth",
+    "band",
 ]
 """How the "Look" section starts; other fields follow in model order."""
 SECTION_NAMES = {
@@ -268,6 +288,7 @@ SECTION_NAMES = {
     "y_right": "Right y axis",
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
+    "band": "Error band",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
@@ -285,10 +306,34 @@ ORDER = [
     "Legend",
     "Export",
 ]
+BASIC = {
+    "LinePlot": ("color", "marker", "linestyle", "linewidth", "label"),
+    "ScatterPlot": ("color", "marker", "size", "edgecolor", "label"),
+    "ErrorbarPlot": ("color", "marker", "linestyle", "capsize", "label"),
+    "Histogram": ("color", "histtype", "density", "label"),
+    "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
+    "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
+    "ResidualPlot": ("color", "marker", "markersize", "linestyle"),
+    "Annotation": ("text", "color", "fontsize", "position", "arrow_to"),
+    "ReferenceLine": ("color", "linestyle", "linewidth", "label"),
+    "ShadedSpan": ("color", "alpha", "label"),
+    "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
+    "ColorMesh": ("cmap", "norm", "vmin", "vmax", "colorbar"),
+    "Figure": ("name", "width_mm", "height_mm", "font_size", "panel_labels"),
+    "Axes": ("title", "grid", "y_right"),
+}
+"""The settings shown at first, per kind of object, apart from its data and
+position: the most asked for, in the assistant's benchmark and otherwise.
+The rest is under "More", folded, and found by the search."""
+WHOLE = {"Data", "File", "Reading", "Position", "Axes", "Export", "More"}
+"""Sections shown whole: what is plotted and where, not how it looks; and
+the PNG resolution, kept apart from the size (decision 0006)."""
+
 COLLAPSED = {"More", "Layout"}
 """Sections that start folded: rarely needed, but always there."""
 
 PLACEHOLDERS = {
+    "band.color": "the plot's",
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
     "label": "not in the legend",
@@ -327,6 +372,7 @@ PLACEHOLDERS = {
     "array": "the first",
     "width_ratios": "1",
     "height_ratios": "1",
+    "x_range": "all",
 }
 
 TIPS = {
@@ -421,6 +467,17 @@ TIPS = {
     "density": "Scale the bars to a total area of 1, to compare data sets of different"
     " size.",
     "histtype": "Filled bars, only their outline, or a filled outline.",
+    "AllanDeviationPlot.values": "The series, one value per sample and without "
+    "gaps: fractional frequency, or phase in s.",
+    "data_type": "Fractional frequency (without unit), or phase, the time error in s.",
+    "sample_interval": "Time between samples, τ0, in s; unused while a column of "
+    "times is chosen.",
+    "time": "The times of the samples in s, evenly spaced; their median step is "
+    "the sample interval. Empty uses the interval typed in.",
+    "taus": "Which averaging times τ = m·τ0 are shown: m = 1, 2, 4, 8 …, or "
+    "1, 2, 5, 10 …, or every m.",
+    "error_bars": "Show σ/√(N − 2m) as error bars, a simple estimate of the "
+    "uncertainty.",
     "c": "The 2-D data whose values are shown as colors.",
     "data": "The 2-D data shown as an image, one pixel per value.",
     "cmap": "The colors the values are shown in, from lowest to highest.",
@@ -447,6 +504,11 @@ TIPS = {
     "panel_labels": "Letters on the panels, (a), (b), (c), in reading order, as "
     "journals ask for.",
     "PanelLabels.style": "How the letters are written.",
+    "band": "Shade the y errors as a band around the line instead of drawing bars, "
+    "for dense data; x errors stay bars.",
+    "ErrorBand.color": "Color of the band; empty takes the plot's.",
+    "ErrorBand.alpha": "Opacity of the band, 1 opaque, 0 invisible; times the "
+    "plot's own.",
     "bold": "Bold letters, as Nature and Science print them.",
     "placement": "Above and left of each panel's top left corner, or just within it.",
     "insets": "Give insets a letter too, right after the panel they sit in.",
@@ -477,9 +539,138 @@ TIPS = {
     "comment": "Lines starting with this are ignored; empty for none.",
     "dataset": "Where the data lies inside the HDF5 file, e.g. /run3/voltage.",
     "array": "Which array of the .npz archive to plot.",
+    "x_conversion": "Show x in another unit: min, h or days for times measured in s, "
+    "ms, or another factor. The axis, the plot's range, its fits and the lines and "
+    "notes on the axis follow.",
+    "y_conversion": "Show y in another unit, e.g. mV with another factor of 1000. The "
+    "axis, the fits and the lines and notes on the axis follow.",
+    "Histogram.x_conversion": "Count the values in another unit: min, h or days "
+    "for times in s, ms, or another factor.",
+    "AllanDeviationPlot.x_conversion": "Show τ in another unit: min, h or days, ms, "
+    "or another factor.",
+    "from_start": "Count from the smallest value, so that the values start at 0: "
+    "hours since the start of the measurement rather than since 1970.",
+    "factor": "What each value is multiplied by, e.g. 1000 for V in mV or 0.001 for "
+    "mV in V.",
+    "Conversion.unit": "The unit of the shown values; the axis takes it.",
+    "x_range": "Use only the rows with x from … to …, in the unit shown; the others "
+    "are not drawn, fitted or counted. Both empty use every row.",
+    "Histogram.x_range": "Count only the values from … to …, in the unit shown; the "
+    "bins span this range.",
+    "AllanDeviationPlot.x_range": "Use only the samples taken from … to … after the "
+    "first, in the unit τ is shown in; τ0 stays that of the whole series.",
 }
 """Explanations shown when the mouse rests on a field, by field name, or by
 "Class.field" where the same name means something else there."""
+
+
+SHARED = (
+    "color",
+    "marker",
+    "markersize",
+    "size",
+    "edgecolor",
+    "linestyle",
+    "linewidth",
+    "capsize",
+    "elinewidth",
+    "alpha",
+    "visible",
+)
+"""What several plots chosen together can have set at once, where every one
+of them has it."""
+
+CONVERSIONS = ("x_conversion", "y_conversion")
+UNITS = [
+    ("min (÷ 60)", 1 / 60, "min"),
+    ("h (÷ 3600)", 1 / 3600, "h"),
+    ("days (÷ 86 400)", 1 / 86400, "days"),
+    ("ms (× 1000)", 1000.0, "ms"),
+]
+"""The units a plot's values are most often shown in: times measured in s."""
+OTHER_FACTOR = "another factor"
+
+CAPTIONS = {
+    ("Histogram", "x_range"): "Use only values",
+    ("AllanDeviationPlot", "x_range"): "Use only times",
+}
+"""Captions for a field whose plain name says something else in this class."""
+
+
+class _Several:
+    """The value of a setting the plots chosen together do not agree on."""
+
+    def __repr__(self) -> str:
+        return "several"
+
+
+SEVERAL = _Several()
+
+
+def _shared_spec(objs: list[BaseModel], name: str) -> Spec | None:
+    """The editor for `name` on all of `objs`, if each has it and of one
+    kind; None may be chosen only if every one of them takes it."""
+    specs = []
+    for obj in objs:
+        field = type(obj).model_fields.get(name)
+        if field is None:
+            return None
+        specs.append(spec_for(name, field.annotation))
+    if any(spec is None or spec.kind != specs[0].kind for spec in specs):
+        return None
+    return next((spec for spec in specs if not spec.optional), specs[0])
+
+
+def _common(objs: list[BaseModel], path: Path) -> Any:
+    """The value at `path` the objects agree on, or SEVERAL."""
+    values = [_get(obj, path) for obj in objs]
+    return values[0] if all(v == values[0] for v in values) else SEVERAL
+
+
+def _set_on_all(objs: list[BaseModel], path: Path, value: Any) -> Macro:
+    steps = [SetField(obj.id, path, value) for obj in objs if _get(obj, path) != value]
+    return Macro(f"Change {len(objs)} plots", steps)
+
+
+def _basic_first(groups: dict[str, list[str]], basic: tuple[str, ...] | None):
+    """Move the fields that are not `basic` from their sections to "More",
+    in their order, before what "More" has; drop the sections left empty."""
+    if basic is None:
+        return
+    moved = []
+    for title in list(groups):
+        if title in WHOLE:
+            continue
+        moved += [n for n in groups[title] if n not in basic]
+        groups[title] = [n for n in groups[title] if n in basic]
+        if not groups[title]:
+            del groups[title]
+    if moved:
+        groups["More"] = [*moved, *groups.get("More", [])]
+
+
+FILTER_DELAY_MS = 150
+"""How long the search waits after a key before it filters, so that typing
+a word builds the form once."""
+
+
+def _row_text(form: QFormLayout, row: int) -> str:
+    """What a search looks in for a row: its caption, and the tooltips of
+    the caption and the field, lower case."""
+    parts = []
+    for role in (
+        QFormLayout.ItemRole.LabelRole,
+        QFormLayout.ItemRole.FieldRole,
+        QFormLayout.ItemRole.SpanningRole,
+    ):
+        item = form.itemAt(row, role)
+        widget = item.widget() if item is not None else None
+        if widget is None:
+            continue
+        if role != QFormLayout.ItemRole.FieldRole:  # a field's text is its value
+            parts.append(getattr(widget, "text", lambda: "")())
+        parts.append(widget.toolTip())
+    return " ".join(p for p in parts if isinstance(p, str)).lower()
 
 
 def tip_for(owner: type[BaseModel], name: str) -> str | None:
@@ -527,6 +718,25 @@ class PropertyPanel(QScrollArea):
         self.edit_fit: Callable[[str], None] = lambda fit_id: None
         """Opens the fit dialog on a fit that is there; the window does."""
         self._folded = {title: True for title in COLLAPSED}
+        self.search = QLineEdit()
+        """Filters the fields by name and tooltip; the window puts it above
+        the panel, where it stays when the form is built anew."""
+        self.search.setObjectName("search")
+        self.search.setPlaceholderText("Find a setting, e.g. tick or font")
+        self.search.setClearButtonEnabled(True)
+        self._filtering = QTimer(self)
+        self._filtering.setSingleShot(True)
+        self._filtering.setInterval(FILTER_DELAY_MS)
+        self._filtering.timeout.connect(self.rebuild)
+        self.search.textChanged.connect(lambda _: self._filtering.start())
+        clear = QShortcut(QKeySequence(Qt.Key.Key_Escape), self.search)
+        # Set apart: PySide6 ignores a context given to the constructor, and
+        # Esc would then act in the whole window.
+        clear.setContext(Qt.ShortcutContext.WidgetShortcut)
+        clear.activated.connect(self.search.clear)
+        self.matches = 0
+        """How many fields the search shows; all of them without a search."""
+        self._searched = False
         self.set_document(document)
 
     def set_document(self, document: Document) -> None:
@@ -542,9 +752,11 @@ class PropertyPanel(QScrollArea):
     def rebuild(self, *_: object) -> None:
         """Build the form for the selected object."""
         for title, section in self.sections.items():
-            if isinstance(section.header, QToolButton):
+            # What the search opened is not what the user unfolded.
+            if isinstance(section.header, QToolButton) and not self._searched:
                 self._folded[title] = not section.expanded
         self.editors = {}
+        self._captions: dict[Path, tuple[QLabel, str | None]] = {}
         self.sections = {}
         self.axis_links: dict[str, QPushButton] = {}
         body = QWidget()
@@ -556,7 +768,11 @@ class PropertyPanel(QScrollArea):
         self.axis_form = None
         axis = split_axis(self.document.selected)
         obj = self._selected_object()
-        if obj is None:
+        several = self._several()
+        if several:
+            self._shown = self._shape_of(obj)
+            layout.addWidget(self._several_header(several))
+        elif obj is None:
             self._shown = None
             hint = label(
                 "Select a figure, panel, plot or data file to edit it.", "hint"
@@ -570,7 +786,9 @@ class PropertyPanel(QScrollArea):
         self._error.setContentsMargins(16, 8, 16, 0)
         self._error.hide()
         layout.addWidget(self._error)
-        if axis is not None and obj is not None:
+        if several:
+            self._fill_several(several, layout)
+        elif axis is not None and obj is not None:
             oid = self.document.selected
             self.axis_form = AxisForm(
                 self, axis[0], axis[1], layout, lambda: self.axis_range(oid)
@@ -578,6 +796,12 @@ class PropertyPanel(QScrollArea):
             self.axis_form.show(obj)
         elif obj is not None:
             self._fill(obj, layout)
+            self._grey_out(obj)
+        self._no_match = label("", "hint")
+        self._no_match.setContentsMargins(16, 16, 16, 16)
+        self._no_match.hide()
+        layout.addWidget(self._no_match)
+        self._filter()
         layout.addStretch(1)
         old = self.takeWidget()
         if old is not None:
@@ -593,6 +817,12 @@ class PropertyPanel(QScrollArea):
         if obj is None or self._shown != self._shape_of(obj):
             self.rebuild()
             return
+        several = self._several()
+        if several:
+            for path, editor in self.editors.items():
+                editor.show(_common(several, path))
+            self._filter()
+            return
         if isinstance(obj, FitCurve) and obj.result != self._fit_result:
             self.rebuild()
             return
@@ -601,6 +831,81 @@ class PropertyPanel(QScrollArea):
             self.axis_form.show(obj)
         for path, editor in self.editors.items():
             editor.show(_get(obj, path))
+        self._grey_out(obj)
+        self._filter()
+
+    def _filter(self) -> None:
+        """Hide the fields the search does not find, and the sections left
+        empty; open a folded section that has one."""
+        self._filtering.stop()
+        words = self.search.text().lower().split()
+        self._searched = bool(words)
+        self.matches = 0
+        for title, section in self.sections.items():
+            form = section.body.layout()
+            if not isinstance(form, QFormLayout):
+                continue
+            titled = all(w in title.lower() for w in words)
+            shown = 0
+            for row in range(form.rowCount()):
+                if not form.isRowVisible(row):
+                    continue  # hidden by the form itself, for another setting
+                if titled or all(w in _row_text(form, row) for w in words):
+                    shown += 1
+                else:
+                    form.setRowVisible(row, False)
+            self.matches += shown
+            if not words:
+                continue
+            section.setVisible(shown > 0)
+            if shown and isinstance(section.header, QToolButton):
+                section.header.setChecked(True)
+        if words and not self.matches and self.sections:
+            self._no_match.setText(f"No setting here matches “{self.search.text()}”.")
+            self._no_match.show()
+
+    def reveal(self, caption: str, title: str) -> None:
+        """Show the field `caption` of section `title`, as `settings` names
+        it: without a search, its section open, scrolled to and focused."""
+        if self.search.text():
+            self.search.clear()
+            self.rebuild()
+        for text, where, widget in self.settings():
+            if (text, where) == (caption, title):
+                section = self.sections[title]
+                if isinstance(section.header, QToolButton):
+                    section.header.setChecked(True)
+                self.ensureWidgetVisible(widget)
+                widget.setFocus(Qt.FocusReason.ShortcutFocusReason)
+                return
+
+    def settings(self) -> list[tuple[str, str, QWidget]]:
+        """(caption, section, field widget) of every field of the selection,
+        for the command palette."""
+        found = []
+        for title, section in self.sections.items():
+            form = section.body.layout()
+            if not isinstance(form, QFormLayout):
+                continue
+            for row in range(form.rowCount()):
+                caption = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                field = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+                if caption is None or field is None or field.widget() is None:
+                    continue
+                text = getattr(caption.widget(), "text", lambda: "")()
+                if text and field.widget().isEnabled():
+                    found.append((text, title, field.widget()))
+        return found
+
+    def _grey_out(self, obj: BaseModel) -> None:
+        """Grey out the fields that do nothing now, and say why."""
+        for path, editor in self.editors.items():
+            caption, tip = self._captions[path]
+            why = without_effect(obj, path, self.document.project)
+            told = "\n\n".join(t for t in (why, tip) if t)
+            for widget in (caption, editor.widget):
+                widget.setEnabled(why is None)
+                widget.setToolTip(told)
 
     def commit(self, oid: str, path: Path, value: Any) -> None:
         """Set the field at `path` of object `oid` to `value`.
@@ -608,14 +913,19 @@ class PropertyPanel(QScrollArea):
         Ignored unless `oid` is still the selected object: an editor torn down
         by a selection change can still report its last input.
         """
-        if oid != self.document.selected:
+        if oid != self.document.selected or value is SEVERAL:
             return
         try:
+            several = self._several()
+            if several:
+                self.document.push(_set_on_all(several, path, value))
+                self._error.hide()
+                return
             obj = find(self.document.project, oid)
             if _get(obj, path) == value:
                 return
             self.document.push(self._command(obj, path, value))
-        except (CommandError, DataError) as exc:
+        except (CommandError, DataError, FitError) as exc:
             self.report(str(exc))
             self.refresh()
         else:
@@ -623,8 +933,23 @@ class PropertyPanel(QScrollArea):
 
     def _command(self, obj: BaseModel, path: Path, value: Any):
         """The change for one field; a right y axis comes and goes with the
-        plots drawn against it, and a data file is read again when how it is
-        read changes."""
+        plots drawn against it, a data file is read again when how it is
+        read changes, and units and a range keep the plot's axis and fits in
+        step."""
+        if path[0] in CONVERSIONS and isinstance(obj, CONVERTIBLE):
+            conversion = value
+            if len(path) == 2:
+                current = getattr(obj, path[0]).model_dump()
+                try:
+                    conversion = Conversion.model_validate({**current, path[1]: value})
+                except ValidationError as exc:
+                    reason = "; ".join(e["msg"] for e in exc.errors())
+                    raise CommandError(f"{field_name(path[1])}: {reason}") from None
+            data = self.document.data
+            axis = path[0][0]
+            return set_conversion(self.document.project, obj.id, axis, conversion, data)
+        if path == ("x_range",) and isinstance(obj, CONVERTIBLE):
+            return set_range(self.document.project, obj.id, value, self.document.data)
         if len(path) == 1 and path[0] in reading_options(obj):
             return read_differently(
                 self.document.project, obj.id, path[0], value, self.document.base_dir
@@ -635,6 +960,10 @@ class PropertyPanel(QScrollArea):
                     "Letter the panels", [SetField(obj.id, path, PanelLabels())]
                 )
             return Macro("Remove the panel labels", [SetField(obj.id, path, None)])
+        if path == ("band",):
+            if value:
+                return Macro("Shade the errors", [SetField(obj.id, path, ErrorBand())])
+            return Macro("Draw the errors as bars", [SetField(obj.id, path, None)])
         if path == ("colorbar",):
             if value:
                 return Macro("Show a color bar", [SetField(obj.id, path, Colorbar())])
@@ -673,7 +1002,53 @@ class PropertyPanel(QScrollArea):
 
     def _shape_of(self, obj: BaseModel) -> tuple:
         oid = self.document.selected
+        if len(self.document.selection) > 1:
+            return ("several", tuple(self.document.selection))
         return ("axis", oid) if split_axis(oid) else _shape(obj)
+
+    def _several(self) -> list[BaseModel]:
+        """The plots selected together; empty while one object or none is."""
+        oids = self.document.selection
+        if len(oids) < 2:
+            return []
+        try:
+            return [find(self.document.project, oid) for oid in oids]
+        except CommandError:
+            return []
+
+    def _several_header(self, objs: list[BaseModel]) -> QWidget:
+        box = self._header(objs[-1])
+        names = [artist_name(obj) for obj in objs]
+        self._kicker.setText(f"{len(objs)} PLOTS")
+        self._title.setText(", ".join(names))
+        self._title.setWordWrap(True)
+        return box
+
+    def _fill_several(self, objs: list[BaseModel], layout: QVBoxLayout) -> None:
+        """The settings the plots share, each showing their value if they
+        agree; a change sets it on all of them, as one undo step."""
+        form = self._section("Together", layout)
+        for name in SHARED:
+            spec = _shared_spec(objs, name)
+            if spec is None:
+                continue
+            path = (name,)
+            editor = make_editor(spec, path, self)
+            value = _common(objs, path)
+            editor.show(value)
+            line = getattr(editor, "line", None)
+            if value is SEVERAL and isinstance(line, QLineEdit):
+                line.setPlaceholderText("several values")
+            self.editors[path] = editor
+            caption = _form_label(name)
+            tip = tip_for(type(objs[-1]), name)
+            self._captions[path] = (caption, tip)
+            if tip is not None:
+                caption.setToolTip(tip)
+                editor.widget.setToolTip(tip)
+            form.addRow(caption, editor.widget)
+        if not self.editors:
+            form.addRow(label("These plots share no setting.", "hint"))
 
     # --- layout ---------------------------------------------------------------
 
@@ -732,6 +1107,7 @@ class PropertyPanel(QScrollArea):
             groups.setdefault(SECTIONS.get(name, fallback), []).append(name)
         if "Look" in groups:
             groups["Look"].sort(key=lambda n: LOOK.index(n) if n in LOOK else 99)
+        _basic_first(groups, BASIC.get(type(obj).__name__))
         titles = {_section_name(n): n for n in nested}
         if isinstance(obj, Axes):
             groups.setdefault("Axes", [])
@@ -795,12 +1171,21 @@ class PropertyPanel(QScrollArea):
         editor = make_editor(spec, path, self)
         editor.show(value)
         self.editors[path] = editor
-        caption = _form_label(name)
+        text = CAPTIONS.get((type(obj).__name__, name))
+        caption = _caption(text) if text else _form_label(name)
         tip = tip_for(type(obj), name)
+        self._captions[path] = (caption, tip)
         if tip is not None:
             caption.setToolTip(tip)
             editor.widget.setToolTip(tip)
         form.addRow(caption, editor.widget)
+        if name in CONVERSIONS and value is not None:
+            # τ of an Allan deviation starts at τ0 whatever: nothing to start.
+            if not isinstance(obj, AllanDeviationPlot):
+                self._row(form, value, (*path, "from_start"))
+            if _unit_of_the_list(value) is None:
+                self._row(form, value, (*path, "factor"))
+                self._row(form, value, (*path, "unit"))
 
     def _axis_links(self, form: QFormLayout, axes: Axes) -> None:
         """One line per axis; clicking it opens the axis's own form."""
@@ -891,8 +1276,6 @@ class PropertyPanel(QScrollArea):
 
     def ask_marker(self, current: str | None) -> str | None:
         """Asks for a marker of one's own; None if cancelled. Replaced in tests."""
-        from PySide6.QtWidgets import QInputDialog
-
         text, ok = QInputDialog.getText(
             self,
             "Marker",
@@ -951,11 +1334,16 @@ class CheckEditor(Editor):
     def __init__(self, spec, path, panel):
         super().__init__(spec, path, panel)
         self.widget = QCheckBox()
-        self.widget.toggled.connect(lambda on: self.commit(on))
+        # clicked, not toggled: from "several" (partly checked) a click checks
+        # the box without toggling it.
+        self.widget.clicked.connect(lambda on: self.commit(on))
 
     def show(self, value: bool) -> None:
         self.widget.blockSignals(True)
-        self.widget.setChecked(bool(value))
+        if value is SEVERAL:
+            self.widget.setCheckState(Qt.CheckState.PartiallyChecked)
+        else:
+            self.widget.setChecked(bool(value))
         self.widget.blockSignals(False)
 
 
@@ -986,7 +1374,8 @@ class ChoiceEditor(Editor):
     def show(self, value: Any) -> None:
         values = [v for _, v in self.choices]
         if value not in values:
-            self.choices.append((f"{value}{self.missing}", value))
+            text = "several" if value is SEVERAL else f"{value}{self.missing}"
+            self.choices.append((text, value))
             self.widget.addItem(self.choices[-1][0])
             values.append(value)
         self.widget.blockSignals(True)
@@ -1010,7 +1399,7 @@ class TextEditor(Editor):
         self.line.setText(self._text(value))
 
     def _text(self, value: Any) -> str:
-        return "" if value is None else self.format(value)
+        return "" if value is None or value is SEVERAL else self.format(value)
 
     def _finish(self) -> None:
         text = self.line.text().strip()
@@ -1032,8 +1421,6 @@ RECENT_COLORS = 5
 """How many recently set colors the color fields offer."""
 
 SWATCHES_PER_ROW = 6
-
-MARKERS = [("o", "Circle"), ("s", "Square"), ("^", "Triangle"), ("D", "Diamond")]
 
 LINESTYLES = [
     ("Solid", "-"),
@@ -1067,6 +1454,12 @@ CHOICES = {
     ],
 }
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
+CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
+CHOICES["taus"] = [
+    ("octaves: 1, 2, 4, 8 …", "octave"),
+    ("decades: 1, 2, 5, 10 …", "decade"),
+    ("every m", "all"),
+]
 CHOICES["unit_format"] = UNIT_FORMATS
 CHOICES["encoding"] = ENCODINGS
 CHOICES["placement"] = [
@@ -1080,7 +1473,10 @@ CHOICES["tick_direction"] = [
 ]
 NONE_TEXT = {
     "stylesheet": "Matplotlib's default",
+    "x_conversion": "as in the file",
+    "y_conversion": "as in the file",
     "tick_direction": "style default",
+    "time": "the sample interval below",
     "grid_linestyle": "style default",
     "prefix": "as in the data",
     "marker": "No marker",
@@ -1156,7 +1552,12 @@ class ColorEditor(TextEditor):
             swatch.setChecked(key == value)
 
     def commit(self, value: Any) -> None:
-        if value is not None and not _CYCLE_COLOR.fullmatch(value):
+        # Only a color Matplotlib draws: a refused one would break the swatches.
+        if (
+            value is not None
+            and not _CYCLE_COLOR.fullmatch(value)
+            and style_problem("color", value) is None
+        ):
             self.panel.remember_color(value)
         super().commit(value)
 
@@ -1278,6 +1679,67 @@ def _ratios(values: list[float | None]) -> list[float] | None:
     return ratios
 
 
+class ConversionEditor(Editor):
+    """The unit a plot's x or y is shown in: as in the file, one of the
+    common units, or another factor, which is then typed below."""
+
+    def __init__(self, spec, path, panel):
+        super().__init__(spec, path, panel)
+        self.choices: list[tuple[str, Any]] = [
+            (NONE_TEXT[path[-1]], None),
+            *((text, (factor, unit)) for text, factor, unit in UNITS),
+            (OTHER_FACTOR, OTHER_FACTOR),
+        ]
+        self.widget = QComboBox()
+        for text, _ in self.choices:
+            self.widget.addItem(text)
+        self.widget.activated.connect(self._chosen)
+
+    def show(self, value: Conversion | None) -> None:
+        self.value = value
+        if value is None:
+            index = 0
+        else:
+            listed = _unit_of_the_list(value)
+            texts = [text for text, _ in self.choices]
+            index = texts.index(listed) if listed else len(texts) - 1
+        self.widget.blockSignals(True)
+        self.widget.setCurrentIndex(index)
+        self.widget.blockSignals(False)
+
+    def _chosen(self, index: int) -> None:
+        _, choice = self.choices[index]
+        current = self.value
+        start = current.from_start if current is not None else False
+        if choice is None:
+            self.commit(None)
+        elif choice == OTHER_FACTOR:
+            if current is not None and _unit_of_the_list(current) is None:
+                return  # already another factor
+            factor = current.factor if current is not None else 1.0
+            # The factor stays as it was; the unit is typed with the new one.
+            self.commit(Conversion(factor=factor, from_start=start))
+        else:
+            factor, unit = choice
+            self.commit(Conversion(factor=factor, from_start=start, unit=unit))
+
+
+def _unit_of_the_list(conversion: Conversion) -> str | None:
+    """The entry of UNITS a conversion is, by factor and unit; None if none."""
+    for text, factor, unit in UNITS:
+        if conversion.unit == unit and math.isclose(conversion.factor, factor):
+            return text
+    return None
+
+
+def _range_ends(values: list[float | None]) -> tuple[float, float] | None:
+    if all(v is None for v in values):
+        return None
+    if any(v is None for v in values):
+        raise ValueError("fill in both ends, or neither to use every row")
+    return (values[0], values[1])
+
+
 class StyleEditor(ChoiceEditor):
     """Matplotlib's style sheets by name, or an .mplstyle file from disk,
     chosen through the last entry."""
@@ -1319,42 +1781,6 @@ class StyleEditor(ChoiceEditor):
             self.commit(str(chosen))
 
 
-class MarkerEditor(TextEditor):
-    """The common markers as buttons; any Matplotlib marker as text."""
-
-    def __init__(self, spec, path, panel):
-        super().__init__(spec, path, panel, str, str)
-        self.line.setPlaceholderText("any Matplotlib marker")
-        self.widget = QWidget()
-        column = QVBoxLayout(self.widget)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(6)
-        row = QHBoxLayout()
-        row.setSpacing(4)
-        options = list(MARKERS)
-        if spec.optional:
-            options.append((None, NONE_TEXT[path[-1]]))
-        self.buttons: dict[str | None, QToolButton] = {}
-        for value, name in options:
-            button = QToolButton()
-            button.setObjectName("choice")
-            button.setCheckable(True)
-            button.setToolTip(name)
-            glyph = "marker-none" if value is None else f"marker-{value}"
-            button.setIcon(theme.icon(glyph, theme.INK))
-            button.clicked.connect(lambda _=False, v=value: self.commit(v))
-            row.addWidget(button)
-            self.buttons[value] = button
-        row.addStretch(1)
-        column.addLayout(row)
-        column.addWidget(self.line)
-
-    def show(self, value: Any) -> None:
-        super().show(value)
-        for key, button in self.buttons.items():
-            button.setChecked(key == value)
-
-
 def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     name = path[-1]
     if spec.kind == "bool":
@@ -1370,6 +1796,11 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return ChoiceEditor(spec, path, panel, choices, missing="")
     if name == "stylesheet":
         return StyleEditor(spec, path, panel)
+    if name in CONVERSIONS:
+        return ConversionEditor(spec, path, panel)
+    if name == "x_range":
+        ends = ["from", "to"]
+        return FieldsEditor(spec, path, panel, ends, PLACEHOLDERS[name], _range_ends)
     if name == "extent":
         sides = ["left", "right", "bottom", "top"]
         return FieldsEditor(spec, path, panel, sides, PLACEHOLDERS[name], _extent)
@@ -1388,8 +1819,6 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return ChoiceEditor(spec, path, panel, panel.document.array_choices())
     if spec.kind == "color":
         editor = ColorEditor(spec, path, panel)
-    elif name in ("marker", "left_out_marker") and spec.kind == "text":
-        editor = MarkerEditor(spec, path, panel)
     else:
         parse, format_ = _TEXT[spec.kind]
         if name in SHOWN:
@@ -1397,7 +1826,9 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         editor = TextEditor(spec, path, panel, parse, format_)
     if spec.optional:
         nested = len(path) > 1  # e.g. an axis label, which no legend shows
-        placeholder = "none" if nested and name == "label" else PLACEHOLDERS.get(name)
+        placeholder = PLACEHOLDERS.get(".".join(path), PLACEHOLDERS.get(name))
+        if nested and name == "label":
+            placeholder = "none"
         editor.line.setPlaceholderText(placeholder or "none")
     return editor
 
@@ -1495,11 +1926,17 @@ def _shape(obj: BaseModel) -> tuple:
     """What decides the form's layout: the object, and its optional parts."""
     parts = tuple(
         getattr(obj, name, None) is None
-        for name in ("y_right", "colorbar", "panel_labels", "inset", "result")
+        for name in ("y_right", "colorbar", "panel_labels", "band", "inset", "result")
     )
     layout = getattr(obj, "layout", None)
     grid = (layout.rows, layout.cols) if layout is not None else None
-    return (obj.id, type(obj), parts, grid)
+    units = tuple(
+        "none"
+        if (c := getattr(obj, name, None)) is None
+        else _unit_of_the_list(c) or OTHER_FACTOR
+        for name in CONVERSIONS
+    )
+    return (obj.id, type(obj), parts, grid, units)
 
 
 def _axes_of(project, artist_id: str) -> Axes | None:
@@ -1590,7 +2027,7 @@ class MarkerList(ChoiceEditor):
         if value is not CUSTOM:
             super().commit(value)
             return
-        typed = self.panel.ask_marker(self.value)
+        typed = self.panel.ask_marker(None if self.value is SEVERAL else self.value)
         if typed is None:
             self.show(self.value)
         else:

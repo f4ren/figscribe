@@ -159,6 +159,23 @@ def test_the_assistant_letters_the_panels(tools, workspace) -> None:
         )
 
 
+def test_the_assistant_shades_the_errors_as_a_band(tools, workspace) -> None:
+    _, _, plot, _ = _ids(workspace)
+    schema = json.dumps(tools.call("get_schema", {}))
+    assert "shaded band" in schema
+    tools.call("set_field", {"object_id": plot, "path": ["band"], "value": {}})
+    tools.call(
+        "set_field", {"object_id": plot, "path": ["band", "alpha"], "value": 0.4}
+    )
+    assert workspace.project.figures[0].axes[0].artists[0].band.alpha == 0.4
+    assert "fill_between" in tools.call("get_python_script", {})["script"]
+    with pytest.raises(ToolError, match="not a color"):
+        tools.call(
+            "set_field",
+            {"object_id": plot, "path": ["band", "color"], "value": "nonsense"},
+        )
+
+
 def test_a_tick_step_that_would_freeze_the_figure_is_refused(tools, workspace) -> None:
     _, axes, _, _ = _ids(workspace)
     before = dumps(workspace.project)
@@ -319,6 +336,17 @@ def test_a_data_file_is_removed_with_its_plots(tools, workspace) -> None:
     result = tools.call("remove", {"object_id": source})
     assert set(result["removed"]) == {source, data}
     assert workspace.project.sources == []
+
+
+def test_a_figure_is_removed_but_never_the_last(tools, workspace) -> None:
+    figure, *_ = _ids(workspace)
+    with pytest.raises(ToolError, match="at least one figure"):
+        tools.call("remove", {"object_id": figure})
+    new = {"name": "B", "axes": [{}]}  # as the system prompt says
+    added = tools.call("insert", {"parent_id": None, "field": "figures", "object": new})
+    tools.call("remove", {"object_id": figure})
+    assert [f.id for f in workspace.project.figures] == [added["id"]]
+    assert len(workspace.project.figures[0].axes) == 1
 
 
 def test_unknown_ids_are_not_removed(tools) -> None:
@@ -723,3 +751,33 @@ def test_leaving_points_out_fits_the_plot_again(tools, workspace) -> None:
     )
     assert find(workspace.project, artist).left_out == [0, 1, 2]
     assert find(workspace.project, fitted["id"]).result != before
+
+
+def test_units_and_a_range_keep_the_axis_and_fits_in_step(tools, workspace) -> None:
+    _, axes, artist, _ = _ids(workspace)
+    fitted = tools.call(
+        "fit",
+        {"target_id": artist, "model": {"kind": "predefined", "name": "gaussian"}},
+    )
+    before = find(workspace.project, fitted["id"]).result
+    hours = {"factor": 1 / 3600, "unit": "h"}
+    result = tools.call(
+        "set_field", {"object_id": artist, "path": ["x_conversion"], "value": hours}
+    )
+    assert result["undo_step"] == "Show x in h"
+    assert workspace.project.figures[0].axes[0].x.unit == "h"
+    assert find(workspace.project, fitted["id"]).result != before
+    tools.call(
+        "set_field",
+        {"object_id": artist, "path": ["x_conversion", "from_start"], "value": True},
+    )
+    assert find(workspace.project, artist).x_conversion.from_start
+    with pytest.raises(ToolError, match="greater than 0"):
+        tools.call(
+            "set_field",
+            {"object_id": artist, "path": ["x_conversion", "factor"], "value": 0},
+        )
+    with pytest.raises(ToolError, match="lower end"):
+        tools.call(
+            "set_field", {"object_id": artist, "path": ["x_range"], "value": [2, 1]}
+        )

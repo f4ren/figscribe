@@ -45,6 +45,9 @@ class Document(QObject):
     """The selected object id, or None."""
     state_changed = Signal()
     """Path or saved state changed; the window title follows it."""
+    figure_changed = Signal()
+    """Another figure is shown, since something in it was selected; a change
+    of the model announces itself through `changed` instead."""
 
     def __init__(self, project: Project | None = None, path: Path | None = None):
         super().__init__()
@@ -144,17 +147,44 @@ class Document(QObject):
     def selected(self) -> str | None:
         return self._selected
 
+    @property
+    def selection(self) -> list[str]:
+        """Every selected object: several plots chosen together, or the one
+        selected; the last of several is `selected`."""
+        if self._many:
+            return list(self._many)
+        return [self._selected] if self._selected is not None else []
+
+    def select_many(self, oids: list[str]) -> None:
+        """Select several objects together; with one or none, as `select`."""
+        oids = [oid for oid in dict.fromkeys(oids) if self._exists(oid)]
+        if len(oids) < 2:
+            self.select(oids[0] if oids else None)
+            return
+        if oids == self._many:
+            return
+        self._many = oids
+        self._announce(oids[-1])
+
     def select(self, oid: str | None) -> None:
         if oid is not None and not self._exists(oid):
             oid = None
-        if oid == self._selected:
+        if oid == self._selected and not self._many:
             return
+        self._many = []
+        self._announce(oid)
+
+    def _announce(self, oid: str | None) -> None:
+        """Make `oid` the selected object, and show its figure."""
         self._selected = oid
+        shown = self.figure
         if oid is not None:
             figure = self._figure_of(oid)
             if figure is not None:
                 self.current_figure = figure.id
         self.selection_changed.emit(oid)
+        if self.figure is not shown:
+            self.figure_changed.emit()
 
     @property
     def figure(self) -> Figure | None:
@@ -175,6 +205,9 @@ class Document(QObject):
         self._states: dict[str, tuple[tuple, str]] = {}
         """Per source: what its file looked like, and its state then."""
         self._selected: str | None = None
+        self._many: list[str] = []
+        """Several objects selected together, `_selected` the last; empty
+        while one or none is."""
         self.allow_preview = False
         """Whether tools may return an image of the figure; it shows the data."""
         self.current_figure: str | None = (
@@ -182,6 +215,11 @@ class Document(QObject):
         )
 
     def _after_change(self) -> None:
+        if self._many and not all(self._exists(oid) for oid in self._many):
+            kept = [oid for oid in self._many if self._exists(oid)]
+            self._many = kept if len(kept) > 1 else []
+            self._selected = kept[-1] if kept else None
+            self.selection_changed.emit(self._selected)
         if self._selected is not None and not self._exists(self._selected):
             self._selected = None
             self.selection_changed.emit(None)
