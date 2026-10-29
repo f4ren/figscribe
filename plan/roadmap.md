@@ -855,10 +855,10 @@ In order of demand:
    - The whole chain for each field (renderer, code generator, panel,
      `names.py`, `tools/spec.py`, `everything.py`), a roundtrip test, an
      image baseline and an equivalence case.
-   - `[decide]` Should the alignment be on by default? If it is, every
-     saved multi-panel file looks different once opened and the baselines
-     change. Alternative: on for new figures, off for old files through a
-     schema bump and a migration. Record the answer in a decision.
+   - **On by default**, also for files saved before (decided with the user,
+     2026-10-29): no schema bump and no migration, but a saved multi-panel
+     figure looks different once opened. Update the image baselines and
+     look at them, and say so in the CHANGELOG. Record it in a decision.
 
 ### F6 Several files as one series — M
 
@@ -1222,7 +1222,6 @@ answer in `docs/decisions.md` when the task is started.
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
-| F5.9 | Labels aligned by default, also in files saved before (baselines change), or only in new figures (schema bump)? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F12 | The proposals for the edge cases: median without error, groups of one row, the last group kept, no leaving points out while reduced, `absolute_sigma` for derived errors? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
