@@ -53,6 +53,7 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(QMessageBox, "warning", message)
     monkeypatch.setattr(QMessageBox, "information", message)
+    monkeypatch.setattr(QMessageBox, "about", message)
     monkeypatch.setattr(
         QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
     )
@@ -91,7 +92,7 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
     return make, shown
 
 
-MENUS = ["File", "Edit", "Insert", "View", "Assistant"]
+MENUS = ["File", "Edit", "Insert", "View", "Assistant", "Help"]
 """The menu bar; one test per menu, so that they run side by side."""
 
 PANELS = range(5)
