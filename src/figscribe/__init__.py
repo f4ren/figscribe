@@ -5,4 +5,4 @@ the code generator and the GUI read it, and change it only through undoable
 commands. See https://github.com/f4ren/figscribe for documentation and plans.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
