@@ -565,6 +565,66 @@ edited. *Not checked by a test:* what other programs take from the clipboard
 and how Explorer reads `/select,` with a path that has spaces (manual
 checklist, step 12).
 
+### U7 The version under Help — S
+
+Asked for by the user (2026-10-29). There is no *Help* menu yet. Add one as
+the last menu with *About figscribe*, a `QMessageBox.about` that names the
+versions a bug report needs: figscribe (`figscribe.__version__`), Python,
+Matplotlib, PySide6/Qt, the platform, and the link to the repository. Also
+`app.setApplicationVersion(__version__)` in `gui/app.py`.
+- On macOS, Qt moves an action whose text starts with "About" into the
+  application menu and leaves *Help* empty. The user asked for it under
+  *Help*, so the action gets `QAction.MenuRole.NoRole`.
+- The action sweep (`tests/gui/test_every_action.py`) replaces
+  `QMessageBox.about`, or the modal box would hang the offscreen test.
+- Tests: the text names each version; *Help* is the last menu and has the
+  entry; the menu role; triggering it shows the version.
+
+### U8 A background behind a note — S
+
+Asked for by the user (2026-10-29): over a grid, a note is hard to read.
+Proposed: `Annotation.background: Color | None` (None by default, so saved
+files stay as they are), offered as a color with "none" and white first.
+The renderer and the script pass `bbox=dict(boxstyle="round,pad=0.2",
+facecolor=..., edgecolor="none")` to `annotate`. The whole chain for the
+field, a roundtrip test, an image baseline with a grid, an equivalence case.
+*Later, if asked:* a frame around the note; the same for panel labels drawn
+inside the corner (F3).
+
+### U9 Where am I: a path in the panel, and the axes in the outline — M
+
+Asked for by the user (2026-10-29): from *X axis* or *Y axis* there is no
+way back, other than clicking something else.
+- **A path** instead of the kicker of the property panel's header
+  ("X AXIS · PANEL A"): *Figure › Panel A › X axis*, each part a link that
+  selects it (`document.select`); for a plot *Figure › Panel A › the plot*,
+  for a fit also its plot; for an inset its parent panel. With several
+  figures the first part is the figure's name.
+- **The axes in the outline**: under each panel's heading, before its
+  plots, a row for the x axis, the y axis and, if there is one, the right y
+  axis, with `axis_summary` in the second column ("Time (s), 0–10"). The
+  row selects the axis id that the preview's click on an axis already uses
+  (`panel/x`), and the outline follows when the axis is chosen in the
+  preview. Right-click: *Same x range in all panels* for that axis.
+- Tests the way a person uses it (B8): click each part of the path; click
+  an axis row and see the axis form; select an axis in the preview and see
+  its row selected. The existing outline tests that count rows change.
+- *Later, if asked:* fold a panel in the outline when there are many.
+
+### U10 The residuals' line width and zero line — S
+
+Asked for by the user (2026-10-29): the residuals made with a fit have no
+line width. `ResidualPlot` has color, marker, marker size and line style,
+but no `linewidth`, and the dashed zero line is fixed in the renderer
+(grey, 0.8 pt, `--`).
+- `ResidualPlot.linewidth: float | None` (None follows the style), for the
+  joining line and the error bars.
+- Proposed with it: the zero line's color, width and style, or none
+  (`zero_line: bool = True`, `zero_color`, `zero_linewidth`,
+  `zero_linestyle`, defaults as drawn now, so saved files stay as they are).
+- The whole chain for each field and the U1 test; the fit dialog stays as
+  it is, the panel of the residual plot shows the new fields.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
@@ -820,6 +880,30 @@ In order of demand:
    outline, as in Matplotlib. Per panel, beside the grid color:
    `grid_linewidth` and `grid_linestyle` (solid, dashed, dotted,
    dash-dotted; "none" is not offered, it would be no grid).
+9. **Axis labels in line across panels, and their distance.** Asked for
+   by the user (2026-10-29). Today a y label sits as far left as the tick
+   numbers of its panel are wide, so in a column of panels the labels
+   stagger. Decided with the user:
+   - **Aligned automatically**: `Figure.align_labels: bool`, a switch in
+     the figure's *Style* section; the renderer and the script call
+     `fig.align_labels()` (x labels in a row, y labels in a column).
+   - **A distance per axis in pt**: `AxisSpec.labelpad: float | None`
+     (None follows the style), so the right y axis has it too; the script
+     writes `labelpad=` on `set_xlabel`/`set_ylabel`. A field "Label
+     distance" in the axis form.
+   - Not wanted for now: dragging a label in the preview.
+   - Only grid panels are aligned: no insets, no twin axes; panels that
+     span several cells and residual panels need a look. Check that
+     `align_labels` and the constrained layout agree, with a render test
+     that compares label positions, and a figure with an inset and a right
+     y axis.
+   - The whole chain for each field (renderer, code generator, panel,
+     `names.py`, `tools/spec.py`, `everything.py`), a roundtrip test, an
+     image baseline and an equivalence case.
+   - **On by default**, also for files saved before (decided with the user,
+     2026-10-29): no schema bump and no migration, but a saved multi-panel
+     figure looks different once opened. Update the image baselines and
+     look at them, and say so in the CHANGELOG. Record it in a decision.
 
 ### F6 Several files as one series — M
 
@@ -948,6 +1032,66 @@ apart.
 *Follow-ups, only if asked:* the conversion in the plot dialog; dragging
 the range in the preview; a row range; converted positions of a color
 mesh; date axes (F5.5) for timestamps instead of hours since the start.
+
+### F12 Fewer points drawn: averaged or thinned — M
+
+Asked for by the user (2026-10-29): show long measurements with fewer
+points, averaged or thinned. This is not E1.3, which thins the preview alone
+for speed; here the figure, the export and the script all show the reduced
+data, and the data file stays untouched. An analysis by decision 0036, so it
+gets a decision of its own before code (F10).
+
+Decided with the user:
+- **Four ways**, per plot: the **mean of every n rows**, the **median of
+  every n rows**, **every n-th row**, and the **mean over x intervals** of a
+  given width (for unevenly sampled data), the width in shown x, as
+  `x_range` is.
+- **Errors**: an averaged point gets the standard error as its error bar
+  (std / √n, ddof = 1); error bars already there are propagated (√Σσ² / n).
+- **Fits and residuals** use the reduced points, and the derived errors
+  count as **absolute** (`absolute_sigma=True`): they are uncertainties
+  estimated from the data, so the parameters' uncertainties follow from
+  them and χ²ᵣ keeps its meaning.
+- **Which plots**: error bar plots, with the derived errors drawn, and line
+  plots, for when the errors do not matter: a line is reduced the same way
+  but draws no error. Points plots were not asked for; ask when F12 is
+  started.
+- **The median gets no error bar**, and the panel says so (1.2533 · std /
+  √n is a poor estimate just where the median is chosen, with outliers).
+- **A group of one row** has no scatter: it keeps its existing error, else
+  it has none, and a fit gets neither NaN nor zero as its sigma.
+- **An incomplete last group** (1003 rows, n = 10): a choice per plot,
+  *keep it* (averaged over the rows it has, with a larger error) or *drop
+  it*. Proposed default: keep it.
+- **Left-out rows** (F2) still mean rows of the file and are taken out
+  before the reduction. The groups stay where they are in the file (rows 1
+  to 10, 11 to 20, …), so a group with a left-out row is averaged over one
+  row fewer, with n − 1 in its error, and the groups after it do not shift.
+  As an option per plot, a left-out row can instead be **replaced by the
+  mean of the kept rows before and after it** (at the start or end of the
+  data the one neighbour), so its group keeps n values. To settle: in that
+  case the error should still count only the measured rows, or the
+  invented value makes the point look more certain than it is.
+
+To settle while building it, with a proposal each (record them in the
+decision):
+- **The order** of the steps, following F11's single place for the
+  arithmetic (`convert.py`): conversion, range, left-out rows (removed or
+  replaced), non-finite values, then the reduction. A module beside it, used
+  by the renderer, the fits and the code generator.
+- **Clicking a reduced plot**: a drawn point is a group, not a row.
+  Proposed: on a reduced plot the preview's "Leave out row …" and the fit
+  dialog's "Find outliers" are disabled, and say why (a B8.4 rule); left-out
+  rows are not drawn while the plot is reduced.
+- **The script** reads as written by hand: the group of each row as
+  `rows // n`, averaged with `scipy.stats.binned_statistic` (SciPy is
+  already a dependency), which also takes x intervals; `[::n]` for every
+  n-th row; with a comment. Groups by file row are why a plain
+  `reshape(-1, n)` does not do once rows are left out. The renderer's bin edges must be the
+  script's, or the equivalence test fails.
+- **Names** in the panel that cannot be taken for the preview's thinning,
+  for example "Draw: every row / mean of … rows / median of … rows / every
+  … th row / mean per … in x".
 
 ---
 
@@ -1138,6 +1282,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
+| F12 | Points plots reduced too? Leaving points out disabled while a plot is reduced? The error of a group with a replaced row? (Answered when F12 is started.) |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
