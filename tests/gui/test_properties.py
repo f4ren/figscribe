@@ -517,6 +517,46 @@ def test_the_grid_color_is_a_color_field(panel: PropertyPanel, document) -> None
     assert _axes(document).grid_color == "#696969"
 
 
+def _with_residuals(document):
+    from figscribe.fit import add_fit
+    from figscribe.model import FitCurve, PredefinedFit
+
+    data = next(a for a in _axes(document).artists if a.kind == "errorbar")
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    document.push(add_fit(document.project, fit, residuals=True))
+    return document.figure.axes[1].artists[0]
+
+
+def test_the_residuals_line_width_is_set_in_the_panel(
+    panel: PropertyPanel, document
+) -> None:
+    residuals = _with_residuals(document)
+    document.select(residuals.id)
+    editor = panel.editors[("linewidth",)]
+    assert editor.line.placeholderText() == "default"
+    _type(panel, ("linewidth",), "2")
+    assert residuals.linewidth == 2.0
+    document.undo()
+    assert residuals.linewidth is None
+    _type(panel, ("linewidth",), "0")  # not a width: refused, nothing changes
+    assert residuals.linewidth is None
+
+
+def test_the_zero_line_is_set_in_the_panel(panel: PropertyPanel, document) -> None:
+    residuals = _with_residuals(document)
+    document.select(residuals.id)
+    _type(panel, ("zero_color",), "tab:red")
+    _type(panel, ("zero_linewidth",), "1.5")
+    assert (residuals.zero_color, residuals.zero_linewidth) == ("tab:red", 1.5)
+    combo = panel.editors[("zero_linestyle",)].widget
+    labels = [combo.itemText(i) for i in range(combo.count())]
+    assert "None" not in labels and "Dotted" in labels
+    combo.activated.emit(labels.index("Dotted"))
+    assert residuals.zero_linestyle == ":"
+    panel.editors[("zero_line",)].widget.click()
+    assert residuals.zero_line is False
+
+
 def test_a_refused_color_is_not_offered_again(
     panel: PropertyPanel, document: Document
 ) -> None:

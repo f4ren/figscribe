@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
+from figscribe.fit import add_fit
 from figscribe.gui import Document
 from figscribe.gui.effect import RULES, without_effect
 from figscribe.gui.properties import PropertyPanel
@@ -38,6 +39,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
     ReferenceLine,
+    ResidualPlot,
     validate_references,
 )
 from figscribe.render.figure import render
@@ -105,6 +107,19 @@ def _fitted(**fields):
     def make():
         data, fit = _fit(**fields)
         return Axes(artists=[data, fit]), fit
+
+    return make
+
+
+def _residuals(data_fields=None, **fields):
+    """Data, its fit and the residuals in one panel."""
+
+    def make():
+        data, fit = _fit()
+        for name, value in (data_fields or {}).items():
+            setattr(data, name, value)
+        residuals = ResidualPlot(target=fit.id, **fields)
+        return Axes(artists=[data, fit, residuals]), residuals
 
     return make
 
@@ -196,6 +211,30 @@ CASES: dict[tuple[str, tuple], Case] = {
         2.0,
         ("time",),
         None,
+    ),
+    ("ResidualPlot", ("zero_color",)): (
+        _residuals(zero_line=False),
+        "red",
+        ("zero_line",),
+        True,
+    ),
+    ("ResidualPlot", ("zero_linewidth",)): (
+        _residuals(zero_line=False),
+        3.0,
+        ("zero_line",),
+        True,
+    ),
+    ("ResidualPlot", ("zero_linestyle",)): (
+        _residuals(zero_line=False),
+        ":",
+        ("zero_line",),
+        True,
+    ),
+    ("ResidualPlot", ("linewidth",)): (
+        _residuals(),
+        4.0,
+        ("linestyle",),
+        "-",
     ),
     ("FitCurve", ("extend_curve",)): (
         _fitted(),
@@ -303,6 +342,36 @@ def test_the_line_width_counts_once_there_is_a_line(panel, document) -> None:
     combo.setCurrentIndex(index)
     combo.activated.emit(index)
     assert panel.editors[("linewidth",)].widget.isEnabled()
+
+
+def test_the_residuals_line_width_counts_with_error_bars() -> None:
+    data = _bars()
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="linear"),
+        result=FitResult(parameters={"a": 0.1, "b": -0.3}, uncertainties={}),
+    )
+    residuals = ResidualPlot(target=fit.id)
+    axes = Axes(artists=[data, fit, residuals])
+    assert residuals.linestyle == "none"
+    assert without_effect(residuals, ("linewidth",), _project(axes)) is None
+    before = _drawn(axes)
+    residuals.linewidth = 4.0
+    assert _drawn(axes) != before
+
+
+def test_the_zero_line_settings_are_greyed_while_it_is_off(panel, document) -> None:
+    data = next(a for a in document.figure.axes[0].artists if a.kind == "errorbar")
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    document.push(add_fit(document.project, fit, residuals=True))
+    residuals = document.figure.axes[1].artists[0]
+    document.select(residuals.id)
+    assert panel.editors[("zero_linewidth",)].widget.isEnabled()
+    panel.editors[("zero_line",)].widget.click()
+    assert not residuals.zero_line
+    widget = panel.editors[("zero_linewidth",)].widget
+    assert not widget.isEnabled()
+    assert widget.toolTip().startswith("Does nothing while the zero line is off")
 
 
 # --- what the problem list says ---------------------------------------------

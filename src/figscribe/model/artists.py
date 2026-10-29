@@ -412,6 +412,17 @@ class ResidualPlot(ArtistBase):
     """Marker size in pt."""
     linestyle: str = "none"
     """"none" draws only the points; "-" also joins them."""
+    linewidth: float | None = Field(None, gt=0.0)
+    """Width in pt of the joining line and of the error bars; None follows the
+    style."""
+    zero_line: bool = True
+    """Whether the dashed line at zero is drawn."""
+    zero_color: Color = "0.6"
+    """Color of the zero line."""
+    zero_linewidth: float = Field(0.8, gt=0.0)
+    """Width of the zero line in pt."""
+    zero_linestyle: str = "--"
+    """"-", "--", "-." or ":"."""
 
 
 class Annotation(ArtistBase):

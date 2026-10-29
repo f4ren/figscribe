@@ -632,6 +632,18 @@ but no `linewidth`, and the dashed zero line is fixed in the renderer
 - The whole chain for each field and the U1 test; the fit dialog stays as
   it is, the panel of the residual plot shows the new fields.
 
+**Done** (2026-10-29; no schema bump, the defaults draw what was drawn):
+`ResidualPlot.linewidth` (None follows the style) and `zero_line`,
+`zero_color`, `zero_linewidth`, `zero_linestyle`, through the renderer, the
+script, the panel (the width is among the first settings, the zero line
+under *More*), the assistant's `set_field` and an image baseline
+`residuals`. Two rules in `gui/effect.py`: the zero line's settings do
+nothing while it is off, and the width does nothing while no line is joined
+and the data has no y errors. *Learned:* a new color or line style field is
+named in `model/styles.py` (`KINDS`), or a typed "2" is taken by the model
+and breaks the drawing; the every-field test found it. *Not done:* the fit
+dialog still offers no look for the residuals it adds; the panel does.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish

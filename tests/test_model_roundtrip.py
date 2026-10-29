@@ -45,6 +45,38 @@ def test_roundtrip_restores_concrete_artist_types(project: Project) -> None:
     assert [type(a) for a in axes[1].artists] == [ResidualPlot]
 
 
+def test_roundtrip_keeps_the_look_of_the_residuals(project: Project) -> None:
+    residuals = project.figures[0].axes[1].artists[0]
+    residuals.linewidth = 2.0
+    residuals.zero_line = False
+    residuals.zero_color = "tab:red"
+    residuals.zero_linewidth = 1.5
+    residuals.zero_linestyle = ":"
+    back = loads(dumps(project)).figures[0].axes[1].artists[0]
+    assert back == residuals
+
+
+def test_residuals_saved_before_the_look_was_settable_are_drawn_as_before(
+    project: Project,
+) -> None:
+    import json
+
+    document = json.loads(dumps(project))
+    residuals = document["figures"][0]["axes"][1]["artists"][0]
+    for name in (
+        "linewidth",
+        "zero_line",
+        "zero_color",
+        "zero_linewidth",
+        "zero_linestyle",
+    ):
+        residuals.pop(name, None)
+    back = loads(json.dumps(document)).figures[0].axes[1].artists[0]
+    assert back.linewidth is None
+    assert (back.zero_line, back.zero_color) == (True, "0.6")
+    assert (back.zero_linewidth, back.zero_linestyle) == (0.8, "--")
+
+
 def test_roundtrip_keeps_nested_unions(project: Project) -> None:
     fit = loads(dumps(project)).figures[0].axes[0].artists[1]
     assert isinstance(fit, FitCurve)

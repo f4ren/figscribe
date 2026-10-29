@@ -5,6 +5,9 @@ release open in every later one.
 
 ## Unreleased
 
+- Residuals have a *Line width* (the joining line and the error bars) and
+  the zero line is set apart: switch it off, or change its color, width and
+  style. Saved files are drawn as before.
 - *Help > About figscribe* shows the version of figscribe and of Python,
   Matplotlib and Qt, for bug reports. On macOS it stays under *Help*.
 

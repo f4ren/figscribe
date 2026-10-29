@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from figscribe.commands.core import CommandError, find
 from figscribe.model import (
     AllanDeviationPlot,
     Axes,
@@ -27,6 +28,7 @@ from figscribe.model import (
     LinePlot,
     Project,
     ReferenceLine,
+    ResidualPlot,
     ScatterPlot,
 )
 from figscribe.render.figure import NO_LINE
@@ -69,6 +71,18 @@ def _no_bars(plot: ErrorbarPlot, _) -> bool:
     return plot.xerr is None and (plot.yerr is None or plot.band is not None)
 
 
+def _no_residual_line(residuals: ResidualPlot, project: Project) -> bool:
+    """Nothing is drawn with the width: no joining line, and the data has no
+    y errors to draw as bars."""
+    if residuals.linestyle not in NO_LINE:
+        return False
+    try:
+        data = find(project, find(project, residuals.target).target)
+    except (CommandError, AttributeError):
+        return True
+    return getattr(data, "yerr", None) is None
+
+
 GRID = ("grid_axis", "grid_which", "grid_color", "grid_linewidth", "grid_linestyle")
 LEGEND = ("position", "frame", "ncols", "fontsize")
 LEFT_OUT = ("left_out_color", "left_out_marker", "left_out_linestyle")
@@ -98,6 +112,18 @@ RULES: list[Rule] = [
         (("linewidth",),),
         'there is no line: its line style is "none"',
         lambda plot, _: plot.linestyle in NO_LINE,
+    ),
+    Rule(
+        (ResidualPlot,),
+        (("linewidth",),),
+        'there is no line: its line style is "none", and the data has no y errors',
+        _no_residual_line,
+    ),
+    Rule(
+        (ResidualPlot,),
+        (("zero_color",), ("zero_linewidth",), ("zero_linestyle",)),
+        "the zero line is off",
+        lambda residuals, _: not residuals.zero_line,
     ),
     Rule(
         (LinePlot, AllanDeviationPlot),

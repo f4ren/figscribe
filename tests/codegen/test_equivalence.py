@@ -130,6 +130,35 @@ def test_fit_and_residuals(tmp_path: Path) -> None:
     assert 'ax_a.tick_params(axis="x"' in script
 
 
+def test_residuals_with_a_line_width_and_a_styled_zero_line(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    residuals = project.figures[0].axes[1].artists[0]
+    residuals.linestyle = "-"
+    residuals.linewidth = 2.5
+    residuals.zero_color = "tab:red"
+    residuals.zero_linewidth = 1.5
+    residuals.zero_linestyle = ":"
+    script = _assert_same(project, tmp_path)
+    assert "linewidth=2.5" in script and 'color="tab:red"' in script
+
+
+def test_residuals_without_a_zero_line(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    project.figures[0].axes[1].artists[0].zero_line = False
+    script = _assert_same(project, tmp_path)
+    assert "axhline" not in script
+
+
 def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")

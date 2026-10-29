@@ -1333,9 +1333,15 @@ class _Writer:
     def _residuals(
         self, ax: str, residuals: ResidualPlot, common: dict[str, str]
     ) -> None:
-        self.emit(
-            f'{ax}.axhline(0.0, color="0.6", linewidth=0.8, linestyle="--", zorder=1)'
-        )
+        if residuals.zero_line:
+            self.call(
+                f"{ax}.axhline",
+                "0.0",
+                color=_str(residuals.zero_color),
+                linewidth=_num(residuals.zero_linewidth),
+                linestyle=_str(residuals.zero_linestyle),
+                zorder="1",
+            )
         fit = self.artists.get(residuals.target)
         if not isinstance(fit, FitCurve) or fit.id not in self.fits:
             self.emit("# The fit is not run yet, so there are no residuals to draw.")
@@ -1365,6 +1371,8 @@ class _Writer:
             "markersize": _num(residuals.markersize),
             "linestyle": _str(residuals.linestyle),
         }
+        if residuals.linewidth is not None:
+            kwargs["linewidth"] = _num(residuals.linewidth)
         self.call(
             f"{ax}.errorbar", x, f"{y} - {function}({x}, *{popt})", **kwargs, **common
         )

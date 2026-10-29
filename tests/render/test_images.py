@@ -24,11 +24,15 @@ from figscribe.model import (
     ErrorBand,
     ErrorbarPlot,
     Figure,
+    FitCurve,
+    FitResult,
     GridLayout,
     Legend,
     LinePlot,
     PanelLabels,
+    PredefinedFit,
     ReferenceLine,
+    ResidualPlot,
     ScatterPlot,
     ShadedSpan,
 )
@@ -43,6 +47,33 @@ TOLERANCE = 0.5
 Matplotlib's wheels bundle their own FreeType, so text renders the same on
 every platform; the small tolerance absorbs antialiasing differences only.
 """
+
+
+def _residuals_figure(ref) -> Figure:
+    """A fit with its residuals below, drawn thick and with a red zero line."""
+    data = ErrorbarPlot(x=ref("t"), y=ref("U"), yerr=ref("dU"), linestyle="none")
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="linear"),
+        result=FitResult(parameters={"a": 0.05, "b": 0.0}, uncertainties={}),
+    )
+    residuals = ResidualPlot(
+        target=fit.id,
+        color="tab:blue",
+        linestyle="-",
+        linewidth=2.5,
+        zero_color="tab:red",
+        zero_linewidth=1.5,
+        zero_linestyle="-",
+    )
+    return Figure(
+        dpi=100.0,
+        layout=GridLayout(rows=2),
+        axes=[
+            Axes(x=AxisSpec(label="$t$", unit="s"), artists=[data, fit]),
+            Axes(row=1, y=AxisSpec(label="Residual"), artists=[residuals]),
+        ],
+    )
 
 
 def _figures(ref) -> dict[str, Figure]:
@@ -186,6 +217,7 @@ def _figures(ref) -> dict[str, Figure]:
                 )
             ],
         ),
+        "residuals": _residuals_figure(ref),
     }
 
 
@@ -200,6 +232,7 @@ def _figures(ref) -> dict[str, Figure]:
         "reference_lines",
         "error_band",
         "converted",
+        "residuals",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:
