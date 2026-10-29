@@ -3,7 +3,7 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
-## Unreleased
+## 0.2.0 — 2026-10-29
 
 **Figures**
 - Several figures in one project: tabs above the figure, *Insert > Add
@@ -48,7 +48,8 @@ release open in every later one.
 - *Same x range in all panels* and *Same y range in all panels*, from a
   panel's menu in the outline or the preview.
 - *Edit > Copy Figure* (Ctrl+Shift+C) puts the figure on the clipboard as
-  PNG and SVG, for slides and documents.
+  PNG and SVG, for slides and documents. When figscribe closes, only the
+  bitmap stays on the clipboard.
 - *Show in Finder* (Explorer, file manager) on a data file in the outline.
 
 **Fixed**
