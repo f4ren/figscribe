@@ -18,6 +18,7 @@ import pytest
 from matplotlib.testing.compare import compare_images
 
 from figscribe.model import (
+    Annotation,
     Axes,
     AxisSpec,
     Conversion,
@@ -218,6 +219,29 @@ def _figures(ref) -> dict[str, Figure]:
             ],
         ),
         "residuals": _residuals_figure(ref),
+        "note_background": Figure(
+            dpi=100.0,
+            axes=[
+                Axes(
+                    **labelled,
+                    grid=True,
+                    artists=[
+                        LinePlot(x=ref("t"), y=ref("U")),
+                        Annotation(
+                            text="peak",
+                            position=(0.45, 0.8),
+                            coords="axes",
+                            background="white",
+                        ),
+                        Annotation(
+                            text="no background",
+                            position=(0.45, 0.2),
+                            coords="axes",
+                        ),
+                    ],
+                )
+            ],
+        ),
     }
 
 
@@ -233,6 +257,7 @@ def _figures(ref) -> dict[str, Figure]:
         "error_band",
         "converted",
         "residuals",
+        "note_background",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

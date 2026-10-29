@@ -35,6 +35,7 @@ FIELD_NAMES = {
     "axis": "y axis",
     "color": "Color",
     "edgecolor": "Edge color",
+    "background": "Background",
     "linestyle": "Line style",
     "linewidth": "Line width (pt)",
     "marker": "Marker",

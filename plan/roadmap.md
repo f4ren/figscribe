@@ -600,6 +600,14 @@ field, a roundtrip test, an image baseline with a grid, an equivalence case.
 *Later, if asked:* a frame around the note; the same for panel labels drawn
 inside the corner (F3).
 
+**Done** (2026-10-29; no schema bump, the default draws no box):
+`Annotation.background`, a color shown in the panel after *Color*, with white
+first among the swatches; empty means none. The box has rounded corners and
+no frame, in the renderer and in the script. Also named in `model/styles.py`
+(`KINDS`) and the panel's color fields, as every color field must be.
+*Follow-ups, only if asked:* a frame around the note; the same for panel
+labels drawn inside the corner (F3).
+
 ### U9 Where am I: a path in the panel, and the axes in the outline — M
 
 Asked for by the user (2026-10-29): from *X axis* or *Y axis* there is no

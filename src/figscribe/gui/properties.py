@@ -136,7 +136,14 @@ EDITED_ELSEWHERE: dict[type[BaseModel], str] = {
 """Model classes whose fields the generated forms never show, and where they
 are edited instead."""
 
-COLOR_FIELDS = {"color", "edgecolor", "grid_color", "left_out_color", "zero_color"}
+COLOR_FIELDS = {
+    "color",
+    "edgecolor",
+    "grid_color",
+    "left_out_color",
+    "zero_color",
+    "background",
+}
 
 Path = tuple[str, ...]
 
@@ -271,6 +278,7 @@ SECTIONS = {
 LOOK = [
     "text",
     "color",
+    "background",
     "edgecolor",
     "marker",
     "markersize",
@@ -314,7 +322,7 @@ BASIC = {
     "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
     "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
     "ResidualPlot": ("color", "marker", "markersize", "linestyle", "linewidth"),
-    "Annotation": ("text", "color", "fontsize", "position", "arrow_to"),
+    "Annotation": ("text", "color", "background", "fontsize", "position", "arrow_to"),
     "ReferenceLine": ("color", "linestyle", "linewidth", "label"),
     "ShadedSpan": ("color", "alpha", "label"),
     "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
@@ -337,6 +345,7 @@ PLACEHOLDERS = {
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
     "label": "not in the legend",
+    "background": "none",
     "color": "automatic",
     "edgecolor": "automatic",
     "grid_color": "automatic",
@@ -441,6 +450,8 @@ TIPS = {
     "color": "A name such as blue or tab:orange, or a code such as #1f77b4; empty "
     "takes the next color of the cycle.",
     "Annotation.color": "Color of the text and the arrow; empty follows the style.",
+    "background": "Fill behind the note, for reading it over a grid or a plot; "
+    "empty draws none.",
     "ReferenceLine.color": "A name such as gray or tab:orange, or a code such as "
     "#1f77b4.",
     "ShadedSpan.color": "A name such as gray or tab:orange, or a code such as "
@@ -1534,7 +1545,9 @@ class ColorEditor(TextEditor):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(6)
         cycle = [(f"C{i}", c) for i, c in enumerate(_cycle(panel)[:10])]
-        self.swatches = self._swatches([*cycle, ("black", "black")])
+        # A fill behind a note is most often white, so it comes first.
+        white = [("white", "white")] if path[-1] == "background" else []
+        self.swatches = self._swatches([*white, *cycle, ("black", "black")])
         self.button = QToolButton()
         self.button.setObjectName("choice")
         self.button.setIcon(theme.icon("plus", theme.MUTED))

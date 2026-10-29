@@ -439,6 +439,9 @@ class Annotation(ArtistBase):
     """Font size in pt; None follows the figure."""
     color: Color | None = None
     """Color of the text and the arrow; None follows the style."""
+    background: Color | None = None
+    """Fill behind the text, so it reads over a grid or a plot; None draws
+    none."""
 
 
 class ReferenceLine(ArtistBase):

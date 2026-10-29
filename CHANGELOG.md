@@ -8,6 +8,8 @@ release open in every later one.
 - Residuals have a *Line width* (the joining line and the error bars) and
   the zero line is set apart: switch it off, or change its color, width and
   style. Saved files are drawn as before.
+- A note can have a *Background*, white or any color, so it reads over a grid.
+  Notes without one are drawn as before.
 - *Help > About figscribe* shows the version of figscribe and of Python,
   Matplotlib and Qt, for bug reports. On macOS it stays under *Help*.
 

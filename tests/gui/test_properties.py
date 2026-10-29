@@ -557,6 +557,40 @@ def test_the_zero_line_is_set_in_the_panel(panel: PropertyPanel, document) -> No
     assert residuals.zero_line is False
 
 
+def _note(document):
+    from figscribe.commands import InsertItem
+    from figscribe.model import Annotation
+
+    note = Annotation(text="peak", position=(1.0, 0.5))
+    document.push(InsertItem(_axes(document).id, "artists", note))
+    return _axes(document).artists[-1]
+
+
+def test_a_note_background_is_chosen_with_white_first(
+    panel: PropertyPanel, document
+) -> None:
+    note = _note(document)
+    document.select(note.id)
+    editor = panel.editors[("background",)]
+    assert editor.line.placeholderText() == "none"
+    assert next(iter(editor.swatches)) == "white"  # for notes over a grid
+    editor.swatches["white"].click()
+    assert note.background == "white"
+    document.undo()
+    assert note.background is None
+    _type(panel, ("background",), "#ffeeaa")
+    assert note.background == "#ffeeaa"
+    _type(panel, ("background",), "")  # none again
+    assert note.background is None
+
+
+def test_a_refused_background_is_reported(panel: PropertyPanel, document) -> None:
+    note = _note(document)
+    document.select(note.id)
+    _type(panel, ("background",), "wh")
+    assert note.background is None and "not a color" in panel.error
+
+
 def test_a_refused_color_is_not_offered_again(
     panel: PropertyPanel, document: Document
 ) -> None:

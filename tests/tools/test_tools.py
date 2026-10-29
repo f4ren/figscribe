@@ -164,6 +164,22 @@ def test_the_assistant_sets_the_residuals_line_width_and_zero_line(
         )
 
 
+def test_the_assistant_gives_a_note_a_background(tools, workspace) -> None:
+    from figscribe.model import Annotation
+
+    axes = workspace.project.figures[0].axes[0]
+    note = Annotation(text="peak", position=(1.0, 2.0))
+    axes.artists.append(note)
+    tools.call(
+        "set_field", {"object_id": note.id, "path": ["background"], "value": "white"}
+    )
+    assert axes.artists[-1].background == "white"
+    with pytest.raises(ToolError, match="not a color"):
+        tools.call(
+            "set_field", {"object_id": note.id, "path": ["background"], "value": "wh"}
+        )
+
+
 def test_the_assistant_letters_the_panels(tools, workspace) -> None:
     figure, *_ = _ids(workspace)
     schema = tools.call("get_schema", {})

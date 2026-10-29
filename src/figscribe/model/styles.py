@@ -16,6 +16,7 @@ KINDS = {
     "color": "color",
     "edgecolor": "color",
     "grid_color": "color",
+    "background": "color",
     "grid_linestyle": "line style",
     "zero_color": "color",
     "zero_linestyle": "line style",
