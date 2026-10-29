@@ -77,7 +77,10 @@ def test_the_bytes_are_the_file_that_export_writes(
     # The clipboard gets the figure as exported, not another rendering of it.
     path = tmp_path / f"f{suffix}"
     export(figure, data, path)
-    assert export_bytes(figure, data, suffix) == path.read_bytes()
+    # Matplotlib writes an SVG file as text, so on Windows its lines end in
+    # CRLF; the bytes in memory end in LF. The picture is the same.
+    written = path.read_bytes().replace(b"\r\n", b"\n")
+    assert export_bytes(figure, data, suffix) == written
 
 
 def test_bytes_of_an_unknown_format_are_refused(figure, data) -> None:
