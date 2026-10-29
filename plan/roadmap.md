@@ -1213,6 +1213,30 @@ template to an existing figure is one undo step.
   myself…" opens this dialog after the import, a second step; it could be
   part of the import dialog instead.
 
+### E5 Versions that are tested, and a lighter CI — S
+
+Asked for by the user (2026-10-29): the checks take long for small changes,
+and `pyproject.toml`'s floors had never been installed.
+
+**Done** (2026-10-29, decision 0044): floors `matplotlib>=3.10`,
+`numpy>=2.0`, `scipy>=1.13`, `PySide6>=6.7`; a CI job `minimum-versions`
+(lowest allowed versions, fast tests without image baselines and GUI tests,
+not a required check); pip cache; older runs of a pull request cancelled; a
+pull request that only changes `plan/`, `docs/` or Markdown skips the
+install and the tests (the required jobs still report).
+
+**Open:** the GUI tests pass on PySide6 6.12 only. On 6.7 to 6.11 (with the
+other floors at their lowest) `test_the_help_menu_is_the_last_and_has_about`,
+`test_the_outline_offers_them_on_a_panel`, `test_style_like_another_plot`
+(all "Internal C++ object (QMenu) already deleted", where a test takes a
+menu from `action.menu()` and works on it) and
+`test_the_arrow_keys_choose_another_entry` fail. Find out whether the tests
+hold the menus too loosely or the program has a lifetime problem (the help
+menu is built like the others), fix it, then let `minimum-versions` run
+`tests/gui` too and set the PySide6 floor to what passes. *Also open:* NumPy
+1.26 could be supported again by reading decimal-comma files without
+`converters` bytes; not wanted for now.
+
 ---
 
 ## Phase 4 — M7: polish and release
