@@ -10,6 +10,11 @@ release open in every later one.
   style. Saved files are drawn as before.
 - A note can have a *Background*, white or any color, so it reads over a grid.
   Notes without one are drawn as before.
+- Where am I: above the settings a path, such as *Scan › Panel A › X axis*,
+  whose parts lead back to the figure or the panel with a click. The axes
+  are rows in the outline, under their panel, and the axis chosen in the
+  figure is the row selected there; a right-click offers the same range for
+  all panels.
 - *Help > About figscribe* shows the version of figscribe and of Python,
   Matplotlib and Qt, for bug reports. On macOS it stays under *Help*.
 

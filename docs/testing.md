@@ -75,6 +75,9 @@ note the platform, the screen scaling and the theme in the pull request.
     spaces and non-ASCII letters.
 13. **About**: *Help > About figscribe* shows the version. On macOS the
     entry is in the *Help* menu, not in the application menu.
+14. **Where am I**: select an axis in the figure and in the outline; the
+    path above the settings leads back to its panel and the figure. With a
+    right y axis and a long label, the outline rows stay readable.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

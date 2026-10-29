@@ -628,6 +628,20 @@ way back, other than clicking something else.
   its row selected. The existing outline tests that count rows change.
 - *Later, if asked:* fold a panel in the outline when there are many.
 
+**Done** (2026-10-29; no model field changed): `gui/path.py` gives the path
+of any object or axis, *Figure › Panel › item*, as the user put it (an inset
+is reached through its host panel); the property panel shows it in place of
+the kicker whenever it has more than one part, and its parts are flat
+buttons. The outline has a row for the x and the y axis of every panel and
+for the right y axis when there is one, with the axis's label and unit and
+its summary as tooltip; the axis chosen in the figure selects its row. A
+right-click on an x or y row offers the same range for all panels (not for
+insets or the right y axis). Unlike the sketch above, a fit has no extra
+part for its plot. *Learned:* `Document` already took axis ids, selecting
+one in another figure brings that figure up; the preview's click and the
+outline row use the same id. *Follow-ups, only if asked:* folding panels;
+the path in the preview's status line.
+
 ### U10 The residuals' line width and zero line — S
 
 Asked for by the user (2026-10-29): the residuals made with a fit have no

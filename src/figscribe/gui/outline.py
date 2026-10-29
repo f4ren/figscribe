@@ -25,7 +25,8 @@ from PySide6.QtWidgets import (
 
 from figscribe.commands import CommandError, SetField, drawing_order, find, to_front
 from figscribe.gui import theme
-from figscribe.gui.document import Document, split_axis
+from figscribe.gui.axisform import AXIS_TITLES, axis_summary, plain, unit_shown
+from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.figures import fill_figure_menu
 from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
@@ -146,6 +147,7 @@ class Outline(QTreeWidget):
     def _axes_rows(self, figure: Figure, axes: Axes) -> None:
         heading = self._row(panel_name(figure, axes).upper(), axes.id)
         _kicker(heading)
+        self._axis_rows(axes)
         # Every Matplotlib axes has its own colour cycle; a right y axis too.
         cycles = {}
         for artist in axes.artists:
@@ -173,6 +175,25 @@ class Outline(QTreeWidget):
                 item.setFont(1, theme.mono_font(11))
         letter = panel_name(figure, axes).split(" ")[1]
         self._link(f"+ Add to panel {letter}", lambda: self.add_requested.emit(axes.id))
+
+    def _axis_rows(self, axes: Axes) -> None:
+        """The panel's axes, before its plots: where to go for their settings."""
+        for field in ("x", "y", "y_right"):
+            spec = getattr(axes, field)
+            if spec is None:
+                continue
+            what = AXIS_TITLES[field].capitalize()
+            label = plain(spec.label) if spec.label else ""
+            unit = unit_shown(spec)
+            if unit:
+                label = f"{label} ({plain(unit)})" if label else f"({plain(unit)})"
+            item = self._row(
+                f"{what} · {label}" if label else what, axis_id(axes.id, field)
+            )
+            item.setIcon(
+                0, theme.icon("axis_y" if field != "x" else "axis_x", theme.MUTED)
+            )
+            item.setToolTip(0, axis_summary(spec))
 
     def _data_rows(self) -> None:
         sources = self.document.project.sources
@@ -244,6 +265,9 @@ class Outline(QTreeWidget):
 
     def context_menu(self, oid: str) -> QMenu | None:
         """What can be done with the object `oid`, as a menu; None if nothing."""
+        axis = split_axis(oid)
+        if axis is not None:
+            return self._axis_menu(*axis)
         try:
             obj = find(self.document.project, oid)
         except CommandError:
@@ -306,6 +330,23 @@ class Outline(QTreeWidget):
             return None
         return menu
 
+    def _axis_menu(self, axes_id: str, field: str) -> QMenu | None:
+        """What can be done with one axis: give every panel its range. Nothing
+        for the right y axis or an inset, which `same_range` leaves alone."""
+        try:
+            axes = find(self.document.project, axes_id)
+        except CommandError:
+            return None
+        if field == "y_right" or axes.inset is not None:
+            return None
+        menu = QMenu(self)
+        action = menu.addAction(
+            f"Same {field} range in all panels",
+            lambda: self.same_range_requested.emit(axes_id, field),
+        )
+        action.setEnabled(self._other_panels(axes))
+        return menu
+
     def _other_panels(self, axes: Axes) -> bool:
         """Whether the figure of `axes` has another panel in its grid."""
         for figure in self.document.project.figures:
@@ -363,10 +404,10 @@ class Outline(QTreeWidget):
                     if item is not None:
                         item.setSelected(True)
                 return
-            axis = split_axis(oid)
-            if axis is not None:
-                oid = axis[0]  # an axis is shown as its panel's row
             item = self.item_for(oid) if oid is not None else None
+            axis = split_axis(oid)
+            if item is None and axis is not None:
+                item = self.item_for(axis[0])  # no row of its own: its panel's
             self.setCurrentItem(item) if item else self.clearSelection()
         finally:
             self._syncing = False
