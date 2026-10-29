@@ -691,7 +691,14 @@ def _draw_residuals(
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
     target = _referenced(artists, fit.target, FITTABLE, "fit")
-    ax.axhline(0.0, color="0.6", linewidth=0.8, linestyle="--", zorder=1)
+    if residuals.zero_line:
+        ax.axhline(
+            0.0,
+            color=residuals.zero_color,
+            linewidth=residuals.zero_linewidth,
+            linestyle=residuals.zero_linestyle,
+            zorder=1,
+        )
     if fit.result is None:
         return
     shown = plot_data(target, data)
@@ -708,6 +715,7 @@ def _draw_residuals(
         marker=residuals.marker,
         markersize=residuals.markersize,
         linestyle=residuals.linestyle,
+        linewidth=residuals.linewidth,
         **common,
     )
     for part in container.get_children():

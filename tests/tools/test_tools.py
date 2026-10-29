@@ -135,6 +135,35 @@ def test_set_field_is_strict(tools, workspace) -> None:
     assert workspace.project.figures[0].dpi == 150.0
 
 
+def test_the_assistant_sets_the_residuals_line_width_and_zero_line(
+    tools, workspace
+) -> None:
+    from figscribe.fit import add_fit
+    from figscribe.model import FitCurve, PredefinedFit
+
+    project = workspace.project
+    data = project.figures[0].axes[0].artists[0]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    residuals = project.figures[0].axes[1].artists[0]
+    for field, value in [
+        ("linewidth", 2.0),
+        ("zero_line", False),
+        ("zero_linewidth", 1.5),
+        ("zero_linestyle", ":"),
+        ("zero_color", "tab:red"),
+    ]:
+        tools.call(
+            "set_field", {"object_id": residuals.id, "path": [field], "value": value}
+        )
+        assert getattr(residuals, field) == value
+    with pytest.raises(ToolError, match="greater than 0"):
+        tools.call(
+            "set_field",
+            {"object_id": residuals.id, "path": ["linewidth"], "value": 0},
+        )
+
+
 def test_the_assistant_letters_the_panels(tools, workspace) -> None:
     figure, *_ = _ids(workspace)
     schema = tools.call("get_schema", {})

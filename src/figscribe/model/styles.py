@@ -17,6 +17,8 @@ KINDS = {
     "edgecolor": "color",
     "grid_color": "color",
     "grid_linestyle": "line style",
+    "zero_color": "color",
+    "zero_linestyle": "line style",
     "left_out_color": "color",
     "marker": "marker",
     "left_out_marker": "marker",

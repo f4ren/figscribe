@@ -3,6 +3,12 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
+## Unreleased
+
+- Residuals have a *Line width* (the joining line and the error bars) and
+  the zero line is set apart: switch it off, or change its color, width and
+  style. Saved files are drawn as before.
+
 ## 0.2.0 — 2026-10-29
 
 **Figures**

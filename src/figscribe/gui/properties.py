@@ -136,7 +136,7 @@ EDITED_ELSEWHERE: dict[type[BaseModel], str] = {
 """Model classes whose fields the generated forms never show, and where they
 are edited instead."""
 
-COLOR_FIELDS = {"color", "edgecolor", "grid_color", "left_out_color"}
+COLOR_FIELDS = {"color", "edgecolor", "grid_color", "left_out_color", "zero_color"}
 
 Path = tuple[str, ...]
 
@@ -313,7 +313,7 @@ BASIC = {
     "Histogram": ("color", "histtype", "density", "label"),
     "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
     "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
-    "ResidualPlot": ("color", "marker", "markersize", "linestyle"),
+    "ResidualPlot": ("color", "marker", "markersize", "linestyle", "linewidth"),
     "Annotation": ("text", "color", "fontsize", "position", "arrow_to"),
     "ReferenceLine": ("color", "linestyle", "linewidth", "label"),
     "ShadedSpan": ("color", "alpha", "label"),
@@ -341,6 +341,7 @@ PLACEHOLDERS = {
     "edgecolor": "automatic",
     "grid_color": "automatic",
     "grid_linewidth": "default",
+    "linewidth": "default",
     "frame_width": "default",
     "tick_width": "default",
     "tick_length": "default",
@@ -457,6 +458,13 @@ TIPS = {
     "linewidth": "Line width in pt.",
     "ErrorbarPlot.linewidth": "Width of the line joining the points in pt; the "
     "error bars have their own width.",
+    "ResidualPlot.linewidth": "Width in pt of the line joining the points and of "
+    "the error bars; empty keeps the style's.",
+    "zero_line": "Draw the line at zero that the residuals scatter around.",
+    "zero_color": "Color of the zero line, e.g. gray or #999999.",
+    "zero_linewidth": "Width of the zero line in pt.",
+    "zero_linestyle": "How the zero line is drawn: solid, dashed, dash-dotted or "
+    "dotted.",
     "marker": "The symbol drawn at each data point.",
     "markersize": "Size of the markers in pt.",
     "size": "Size of the markers in pt.",
@@ -1454,6 +1462,7 @@ CHOICES = {
     ],
 }
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
+CHOICES["zero_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
 CHOICES["taus"] = [
     ("octaves: 1, 2, 4, 8 …", "octave"),

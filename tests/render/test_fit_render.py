@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import matplotlib
+import matplotlib.colors
 import numpy as np
 import pytest
 
@@ -78,3 +80,62 @@ def test_a_dangling_reference_is_reported(figure: Figure, data) -> None:
     figure.axes[0].artists[1].target = "gone"
     with pytest.raises(ValueError, match="'gone'"):
         render(figure, data)
+
+
+# --- the look of the residuals (U10) -----------------------------------------
+
+
+def _drawn_residuals(figure: Figure, data):
+    """The panel of the residuals, and the data lines and bars drawn for them."""
+    ax = render(figure, data).axes[1]
+    residuals = figure.axes[1].artists[0]
+    return ax, _lines(ax, residuals.id)
+
+
+def test_the_line_width_of_residuals_reaches_the_line_and_the_bars(
+    figure: Figure, data
+) -> None:
+    residuals = figure.axes[1].artists[0]
+    residuals.linestyle = "-"
+    residuals.linewidth = 3.0
+    ax, parts = _drawn_residuals(figure, data)
+    joined = next(line for line in parts if line.get_marker() == "o")
+    assert joined.get_linewidth() == 3.0
+    (bars,) = ax.containers[0].lines[2]  # the y error bars
+    assert bars.get_linewidth()[0] == 3.0
+
+
+def test_residuals_without_a_line_width_follow_the_style(figure: Figure, data) -> None:
+    assert figure.axes[1].artists[0].linewidth is None
+    residuals = figure.axes[1].artists[0]
+    residuals.linestyle = "-"
+    _, parts = _drawn_residuals(figure, data)
+    joined = next(line for line in parts if line.get_marker() == "o")
+    assert joined.get_linewidth() == matplotlib.rcParams["lines.linewidth"]
+
+
+def test_the_zero_line_is_as_it_was_by_default(figure: Figure, data) -> None:
+    ax = render(figure, data).axes[1]
+    (zero,) = [line for line in ax.get_lines() if tuple(line.get_ydata()) == (0.0, 0.0)]
+    assert matplotlib.colors.same_color(zero.get_color(), "0.6")
+    assert zero.get_linewidth() == 0.8
+    assert zero.get_linestyle() == "--"
+
+
+def test_the_zero_line_can_be_styled(figure: Figure, data) -> None:
+    residuals = figure.axes[1].artists[0]
+    residuals.zero_color = "tab:red"
+    residuals.zero_linewidth = 2.0
+    residuals.zero_linestyle = "-"
+    ax = render(figure, data).axes[1]
+    (zero,) = [line for line in ax.get_lines() if tuple(line.get_ydata()) == (0.0, 0.0)]
+    assert matplotlib.colors.same_color(zero.get_color(), "tab:red")
+    assert zero.get_linewidth() == 2.0
+    assert zero.get_linestyle() == "-"
+
+
+def test_the_zero_line_can_be_left_out(figure: Figure, data) -> None:
+    figure.axes[1].artists[0].zero_line = False
+    ax = render(figure, data).axes[1]
+    zero = [line for line in ax.get_lines() if tuple(line.get_ydata()) == (0.0, 0.0)]
+    assert zero == []
