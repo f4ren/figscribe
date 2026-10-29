@@ -565,6 +565,21 @@ edited. *Not checked by a test:* what other programs take from the clipboard
 and how Explorer reads `/select,` with a path that has spaces (manual
 checklist, step 12).
 
+### U7 The version under Help — S
+
+Asked for by the user (2026-10-29). There is no *Help* menu yet. Add one as
+the last menu with *About figscribe*, a `QMessageBox.about` that names the
+versions a bug report needs: figscribe (`figscribe.__version__`), Python,
+Matplotlib, PySide6/Qt, the platform, and the link to the repository. Also
+`app.setApplicationVersion(__version__)` in `gui/app.py`.
+- On macOS, Qt moves an action whose text starts with "About" into the
+  application menu and leaves *Help* empty. The user asked for it under
+  *Help*, so the action gets `QAction.MenuRole.NoRole`.
+- The action sweep (`tests/gui/test_every_action.py`) replaces
+  `QMessageBox.about`, or the modal box would hang the offscreen test.
+- Tests: the text names each version; *Help* is the last menu and has the
+  entry; the menu role; triggering it shows the version.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
@@ -820,6 +835,30 @@ In order of demand:
    outline, as in Matplotlib. Per panel, beside the grid color:
    `grid_linewidth` and `grid_linestyle` (solid, dashed, dotted,
    dash-dotted; "none" is not offered, it would be no grid).
+9. **Axis labels in line across panels, and their distance.** Asked for
+   by the user (2026-10-29). Today a y label sits as far left as the tick
+   numbers of its panel are wide, so in a column of panels the labels
+   stagger. Decided with the user:
+   - **Aligned automatically**: `Figure.align_labels: bool`, a switch in
+     the figure's *Style* section; the renderer and the script call
+     `fig.align_labels()` (x labels in a row, y labels in a column).
+   - **A distance per axis in pt**: `AxisSpec.labelpad: float | None`
+     (None follows the style), so the right y axis has it too; the script
+     writes `labelpad=` on `set_xlabel`/`set_ylabel`. A field "Label
+     distance" in the axis form.
+   - Not wanted for now: dragging a label in the preview.
+   - Only grid panels are aligned: no insets, no twin axes; panels that
+     span several cells and residual panels need a look. Check that
+     `align_labels` and the constrained layout agree, with a render test
+     that compares label positions, and a figure with an inset and a right
+     y axis.
+   - The whole chain for each field (renderer, code generator, panel,
+     `names.py`, `tools/spec.py`, `everything.py`), a roundtrip test, an
+     image baseline and an equivalence case.
+   - `[decide]` Should the alignment be on by default? If it is, every
+     saved multi-panel file looks different once opened and the baselines
+     change. Alternative: on for new figures, off for old files through a
+     schema bump and a migration. Record the answer in a decision.
 
 ### F6 Several files as one series — M
 
@@ -948,6 +987,52 @@ apart.
 *Follow-ups, only if asked:* the conversion in the plot dialog; dragging
 the range in the preview; a row range; converted positions of a color
 mesh; date axes (F5.5) for timestamps instead of hours since the start.
+
+### F12 Fewer points drawn: averaged or thinned — M
+
+Asked for by the user (2026-10-29): show long measurements with fewer
+points, averaged or thinned. This is not E1.3, which thins the preview alone
+for speed; here the figure, the export and the script all show the reduced
+data, and the data file stays untouched. An analysis by decision 0036, so it
+gets a decision of its own before code (F10).
+
+Decided with the user:
+- **Four ways**, per plot: the **mean of every n rows**, the **median of
+  every n rows**, **every n-th row**, and the **mean over x intervals** of a
+  given width (for unevenly sampled data), the width in shown x, as
+  `x_range` is.
+- **Errors**: an averaged point gets the standard error as its error bar
+  (std / √n, ddof = 1); error bars already there are propagated (√Σσ² / n).
+- **Fits and residuals** use the reduced points.
+
+To settle while building it, with a proposal each (record them in the
+decision):
+- **Which plots**: line, points and error bars. Proposed: an error only
+  where a plot draws error bars, so a line or points plot is just averaged.
+- **The order** of the steps, following F11's single place for the
+  arithmetic (`convert.py`): conversion, range, left-out rows, non-finite
+  values, then the reduction. A module beside it, used by the renderer, the
+  fits and the code generator.
+- **The median's error**: 1.2533 · std / √n, or none. Proposed: none, and
+  the panel says so.
+- **A group of one row** has no scatter. Proposed: its existing error, else
+  no error; a fit must not get NaN or zero as sigma.
+- **An incomplete last group**: dropped or kept. Proposed: kept, averaged
+  over the rows it has.
+- **Leaving points out** (F2) on a reduced plot: a click hits a group, not a
+  row. Proposed: left-out rows still mean rows of the file and are taken out
+  before the reduction; on a reduced plot the preview's "Leave out row …" and
+  the fit dialog's "Find outliers" are disabled, and say why (a B8.4 rule).
+  Left-out rows are not drawn while the plot is reduced.
+- **The fit's uncertainties**: whether the derived errors count as absolute
+  (`absolute_sigma`), which changes the reported uncertainties and χ²ᵣ.
+- **The script** reads as written by hand: `y.reshape(-1, n).mean(axis=1)`,
+  `[::n]`, and `scipy.stats.binned_statistic` for x intervals (SciPy is
+  already a dependency), with a comment. The renderer's bin edges must be the
+  script's, or the equivalence test fails.
+- **Names** in the panel that cannot be taken for the preview's thinning,
+  for example "Draw: every row / mean of … rows / median of … rows / every
+  … th row / mean per … in x".
 
 ---
 
@@ -1137,7 +1222,9 @@ answer in `docs/decisions.md` when the task is started.
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
+| F5.9 | Labels aligned by default, also in files saved before (baselines change), or only in new figures (schema bump)? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
+| F12 | The proposals for the edge cases: median without error, groups of one row, the last group kept, no leaving points out while reduced, `absolute_sigma` for derived errors? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
