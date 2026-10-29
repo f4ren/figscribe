@@ -56,6 +56,7 @@ from figscribe.render.figure import (
     MM_PER_INCH,
     NO_LINE,
     DataProvider,
+    aligned_axes,
     band_options,
     banded,
     like_the_plot,
@@ -928,9 +929,34 @@ class _Writer:
                 self.emit(
                     f'{name}.tick_params(axis="y", which="both", labelleft=False)'
                 )
+        self._align_labels()
         labels = panel_labels(figure)
         if labels:
             self._panel_labels(labels)
+
+    def _align_labels(self) -> None:
+        """Line up the axis labels of the panels, as the renderer does: the
+        panels in the grid and their right y axes, never insets or colour
+        bars, so those are named when the figure has any."""
+        figure = self.figure
+        aligned = aligned_axes(figure)
+        if not (figure.align_labels and aligned):
+            return
+        self.emit("", "# Axis labels of the panels on one line.")
+        everything = len(aligned) == len(figure.axes) and not any(
+            getattr(artist, "colorbar", None) is not None
+            for axes in figure.axes
+            for artist in axes.artists
+        )
+        if everything:  # then fig.axes are the panels and their right axes
+            self.emit("fig.align_labels()")
+            return
+        names = []
+        for i in aligned:
+            names.append(self.axes_names[i])
+            if figure.axes[i].y_right is not None:
+                names.append(f"{self.axes_names[i]}_right")
+        self.call("fig.align_labels", f"[{', '.join(names)}]")
 
     def _panel_labels(self, labels: dict[int, str]) -> None:
         options = {
@@ -993,6 +1019,8 @@ class _Writer:
         label = axis_label(spec, self.figure.unit_format)
         if label is not None:
             size = {"fontsize": _num(spec.label_size)} if spec.label_size else {}
+            if spec.labelpad is not None:
+                size["labelpad"] = _num(spec.labelpad)
             self.call(f"{ax}.set_{name}label", _str(label), **size)
         if spec.scale == "symlog" and spec.symlog_linthresh is not None:
             self.emit(

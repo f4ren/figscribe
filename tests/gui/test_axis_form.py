@@ -226,3 +226,31 @@ def test_clicking_the_numbers_of_an_axis_selects_it(window, document) -> None:
     assert not window.delete_action.isEnabled()  # an axis is not deleted
     # The axis has a row of its own, under its panel's heading.
     assert window.outline.currentItem().text(0).startswith("X axis")
+
+
+# --- the distance of the label (F5.9) ------------------------------------------
+
+
+def test_the_label_distance_is_typed_in_the_label_section(panel, document) -> None:
+    axes = _axes(document)
+    document.select(axis_id(axes.id, "y"))
+    edit = panel.axis_form.labelpad
+    assert edit.placeholderText() == "default"
+    _enter(edit, "12")
+    assert axes.y.labelpad == 12.0
+    document.undo()
+    assert axes.y.labelpad is None
+    _enter(edit, "-3")  # not a distance: refused, nothing changes, and it is said
+    assert axes.y.labelpad is None and panel.error
+    _enter(edit, "")
+    assert axes.y.labelpad is None
+
+
+def test_the_distance_of_the_right_axis_is_its_own(panel, document) -> None:
+    from figscribe.model import AxisSpec
+
+    axes = _axes(document)
+    document.push(SetField(axes.id, ("y_right",), AxisSpec(label="dU")))
+    document.select(axis_id(axes.id, "y_right"))
+    _enter(panel.axis_form.labelpad, "9")
+    assert axes.y_right.labelpad == 9.0 and axes.y.labelpad is None

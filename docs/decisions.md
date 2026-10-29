@@ -1841,3 +1841,59 @@ only known after drawing, and a zoom that was not adopted is what the user
 sees. **Copying the range into panels of another unit as well**: silently
 wrong numbers. **A PDF on the clipboard**: right for Keynote and Pages, but
 not for the rest; PNG and SVG cover slides and documents everywhere.
+
+
+## 0043 — Axis labels in line across panels, and their distance
+
+**Date:** 2026-10-29
+**Status:** accepted
+
+### Context
+
+Roadmap F5.9, asked for by the user. In a column of panels the y labels
+stagger: each stands as far left as the numbers of its own panel are wide.
+Matplotlib has `fig.align_labels()` for it, and `labelpad` for the distance
+of a label from the axis.
+
+### Decision
+
+- **`Figure.align_labels`, on by default, also for files saved before.** No
+  schema bump and no migration: a saved figure with several panels looks
+  different once it is opened (the labels line up), and the CHANGELOG says
+  so. The user chose this over "on for new figures only" (2026-10-29); the
+  figure's setting turns it off. A figure with one panel is drawn the same
+  either way, so its script has no call.
+- **Which axes are lined up** is the same set in the renderer and the script
+  (`render.figure.aligned_axes`): the panels in the grid, and their right y
+  axes with them, so right labels of several rows line up too. Never an
+  inset, which is no part of the grid, and never a colour bar's own axes. And,
+  without the constrained layout, not a panel that draws a colour bar:
+  Matplotlib then splits the panel's grid cell for the bar, the alignment
+  counts its rows and columns from zero again and takes the panel for one in
+  the first row or column, which pulled its label out of the figure (found by
+  a test, with the bar in the second column). With the constrained layout the
+  panel keeps its place and is lined up. The renderer always passes the
+  list; the script writes plain `fig.align_labels()` when `fig.axes` are
+  exactly these (no inset, no colour bar, no panel left out), as a person
+  would, and names them otherwise. The plain call itself also ran without
+  error with insets, twin axes and colour bars on Matplotlib 3.8.4 and
+  3.11; the list is for what gets grouped, not for old versions.
+- **`AxisSpec.labelpad`** in pt, at least 0, empty follows the style; on the
+  right y axis too. A panel's own distance moves its label alone, also where
+  labels are lined up: Matplotlib puts a label at the group's edge minus its
+  own distance. The axis form's *Label* section has *Distance (pt)*; it
+  cannot be greyed without a label, as the form has no such mechanism, so
+  its tooltip says it needs a label, and the script writes the distance only
+  with a label.
+- The switch is greyed while there are fewer than two panels to line up (a
+  rule in `gui/effect.py`, checked against the renderer).
+
+### Alternatives considered
+
+**On only for new figures, off for saved ones** through a schema bump: files
+keep their look, but most figures figscribe has made would stay staggered
+until someone found the switch. **Dragging a label in the preview**: not
+wanted for now. **Aligning insets and colour bars too**: a colour bar's
+label would be lined up with a panel's, which is wrong. **Always the
+explicit list in the script**: correct, but `fig.align_labels()` is what a
+person writes.

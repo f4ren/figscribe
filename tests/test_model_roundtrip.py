@@ -94,6 +94,33 @@ def test_a_note_background_is_kept_and_unset_in_older_files(
     assert older.background is None
 
 
+def test_the_alignment_and_the_label_distance_are_kept_and_on_in_older_files(
+    project: Project,
+) -> None:
+    import json
+
+    figure = project.figures[0]
+    figure.align_labels = False
+    figure.axes[0].y.labelpad = 7.5
+    back = loads(dumps(project)).figures[0]
+    assert back.align_labels is False and back.axes[0].y.labelpad == 7.5
+    document = json.loads(dumps(project))
+    del document["figures"][0]["align_labels"]
+    del document["figures"][0]["axes"][0]["y"]["labelpad"]
+    older = loads(json.dumps(document)).figures[0]
+    assert older.align_labels is True  # as decided: also for saved files
+    assert older.axes[0].y.labelpad is None
+
+
+def test_a_negative_label_distance_is_refused() -> None:
+    from pydantic import ValidationError
+
+    from figscribe.model import AxisSpec
+
+    with pytest.raises(ValidationError):
+        AxisSpec(labelpad=-1.0)
+
+
 def test_roundtrip_keeps_nested_unions(project: Project) -> None:
     fit = loads(dumps(project)).figures[0].axes[0].artists[1]
     assert isinstance(fit, FitCurve)

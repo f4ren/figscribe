@@ -250,6 +250,7 @@ SECTIONS = {
     "font_size": "Style",
     "tick_direction": "Style",
     "ticks_all_sides": "Style",
+    "align_labels": "Style",
     "frame_width": "Style",
     "tick_width": "Style",
     "tick_length": "Style",
@@ -408,6 +409,9 @@ TIPS = {
     "stylesheet": "A Matplotlib style sheet the figure starts from.",
     "font_size": "Base font size; labels, numbers and legend scale with it.",
     "tick_direction": "Whether tick marks point into the plot, out of it, or both.",
+    "align_labels": "Put the axis labels of panels in one column or row on one "
+    "line, whatever the width of their numbers. Insets and color bars are left "
+    "out.",
     "ticks_all_sides": "Tick marks also on the top and right edge of every "
     "panel; the numbers stay at the bottom and left.",
     "frame_width": "Line width of the frame around every panel; empty keeps "

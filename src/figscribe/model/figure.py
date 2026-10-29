@@ -93,6 +93,10 @@ class Figure(Identified):
     """Line width of the minor tick marks in pt; None keeps Matplotlib's, 0.6."""
     minor_tick_length: float | None = Field(None, gt=0.0)
     """Length of the minor tick marks in pt; None keeps Matplotlib's, 2."""
+    align_labels: bool = True
+    """Axis labels of panels in one column (y) or one row (x) stand on one
+    line, whatever the width of their numbers. Insets and colour bars are
+    left out; a figure of one panel looks the same either way."""
     panel_labels: PanelLabels | None = None
     """Letters on the panels, as journals ask for; None draws none."""
     layout: GridLayout = Field(default_factory=GridLayout)
