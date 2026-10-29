@@ -30,9 +30,11 @@ reproduction is given so a session can turn it into a failing test first.
 2. **Tasks marked `[decide]` need the user's answer first.** Ask the question
    in the task, record the answer in `docs/decisions.md`, then implement. Do not
    guess; the working agreement in the brief says to ask.
-3. **One task, one branch, one pull request** into `develop`. Branch from
-   `develop`, name the branch after the task (`b1-tick-limit`). CI must be green
-   on all three platforms before merging.
+3. **One theme, one branch, one pull request** into `develop`: a large task
+   alone, or a few small related ones (at most four or five) with one commit
+   each, so the checks run once for them. Branch from `develop`, name the
+   branch after the task or theme (`b1-tick-limit`, `ui-navigation`). CI must
+   be green on all three platforms before merging.
 4. **Test first.** For a bug, the first commit is a failing test that
    reproduces it. Every model change gets a roundtrip test, every new command an
    undo test, every rendered feature an image baseline and a codegen

@@ -38,8 +38,10 @@ FIGSCRIBE_UPDATE_BASELINES=1 python -m pytest tests/render/test_images.py
 
 - Everything in the repository is English, commit messages included.
 - Test first; for a bug, a failing test that reproduces it comes first.
-- One task per branch, branched from `develop`; pull request into `develop`;
-  CI must be green on Linux, Windows and macOS. `main` only gets releases.
+- One theme per branch, branched from `develop`: a large task alone, or a
+  few small related ones (at most four or five), one commit per task. Pull
+  request into `develop`; CI must be green on Linux, Windows and macOS.
+  `main` only gets releases. Run the whole suite before pushing.
 - Commits use the repository's configured identity (f4ren); no
   Co-Authored-By trailer.
 - No new dependency without a rationale in `docs/decisions.md`.
