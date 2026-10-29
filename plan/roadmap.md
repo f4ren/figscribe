@@ -952,13 +952,15 @@ In order of demand:
    in the figure's *Style*, greyed while there is one panel) and
    `AxisSpec.labelpad` (*Distance (pt)* in the axis form, at least 0). The
    renderer and the script line up the same axes: grid panels and their right
-   y axes, never insets or colour bars (`aligned_axes`); the script writes
-   plain `fig.align_labels()` when that is every axes of the figure and a
-   list otherwise. Only the `two_panels` baseline changed, looked at. *Not
-   done:* the older-Matplotlib behaviour the explicit list is for is not
-   tested (CI has no old version); a distance cannot be greyed without a
-   label (the axis form has no such mechanism, the tooltip says it needs
-   one).
+   y axes, never insets or colour bars, and without the constrained layout
+   not a panel with a colour bar (`aligned_axes`); the script writes plain
+   `fig.align_labels()` when that is every axes of the figure and a list
+   otherwise. Only the `two_panels` baseline changed, looked at. *Learned:*
+   without the constrained layout a colour bar splits its panel's grid cell,
+   and the alignment then took the panel for one in the first column and
+   pulled its label out of the figure; a test with the bar in the second
+   column found it. *Not done:* a distance cannot be greyed without a label
+   (the axis form has no such mechanism, the tooltip says it needs one).
 
 ### F6 Several files as one series — M
 

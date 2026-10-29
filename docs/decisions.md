@@ -1866,13 +1866,18 @@ of a label from the axis.
 - **Which axes are lined up** is the same set in the renderer and the script
   (`render.figure.aligned_axes`): the panels in the grid, and their right y
   axes with them, so right labels of several rows line up too. Never an
-  inset, which is no part of the grid, and never a colour bar, which would
-  be grouped with unrelated panels. The renderer always passes the list; the
-  script writes plain `fig.align_labels()` when `fig.axes` are exactly these
-  (no inset, no colour bar), as a person would, and names them otherwise,
-  because older Matplotlib versions (the floor is 3.8) do not take axes
-  without a subplot spec in the plain call. Only checked here on the
-  current Matplotlib; the CI installs no older one.
+  inset, which is no part of the grid, and never a colour bar's own axes. And,
+  without the constrained layout, not a panel that draws a colour bar:
+  Matplotlib then splits the panel's grid cell for the bar, the alignment
+  counts its rows and columns from zero again and takes the panel for one in
+  the first row or column, which pulled its label out of the figure (found by
+  a test, with the bar in the second column). With the constrained layout the
+  panel keeps its place and is lined up. The renderer always passes the
+  list; the script writes plain `fig.align_labels()` when `fig.axes` are
+  exactly these (no inset, no colour bar, no panel left out), as a person
+  would, and names them otherwise. The plain call itself also ran without
+  error with insets, twin axes and colour bars on Matplotlib 3.8.4 and
+  3.11; the list is for what gets grouped, not for old versions.
 - **`AxisSpec.labelpad`** in pt, at least 0, empty follows the style; on the
   right y axis too. A panel's own distance moves its label alone, also where
   labels are lined up: Matplotlib puts a label at the group's edge minus its
@@ -1880,8 +1885,8 @@ of a label from the axis.
   cannot be greyed without a label, as the form has no such mechanism, so
   its tooltip says it needs a label, and the script writes the distance only
   with a label.
-- The switch is greyed while the figure has one panel (a rule in
-  `gui/effect.py`, checked against the renderer).
+- The switch is greyed while there are fewer than two panels to line up (a
+  rule in `gui/effect.py`, checked against the renderer).
 
 ### Alternatives considered
 

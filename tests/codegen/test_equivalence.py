@@ -258,6 +258,36 @@ def test_panels_with_right_axes_an_inset_and_a_colour_bar_name_what_they_align(
     assert "fig.align_labels([ax_a, ax_a_right, ax_b])" in script
 
 
+def test_without_the_constrained_layout_a_colour_bar_panel_is_not_aligned(
+    tmp_path: Path,
+) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ImagePlot
+
+    np.save(tmp_path / "frame.npy", np.arange(60.0).reshape(6, 10))
+    frame = numpy_source(tmp_path / "frame.npy", tmp_path)
+    project, ref = _scan(tmp_path)
+    project.sources.append(frame)
+    figure = _stacked_panels(ref)
+    figure.axes[1].row, figure.axes[1].col = 0, 1
+    figure.axes[0].y.label = "U"
+    figure.axes[1].y.label = "U"
+    figure.axes[1].artists = [
+        ImagePlot(data=ArrayRef(source=frame.id), colorbar=Colorbar(label="counts"))
+    ]
+    figure.axes.append(
+        Axes(
+            row=1,
+            y=AxisSpec(label="U", limits=(0.0, 5000.0)),
+            artists=[LinePlot(x=ref["t"], y=ref["U"])],
+        )
+    )
+    figure.layout = GridLayout(rows=2, cols=2, constrained_layout=False)
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    assert "fig.align_labels([ax_a, ax_c])" in script
+
+
 def test_a_label_distance(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     figure = _stacked_panels(ref)

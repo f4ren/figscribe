@@ -203,3 +203,87 @@ def test_a_colour_bar_does_not_break_the_alignment(ref, data) -> None:
 
     fig = _drawn(figure, resolve)
     assert len(fig.axes) == 3  # two panels and the bar
+
+
+def _with_colour_bar(ref, *, cols: int, constrained: bool) -> Figure:
+    """Panel A a line; panel B an image with a colour bar, to its right
+    (`cols` = 2) or below it. Without the constrained layout, Matplotlib
+    splits the parent's grid cell for the bar."""
+    first = Axes(
+        x=AxisSpec(label="a"),
+        y=AxisSpec(label="a"),
+        artists=[LinePlot(x=ref("t"), y=ref("U"))],
+    )
+    second = Axes(
+        row=0 if cols == 2 else 1,
+        col=1 if cols == 2 else 0,
+        x=AxisSpec(label="b"),
+        y=AxisSpec(label="b"),
+        artists=[ImagePlot(data=ArrayRef(source="img"), colorbar=Colorbar(label="c"))],
+    )
+    layout = (
+        GridLayout(cols=2, constrained_layout=constrained)
+        if cols == 2
+        else GridLayout(rows=2, constrained_layout=constrained)
+    )
+    return Figure(layout=layout, axes=[first, second])
+
+
+def _resolve(reference):
+    if isinstance(reference, ArrayRef):
+        return np.arange(12.0).reshape(3, 4)
+    return np.linspace(0.0, 1.0, 21)
+
+
+def _label_positions(figure: Figure) -> list[float]:
+    """Where each panel's x and y label start, in drawing order."""
+    fig = _drawn(figure, _resolve)
+    return [
+        value
+        for ax in fig.axes[:2]
+        for value in (
+            ax.xaxis.label.get_window_extent().y0,
+            ax.yaxis.label.get_window_extent().x0,
+        )
+    ]
+
+
+@pytest.mark.parametrize("cols", [1, 2])
+@pytest.mark.parametrize("constrained", [True, False])
+def test_a_colour_bar_panel_keeps_its_labels_where_they_are(
+    ref, cols: int, constrained: bool
+) -> None:
+    """Without the constrained layout Matplotlib splits the parent's grid cell
+    for the bar, and the alignment would count its rows and columns from
+    zero again, pulling the label out of the figure."""
+    figure = _with_colour_bar(ref, cols=cols, constrained=constrained)
+    figure.align_labels = False
+    off = _label_positions(figure)
+    figure.align_labels = True
+    on = _label_positions(figure)
+    assert on == pytest.approx(off, abs=0.01)
+
+
+def test_the_other_panels_of_a_column_are_still_lined_up_beside_a_colour_bar(
+    ref,
+) -> None:
+    figure = _with_colour_bar(ref, cols=2, constrained=False)
+    figure.axes[0].y.label = "U"
+    figure.axes.append(
+        Axes(
+            row=1,
+            y=AxisSpec(label="U", limits=(0.0, 5000.0)),
+            artists=[LinePlot(x=ref("t"), y=ref("U"))],
+        )
+    )
+    figure.layout = GridLayout(rows=2, cols=2, constrained_layout=False)
+    fig = _drawn(figure, _resolve)
+    by_gid = {ax.get_gid(): ax for ax in fig.axes}
+    top, bar_panel, bottom = (by_gid[axes.id] for axes in figure.axes)
+    assert _label_x(top) == pytest.approx(_label_x(bottom), abs=0.01)
+    figure.align_labels = False
+    plain = _drawn(figure, _resolve)
+    by_gid = {ax.get_gid(): ax for ax in plain.axes}
+    assert _label_x(bar_panel) == pytest.approx(
+        _label_x(by_gid[figure.axes[1].id]), abs=0.01
+    )

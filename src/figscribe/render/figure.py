@@ -166,9 +166,27 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
 def aligned_axes(figure: Figure) -> list[int]:
     """The panels whose labels are lined up: those in the grid, not insets,
     and only when there are two or more; one panel has nothing to line up
-    with. Their right y axes go with them."""
-    grid = [i for i, axes in enumerate(figure.axes) if axes.inset is None]
+    with. Their right y axes go with them.
+
+    Without the constrained layout a panel with a colour bar is left out too:
+    Matplotlib then splits its grid cell for the bar, which counts the rows
+    and columns from zero again, and the alignment would take the panel for
+    one in the first row or column."""
+    grid = [
+        i
+        for i, axes in enumerate(figure.axes)
+        if axes.inset is None
+        and (figure.layout.constrained_layout or not _has_colour_bar(axes))
+    ]
     return grid if len(grid) > 1 else []
+
+
+def _has_colour_bar(axes: Axes) -> bool:
+    """Whether the panel draws a colour bar."""
+    return any(
+        getattr(artist, "colorbar", None) is not None and artist.colorbar.visible
+        for artist in axes.artists
+    )
 
 
 def tick_ranges(

@@ -428,7 +428,9 @@ def test_aligning_labels_is_greyed_for_one_panel_and_counts_for_two(
     document.select(figure.id)
     toggle = panel.editors[("align_labels",)].widget
     assert not toggle.isEnabled()
-    assert toggle.toolTip().startswith("Does nothing while the figure has one panel")
+    assert toggle.toolTip().startswith(
+        "Does nothing while the figure has fewer than two panels"
+    )
     document.push(add_panel(document.project, figure.axes[0].id, "below")[0])
     assert panel.editors[("align_labels",)].widget.isEnabled()
     panel.editors[("align_labels",)].widget.click()

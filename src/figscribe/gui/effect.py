@@ -117,7 +117,8 @@ RULES: list[Rule] = [
     Rule(
         (Figure,),
         (("align_labels",),),
-        "the figure has one panel: there is nothing to line the labels up with",
+        "the figure has fewer than two panels to line up (insets are left out, "
+        "and without the automatic layout panels with a color bar)",
         lambda figure, _: not aligned_axes(figure),
     ),
     Rule(
