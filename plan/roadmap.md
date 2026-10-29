@@ -580,6 +580,51 @@ Matplotlib, PySide6/Qt, the platform, and the link to the repository. Also
 - Tests: the text names each version; *Help* is the last menu and has the
   entry; the menu role; triggering it shows the version.
 
+### U8 A background behind a note — S
+
+Asked for by the user (2026-10-29): over a grid, a note is hard to read.
+Proposed: `Annotation.background: Color | None` (None by default, so saved
+files stay as they are), offered as a color with "none" and white first.
+The renderer and the script pass `bbox=dict(boxstyle="round,pad=0.2",
+facecolor=..., edgecolor="none")` to `annotate`. The whole chain for the
+field, a roundtrip test, an image baseline with a grid, an equivalence case.
+*Later, if asked:* a frame around the note; the same for panel labels drawn
+inside the corner (F3).
+
+### U9 Where am I: a path in the panel, and the axes in the outline — M
+
+Asked for by the user (2026-10-29): from *X axis* or *Y axis* there is no
+way back, other than clicking something else.
+- **A path** instead of the kicker of the property panel's header
+  ("X AXIS · PANEL A"): *Figure › Panel A › X axis*, each part a link that
+  selects it (`document.select`); for a plot *Figure › Panel A › the plot*,
+  for a fit also its plot; for an inset its parent panel. With several
+  figures the first part is the figure's name.
+- **The axes in the outline**: under each panel's heading, before its
+  plots, a row for the x axis, the y axis and, if there is one, the right y
+  axis, with `axis_summary` in the second column ("Time (s), 0–10"). The
+  row selects the axis id that the preview's click on an axis already uses
+  (`panel/x`), and the outline follows when the axis is chosen in the
+  preview. Right-click: *Same x range in all panels* for that axis.
+- Tests the way a person uses it (B8): click each part of the path; click
+  an axis row and see the axis form; select an axis in the preview and see
+  its row selected. The existing outline tests that count rows change.
+- *Later, if asked:* fold a panel in the outline when there are many.
+
+### U10 The residuals' line width and zero line — S
+
+Asked for by the user (2026-10-29): the residuals made with a fit have no
+line width. `ResidualPlot` has color, marker, marker size and line style,
+but no `linewidth`, and the dashed zero line is fixed in the renderer
+(grey, 0.8 pt, `--`).
+- `ResidualPlot.linewidth: float | None` (None follows the style), for the
+  joining line and the error bars.
+- Proposed with it: the zero line's color, width and style, or none
+  (`zero_line: bool = True`, `zero_color`, `zero_linewidth`,
+  `zero_linestyle`, defaults as drawn now, so saved files stay as they are).
+- The whole chain for each field and the U1 test; the fit dialog stays as
+  it is, the panel of the residual plot shows the new fields.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
