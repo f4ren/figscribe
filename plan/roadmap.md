@@ -580,6 +580,13 @@ Matplotlib, PySide6/Qt, the platform, and the link to the repository. Also
 - Tests: the text names each version; *Help* is the last menu and has the
   entry; the menu role; triggering it shows the version.
 
+**Done** (2026-10-29): `gui/about.py` builds the text; *Help > About
+figscribe* is the last menu, with the menu role `NoRole` so macOS leaves it
+there; `app.set_application_identity` sets the application's name and
+version. The action sweep lists *Help* among the menus and stubs
+`QMessageBox.about`, which would block offscreen. *Not checked by a test:*
+that macOS really leaves the entry in *Help* (manual checklist, step 13).
+
 ### U8 A background behind a note — S
 
 Asked for by the user (2026-10-29): over a grid, a note is hard to read.

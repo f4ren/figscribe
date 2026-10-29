@@ -3,6 +3,11 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
+## Unreleased
+
+- *Help > About figscribe* shows the version of figscribe and of Python,
+  Matplotlib and Qt, for bug reports. On macOS it stays under *Help*.
+
 ## 0.2.0 — 2026-10-29
 
 **Figures**

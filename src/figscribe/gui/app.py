@@ -8,8 +8,14 @@ from collections.abc import Sequence
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
+import figscribe
 from figscribe.gui import theme
 from figscribe.gui.mainwindow import MainWindow
+
+
+def set_application_identity(app: QApplication) -> None:
+    app.setApplicationName("figscribe")
+    app.setApplicationVersion(figscribe.__version__)
 
 
 def create_window(argv: Sequence[str], remember: bool = False) -> MainWindow:
@@ -28,7 +34,7 @@ def create_window(argv: Sequence[str], remember: bool = False) -> MainWindow:
 
 def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
-    app.setApplicationName("figscribe")
+    set_application_identity(app)
     theme.apply(app)
     window = create_window(sys.argv[1:], remember=True)
     window.show()
