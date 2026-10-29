@@ -66,6 +66,7 @@ from figscribe.commands.core import noun, walk
 from figscribe.examples import bundled_example
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import clipboard, markings, reveal, theme
+from figscribe.gui.about import about_text
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.databar import DataBar
@@ -316,6 +317,9 @@ class MainWindow(QMainWindow):
         self.settings.setValue("assistant/model", provider.model)
         self.settings.setValue("assistant/base_url", provider.base_url or "")
         self.settings.setValue("assistant/vision", provider.vision)
+
+    def show_about(self) -> None:
+        QMessageBox.about(self, "About figscribe", about_text())
 
     def _show_mcp_help(self) -> None:
         QMessageBox.information(self, "Connecting an assistant", MCP_HELP)
@@ -1349,6 +1353,12 @@ class MainWindow(QMainWindow):
         )
         assistant.addSeparator()
         self._action(assistant, "&How to Connect…", self._show_mcp_help)
+
+        help_menu = self.menuBar().addMenu("&Help")
+        self.about_action = self._action(help_menu, "&About figscribe", self.show_about)
+        # Qt moves an entry that starts with "About" into the application
+        # menu on macOS and leaves Help empty; the version is looked for here.
+        self.about_action.setMenuRole(QAction.MenuRole.NoRole)
         self._mcp_status = QLabel()
         self.statusBar().addPermanentWidget(self._mcp_status)
 
