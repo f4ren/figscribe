@@ -13,6 +13,13 @@ import figscribe
 REPOSITORY = "https://github.com/f4ren/figscribe"
 
 
+def system_name() -> str:
+    """The system as a person knows it: macOS 15.1, not Darwin 24.1.0."""
+    if platform.system() == "Darwin":
+        return f"macOS {platform.mac_ver()[0]}"
+    return f"{platform.system()} {platform.release()}"
+
+
 def about_text() -> str:
     """Rich text for `QMessageBox.about`."""
     return (
@@ -21,6 +28,6 @@ def about_text() -> str:
         "standalone Python code.</p>"
         f"<p>Python {platform.python_version()} · Matplotlib "
         f"{matplotlib.__version__} · PySide6 {PySide6.__version__} "
-        f"(Qt {qVersion()})<br>{platform.system()} {platform.release()}</p>"
+        f"(Qt {qVersion()})<br>{system_name()}</p>"
         f'<p><a href="{REPOSITORY}">{REPOSITORY.removeprefix("https://")}</a></p>'
     )
