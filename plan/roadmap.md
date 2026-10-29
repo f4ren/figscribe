@@ -30,9 +30,11 @@ reproduction is given so a session can turn it into a failing test first.
 2. **Tasks marked `[decide]` need the user's answer first.** Ask the question
    in the task, record the answer in `docs/decisions.md`, then implement. Do not
    guess; the working agreement in the brief says to ask.
-3. **One task, one branch, one pull request** into `develop`. Branch from
-   `develop`, name the branch after the task (`b1-tick-limit`). CI must be green
-   on all three platforms before merging.
+3. **One theme, one branch, one pull request** into `develop`: a large task
+   alone, or a few small related ones (at most four or five) with one commit
+   each, so the checks run once for them. Branch from `develop`, name the
+   branch after the task or theme (`b1-tick-limit`, `ui-navigation`). CI must
+   be green on all three platforms before merging.
 4. **Test first.** For a bug, the first commit is a failing test that
    reproduces it. Every model change gets a roundtrip test, every new command an
    undo test, every rendered feature an image baseline and a codegen
@@ -598,6 +600,14 @@ field, a roundtrip test, an image baseline with a grid, an equivalence case.
 *Later, if asked:* a frame around the note; the same for panel labels drawn
 inside the corner (F3).
 
+**Done** (2026-10-29; no schema bump, the default draws no box):
+`Annotation.background`, a color shown in the panel after *Color*, with white
+first among the swatches; empty means none. The box has rounded corners and
+no frame, in the renderer and in the script. Also named in `model/styles.py`
+(`KINDS`) and the panel's color fields, as every color field must be.
+*Follow-ups, only if asked:* a frame around the note; the same for panel
+labels drawn inside the corner (F3).
+
 ### U9 Where am I: a path in the panel, and the axes in the outline — M
 
 Asked for by the user (2026-10-29): from *X axis* or *Y axis* there is no
@@ -617,6 +627,20 @@ way back, other than clicking something else.
   an axis row and see the axis form; select an axis in the preview and see
   its row selected. The existing outline tests that count rows change.
 - *Later, if asked:* fold a panel in the outline when there are many.
+
+**Done** (2026-10-29; no model field changed): `gui/path.py` gives the path
+of any object or axis, *Figure › Panel › item*, as the user put it (an inset
+is reached through its host panel); the property panel shows it in place of
+the kicker whenever it has more than one part, and its parts are flat
+buttons. The outline has a row for the x and the y axis of every panel and
+for the right y axis when there is one, with the axis's label and unit and
+its summary as tooltip; the axis chosen in the figure selects its row. A
+right-click on an x or y row offers the same range for all panels (not for
+insets or the right y axis). Unlike the sketch above, a fit has no extra
+part for its plot. *Learned:* `Document` already took axis ids, selecting
+one in another figure brings that figure up; the preview's click and the
+outline row use the same id. *Follow-ups, only if asked:* folding panels;
+the path in the preview's status line.
 
 ### U10 The residuals' line width and zero line — S
 

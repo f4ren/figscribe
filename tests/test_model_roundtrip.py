@@ -77,6 +77,23 @@ def test_residuals_saved_before_the_look_was_settable_are_drawn_as_before(
     assert (back.zero_linewidth, back.zero_linestyle) == (0.8, "--")
 
 
+def test_a_note_background_is_kept_and_unset_in_older_files(
+    project: Project,
+) -> None:
+    import json
+
+    from figscribe.model import Annotation
+
+    note = Annotation(text="peak", position=(1.0, 2.0), background="white")
+    project.figures[0].axes[0].artists.append(note)
+    back = loads(dumps(project)).figures[0].axes[0].artists[-1]
+    assert back.background == "white"
+    document = json.loads(dumps(project))
+    del document["figures"][0]["axes"][0]["artists"][-1]["background"]
+    older = loads(json.dumps(document)).figures[0].axes[0].artists[-1]
+    assert older.background is None
+
+
 def test_roundtrip_keeps_nested_unions(project: Project) -> None:
     fit = loads(dumps(project)).figures[0].axes[0].artists[1]
     assert isinstance(fit, FitCurve)

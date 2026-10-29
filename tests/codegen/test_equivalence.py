@@ -159,6 +159,34 @@ def test_residuals_without_a_zero_line(tmp_path: Path) -> None:
     assert "axhline" not in script
 
 
+def test_notes_with_a_background_over_a_grid(tmp_path: Path) -> None:
+    from figscribe.model import Annotation
+
+    project, ref = _scan(tmp_path)
+    panel = Axes(
+        grid=True,
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"]),
+            Annotation(
+                text="on white",
+                position=(0.4, 0.5),
+                coords="axes",
+                background="white",
+            ),
+            Annotation(
+                text=r"$\mu$ here",
+                position=(7.0, 0.8),
+                arrow_to=(5.0, 1.0),
+                color="C1",
+                background="#ffeeaa",
+            ),
+        ],
+    )
+    project.figures = [Figure(dpi=100, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert script.count("bbox=") == 2 and 'facecolor="white"' in script
+
+
 def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")

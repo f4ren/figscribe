@@ -65,6 +65,7 @@ from figscribe.gui.names import (
     with_error,
 )
 from figscribe.gui.numbers import number, numbers, whole
+from figscribe.gui.path import path_to
 from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
 from figscribe.io.refresh import read_differently, reading_options
@@ -136,7 +137,14 @@ EDITED_ELSEWHERE: dict[type[BaseModel], str] = {
 """Model classes whose fields the generated forms never show, and where they
 are edited instead."""
 
-COLOR_FIELDS = {"color", "edgecolor", "grid_color", "left_out_color", "zero_color"}
+COLOR_FIELDS = {
+    "color",
+    "edgecolor",
+    "grid_color",
+    "left_out_color",
+    "zero_color",
+    "background",
+}
 
 Path = tuple[str, ...]
 
@@ -271,6 +279,7 @@ SECTIONS = {
 LOOK = [
     "text",
     "color",
+    "background",
     "edgecolor",
     "marker",
     "markersize",
@@ -314,7 +323,7 @@ BASIC = {
     "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
     "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
     "ResidualPlot": ("color", "marker", "markersize", "linestyle", "linewidth"),
-    "Annotation": ("text", "color", "fontsize", "position", "arrow_to"),
+    "Annotation": ("text", "color", "background", "fontsize", "position", "arrow_to"),
     "ReferenceLine": ("color", "linestyle", "linewidth", "label"),
     "ShadedSpan": ("color", "alpha", "label"),
     "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
@@ -337,6 +346,7 @@ PLACEHOLDERS = {
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
     "label": "not in the legend",
+    "background": "none",
     "color": "automatic",
     "edgecolor": "automatic",
     "grid_color": "automatic",
@@ -441,6 +451,8 @@ TIPS = {
     "color": "A name such as blue or tab:orange, or a code such as #1f77b4; empty "
     "takes the next color of the cycle.",
     "Annotation.color": "Color of the text and the arrow; empty follows the style.",
+    "background": "Fill behind the note, for reading it over a grid or a plot; "
+    "empty draws none.",
     "ReferenceLine.color": "A name such as gray or tab:orange, or a code such as "
     "#1f77b4.",
     "ShadedSpan.color": "A name such as gray or tab:orange, or a code such as "
@@ -721,6 +733,8 @@ class PropertyPanel(QScrollArea):
         self._shown: tuple | None = None
         self._fit_result = None
         self.axis_form: AxisForm | None = None
+        self._path: QWidget | None = None
+        self._path_parts: list[tuple[str, str | None]] = []
         self.axis_range: Callable[[str], tuple[float, float] | None] = lambda _: None
         """The range an axis shows right now; the window asks the preview."""
         self.edit_fit: Callable[[str], None] = lambda fit_id: None
@@ -774,6 +788,7 @@ class PropertyPanel(QScrollArea):
         layout.setSpacing(0)
 
         self.axis_form = None
+        self._path, self._path_parts = None, []
         axis = split_axis(self.document.selected)
         obj = self._selected_object()
         several = self._several()
@@ -1066,19 +1081,63 @@ class PropertyPanel(QScrollArea):
         column = QVBoxLayout(box)
         column.setContentsMargins(16, 16, 16, 14)
         column.setSpacing(2)
+        self._path = QWidget()
+        self._path_row = QHBoxLayout(self._path)
+        self._path_row.setContentsMargins(0, 0, 0, 4)
+        self._path_row.setSpacing(2)
         self._kicker = label("", "panelKicker")
         self._title = label("", "panelTitle")
+        column.addWidget(self._path)
         column.addWidget(self._kicker)
         column.addWidget(self._title)
         self._update_header(obj)
         return box
 
+    def path_buttons(self) -> list[QPushButton]:
+        """The parts of the path above the settings that lead somewhere."""
+        return self._path.findChildren(QPushButton) if self._path else []
+
+    def path_texts(self) -> list[str]:
+        """The path above the settings, left to right, the end included."""
+        return [part for part, _ in self._path_parts]
+
+    def _show_path(self) -> None:
+        """Fill the path row: each part before the last a button that selects
+        what it names, the last one plain."""
+        while self._path_row.count():
+            item = self._path_row.takeAt(0)
+            if item.widget() is not None:
+                item.widget().hide()
+                item.widget().deleteLater()
+        several = len(self.document.selection) > 1
+        parts = [] if several else path_to(self.document, self.document.selected or "")
+        self._path_parts = parts
+        self._path.setVisible(len(parts) > 1)
+        self._kicker.setVisible(len(parts) <= 1)  # the path ends in what it says
+        for index, (text, oid) in enumerate(parts):
+            if index:
+                arrow = label("›", "hint")
+                arrow.setContentsMargins(3, 0, 3, 0)
+                self._path_row.addWidget(arrow)
+            if oid is None:
+                here = label(text, "hint")
+                here.setContentsMargins(2, 0, 0, 0)
+                self._path_row.addWidget(here)
+                continue
+            button = QPushButton(text)
+            button.setObjectName("crumb")
+            button.setFlat(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(f"Go to {text}")
+            button.clicked.connect(lambda _=False, o=oid: self.document.select(o))
+            self._path_row.addWidget(button)
+        self._path_row.addStretch(1)
+
     def _update_header(self, obj: BaseModel) -> None:
+        self._show_path()
         axis = split_axis(self.document.selected)
         if axis is not None:
-            axes = find(self.document.project, axis[0])
-            panel = _describe(axes, self.document)[1]
-            kicker, title = f"{AXIS_TITLES[axis[1]]} · {panel}", axis_summary(obj)
+            kicker, title = AXIS_TITLES[axis[1]], axis_summary(obj)
         else:
             kicker, title = _describe(obj, self.document)
         self._kicker.setText(kicker.upper())
@@ -1534,7 +1593,9 @@ class ColorEditor(TextEditor):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(6)
         cycle = [(f"C{i}", c) for i, c in enumerate(_cycle(panel)[:10])]
-        self.swatches = self._swatches([*cycle, ("black", "black")])
+        # A fill behind a note is most often white, so it comes first.
+        white = [("white", "white")] if path[-1] == "background" else []
+        self.swatches = self._swatches([*white, *cycle, ("black", "black")])
         self.button = QToolButton()
         self.button.setObjectName("choice")
         self.button.setIcon(theme.icon("plus", theme.MUTED))

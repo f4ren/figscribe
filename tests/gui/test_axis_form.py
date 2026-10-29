@@ -63,7 +63,9 @@ def test_the_panel_form_opens_an_axis(panel, document) -> None:
     document.select(axes.id)
     panel.axis_links["y"].click()
     assert document.selected == axis_id(axes.id, "y")
-    assert panel._kicker.text().startswith("Y AXIS · ")
+    # The path above the settings says where the axis is; no kicker repeats it.
+    assert panel.path_texts() == [document.figure.name, "Panel A", "Y axis"]
+    assert panel._kicker.isHidden()
     assert panel._title.text() == "U (V) · linear · automatic range"
     assert list(panel.sections) == [
         "Label",
@@ -222,4 +224,5 @@ def test_clicking_the_numbers_of_an_axis_selects_it(window, document) -> None:
     document.select(axis_id(_axes(document).id, "x"))
     assert preview.selection_rect() is not None
     assert not window.delete_action.isEnabled()  # an axis is not deleted
-    assert window.outline.currentItem().text(0).lower().startswith("panel")
+    # The axis has a row of its own, under its panel's heading.
+    assert window.outline.currentItem().text(0).startswith("X axis")

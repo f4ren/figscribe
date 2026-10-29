@@ -177,6 +177,11 @@ QFrame#card {{
 }}
 QLabel#value {{ font-family: "{MONO}"; }}
 QLabel#panelKicker {{ color: {ACCENT}; font-size: 11px; font-weight: 600; }}
+QPushButton#crumb {{
+    border: 0; background: transparent; padding: 0 2px;
+    color: {ACCENT}; font-size: 12px; text-align: left;
+}}
+QPushButton#crumb:hover {{ text-decoration: underline; }}
 
 QScrollArea {{ border: 0; background: {SURFACE}; }}
 
@@ -363,6 +368,10 @@ _ICONS = {
     "residual": '<path d="M1 8 H15" stroke="#8A8A90" stroke-width="1" '
     'stroke-dasharray="2 2"/><circle cx="5" cy="6" r="1.7" fill="{c}"/>'
     '<circle cx="11" cy="10" r="1.7" fill="{c}"/>',
+    "axis_x": '<path d="M1.5 12 H14.5 M4 12 V8 M8 12 V8 M12 12 V8" '
+    'stroke="{c}" stroke-width="1.3" stroke-linecap="round"/>',
+    "axis_y": '<path d="M4 1.5 V14.5 M4 4 H8 M4 8 H8 M4 12 H8" '
+    'stroke="{c}" stroke-width="1.3" stroke-linecap="round"/>',
     "annotation": '<path d="M2 13 L7 8 M7 8 H14" stroke="{c}" stroke-width="1.5" '
     'fill="none" stroke-linecap="round"/>',
     "histogram": '<path d="M2 14 V9 H5 V5 H8 V7 H11 V10 H14 V14 Z" fill="{c}"/>',

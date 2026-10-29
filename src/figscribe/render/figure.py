@@ -543,6 +543,12 @@ def _draw_annotation(note: Annotation, ax: MplAxes, common: dict) -> None:
         for key, value in (("fontsize", note.fontsize), ("color", note.color))
         if value is not None
     }
+    if note.background is not None:
+        style["bbox"] = {
+            "boxstyle": "round,pad=0.2",
+            "facecolor": note.background,
+            "edgecolor": "none",
+        }
     ax.annotate(
         note.text,
         xy=note.arrow_to if note.arrow_to is not None else note.position,

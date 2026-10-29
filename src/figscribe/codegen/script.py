@@ -1118,6 +1118,11 @@ class _Writer:
         if note.fontsize is not None:
             kwargs["fontsize"] = _num(note.fontsize)
         kwargs |= _some(color=note.color)
+        if note.background is not None:
+            kwargs["bbox"] = (
+                f'dict(boxstyle="round,pad=0.2", facecolor={_str(note.background)}, '
+                'edgecolor="none")'
+            )
         self.call(f"{ax}.annotate", _str(note.text), **kwargs, **common)
 
     def _two_d(self, ax: str, artist, common: dict[str, str]) -> None:
