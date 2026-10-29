@@ -79,7 +79,9 @@ def test_the_bytes_are_the_file_that_export_writes(
     export(figure, data, path)
     # Matplotlib writes an SVG file as text, so on Windows its lines end in
     # CRLF; the bytes in memory end in LF. The picture is the same.
-    written = path.read_bytes().replace(b"\r\n", b"\n")
+    written = path.read_bytes()
+    if suffix == ".svg":
+        written = written.replace(b"\r\n", b"\n")
     assert export_bytes(figure, data, suffix) == written
 
 
