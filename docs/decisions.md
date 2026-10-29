@@ -1819,6 +1819,12 @@ so the project file stays as it is (no schema bump).
   Which of the formats another program takes depends on the system and the
   program; the tests only read them back from Qt's own clipboard, so
   step 12 of the manual checklist is what shows it.
+  **At the end of the program** the clipboard keeps only the bitmap: a
+  `QMimeData` made in Python is deleted by Qt after Python has shut down,
+  which crashed every process on exit (found when Python crash reports piled
+  up during the test runs). `gui/clipboard.release` swaps it for Qt's own
+  image data on `aboutToQuit`; the tests do the same after each test. The
+  SVG therefore does not outlive the program.
 - **Show in Finder / Explorer / file manager** on a data file in the outline
   selects the file where the system can: `open -R` on macOS, `explorer
   /select,` on Windows, with the standard library's `subprocess`; elsewhere
