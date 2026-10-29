@@ -66,6 +66,13 @@ note the platform, the screen scaling and the theme in the pull request.
 10. **Theme**: switch the system to dark mode; text and lines stay readable.
 11. **Keyboard**: go through the import dialog and the property panel with
     Tab and Enter only.
+12. **Clipboard and file manager** (what no test can see): *Edit > Copy
+    Figure*, then paste into a slide (PowerPoint or Keynote) and a Word or
+    LibreOffice document; the picture has the figure's size and is sharp.
+    Paste into Inkscape or a vector program too: the SVG stays vector. In the
+    outline, right-click a data file and choose *Show in Finder* (Explorer,
+    file manager): it opens with the file selected, also when the path has
+    spaces and non-ASCII letters.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

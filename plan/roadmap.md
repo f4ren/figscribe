@@ -538,6 +538,33 @@ column's share from a drag is approximate under constrained layout.
 - **Copy figure to clipboard** as PNG and SVG, for slides and documents.
 - **Reveal data file** in the file manager.
 
+**Done** (2026-10-29, decision 0042; no model field changed, so no schema
+bump): *Edit > Duplicate* (Ctrl+D) acts on the selection: plots (right after
+the originals, "… (copy)" in the legend), a panel with its plots, fits and
+insets (into the cell to its right), a figure (F8's command, now under the
+same key). *Copy Style* and *Paste Style* (Ctrl+Alt+C, Ctrl+Alt+V) keep a
+snapshot of the plot and paste it onto every chosen plot as one step; *Style
+like* from U4 runs on the same code (`paste_style`). *Same x / y range in all
+panels* is in the panel's menu in the outline and the preview. *Copy Figure*
+(Ctrl+Shift+C) puts PNG, SVG and a bitmap on the clipboard, the bytes of
+`render.export_bytes`, which `export` now writes too. A data file in the
+outline has *Show in Finder* (Explorer, file manager).
+*Learned:* the action sweep counts a disabled action as a failure, so its
+window copies a style first, or *Paste Style* would never be tried; and it
+would have opened the real file manager, so it replaces
+`reveal.show_in_file_manager`. A command stores a deep copy of what it is
+given, so a test that changes the object it pushed changes nothing in the
+model; two of the new tests did that and passed for the wrong reason until
+they took the plot from the model. *Follow-ups, only if asked:* Copy Style
+and Paste Style in the outline's and the preview's menus (the keys and
+*Style like* cover the need); a duplicated panel takes one grid cell, not
+the original's span, and leaves its residual panel with the original; a PDF
+on the clipboard for Keynote and Pages; *Same range* for the right y axis;
+a duplicated note, line or range lies on its original until it is moved or
+edited. *Not checked by a test:* what other programs take from the clipboard
+and how Explorer reads `/select,` with a path that has spaces (manual
+checklist, step 12).
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish

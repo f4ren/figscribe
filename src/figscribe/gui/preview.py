@@ -136,6 +136,9 @@ class Preview(QWidget):
     """The zoomed or panned view changed, or was dropped."""
     fit_requested = Signal(str)
     """Fit the plot with this id, from its menu; the window asks how."""
+    same_range_requested = Signal(str, str)
+    """Give every panel the range this panel shows on an axis: (panel id,
+    "x" or "y"), from its menu."""
 
     def __init__(self, document: Document, parent: QWidget | None = None):
         super().__init__(parent)
@@ -421,6 +424,15 @@ class Preview(QWidget):
                 return (min(low, high), max(low, high))
         return None
 
+    def axis_range(self, oid: str) -> tuple[float, float] | None:
+        """The range an axis shows right now, as drawn: the first end may be
+        the higher one, if the axis is turned around."""
+        for ax, field in self._model_axes():
+            if axis_id(_host(ax), field) == oid:
+                low, high = ax.get_xlim() if field == "x" else ax.get_ylim()
+                return (float(low), float(high))
+        return None
+
     def _model_axes(self):
         """(Matplotlib axes, field) for every axis of a model panel."""
         if self._figure is None or self.document.figure is None:
@@ -564,6 +576,16 @@ class Preview(QWidget):
         if self.view:
             self.view = {}
             self.refresh()  # the model's ranges may be automatic: render them
+            self.view_changed.emit()
+            self._place_view_bar()
+
+    def drop_view(self, axes_ids: list[str]) -> None:
+        """Forget the zoom of these panels, as when their ranges are set from
+        elsewhere: the drawing then shows the ranges in the model."""
+        gone = [oid for oid in axes_ids if oid in self.view]
+        for oid in gone:
+            del self.view[oid]
+        if gone:
             self.view_changed.emit()
             self._place_view_bar()
 
@@ -760,6 +782,7 @@ class Preview(QWidget):
             if menu.actions():
                 menu.addSeparator()
             self._marking_entries(menu, ax, point)
+            self._range_entries(menu, ax)
         return menu if menu.actions() else None
 
     def _plot_entries(self, menu: QMenu, point: QPointF) -> None:
@@ -824,6 +847,21 @@ class Preview(QWidget):
             else:
                 text = f"Shade {'an' if name == 'x' else 'a'} {name} range here"
             menu.addAction(text, lambda m=made: self._add_marking(ax.get_gid(), m))
+
+    def _range_entries(self, menu: QMenu, ax) -> None:
+        """Give all panels the range of the panel `ax`, when there are others."""
+        figure = self.document.figure
+        panel = next((a for a in figure.axes if a.id == ax.get_gid()), None)
+        if panel is None or panel.inset is not None:
+            return
+        if not any(a is not panel and a.inset is None for a in figure.axes):
+            return
+        menu.addSeparator()
+        for field in ("x", "y"):
+            menu.addAction(
+                f"Same {field} range in all panels",
+                lambda f=field: self.same_range_requested.emit(panel.id, f),
+            )
 
     def _add_marking(self, axes_id: str, made) -> None:
         self.document.push(add(axes_id, made))

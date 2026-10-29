@@ -270,6 +270,9 @@ ones, `--repeat 3` evens out variation between runs.
 |---|---|
 | New, open, save, save as, quit | the system's usual keys (Ctrl+N, Ctrl+O, Ctrl+S, …) |
 | Undo, redo, delete the selection | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y, Del |
+| Duplicate the selected plots, panel or figure | Ctrl+D |
+| Copy a plot's style, paste it onto others | Ctrl+Alt+C, Ctrl+Alt+V |
+| Copy the figure to the clipboard (PNG and SVG) | Ctrl+Shift+C |
 | Import data | Ctrl+I |
 | Find a setting of the selection | Ctrl+F, then type |
 | Find any setting or menu action | Ctrl+K, then type and Enter |

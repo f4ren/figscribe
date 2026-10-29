@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from figscribe.model import Axes, Figure, LinePlot
-from figscribe.render import export
+from figscribe.render import export, export_bytes
 
 MM_PER_INCH = 25.4
 
@@ -68,3 +68,23 @@ def test_vector_output_is_byte_stable(suffix, figure, data, tmp_path: Path) -> N
 def test_unknown_format_is_refused(figure, data, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=r"\.jpg"):
         export(figure, data, tmp_path / "f.jpg")
+
+
+@pytest.mark.parametrize("suffix", [".png", ".pdf", ".svg"])
+def test_the_bytes_are_the_file_that_export_writes(
+    suffix, figure, data, tmp_path: Path
+) -> None:
+    # The clipboard gets the figure as exported, not another rendering of it.
+    path = tmp_path / f"f{suffix}"
+    export(figure, data, path)
+    # Matplotlib writes an SVG file as text, so on Windows its lines end in
+    # CRLF; the bytes in memory end in LF. The picture is the same.
+    written = path.read_bytes()
+    if suffix == ".svg":
+        written = written.replace(b"\r\n", b"\n")
+    assert export_bytes(figure, data, suffix) == written
+
+
+def test_bytes_of_an_unknown_format_are_refused(figure, data) -> None:
+    with pytest.raises(ValueError, match=r"\.jpg"):
+        export_bytes(figure, data, ".jpg")
