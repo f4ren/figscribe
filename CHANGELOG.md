@@ -40,6 +40,17 @@ release open in every later one.
 - Right-click a plot: *Style like…*, *Bring to front*, *Send to back*,
   *Fit…*, *Hide*.
 
+**Everyday actions**
+- *Edit > Duplicate* (Ctrl+D) copies the selected plots, panel or figure.
+  A panel comes with its plots, fits and insets, beside the original.
+- *Copy Style* and *Paste Style* (Ctrl+Alt+C, Ctrl+Alt+V) give one or
+  several plots the look of another, as one undo step.
+- *Same x range in all panels* and *Same y range in all panels*, from a
+  panel's menu in the outline or the preview.
+- *Edit > Copy Figure* (Ctrl+Shift+C) puts the figure on the clipboard as
+  PNG and SVG, for slides and documents.
+- *Show in Finder* (Explorer, file manager) on a data file in the outline.
+
 **Fixed**
 - With openai 3.38 or later, the assistant again says why Gemini refused a
   request and how long to wait at a rate limit.

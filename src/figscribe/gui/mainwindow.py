@@ -6,7 +6,14 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSettings, QSize, QStandardPaths, Qt, QUrl
+from PySide6.QtCore import (
+    QEvent,
+    QSettings,
+    QSize,
+    QStandardPaths,
+    Qt,
+    QUrl,
+)
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -43,18 +50,22 @@ from figscribe.commands import (
     SetField,
     add_figure,
     add_panel,
+    duplicate_artists,
+    duplicate_axes,
     duplicate_figure,
     find,
+    paste_style,
     remove_artist,
     remove_artists,
     remove_axes,
     remove_figure,
     remove_source,
+    same_range,
 )
 from figscribe.commands.core import noun, walk
 from figscribe.examples import bundled_example
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
-from figscribe.gui import markings, theme
+from figscribe.gui import clipboard, markings, reveal, theme
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.databar import DataBar
@@ -72,6 +83,7 @@ from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
 from figscribe.gui.start import DOCS_URL, StartPage
 from figscribe.io import DataError, numpy_source
+from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import array_names, read_numpy
 from figscribe.model import (
     AllanDeviationPlot,
@@ -82,12 +94,14 @@ from figscribe.model import (
     AxisSpec,
     Colorbar,
     ColumnRef,
+    Figure,
     FitCurve,
     Histogram,
     ImagePlot,
+    ResidualPlot,
 )
 from figscribe.model.validate import FITTABLE
-from figscribe.render import export
+from figscribe.render import export, export_bytes
 from figscribe.templates import template
 
 MCP_HELP = """\
@@ -150,6 +164,8 @@ class MainWindow(QMainWindow):
         """Asks for a line of text, None if cancelled; replaced in tests."""
         self.ask_name: Callable[[str, str, str], str | None] = self._ask_name
         """Asks for a name, given the current one; None if cancelled."""
+        self._copied_style: ArtistBase | None = None
+        """A copy of the plot whose style Copy Style took; pasted by Paste Style."""
         """Runs a dialog, True if accepted; replaced in tests."""
 
         self.preview = Preview(self.document)
@@ -207,6 +223,8 @@ class MainWindow(QMainWindow):
         self.outline.marking_requested.connect(
             lambda oid, kind, orientation: self.add_marking(kind, orientation, oid)
         )
+        self.outline.same_range_requested.connect(self.same_range)
+        self.outline.reveal_requested.connect(self.reveal_source)
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
@@ -218,6 +236,7 @@ class MainWindow(QMainWindow):
         self.properties.edit_fit = self.edit_fit
         self.preview.show_error = self.show_error
         self.preview.fit_requested.connect(self._fit_plot)
+        self.preview.same_range_requested.connect(self.same_range)
         self.problems_dock = self._dock(
             "Problems", self.problems, Qt.DockWidgetArea.BottomDockWidgetArea
         )
@@ -999,6 +1018,120 @@ class MainWindow(QMainWindow):
         except CommandError as exc:
             self.show_error("The change was refused", exc)
 
+    def _chosen(self) -> list:
+        """The objects selected, leaving out an axis, which stands for no object
+        of its own."""
+        project = self.document.project
+        chosen = []
+        for oid in self.document.selection:
+            if split_axis(oid) is not None:
+                return []
+            try:
+                chosen.append(find(project, oid))
+            except CommandError:
+                return []
+        return chosen
+
+    def duplicate_selected(self) -> None:
+        """Copy what is selected and select the copy: a figure, a panel with its
+        plots (beside it), or plots (right after the originals)."""
+        chosen = self._chosen()
+        if not _can_duplicate(chosen):
+            return
+        project = self.document.project
+        if isinstance(chosen[0], Figure):
+            self.duplicate_figure(chosen[0].id)
+            return
+        try:
+            if isinstance(chosen[0], Axes):
+                command, copy = duplicate_axes(project, chosen[0].id)
+                made = [copy]
+            else:
+                command, made = duplicate_artists(project, [o.id for o in chosen])
+            self.document.push(command)
+        except CommandError as exc:
+            self.show_error("Cannot duplicate", exc)
+            return
+        self.document.select_many([each.id for each in made])
+
+    def copy_style(self) -> None:
+        """Take the look of the selected plot, for Paste Style."""
+        chosen = self._chosen()
+        if not chosen or not isinstance(chosen[-1], ArtistBase):
+            return
+        self._copied_style = chosen[-1].model_copy(deep=True)
+        self._update_state()
+        self.statusBar().showMessage(
+            f"Copied the style of {artist_name(chosen[-1])}", 4000
+        )
+
+    def paste_style(self) -> None:
+        """Give the selected plots the look Copy Style took, as one step."""
+        plots = [o.id for o in self._chosen() if isinstance(o, ArtistBase)]
+        if self._copied_style is None or not plots:
+            return
+        command = paste_style(self.document.project, plots, self._copied_style)
+        if not command.steps:
+            self.statusBar().showMessage(
+                "Nothing to change: the plot already has this style", 4000
+            )
+            return
+        self._push(command)
+
+    def same_range(self, axes_id: str, field: str) -> None:
+        """Give every panel of the figure the range that the panel `axes_id`
+        shows on its x or y axis, as one step."""
+        project = self.document.project
+        shown = self.preview.axis_range(axis_id(axes_id, field))
+        if shown is None:
+            self.show_error("Cannot read the range", "The panel is not drawn.")
+            return
+        try:
+            command, skipped = same_range(project, axes_id, field, shown)
+        except CommandError as exc:
+            self.show_error("Cannot give the panels one range", exc)
+            return
+        if command.steps:
+            # A panel zoomed in the preview shows the new range, not the zoom.
+            self.preview.drop_view([step.target for step in command.steps])
+            self._push(command)
+            message = f"All panels show the {field} range now."
+        else:
+            message = f"All panels show this {field} range already."
+        if skipped:
+            figure = self.document.figure
+            names = ", ".join(panel_name(figure, each) for each in skipped)
+            message += f" Left out, as their axis has another scale or unit: {names}."
+        self.statusBar().showMessage(message, 8000)
+
+    def copy_figure(self) -> None:
+        """Put the shown figure on the clipboard as PNG and SVG, exactly as
+        exporting would write them, for slides and documents."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        try:
+            png = export_bytes(figure, self.document.data, ".png")
+            svg = export_bytes(figure, self.document.data, ".svg")
+        except Exception as exc:
+            self.show_error("Cannot copy the figure", exc)
+            return
+        clipboard.put_figure(png, svg)
+        self.statusBar().showMessage("Copied the figure to the clipboard", 5000)
+
+    def reveal_source(self, oid: str) -> None:
+        """Show the data file in the system's file manager."""
+        source = find(self.document.project, oid)
+        path = resolve_path(source.path, self.document.base_dir)
+        if not path.exists():
+            self.show_error(
+                "Cannot show the file",
+                f"{path.name} is not at {path}. Use “Locate file…” in the bar "
+                "above the figure to find it again.",
+            )
+            return
+        reveal.show_in_file_manager(path)
+
     # --- window -------------------------------------------------------------
 
     def set_document(self, document: Document) -> None:
@@ -1064,6 +1197,15 @@ class MainWindow(QMainWindow):
         selected = self.document.selected
         self.delete_action.setEnabled(
             selected is not None and split_axis(selected) is None
+        )
+        chosen = self._chosen()
+        self.duplicate_action.setEnabled(_can_duplicate(chosen))
+        self.copy_style_action.setEnabled(
+            bool(chosen) and isinstance(chosen[-1], ArtistBase)
+        )
+        self.paste_style_action.setEnabled(
+            self._copied_style is not None
+            and any(isinstance(obj, ArtistBase) for obj in chosen)
         )
         path = self.document.path
         self._project_name.setText(path.stem if path is not None else "Untitled")
@@ -1141,6 +1283,19 @@ class MainWindow(QMainWindow):
         edit.addSeparator()
         self.delete_action = self._action(
             edit, "&Delete", self.delete_selected, QKeySequence.StandardKey.Delete
+        )
+        self.duplicate_action = self._action(
+            edit, "Du&plicate", self.duplicate_selected, "Ctrl+D"
+        )
+        edit.addSeparator()
+        self.copy_style_action = self._action(
+            edit, "Copy &Style", self.copy_style, "Ctrl+Alt+C"
+        )
+        self.paste_style_action = self._action(
+            edit, "Paste St&yle", self.paste_style, "Ctrl+Alt+V"
+        )
+        self.copy_figure_action = self._action(
+            edit, "&Copy Figure", self.copy_figure, "Ctrl+Shift+C"
         )
         edit.addSeparator()
         self._action(edit, "&Find Setting", self.find_setting, "Ctrl+F")
@@ -1289,6 +1444,21 @@ class MainWindow(QMainWindow):
         # or hidden.
         self.addAction(action)
         return action
+
+
+def _can_duplicate(chosen: list) -> bool:
+    """Whether Duplicate applies to the selected objects: a figure or a panel
+    of the grid alone, or plots (not residuals, which come with a fit)."""
+    if not chosen:
+        return False
+    if len(chosen) == 1 and isinstance(chosen[0], Figure):
+        return True
+    if len(chosen) == 1 and isinstance(chosen[0], Axes):
+        return chosen[0].inset is None
+    return all(
+        isinstance(obj, ArtistBase) and not isinstance(obj, ResidualPlot)
+        for obj in chosen
+    )
 
 
 def _ndim(raw: bytes, name: str) -> int:

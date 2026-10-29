@@ -29,6 +29,7 @@ from figscribe.gui.document import Document, split_axis
 from figscribe.gui.figures import fill_figure_menu
 from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
+from figscribe.gui.reveal import reveal_label
 from figscribe.gui.widgets import FlowLayout, chip
 from figscribe.model import Axes, Figure
 
@@ -58,6 +59,11 @@ class Outline(QTreeWidget):
     """Add a panel beside or inside the panel with this id: (id, side)."""
     delete_requested = Signal(str)
     note_requested = Signal(str)
+    same_range_requested = Signal(str, str)
+    """Give every panel the range this panel shows on an axis: (panel id,
+    "x" or "y")."""
+    reveal_requested = Signal(str)
+    """Show the data file with this id in the file manager."""
     marking_requested = Signal(str, str, str)
     figure_requested = Signal(str, str)
     """Something done with the figure with this id: (id, what), as
@@ -260,6 +266,15 @@ class Outline(QTreeWidget):
                         oid, k, o
                     ),
                 )
+            if obj.inset is None:
+                menu.addSeparator()
+                others = self._other_panels(obj)
+                for field in ("x", "y"):
+                    action = menu.addAction(
+                        f"Same {field} range in all panels",
+                        lambda f=field: self.same_range_requested.emit(oid, f),
+                    )
+                    action.setEnabled(others)
             menu.addSeparator()
             menu.addAction("Delete panel", lambda: self.delete_requested.emit(oid))
         elif isinstance(obj, Figure):
@@ -272,6 +287,8 @@ class Outline(QTreeWidget):
                 menu, self.document, oid, self.figure_requested.emit, across=False
             )
         elif any(source.id == oid for source in self.document.project.sources):
+            menu.addAction(reveal_label(), lambda: self.reveal_requested.emit(oid))
+            menu.addSeparator()
             menu.addAction("Remove data file", lambda: self.delete_requested.emit(oid))
         elif hasattr(obj, "visible") and hasattr(obj, "kind"):
             menu.addAction(
@@ -288,6 +305,13 @@ class Outline(QTreeWidget):
         else:
             return None
         return menu
+
+    def _other_panels(self, axes: Axes) -> bool:
+        """Whether the figure of `axes` has another panel in its grid."""
+        for figure in self.document.project.figures:
+            if axes in figure.axes:
+                return any(a is not axes and a.inset is None for a in figure.axes)
+        return False
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt naming
         item = self.itemAt(event.pos())

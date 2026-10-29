@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -101,3 +102,14 @@ def project(source: CsvSource) -> Project:
             )
         ],
     )
+
+
+@pytest.fixture(autouse=True)
+def _leave_the_clipboard_to_qt():
+    """A figure copied to the clipboard is made in Python; Qt would delete it
+    only when the process ends, after Python has shut down, and crash. The
+    program does this when it quits."""
+    yield
+    clipboard = sys.modules.get("figscribe.gui.clipboard")
+    if clipboard is not None:
+        clipboard.release()

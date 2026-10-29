@@ -1764,3 +1764,74 @@ parameters would not match the axis they are read against.
   <= 10)`, instead of folding it into `kept`: `kept` also says which rows
   are drawn apart as left out, and those outside the range are not drawn
   at all. The two are joined where the plot is drawn and fitted.
+
+## 0042 — Everyday actions: duplicate, paste a style, one range, copy, show
+
+**Date:** 2026-10-29
+**Status:** accepted
+
+### Context
+
+Roadmap U5: five small actions that a scientist reaches for all the time and
+that took many clicks or a trip to the file manager. No model field changes,
+so the project file stays as it is (no schema bump).
+
+### Decision
+
+- **Duplicate (Ctrl+D) is one action that acts on the selection.** A figure
+  is copied as before (F8); a panel is copied with its plots, its fits and
+  its insets into the cell to its right, making a column if none is free
+  (`add_panel`'s rule, now `_make_room`); plots are copied right after their
+  originals, so they are drawn above them. Several chosen plots are one
+  undo step. The copy is selected.
+  - Every copy gets new ids, and what refers to a copied object follows it:
+    an inset its panel, a fit its data, residuals their fit. A reference to
+    something that was not copied stays: a fit copied alone fits the same
+    data, a panel's fit residuals (in another panel) stay with the original.
+  - A copied plot with a label is labelled "… (copy)", or the legend would
+    show two entries alike.
+  - **Not duplicated:** residuals (add them again from the fit, which keeps
+    them tied to one fit), an inset alone (a copy at the same bounds would
+    lie exactly on the original and show nothing; the panel's copy takes its
+    insets along), a data file, an axis.
+- **Copy Style / Paste Style (Ctrl+Alt+C, Ctrl+Alt+V)** keep a *snapshot* of
+  the plot, not its id: the source may be changed or deleted before the
+  paste, and what was copied is what is pasted. Paste goes to every chosen
+  plot as one step, takes what each plot can have (as *Style like* does,
+  which is the same code), and does not make an undo step when nothing
+  would change. The system clipboard is not used; it has no format for this.
+  Plain Ctrl+C and Ctrl+V are left alone: they belong to text fields.
+- **Same range in all panels** (the panel's menu in the outline and in the
+  preview, x or y) writes the range the panel *shows* into every panel of
+  the grid, as fixed limits, also into the panel itself, so that they stay
+  equal when the data changes. The range is read from the drawn axis, so an
+  automatic or zoomed range works, and a turned axis (first end the higher)
+  stays turned. Left out, and named in the status bar: insets, which have a
+  range of their own, and panels whose axis has another scale or another
+  unit text, where the same numbers would mean something else (since F11,
+  panels may show the same column in h and s).
+- **Copy Figure (Ctrl+Shift+C)** puts the shown figure on the clipboard as
+  PNG and SVG, and as a bitmap for programs that read neither (Office on
+  Windows). Both are the bytes *Export* writes: `render.export_bytes`, one
+  code path with `export`, so size, resolution and metadata are the same and
+  the clipboard cannot show another picture than the file. PDF is not put
+  there; no common program reads it from the clipboard on Windows or Linux.
+  Which of the formats another program takes depends on the system and the
+  program; the tests only read them back from Qt's own clipboard, so
+  step 12 of the manual checklist is what shows it.
+- **Show in Finder / Explorer / file manager** on a data file in the outline
+  selects the file where the system can: `open -R` on macOS, `explorer
+  /select,` on Windows, with the standard library's `subprocess`; elsewhere
+  the folder is opened through Qt. A file that is not there says so and
+  points to *Locate file…* in the data bar. No new dependency.
+
+### Alternatives considered
+
+**A separate Duplicate for each kind of object**: three menu entries and
+three shortcuts for one idea. **Storing the copied style's plot id**: breaks
+when the plot is deleted, and pastes a later style than the one copied.
+**The same range taken from the model's limits**: an automatic range is
+only known after drawing, and a zoom that was not adopted is what the user
+sees. **Copying the range into panels of another unit as well**: silently
+wrong numbers. **A PDF on the clipboard**: right for Keynote and Pages, but
+not for the rest; PNG and SVG cover slides and documents everywhere.

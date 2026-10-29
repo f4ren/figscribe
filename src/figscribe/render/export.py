@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import matplotlib
@@ -25,7 +26,18 @@ def export(figure: Figure, data: DataProvider, path: str | Path) -> None:
     size the user asked for.
     """
     path = Path(path)
-    suffix = path.suffix.lower()
+    _save(figure, data, path, path.suffix.lower())
+
+
+def export_bytes(figure: Figure, data: DataProvider, suffix: str) -> bytes:
+    """The file `export` would write for `suffix` (".png", ".pdf" or ".svg"),
+    as bytes: what goes to the clipboard."""
+    target = io.BytesIO()
+    _save(figure, data, target, suffix.lower())
+    return target.getvalue()
+
+
+def _save(figure: Figure, data: DataProvider, target, suffix: str) -> None:
     if suffix not in _METADATA:
         raise ValueError(
             f"cannot export to {suffix!r}; supported are {', '.join(_METADATA)}"
@@ -35,4 +47,9 @@ def export(figure: Figure, data: DataProvider, path: str | Path) -> None:
     # A fixed salt makes the SVG element ids deterministic.
     rc = {"svg.hashsalt": "figscribe"} if suffix == ".svg" else {}
     with style_context(figure), matplotlib.rc_context(rc):
-        fig.savefig(path, dpi=figure.dpi, metadata=_METADATA[suffix])
+        fig.savefig(
+            target,
+            format=suffix[1:],
+            dpi=figure.dpi,
+            metadata=_METADATA[suffix],
+        )

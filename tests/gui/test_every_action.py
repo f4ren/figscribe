@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
 
 from figscribe.assistant import endpoint
 from figscribe.commands import SetField
-from figscribe.gui import Document, MainWindow
+from figscribe.gui import Document, MainWindow, reveal
 from figscribe.model import dumps
 
 from .everything import build
@@ -72,6 +72,7 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
         QInputDialog, "getMultiLineText", lambda *a, **k: ("A note\nof two lines", True)
     )
     monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(reveal, "show_in_file_manager", lambda path: None)
 
     def make() -> MainWindow:
         window = MainWindow(Document.open(project))
@@ -81,7 +82,10 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
         for name in ("Changed", "Changed again"):  # something to undo and redo
             document.push(SetField(document.figure.id, ("name",), name))
         document.undo()
-        document.select(document.figure.axes[0].artists[0].id)  # the error bars
+        panel = document.figure.axes[0]
+        document.select(panel.artists[1].id)
+        window.copy_style_action.trigger()  # something to paste
+        document.select(panel.artists[0].id)  # the error bars
         return window
 
     return make, shown
