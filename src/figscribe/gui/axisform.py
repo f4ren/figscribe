@@ -56,6 +56,9 @@ TIPS = {
     "major": "Where the numbered ticks go.",
     "labels": "Text for each tick value, separated by commas; empty for numbers.",
     "minor": "Unnumbered ticks between the numbered ones.",
+    "labelpad": "How far the label stands from the numbers, in pt; empty follows "
+    "the style. Needs a label. Where the figure lines labels up, a panel's own "
+    "distance moves its label alone.",
     "label_size": "Font size of the axis label in pt; empty follows the figure.",
     "tick_size": "Font size of the numbers in pt; empty follows the figure.",
 }
@@ -88,6 +91,10 @@ class AxisForm:
         self.unit = self._line(form, "Unit", "unit", "none")
         self.unit.editingFinished.connect(
             lambda: self._set(unit=self.unit.text().strip() or None)
+        )
+        self.labelpad = self._line(form, "Distance (pt)", "labelpad", "default")
+        self.labelpad.editingFinished.connect(
+            lambda: self._number("labelpad", self.labelpad)
         )
         self.prefix = self._combo(form, "Show values in", "prefix", [])
         self.prefix.activated.connect(
@@ -167,6 +174,7 @@ class AxisForm:
             self.tick_labels,
             self.minor,
             self.count,
+            self.labelpad,
             self.label_size,
             self.tick_size,
         ]
@@ -239,6 +247,7 @@ class AxisForm:
         )
         self.minor_hint.setVisible(ignored)
 
+        _text(self.labelpad, _number_text(spec.labelpad))
         _text(self.label_size, _number_text(spec.label_size))
         _text(self.tick_size, _number_text(spec.tick_size))
 

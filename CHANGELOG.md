@@ -5,6 +5,12 @@ release open in every later one.
 
 ## Unreleased
 
+- **Axis labels are lined up across panels**, by default and also in files
+  saved before: in a column of panels the y labels stand on one line instead
+  of following the width of their numbers (and x labels in a row).
+  Saved figures with several panels therefore look a little different once
+  opened. *Line up axis labels* in the figure's settings turns it off. Each
+  axis has a *Distance (pt)* for its label.
 - Residuals have a *Line width* (the joining line and the error bars) and
   the zero line is set apart: switch it off, or change its color, width and
   style. Saved files are drawn as before.

@@ -146,7 +146,29 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
         # No gid: a panel label is not a note to drag.
         for i, text in panel_labels(figure).items():
             axs[i].annotate(text, **panel_label_options(figure.panel_labels))
+
+        aligned = aligned_axes(figure)
+        if figure.align_labels and aligned:
+            twins = {
+                ax.get_gid(): ax for ax, _, _ in ticked if ax.get_gid().endswith(RIGHT)
+            }
+            fig.align_labels(
+                [
+                    ax
+                    for i in aligned
+                    for ax in (axs[i], twins.get(f"{figure.axes[i].id}{RIGHT}"))
+                    if ax is not None
+                ]
+            )
     return fig
+
+
+def aligned_axes(figure: Figure) -> list[int]:
+    """The panels whose labels are lined up: those in the grid, not insets,
+    and only when there are two or more; one panel has nothing to line up
+    with. Their right y axes go with them."""
+    grid = [i for i, axes in enumerate(figure.axes) if axes.inset is None]
+    return grid if len(grid) > 1 else []
 
 
 def tick_ranges(
@@ -243,6 +265,8 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
     if label is not None:
         size = {"fontsize": spec.label_size} if spec.label_size else {}
         axis.set_label_text(label, **size)
+    if spec.labelpad is not None:
+        axis.labelpad = spec.labelpad
 
     set_scale, set_lim = (
         (ax.set_xscale, ax.set_xlim) if name == "x" else (ax.set_yscale, ax.set_ylim)

@@ -33,6 +33,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     FitResult,
+    GridLayout,
     ImagePlot,
     Legend,
     LinePlot,
@@ -123,6 +124,22 @@ def _residuals(data_fields=None, **fields):
 
     return make
 
+
+def _one_panel_of_two_cells() -> tuple[Figure, Figure]:
+    """A figure with a grid of two rows and only the first filled."""
+    figure = Figure(
+        dpi=72,
+        layout=GridLayout(rows=2),
+        axes=[Axes(y=AxisSpec(label="U", limits=(0.0, 1.0)), artists=[_line()])],
+    )
+    return figure, figure
+
+
+SECOND_PANEL = [
+    Axes(y=AxisSpec(label="U", limits=(0.0, 1.0)), artists=[_line()]),
+    Axes(row=1, y=AxisSpec(label="U", limits=(0.0, 5000.0)), artists=[_line()]),
+]
+"""A second panel whose numbers are wider, so lining up the labels shows."""
 
 RIGHT = {"y_right": AxisSpec(limits=(-10.0, 10.0))}
 
@@ -236,6 +253,12 @@ CASES: dict[tuple[str, tuple], Case] = {
         ("linestyle",),
         "-",
     ),
+    ("Figure", ("align_labels",)): (
+        _one_panel_of_two_cells,
+        False,
+        ("axes",),
+        SECOND_PANEL,
+    ),
     ("FitCurve", ("extend_curve",)): (
         _fitted(),
         True,
@@ -257,14 +280,18 @@ def _set(obj, path: tuple, value) -> None:
     setattr(obj, path[-1], value)
 
 
-def _drawn(axes: Axes) -> str:
-    figure = render(Figure(dpi=72, axes=[axes]), _data)
+def _figure(shown: Axes | Figure) -> Figure:
+    return shown if isinstance(shown, Figure) else Figure(dpi=72, axes=[shown])
+
+
+def _drawn(axes: Axes | Figure) -> str:
+    figure = render(_figure(axes), _data)
     FigureCanvasAgg(figure).draw()
     return hashlib.sha1(bytes(figure.canvas.buffer_rgba())).hexdigest()
 
 
-def _project(axes: Axes) -> Project:
-    return Project(figures=[Figure(axes=[axes])])
+def _project(axes: Axes | Figure) -> Project:
+    return Project(figures=[_figure(axes)])
 
 
 def test_every_rule_is_checked_here() -> None:
@@ -390,3 +417,21 @@ def test_grid_lines_at_minor_ticks_without_minor_ticks_are_reported() -> None:
     axes.y.minor_ticks = True
     issues = [str(issue) for issue in validate_references(_project(axes))]
     assert not any("minor ticks" in issue for issue in issues), issues
+
+
+def test_aligning_labels_is_greyed_for_one_panel_and_counts_for_two(
+    panel, document
+) -> None:
+    from figscribe.commands import add_panel
+
+    figure = document.figure
+    document.select(figure.id)
+    toggle = panel.editors[("align_labels",)].widget
+    assert not toggle.isEnabled()
+    assert toggle.toolTip().startswith("Does nothing while the figure has one panel")
+    document.push(add_panel(document.project, figure.axes[0].id, "below")[0])
+    assert panel.editors[("align_labels",)].widget.isEnabled()
+    panel.editors[("align_labels",)].widget.click()
+    assert document.figure.align_labels is False
+    document.undo()
+    assert document.figure.align_labels is True

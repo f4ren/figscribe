@@ -91,6 +91,8 @@ FIELD_NAMES = {
     "y_right": "Right y axis",
     "tick_direction": "Tick marks point",
     "ticks_all_sides": "Ticks on all sides",
+    "align_labels": "Line up axis labels",
+    "labelpad": "Label distance (pt)",
     "frame_width": "Frame width (pt)",
     "tick_width": "Tick width (pt)",
     "tick_length": "Tick length (pt)",

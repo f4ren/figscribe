@@ -187,6 +187,96 @@ def test_notes_with_a_background_over_a_grid(tmp_path: Path) -> None:
     assert script.count("bbox=") == 2 and 'facecolor="white"' in script
 
 
+def _stacked_panels(ref, **figure_fields) -> Figure:
+    """Two panels in a column whose tick numbers differ in width."""
+    return Figure(
+        dpi=100,
+        layout=GridLayout(rows=2),
+        axes=[
+            Axes(
+                y=AxisSpec(label="short", limits=(0.0, 1.0)),
+                artists=[LinePlot(x=ref["t"], y=ref["U"])],
+            ),
+            Axes(
+                row=1,
+                x=AxisSpec(label="$t$", unit="s"),
+                y=AxisSpec(label="long", limits=(0.0, 5000.0)),
+                artists=[LinePlot(x=ref["t"], y=ref["U"])],
+            ),
+        ],
+        **figure_fields,
+    )
+
+
+def test_the_labels_of_the_panels_are_aligned(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    project.figures = [_stacked_panels(ref)]
+    script = _assert_same(project, tmp_path)
+    assert "fig.align_labels()" in script
+
+
+def test_labels_that_are_not_aligned_leave_no_call(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    project.figures = [_stacked_panels(ref, align_labels=False)]
+    assert "align_labels" not in _assert_same(project, tmp_path)
+
+
+def test_one_panel_has_nothing_to_align(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.axes.pop()
+    figure.layout = GridLayout()
+    project.figures = [figure]
+    assert "align_labels" not in _assert_same(project, tmp_path)
+
+
+def test_panels_with_right_axes_an_inset_and_a_colour_bar_name_what_they_align(
+    tmp_path: Path,
+) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ImagePlot, Inset
+
+    np.save(tmp_path / "frame.npy", np.arange(60.0).reshape(6, 10))
+    frame = numpy_source(tmp_path / "frame.npy", tmp_path)
+    project, ref = _scan(tmp_path)
+    project.sources.append(frame)
+    figure = _stacked_panels(ref)
+    figure.axes[0].y_right = AxisSpec(label="right", limits=(0.0, 1.0))
+    figure.axes[1].artists = [
+        ImagePlot(data=ArrayRef(source=frame.id), colorbar=Colorbar(label="counts"))
+    ]
+    figure.axes.append(
+        Axes(
+            inset=Inset(parent=figure.axes[0].id, bounds=(0.6, 0.6, 0.3, 0.3)),
+            artists=[LinePlot(x=ref["t"], y=ref["U"])],
+        )
+    )
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    # Not the colour bar's axes and not the inset: just the panels and the
+    # right y axis of the first.
+    assert "fig.align_labels([ax_a, ax_a_right, ax_b])" in script
+
+
+def test_a_label_distance(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.axes[0].y.labelpad = 12.0
+    figure.axes[1].x.labelpad = 0.0
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    assert 'set_ylabel("short", labelpad=12)' in script
+    assert "labelpad=0" in script
+
+
+def test_a_label_distance_without_a_label_leaves_no_trace(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.axes[0].x.labelpad = 12.0  # there is no x label here
+    project.figures = [figure]
+    assert "labelpad" not in _assert_same(project, tmp_path)
+
+
 def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")

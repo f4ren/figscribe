@@ -180,6 +180,20 @@ def test_the_assistant_gives_a_note_a_background(tools, workspace) -> None:
         )
 
 
+def test_the_assistant_aligns_labels_and_sets_a_distance(tools, workspace) -> None:
+    figure, axes, *_ = _ids(workspace)
+    tools.call(
+        "set_field", {"object_id": figure, "path": ["align_labels"], "value": False}
+    )
+    assert workspace.project.figures[0].align_labels is False
+    tools.call("set_field", {"object_id": axes, "path": ["y", "labelpad"], "value": 6})
+    assert workspace.project.figures[0].axes[0].y.labelpad == 6.0
+    with pytest.raises(ToolError, match="greater than or equal to 0"):
+        tools.call(
+            "set_field", {"object_id": axes, "path": ["y", "labelpad"], "value": -1}
+        )
+
+
 def test_the_assistant_letters_the_panels(tools, workspace) -> None:
     figure, *_ = _ids(workspace)
     schema = tools.call("get_schema", {})

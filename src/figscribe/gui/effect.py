@@ -23,6 +23,7 @@ from figscribe.model import (
     Axes,
     ColorMesh,
     ErrorbarPlot,
+    Figure,
     FitCurve,
     ImagePlot,
     LinePlot,
@@ -31,7 +32,7 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
 )
-from figscribe.render.figure import NO_LINE
+from figscribe.render.figure import NO_LINE, aligned_axes
 
 Path = tuple[str, ...]
 
@@ -112,6 +113,12 @@ RULES: list[Rule] = [
         (("linewidth",),),
         'there is no line: its line style is "none"',
         lambda plot, _: plot.linestyle in NO_LINE,
+    ),
+    Rule(
+        (Figure,),
+        (("align_labels",),),
+        "the figure has one panel: there is nothing to line the labels up with",
+        lambda figure, _: not aligned_axes(figure),
     ),
     Rule(
         (ResidualPlot,),
