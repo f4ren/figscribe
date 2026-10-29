@@ -1048,32 +1048,44 @@ Decided with the user:
   `x_range` is.
 - **Errors**: an averaged point gets the standard error as its error bar
   (std / √n, ddof = 1); error bars already there are propagated (√Σσ² / n).
-- **Fits and residuals** use the reduced points.
+- **Fits and residuals** use the reduced points, and the derived errors
+  count as **absolute** (`absolute_sigma=True`): they are uncertainties
+  estimated from the data, so the parameters' uncertainties follow from
+  them and χ²ᵣ keeps its meaning.
+- **The median gets no error bar**, and the panel says so (1.2533 · std /
+  √n is a poor estimate just where the median is chosen, with outliers).
+- **A group of one row** has no scatter: it keeps its existing error, else
+  it has none, and a fit gets neither NaN nor zero as its sigma.
+- **An incomplete last group** (1003 rows, n = 10): a choice per plot,
+  *keep it* (averaged over the rows it has, with a larger error) or *drop
+  it*. Proposed default: keep it.
+- **Left-out rows** (F2) still mean rows of the file and are taken out
+  before the reduction. The groups stay where they are in the file (rows 1
+  to 10, 11 to 20, …), so a group with a left-out row is averaged over one
+  row fewer, with n − 1 in its error, and the groups after it do not shift.
+  As an option per plot, a left-out row can instead be **replaced by the
+  mean of the kept rows before and after it** (at the start or end of the
+  data the one neighbour), so its group keeps n values. To settle: in that
+  case the error should still count only the measured rows, or the
+  invented value makes the point look more certain than it is.
 
 To settle while building it, with a proposal each (record them in the
 decision):
 - **Which plots**: line, points and error bars. Proposed: an error only
   where a plot draws error bars, so a line or points plot is just averaged.
 - **The order** of the steps, following F11's single place for the
-  arithmetic (`convert.py`): conversion, range, left-out rows, non-finite
-  values, then the reduction. A module beside it, used by the renderer, the
-  fits and the code generator.
-- **The median's error**: 1.2533 · std / √n, or none. Proposed: none, and
-  the panel says so.
-- **A group of one row** has no scatter. Proposed: its existing error, else
-  no error; a fit must not get NaN or zero as sigma.
-- **An incomplete last group**: dropped or kept. Proposed: kept, averaged
-  over the rows it has.
-- **Leaving points out** (F2) on a reduced plot: a click hits a group, not a
-  row. Proposed: left-out rows still mean rows of the file and are taken out
-  before the reduction; on a reduced plot the preview's "Leave out row …" and
-  the fit dialog's "Find outliers" are disabled, and say why (a B8.4 rule).
-  Left-out rows are not drawn while the plot is reduced.
-- **The fit's uncertainties**: whether the derived errors count as absolute
-  (`absolute_sigma`), which changes the reported uncertainties and χ²ᵣ.
-- **The script** reads as written by hand: `y.reshape(-1, n).mean(axis=1)`,
-  `[::n]`, and `scipy.stats.binned_statistic` for x intervals (SciPy is
-  already a dependency), with a comment. The renderer's bin edges must be the
+  arithmetic (`convert.py`): conversion, range, left-out rows (removed or
+  replaced), non-finite values, then the reduction. A module beside it, used
+  by the renderer, the fits and the code generator.
+- **Clicking a reduced plot**: a drawn point is a group, not a row.
+  Proposed: on a reduced plot the preview's "Leave out row …" and the fit
+  dialog's "Find outliers" are disabled, and say why (a B8.4 rule); left-out
+  rows are not drawn while the plot is reduced.
+- **The script** reads as written by hand: the group of each row as
+  `rows // n`, averaged with `scipy.stats.binned_statistic` (SciPy is
+  already a dependency), which also takes x intervals; `[::n]` for every
+  n-th row; with a comment. Groups by file row are why a plain
+  `reshape(-1, n)` does not do once rows are left out. The renderer's bin edges must be the
   script's, or the equivalence test fails.
 - **Names** in the panel that cannot be taken for the preview's thinning,
   for example "Draw: every row / mean of … rows / median of … rows / every
@@ -1268,7 +1280,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
-| F12 | The proposals for the edge cases: median without error, groups of one row, the last group kept, no leaving points out while reduced, `absolute_sigma` for derived errors? |
+| F12 | Which plots get derived errors; leaving points out disabled while a plot is reduced; the error of a group with a replaced row? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
