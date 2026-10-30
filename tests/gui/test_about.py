@@ -26,8 +26,13 @@ def window(qtbot, example: Path) -> MainWindow:
     return win
 
 
-def _help_menu(window: MainWindow):
-    return next(a.menu() for a in window.menuBar().actions() if a.text() == "&Help")
+def _help_menu(window: MainWindow) -> list:
+    """The actions of the Help menu. The menu bar's action is kept while its
+    menu is used: PySide6 before 6.12 makes the menu invalid without it."""
+    actions = window.menuBar().actions()
+    help_action = next(a for a in actions if a.text() == "&Help")
+    menu = help_action.menu()
+    return [*menu.actions()]
 
 
 def test_the_text_names_the_versions_a_bug_report_needs() -> None:
@@ -44,7 +49,7 @@ def test_the_text_names_the_versions_a_bug_report_needs() -> None:
 def test_the_help_menu_is_the_last_and_has_about(window: MainWindow) -> None:
     menus = [a.text() for a in window.menuBar().actions()]
     assert menus[-1] == "&Help"
-    assert window.about_action in _help_menu(window).actions()
+    assert window.about_action in _help_menu(window)
     assert window.about_action.text() == "&About figscribe"
 
 

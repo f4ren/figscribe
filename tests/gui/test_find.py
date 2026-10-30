@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication, QFormLayout
 
 from figscribe.gui import MainWindow
 from figscribe.gui.app import create_window
-from figscribe.gui.palette import CommandPalette, Entry, matching
+from figscribe.gui.palette import CommandPalette, Entry, matching, menu_entries
 
 
 @pytest.fixture
@@ -167,3 +167,18 @@ def test_esc_elsewhere_leaves_the_search_alone(window: MainWindow, qtbot) -> Non
     QTest.keyClick(preview, Qt.Key.Key_Escape)
     assert window.properties.search.text() == "tick"
     assert not preview.view  # the view is back at the model's ranges
+
+
+def test_an_entry_of_a_submenu_runs_after_the_menus_were_read(
+    window: MainWindow,
+) -> None:
+    """PySide6 before 6.12 made the actions of a submenu invalid once the
+    palette had read the menus: running one raised "already deleted"."""
+    import gc
+
+    entries = menu_entries(window.menuBar())
+    gc.collect()
+    panels = len(window.document.figure.axes)
+    (entry,) = [e for e in entries if e.text == "Panel to the right"]
+    entry.run()
+    assert len(window.document.figure.axes) == panels + 1

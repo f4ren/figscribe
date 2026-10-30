@@ -80,8 +80,13 @@ def test_the_insert_menu_adds_lines_and_ranges(window: MainWindow) -> None:
 def test_the_outline_offers_them_on_a_panel(window: MainWindow) -> None:
     panel = window.document.figure.axes[0]
     menu = window.outline.context_menu(panel.id)
-    (sub,) = [a.menu() for a in menu.actions() if a.menu() is not None]
-    entry = next(a for a in sub.actions() if a.text() == "Horizontal line")
+    # Each wrapper is kept in a name: PySide6 before 6.12 makes a menu invalid
+    # once the wrapper of the action that holds it is gone.
+    actions = menu.actions()
+    (lines,) = [a for a in actions if a.menu() is not None]
+    sub = lines.menu()
+    entries = sub.actions()
+    entry = next(a for a in entries if a.text() == "Horizontal line")
     entry.trigger()
     line = window.document.figure.axes[0].artists[-1]
     assert isinstance(line, ReferenceLine) and line.orientation == "horizontal"
