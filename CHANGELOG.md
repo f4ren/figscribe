@@ -5,6 +5,13 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed: with PySide6 before 6.12, running a command from a submenu in the
+  command palette (Ctrl+K), such as *Add Panel*, did nothing and printed an
+  error.
+- **Requirements:** Matplotlib 3.10, NumPy 2.0, SciPy 1.13 and PySide6 6.7 at
+  least. Older Matplotlib (3.8) did not run at all and older NumPy read some
+  text files wrongly; the minimum versions are now installed and tested on
+  every change.
 - **Axis labels are lined up across panels**, by default and also in files
   saved before: in a column of panels the y labels stand on one line instead
   of following the width of their numbers (and x labels in a row).

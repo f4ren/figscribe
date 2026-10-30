@@ -1897,3 +1897,70 @@ wanted for now. **Aligning insets and colour bars too**: a colour bar's
 label would be lined up with a panel's, which is wrong. **Always the
 explicit list in the script**: correct, but `fig.align_labels()` is what a
 person writes.
+
+
+## 0044 — Minimum versions that are tested, and a lighter CI
+
+**Date:** 2026-10-29
+**Status:** accepted
+
+### Context
+
+`pyproject.toml` said `matplotlib>=3.8`, `numpy>=1.26`, `scipy>=1.11`, but the
+CI always installed the newest versions, so no floor had ever been run. Trying
+them (a scratch environment with Python 3.11 and `uv pip install
+--resolution lowest-direct`, then each version on its own) showed:
+
+- **Matplotlib 3.8** does not run: the renderer calls `axis.minorticks_on()`,
+  which exists from 3.9. 3.9.4 runs, but five tests of shared tick labels
+  fail there. 3.10.0 has no functional failure; only the pixels of the image
+  baselines differ, as they are made with the newest version.
+- **NumPy 1.26** fails two tests that read decimal-comma and Windows-encoded
+  text files (the `converters` of `np.loadtxt` get bytes there); the same
+  call is in the generated script. 2.0 passes.
+- **SciPy 1.13** is the first with NumPy 2 support. **PySide6 6.6** is built
+  against NumPy 1 and warns that it may crash with NumPy 2; 6.7 does not.
+
+### Decision
+
+- **Floors: `matplotlib>=3.10`, `numpy>=2.0`, `scipy>=1.13`,
+  `PySide6>=6.7`.** The first three are what the tests passed at, apart from
+  the image baselines. pydantic stays at 2.9, which passed.
+- **A CI job `minimum-versions`** installs the lowest allowed version of each
+  direct dependency (`uv pip install --resolution lowest-direct`) on Linux
+  with Python 3.11 and runs the fast tests, including the GUI tests, without
+  the image baselines and the slow sweeps. It is not among the checks the
+  branch protection requires, so a new release of a dependency cannot block a
+  merge.
+- **PySide6 before 6.12 invalidates menus that outlive the action holding
+  them.** The GUI tests first failed on 6.7 to 6.11 (four tests and one error,
+  "Internal C++ object (QMenu) already deleted"). The C++ menus are not
+  deleted: the Python wrapper of a menu goes invalid once the wrapper of the
+  action that holds it is gone (`next(a.menu() for a in actions)` does it), and
+  the wrappers of that menu's actions with it. Two of the places were tests
+  that took a submenu from a temporary action; one was the program: **running
+  an entry of a submenu from the command palette (Ctrl+K) raised that error**,
+  so "Add Panel", "Add Line or Range" and the like did nothing there.
+  `menu_entries` now keeps every menu and action it visits, and each entry
+  holds that list; the tests keep the actions they take menus from. With that,
+  all 449 fast and all 124 slow GUI tests pass on PySide6 6.7.0 and the fast
+  ones on 6.11.0, with the other floors at their lowest. Matplotlib, NumPy,
+  SciPy and pydantic had nothing to do with it.
+- **The CI is lighter for small changes:** a newer push to a pull request
+  cancels the older run (not on develop and main); `setup-python` caches pip;
+  a pull request that only changes `plan/`, `docs/` or Markdown files runs the
+  required jobs without installing or testing. The jobs still start, because
+  the branch protection requires them by name and a workflow skipped as a
+  whole would leave them pending.
+
+### Alternatives considered
+
+**`paths-ignore` on the workflow**: simplest, but a pull request that only
+changes the plan could then not be merged without bypassing the protection.
+**Fixing NumPy 1.26 in the reader and the script** to keep the old floor: more
+code, and the script would carry a workaround for a version two years old.
+**Floor PySide6 at 6.12**: where the GUI tests first passed, which is also the
+newest; the cause turned out to be the wrappers of menus (above), which are
+kept now, so there is no reason to make users upgrade.
+**A second Python version in the minimum job**: 3.11 is the floor of
+`requires-python`; 3.13 runs in the main matrix.

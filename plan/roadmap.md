@@ -1213,6 +1213,29 @@ template to an existing figure is one undo step.
   myself…" opens this dialog after the import, a second step; it could be
   part of the import dialog instead.
 
+### E5 Versions that are tested, and a lighter CI — S
+
+Asked for by the user (2026-10-29): the checks take long for small changes,
+and `pyproject.toml`'s floors had never been installed.
+
+**Done** (2026-10-29, decision 0044): floors `matplotlib>=3.10`,
+`numpy>=2.0`, `scipy>=1.13`, `PySide6>=6.7`; a CI job `minimum-versions`
+(lowest allowed versions, the fast tests without the image baselines, not a
+required check); pip cache; older runs of a pull request cancelled; a
+pull request that only changes `plan/`, `docs/` or Markdown skips the
+install and the tests (the required jobs still report).
+
+**Found on the way** (2026-10-30): the GUI tests failed on PySide6 6.7 to
+6.11 and passed on 6.12. Not the tests alone: before 6.12 the Python wrapper
+of a menu goes invalid once the wrapper of the action that holds it is gone,
+and running an entry of a submenu from the command palette (Ctrl+K) raised
+"Internal C++ object already deleted". Fixed in `gui/palette.menu_entries`
+(it keeps every menu and action it visits) and in the tests that took a
+submenu from a temporary action; `minimum-versions` now runs the GUI tests
+too, and they pass on 6.7.0 (also the slow ones) and 6.11.0. *Open:* NumPy
+1.26 could be supported again by reading decimal-comma files without
+`converters` bytes; not wanted for now.
+
 ---
 
 ## Phase 4 — M7: polish and release

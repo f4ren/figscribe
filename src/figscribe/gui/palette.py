@@ -9,7 +9,7 @@ first word come first.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent
@@ -32,25 +32,41 @@ class Entry:
     where: str
     """Where it is found, e.g. "Insert" or "Setting · Look"."""
     run: Callable[[], None]
+    hold: list = field(default_factory=list, repr=False, compare=False)
+    """Qt objects `run` depends on, kept so that they stay valid: see
+    `menu_entries`."""
 
 
 def menu_entries(bar: QMenuBar) -> list[Entry]:
-    """Every enabled action of the menu bar, with the menus it is in."""
+    """Every enabled action of the menu bar, with the menus it is in.
+
+    PySide6 before 6.12 makes the wrapper of a menu invalid, and with it the
+    wrappers of its actions, as soon as the wrapper of the action that holds
+    the menu is gone: running an entry of a submenu raised "Internal C++
+    object already deleted". So every menu and action visited is kept in a
+    list that each entry holds on to.
+    """
     found: list[Entry] = []
+    hold: list = []
 
     def walk(menu: QMenu, path: list[str]) -> None:
+        hold.append(menu)
         for action in menu.actions():
+            hold.append(action)
             if action.isSeparator() or not action.isVisible():
                 continue
             text = action.text().replace("&", "")
-            if action.menu() is not None:
-                walk(action.menu(), [*path, text])
+            submenu = action.menu()
+            if submenu is not None:
+                walk(submenu, [*path, text])
             elif action.isEnabled():
-                found.append(Entry(text, " › ".join(path), action.trigger))
+                found.append(Entry(text, " › ".join(path), action.trigger, hold))
 
     for action in bar.actions():
-        if action.menu() is not None:
-            walk(action.menu(), [action.text().replace("&", "")])
+        hold.append(action)
+        submenu = action.menu()
+        if submenu is not None:
+            walk(submenu, [action.text().replace("&", "")])
     return found
 
 

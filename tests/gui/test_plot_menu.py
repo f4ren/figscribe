@@ -63,7 +63,8 @@ def test_the_menu_of_a_plot(window: MainWindow) -> None:
 
 def test_style_like_another_plot(window: MainWindow) -> None:
     menu = window.preview.context_menu(_point(window, 20))
-    like = _entry(menu, "Style like").menu()
+    like_action = _entry(menu, "Style like")  # kept: PySide6 before 6.12 makes
+    like = like_action.menu()  # the menu invalid once this action is gone
     assert _texts(like) == ["noise"]
     like.actions()[0].trigger()
     bars = window.document.figure.axes[0].artists[0]
