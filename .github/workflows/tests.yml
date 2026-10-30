@@ -78,8 +78,8 @@ jobs:
   # The oldest versions pyproject.toml allows (Matplotlib, NumPy, SciPy,
   # pydantic, PySide6), since a floor nobody installs is only a guess. Left
   # out: the images of tests/render/test_images.py, made with the newest
-  # Matplotlib, and the GUI tests, which pass from PySide6 6.12 only (decision
-  # 0044). Not required by the branch protection.
+  # Matplotlib, and the slow GUI sweeps (decision 0044). Not required by the
+  # branch protection.
   minimum-versions:
     runs-on: ubuntu-latest
     env:
@@ -115,4 +115,4 @@ jobs:
           uv pip install --python .venv-min/bin/python pytest pytest-qt pytest-xdist
       - name: Run tests
         if: steps.changes.outputs.docs_only != 'true'
-        run: .venv-min/bin/python -m pytest -q -n auto --dist worksteal -m "not slow" --ignore=tests/render/test_images.py --ignore=tests/gui
+        run: .venv-min/bin/python -m pytest -q -n auto --dist worksteal -m "not slow" --ignore=tests/render/test_images.py

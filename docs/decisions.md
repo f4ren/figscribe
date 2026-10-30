@@ -1928,17 +1928,24 @@ them (a scratch environment with Python 3.11 and `uv pip install
   the image baselines. pydantic stays at 2.9, which passed.
 - **A CI job `minimum-versions`** installs the lowest allowed version of each
   direct dependency (`uv pip install --resolution lowest-direct`) on Linux
-  with Python 3.11 and runs the fast tests, without the image baselines and
-  without the GUI tests. It is not among the checks the branch protection
-  requires, so a new release of a dependency cannot block a merge.
-- **The GUI tests were seen to pass only on PySide6 6.12.** With the other
-  floors at their lowest and PySide6 6.7 to 6.11, the same four tests and one
-  error fail (the help menu, the arrow keys in the search, two outline menus;
-  "Internal C++ object (QMenu) already deleted" and a key that is not taken).
-  With 6.12.0 and the other floors still at their lowest, all 448 pass. It is
-  open whether those are the tests holding Qt objects too loosely or the
-  program; `PySide6>=6.7` is therefore only the floor for what loads and runs
-  without the window, and the roadmap has a task to settle it (E5).
+  with Python 3.11 and runs the fast tests, including the GUI tests, without
+  the image baselines and the slow sweeps. It is not among the checks the
+  branch protection requires, so a new release of a dependency cannot block a
+  merge.
+- **PySide6 before 6.12 invalidates menus that outlive the action holding
+  them.** The GUI tests first failed on 6.7 to 6.11 (four tests and one error,
+  "Internal C++ object (QMenu) already deleted"). The C++ menus are not
+  deleted: the Python wrapper of a menu goes invalid once the wrapper of the
+  action that holds it is gone (`next(a.menu() for a in actions)` does it), and
+  the wrappers of that menu's actions with it. Two of the places were tests
+  that took a submenu from a temporary action; one was the program: **running
+  an entry of a submenu from the command palette (Ctrl+K) raised that error**,
+  so "Add Panel", "Add Line or Range" and the like did nothing there.
+  `menu_entries` now keeps every menu and action it visits, and each entry
+  holds that list; the tests keep the actions they take menus from. With that,
+  all 449 fast and all 124 slow GUI tests pass on PySide6 6.7.0 and the fast
+  ones on 6.11.0, with the other floors at their lowest. Matplotlib, NumPy,
+  SciPy and pydantic had nothing to do with it.
 - **The CI is lighter for small changes:** a newer push to a pull request
   cancels the older run (not on develop and main); `setup-python` caches pip;
   a pull request that only changes `plan/`, `docs/` or Markdown files runs the
@@ -1952,7 +1959,8 @@ them (a scratch environment with Python 3.11 and `uv pip install
 changes the plan could then not be merged without bypassing the protection.
 **Fixing NumPy 1.26 in the reader and the script** to keep the old floor: more
 code, and the script would carry a workaround for a version two years old.
-**Floor PySide6 at 6.12**: the only version the GUI tests pass on, which is
-also the newest; users would have to upgrade for no reason known yet.
+**Floor PySide6 at 6.12**: where the GUI tests first passed, which is also the
+newest; the cause turned out to be the wrappers of menus (above), which are
+kept now, so there is no reason to make users upgrade.
 **A second Python version in the minimum job**: 3.11 is the floor of
 `requires-python`; 3.13 runs in the main matrix.

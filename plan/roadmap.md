@@ -1220,20 +1220,19 @@ and `pyproject.toml`'s floors had never been installed.
 
 **Done** (2026-10-29, decision 0044): floors `matplotlib>=3.10`,
 `numpy>=2.0`, `scipy>=1.13`, `PySide6>=6.7`; a CI job `minimum-versions`
-(lowest allowed versions, fast tests without image baselines and GUI tests,
-not a required check); pip cache; older runs of a pull request cancelled; a
+(lowest allowed versions, the fast tests without the image baselines, not a
+required check); pip cache; older runs of a pull request cancelled; a
 pull request that only changes `plan/`, `docs/` or Markdown skips the
 install and the tests (the required jobs still report).
 
-**Open:** the GUI tests pass on PySide6 6.12 only. On 6.7 to 6.11 (with the
-other floors at their lowest) `test_the_help_menu_is_the_last_and_has_about`,
-`test_the_outline_offers_them_on_a_panel`, `test_style_like_another_plot`
-(all "Internal C++ object (QMenu) already deleted", where a test takes a
-menu from `action.menu()` and works on it) and
-`test_the_arrow_keys_choose_another_entry` fail. Find out whether the tests
-hold the menus too loosely or the program has a lifetime problem (the help
-menu is built like the others), fix it, then let `minimum-versions` run
-`tests/gui` too and set the PySide6 floor to what passes. *Also open:* NumPy
+**Found on the way** (2026-10-30): the GUI tests failed on PySide6 6.7 to
+6.11 and passed on 6.12. Not the tests alone: before 6.12 the Python wrapper
+of a menu goes invalid once the wrapper of the action that holds it is gone,
+and running an entry of a submenu from the command palette (Ctrl+K) raised
+"Internal C++ object already deleted". Fixed in `gui/palette.menu_entries`
+(it keeps every menu and action it visits) and in the tests that took a
+submenu from a temporary action; `minimum-versions` now runs the GUI tests
+too, and they pass on 6.7.0 (also the slow ones) and 6.11.0. *Open:* NumPy
 1.26 could be supported again by reading decimal-comma files without
 `converters` bytes; not wanted for now.
 

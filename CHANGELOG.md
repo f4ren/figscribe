@@ -5,6 +5,9 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed: with PySide6 before 6.12, running a command from a submenu in the
+  command palette (Ctrl+K), such as *Add Panel*, did nothing and printed an
+  error.
 - **Requirements:** Matplotlib 3.10, NumPy 2.0, SciPy 1.13 and PySide6 6.7 at
   least. Older Matplotlib (3.8) did not run at all and older NumPy read some
   text files wrongly; the minimum versions are now installed and tested on
