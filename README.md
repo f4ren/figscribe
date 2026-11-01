@@ -34,7 +34,8 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 **Alpha.** The features below are implemented and tested on Linux, Windows
 and macOS with Python 3.11 and 3.13. Behaviour may still change; project files
 of a release keep opening in later ones. Still to come: style templates,
-snapping and alignment guides, and installers that need no Python (see the
+snapping and alignment guides, installers that need no Python, and more
+plot types, axis formats and fit models (see the
 [roadmap](https://github.com/f4ren/figscribe/blob/main/plan/roadmap.md)). What changed in each release is in the
 [changelog](https://github.com/f4ren/figscribe/blob/main/CHANGELOG.md).
 
@@ -51,7 +52,9 @@ figscribe
 ```
 
 `pip install figscribe` in a virtual environment works as well. With Qt,
-Matplotlib and SciPy the installation takes about 1.5 GB.
+Matplotlib and SciPy the installation takes about 1.5 GB. The oldest versions
+of the libraries that are tested are NumPy 2.0, SciPy 1.13, Matplotlib 3.10
+and PySide6 6.7.
 
 Optional parts:
 
@@ -99,13 +102,16 @@ script.
 **Plots**
 - Line, scatter, error bars, histograms, images and color meshes with color
   bars (linear or logarithmic), notes of one or several lines with or
-  without an arrow, reference lines and shaded ranges.
+  without an arrow (optionally on a background, so they read over a grid),
+  reference lines and shaded ranges.
+- Error bars as a shaded band around the line, for dense data.
 - The Allan deviation of a time series (fractional frequency or phase), on
   log-log axes, for the stability of clocks, lasers and sensors.
 - Curve fits: linear, polynomial, Gaussian, Lorentzian, exponential, or your
   own expression such as `a*exp(-x/tau)+c`. Error bars weight the fit; the
   result shows each parameter with its 1σ uncertainty, the reduced χ² and
-  the residuals, and can be copied. Residuals go into their own panel below.
+  the residuals, and can be copied. Residuals go into their own panel below,
+  with a line width and a zero line of their own to style.
 - Fit only a range of x; hold a parameter at its start value or keep it
   within bounds; change a fit that is already there.
 - Leave points out by right-clicking them, or let the fit dialog find
@@ -115,6 +121,12 @@ script.
 - Show a plot's values in other units, e.g. seconds as hours since the
   start of the measurement or volts as mV, and draw it from part of its data
   only. The axis, its marks and the fits follow in the same step.
+- Draw fewer points than the file has: the mean or median of every *n* rows,
+  every *n*-th row, or the mean over intervals of x for unevenly sampled
+  data. An averaged point gets its standard error as error bar (propagated
+  when the plot has errors of its own), fits use the reduced points, and the
+  script does the same arithmetic. Rows left out are removed before
+  averaging, or replaced by the mean of their neighbours.
 
 **Layout and style**
 - Several figures in one project, as tabs above the figure: add one with
@@ -126,6 +138,8 @@ script.
   marks inward or outward and on all four sides, grid, LaTeX in labels
   (`$\Delta U$`), units in labels as `U (V)`, `U / V` or `U [V]`.
 - Panel letters, (a), (b), … in the style a journal asks for.
+- Axis labels lined up across panels, so that in a column of panels the y
+  labels stand on one line, and a distance for each axis' label.
 - Line widths of the frame, the tick marks and the grid, tick lengths, and
   a dashed or dotted grid.
 - Values shown with an SI prefix: frequencies in Hz drawn as `0 … 225` with
@@ -137,6 +151,13 @@ script.
   label in plain terms: *major ticks every 50*, *4 minor ticks between
   them*; with values shown in kHz you type the range in kHz too. Hovering
   over a field explains it.
+- Find a setting by typing (Ctrl+F), or any menu action or setting with
+  the command palette (Ctrl+K). The settings used most come first, the rest
+  are under *More*. A setting that does nothing in the current state is
+  greyed out, and its tooltip says why.
+- Above the settings a path such as *Figure › Panel A › X axis* shows where
+  you are, each part a link back; the axes are rows in the outline, under
+  their panel.
 - Colors come from the figure's color cycle, the colors used lately, or
   *Same as…* another plot; a plot's context menu brings it to the front or
   sends it to the back.
@@ -151,6 +172,8 @@ script.
   to style it like another, bring it to the front, fit or hide it.
 - The **Python code** drawer under the figure shows the generated script,
   live, as you edit.
+- *Help > About figscribe* names the versions of figscribe, Python,
+  Matplotlib and Qt, for a bug report.
 
 **Export**
 - PDF, SVG and PNG at the exact size; *File > Export All Figures…* writes
@@ -161,10 +184,10 @@ script.
 ## The generated code
 
 *File > Export Python Script…* (or `figscribe script PROJECT.figscribe -o
-plot.py`) writes a script that needs only NumPy, Matplotlib and, for fits,
-SciPy. It is written the way a person would write it: no figscribe helpers,
-named variables, comments where they help. From the example project's script
-(shortened):
+plot.py`) writes a script that needs only NumPy, Matplotlib and, for fits and
+for fewer points drawn, SciPy. It is written the way a person would write it:
+no figscribe helpers, named variables, comments where they help. From the
+example project's script (shortened):
 
 ```python
 scan_path = HERE / "scan.csv"
@@ -186,8 +209,9 @@ fig.savefig(HERE / "scan.pdf")
 ```
 
 Fits are redone in the script with `scipy.optimize.curve_fit` from the same
-start values. A test runs the generated scripts and compares their PNG pixel
-by pixel with figscribe's own export.
+start values, and averaged points with `scipy.stats.binned_statistic`. A test
+runs the generated scripts and compares their PNG pixel by pixel with
+figscribe's own export.
 
 ## AI assistants
 
@@ -324,8 +348,10 @@ Design decisions and their reasons are recorded in
 
 ## Scope
 
-Planned beyond what exists: HDF5 import, style templates for journals,
-snapping and alignment guides, installers.
+Planned beyond what exists: HDF5 import, several files as one series,
+number formats and inverted axes, a second x axis on top, more fit models and
+a confidence band, step plots and bar charts, style templates for journals,
+snapping and alignment guides, autosave, installers.
 
 Deliberately out of scope: spreadsheet-style data editing, a statistics
 suite, a scripting language of its own, and reading generated or other
