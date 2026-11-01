@@ -6,6 +6,8 @@ evaluated, shown and turned into generated code exactly like a user's own.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from figscribe.fit.expression import FitError
@@ -41,6 +43,18 @@ def guess(
     name: str, degree: int | None, x: np.ndarray, y: np.ndarray
 ) -> dict[str, float]:
     """Start values estimated from the data; always finite, never raising."""
+    try:
+        with warnings.catch_warnings(), np.errstate(all="ignore"):
+            warnings.simplefilter("ignore", np.exceptions.RankWarning)
+            return _guess(name, degree, x, y)
+    except np.linalg.LinAlgError:
+        # Values near the limits of floating point defeat the least squares.
+        return dict.fromkeys(predefined(name, degree)[1], 1.0)
+
+
+def _guess(
+    name: str, degree: int | None, x: np.ndarray, y: np.ndarray
+) -> dict[str, float]:
     order = np.argsort(x)
     x, y = x[order], y[order]
     if name in ("linear", "polynomial"):

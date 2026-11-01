@@ -7,6 +7,8 @@ again right away, on the data of the target plot, without touching the project; 
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -555,9 +557,32 @@ class FitDialog(QDialog):
             self._show_error(str(exc))
             return
         self.result = result
-        self.error.setText("" if result.converged else "The fit did not converge.")
+        self.error.setText(self._doubt(result))
         self._show_result()
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
+
+    @staticmethod
+    def _doubt(result) -> str:
+        """What a usable result still lacks: convergence or uncertainties."""
+        if not result.converged:
+            return "The fit did not converge."
+        unknown = [
+            GREEK.get(name, name)
+            for name, error in result.uncertainties.items()
+            if not math.isfinite(error)
+        ]
+        if not unknown:
+            return ""
+        names = ", ".join(unknown[:-1]) + (" and " if unknown[1:] else "") + unknown[-1]
+        if not unknown[1:]:
+            return (
+                f"The uncertainty of {names} cannot be estimated: the data does "
+                "not determine it, or the parameters depend on each other."
+            )
+        return (
+            f"The uncertainties of {names} cannot be estimated: the data does "
+            "not determine them, or the parameters depend on each other."
+        )
 
     def _guesses_within(self, bounds) -> None:
         """Move start values the user did not type into their bounds; a typed

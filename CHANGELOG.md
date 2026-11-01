@@ -14,6 +14,10 @@ release open in every later one.
   before and can be replaced by the mean of their neighbours. While a plot is
   reduced, leaving rows out and finding outliers are off. Saved files are
   drawn as before.
+- Fixed: the fit dialog no longer fails on data near the limits of floating
+  point (about 1e-300 or 1e300), says in words when a fit stops because the
+  model is not finite for values it tried, and says which uncertainties
+  cannot be estimated when the data does not determine a parameter.
 - Fixed: the residuals, and the count of points fitted, no longer include
   points whose y error is missing (NaN); the fit never used them.
 - Fixed: with PySide6 before 6.12, running a command from a submenu in the
