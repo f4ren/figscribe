@@ -5,21 +5,96 @@ left off. The brief stays the vision; this file is the work list. It is written
 so that a coding session can take the next open task and finish it without
 asking what was meant.
 
-**State as of 2026-10-23** (branch `develop`, commit `9063d71`):
+**State as of 2026-11-01** (branch `develop`, commit `51c9e74`):
 
 - M1 to M6 of the brief are done: model, renderer, code generator with the
   pixel equivalence test, GUI with import, property panel, outline, undo/redo,
   zoom/pan, panels and insets, right y axis, histograms, notes, 2-D data, fits
   with residuals. Beyond the brief: the built-in assistant (Claude, ChatGPT,
-  local models), the MCP server and `figscribe bench`.
-- M7 is open: style templates, snapping and alignment guides, packaging.
-- About 650 tests run in about 25 s; CI is green on Linux, Windows and macOS
-  with Python 3.11 and 3.13. Decisions 0001 to 0026 are in
-  [`docs/decisions.md`](../docs/decisions.md).
-- 0.1.0 is released (2026-10-26, R4): `main` at PR #78, on PyPI.
+  Gemini, local models), the MCP server and `figscribe bench`; since the
+  first version of this plan also several figures in one project, units and
+  a range per plot, fewer points drawn, the Allan deviation, error bands,
+  reference lines, a search and a command palette for settings, and
+  settings that grey out when they do nothing.
+- M7 is open: style templates, snapping and alignment guides, installers.
+- About 1,400 tests run in about two minutes in parallel; CI is green on
+  Linux, Windows and macOS with Python 3.11 and 3.13, and a further job runs
+  the fast tests at the oldest allowed versions (decision 0044). Decisions
+  0001 to 0045 are in [`docs/decisions.md`](../docs/decisions.md).
+- 0.1.0 (2026-10-26) and 0.2.0 (2026-10-29) are released, on PyPI; `main` is
+  at 0.2.0 (PR #94). What `develop` has gained since is under "Unreleased"
+  in the [changelog](../CHANGELOG.md).
 
 The findings below marked **(verified)** were reproduced on 2026-10-23; the
 reproduction is given so a session can turn it into a failing test first.
+
+---
+
+## What is open (2026-11-01)
+
+A map of the tasks below that are not finished; the tasks hold the detail.
+`[decide]` needs the user's answer first (rule 2). A task that is not named
+here is done; its follow-ups ("only if asked") stay in its text.
+
+**Phase 0 — Bugs and robustness** (B1 to B6 are done)
+- **B7**, the bug hunt, repeated before every release. Done: item 1 (the
+  edge-data matrix). Open: item 2 undo stress (`[decide]` `hypothesis`);
+  item 3 fits that fail politely (the matrix already shows fewer points than
+  parameters refused; the rest is unchecked); item 4 files (read-only
+  folder, a file deleted while open, network paths; a project of a newer
+  figscribe is refused and tested); item 5 the GUI at 1024 × 700, 150 % and
+  200 % scaling, dark mode, keyboard only; item 6 every bench case through
+  the equivalence test (the project in `examples/` already is).
+- **An open bug from F12**: the script of a reduced plot whose x range keeps
+  no row stops with an error (`group.max()` of an empty array), where B7.1
+  asks that nothing crashes; the problem list warns about the range before.
+  Fix it with a failing equivalence case first.
+- **B8**: about twenty dialog tests still set widgets instead of clicking
+  them, and the preview's zoom, pan and legend drag lack mouse-event tests.
+  Follow-ups: ratios that no longer match the grid; a lower bound for font
+  sizes and the figure size; marking columns of another length.
+
+**Phase 1 — The settings** (U1 to U5 and U7 to U10 are done)
+- **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
+  bump).
+
+**Phase 2 — What a scientist needs**
+- **F1** fits (L): the range dragged in the preview (1); the result as text
+  in the figure (3); CSV and a LaTeX row (4); a confidence band (5); more
+  models, such as sine, power law, logistic, Voigt, two peaks (6); weighting
+  by none, y errors or Poisson (7); x errors (8, `[decide]`).
+- **F4** plot types (M each): hollow markers, error bar colour and caps, an
+  error bar on every n-th point (3); step plot (4); points coloured by a
+  third column (5); waterfall (6); contours (7); bar chart (8).
+- **F5** axes: number format and the decimal comma (1); inverted axes (2);
+  a second x axis on top that converts (3); hiding and offsetting spines
+  (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
+  broken axes (6, later).
+- **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
+  check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
+  data cursor (S). **F10** smoothing, peak finding, baseline and normalising
+  (`[decide]`, judged by decision 0036).
+
+**Phase 3 — Speed and working faster**
+- **E1** large data: render off the GUI thread (2), thin the preview only
+  (3), a performance test (4); item 1 is done for zoom and pan only, changes
+  from the property panel still render at once.
+- **E2** autosave and `.bak`. **E3** save a figure as a template. **E4**
+  fewer steps for the common path (everything except the plot dialog).
+
+**Phase 4 — M7: polish and release**
+- **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
+  snapping and alignment guides. **R3** TIFF and EPS, a transparent
+  background, a dpi at export. **R4** installers (`[decide]`: PyInstaller or
+  Briefcase, an Apple developer account), screenshots in the README, a
+  gallery in `examples/`. **R5** measure models with `figscribe bench`.
+  **R7** follow-up: wait out a rate limit in the chat.
+
+**Phase 5** is later and optional.
+
+**Where to start** (rule 1): the first open task is B7. Its item 2 needs an
+answer; items 3 to 6 do not, so B7.3 is the first that can be built without
+asking. The user may name another task.
 
 ---
 
@@ -44,7 +119,8 @@ reproduction is given so a session can turn it into a failing test first.
    (with a plain name in `gui/names.py` and a tooltip) and the assistant tools
    (`tools/spec.py`). Task U1 turns this into a test.
 6. **Record decisions** that are not obvious from the code in
-   `docs/decisions.md` (context, decision, alternatives), numbered on from 0026.
+   `docs/decisions.md` (context, decision, alternatives), numbered on from the
+   last one.
 7. **Update this file in the same pull request**: tick the task, add what was
    learned, add follow-up tasks you discovered.
 8. Everything in the repository is written in English, commit messages
@@ -65,12 +141,9 @@ reproduction is given so a session can turn it into a failing test first.
     `gh pr list`), and open a draft pull request as soon as the branch is
     pushed, so the next session sees it.
 
-**Pulled forward** at the user's request (2026-10-25): F1.2 (held
-parameters and bounds) now, since it touches nothing U2 changes; F8 (several
-figures) right after U2 is merged and before U3 and U4, because it turns
-"the first figure" into "the current one" in eight modules, and the GUI work
-of U3 and U4 would otherwise be built on the old assumption. Nobody starts U3
-or U4 while F8 is open.
+**Pulled forward** at the user's request (2026-10-25), both done: F1.2 (held
+parameters and bounds), and F8 (several figures) before U3 and U4, because it
+turned "the first figure" into "the current one" in eight modules.
 
 Sizes: **S** is up to half a day, **M** a day or two, **L** more; split an L
 into pull requests that each leave `develop` working.
@@ -1267,8 +1340,8 @@ other objects, with guide lines; Alt disables snapping.
 ### R3 Export for every journal — S
 
 TIFF (often required, with LZW compression) and EPS in addition to PDF, SVG
-and PNG; transparent background option; *Export all figures*; a dpi override
-at export time instead of a model field (see U2).
+and PNG; transparent background option; a dpi override at export time
+instead of a model field (see U2). *Export all figures* is done (F8).
 
 ### R4 Release 0.1.0 — M
 
@@ -1296,6 +1369,12 @@ of a release must open in later ones (rule 9 above).
 release `v0.1.0` ran `release.yml`, and `pip install "figscribe[chat]"` from
 PyPI into a fresh environment starts the window and writes a working script
 from the example.
+
+**0.2.0 released** (2026-10-29, PR #93 and #94): several figures, units and a
+range per plot, the Allan deviation, error bands, a search and a command
+palette for settings, editing where it is drawn, and the everyday actions.
+Still open from R4: item 2 (installers), the screenshots of item 3, and
+item 4 (`examples/` holds one project, the Gaussian scan).
 
 ### R5 The assistant: measure models (carried over from the brief) — M
 
