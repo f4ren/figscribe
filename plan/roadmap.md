@@ -1109,10 +1109,10 @@ Decided with the user:
   count as **absolute** (`absolute_sigma=True`): they are uncertainties
   estimated from the data, so the parameters' uncertainties follow from
   them and χ²ᵣ keeps its meaning.
-- **Which plots**: error bar plots, with the derived errors drawn, and line
-  plots, for when the errors do not matter: a line is reduced the same way
-  but draws no error. Points plots were not asked for; ask when F12 is
-  started.
+- **Which plots**: error bar plots, with the derived errors drawn, line
+  plots, for when the errors do not matter (a line is reduced the same way
+  but draws no error), and points plots, reduced the same way as lines
+  (answered 2026-11-01).
 - **The median gets no error bar**, and the panel says so (1.2533 · std /
   √n is a poor estimate just where the median is chosen, with outliers).
 - **A group of one row** has no scatter: it keeps its existing error, else
@@ -1126,9 +1126,15 @@ Decided with the user:
   row fewer, with n − 1 in its error, and the groups after it do not shift.
   As an option per plot, a left-out row can instead be **replaced by the
   mean of the kept rows before and after it** (at the start or end of the
-  data the one neighbour), so its group keeps n values. To settle: in that
-  case the error should still count only the measured rows, or the
-  invented value makes the point look more certain than it is.
+  data the one neighbour), so its group keeps n values. The mean is taken
+  over all n values, but the error counts only the measured rows (n minus
+  the replaced ones, in ddof = 1 and in √n), or the invented value would
+  make the point look more certain than it is (answered 2026-11-01).
+- **Clicking a reduced plot**: a drawn point is a group, not a row. On a
+  reduced plot the preview's "Leave out row …" and the fit dialog's "Find
+  outliers" are disabled, and say why (a B8.4 rule); left-out rows already
+  there still count and are removed before the reduction as above, but are
+  not drawn grey while the plot is reduced (answered 2026-11-01).
 
 To settle while building it, with a proposal each (record them in the
 decision):
@@ -1136,10 +1142,6 @@ decision):
   arithmetic (`convert.py`): conversion, range, left-out rows (removed or
   replaced), non-finite values, then the reduction. A module beside it, used
   by the renderer, the fits and the code generator.
-- **Clicking a reduced plot**: a drawn point is a group, not a row.
-  Proposed: on a reduced plot the preview's "Leave out row …" and the fit
-  dialog's "Find outliers" are disabled, and say why (a B8.4 rule); left-out
-  rows are not drawn while the plot is reduced.
 - **The script** reads as written by hand: the group of each row as
   `rows // n`, averaged with `scipy.stats.binned_statistic` (SciPy is
   already a dependency), which also takes x intervals; `[::n]` for every
@@ -1362,7 +1364,6 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
-| F12 | Points plots reduced too? Leaving points out disabled while a plot is reduced? The error of a group with a replaced row? (Answered when F12 is started.) |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
