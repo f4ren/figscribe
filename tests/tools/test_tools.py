@@ -235,6 +235,30 @@ def test_the_assistant_shades_the_errors_as_a_band(tools, workspace) -> None:
         )
 
 
+def test_the_assistant_draws_fewer_points(tools, workspace) -> None:
+    _, _, plot, _ = _ids(workspace)
+    schema = json.dumps(tools.call("get_schema", {}))
+    assert "Draw fewer points" in schema
+    tools.call("set_field", {"object_id": plot, "path": ["reduction"], "value": {}})
+    tools.call(
+        "set_field", {"object_id": plot, "path": ["reduction", "count"], "value": 4}
+    )
+    tools.call(
+        "set_field",
+        {"object_id": plot, "path": ["reduction", "method"], "value": "median"},
+    )
+    reduction = workspace.project.figures[0].axes[0].artists[0].reduction
+    assert (reduction.method, reduction.count) == ("median", 4)
+    assert "binned_statistic" in tools.call("get_python_script", {})["script"]
+    with pytest.raises(ToolError, match="count"):
+        tools.call(
+            "set_field",
+            {"object_id": plot, "path": ["reduction", "count"], "value": 1},
+        )
+    tools.call("set_field", {"object_id": plot, "path": ["reduction"], "value": None})
+    assert workspace.project.figures[0].axes[0].artists[0].reduction is None
+
+
 def test_a_tick_step_that_would_freeze_the_figure_is_refused(tools, workspace) -> None:
     _, axes, _, _ = _ids(workspace)
     before = dumps(workspace.project)

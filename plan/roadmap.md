@@ -1136,21 +1136,27 @@ Decided with the user:
   there still count and are removed before the reduction as above, but are
   not drawn grey while the plot is reduced (answered 2026-11-01).
 
-To settle while building it, with a proposal each (record them in the
-decision):
-- **The order** of the steps, following F11's single place for the
-  arithmetic (`convert.py`): conversion, range, left-out rows (removed or
-  replaced), non-finite values, then the reduction. A module beside it, used
-  by the renderer, the fits and the code generator.
-- **The script** reads as written by hand: the group of each row as
-  `rows // n`, averaged with `scipy.stats.binned_statistic` (SciPy is
-  already a dependency), which also takes x intervals; `[::n]` for every
-  n-th row; with a comment. Groups by file row are why a plain
-  `reshape(-1, n)` does not do once rows are left out. The renderer's bin edges must be the
-  script's, or the equivalence test fails.
-- **Names** in the panel that cannot be taken for the preview's thinning,
-  for example "Draw: every row / mean of … rows / median of … rows / every
-  … th row / mean per … in x".
+**Done** (2026-11-01; decision 0045; no schema bump, a file without
+`reduction` is drawn as before): `Reduction` (`method` mean, median, every or
+interval; `count`, `width`, `keep_last`, `replace_left_out`) on line, points
+and error bar plots, calculated in `figscribe/reduce.py` and reached through
+`plot_data` by the renderer, the fits, the residuals, the fit dialog and the
+code generator, whose section "Fewer points" makes the same
+`binned_statistic` calls (the equivalence tests hold them to it). The panel
+has *Fewer points* under *Data* and a section for its settings; five rules in
+`gui/effect.py` grey what does nothing, "Leave out row …" and "Find
+outliers" are disabled on a reduced plot with the reason, and the assistant's
+`set_field` takes `reduction`. A point without an error (a group of one row
+and no error column) is not fitted, as the user chose; "Points fitted" says
+so. An image baseline `reduced`. *Learned:* every user of `plot_data` indexed
+its arrays by row of the file; `PlotData.rows_kept` is now the one place that
+says which points a fit may use (all of them when reduced), or a left-out row
+would have raised a false "row N is left out" for a group. Residuals now
+leave out points without an error, as the fit does. *Follow-ups, only if
+asked:* an error band from derived errors (a band still needs the plot's y
+error column); a weighted mean; reduction for the Allan deviation and
+histograms; a script of a reduced plot whose range keeps no row stops with an
+error (the problem list says so before).
 
 ---
 

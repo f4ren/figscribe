@@ -1154,3 +1154,102 @@ def test_an_allan_deviation_in_minutes_over_a_range(tmp_path: Path) -> None:
     )
     script = _assert_same(project, tmp_path)
     assert "/ 60" in script
+
+
+def test_a_mean_of_rows_with_a_fit_and_its_residuals(tmp_path: Path) -> None:
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        left_out=[3, 20],
+        reduction=Reduction(count=5, replace_left_out=True),
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "from scipy.stats import binned_statistic" in script
+    assert "group = rows[member] // 5" in script
+    assert "binned_statistic(group, t[member]," in script
+    assert "sigma=" in script and "absolute_sigma=True" in script
+
+
+def test_derived_errors_with_units_a_range_and_a_dropped_last_group(
+    tmp_path: Path,
+) -> None:
+    from figscribe.model import Conversion, Reduction
+
+    project, ref = _run_csv(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        label="data",
+        x_conversion=Conversion(factor=1 / 3600, from_start=True, unit="h"),
+        x_range=(0.5, 3.5),
+        left_out=[12],
+        reduction=Reduction(count=4, keep_last=False),
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    _assert_same(project, tmp_path)
+
+
+def test_a_median_every_nth_row_and_intervals(tmp_path: Path) -> None:
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    median = LinePlot(
+        x=ref["t"], y=ref["U"], reduction=Reduction(method="median", count=6)
+    )
+    every = ScatterPlot(
+        x=ref["t"],
+        y=ref["U"],
+        left_out=[8],
+        reduction=Reduction(method="every", count=4, replace_left_out=True),
+    )
+    interval = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        left_out=[5],
+        reduction=Reduction(method="interval", width=1.3),
+    )
+    project.figures = [
+        Figure(
+            dpi=150,
+            layout=GridLayout(rows=1, cols=2),
+            axes=[Axes(artists=[median, every]), Axes(col=1, artists=[interval])],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
+def test_a_band_over_reduced_points_and_a_median_without_one(tmp_path: Path) -> None:
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    banded = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        linestyle="-",
+        band=ErrorBand(),
+        reduction=Reduction(count=4),
+    )
+    bare = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["t2"],
+        yerr=ref["dU"],
+        linestyle="-",
+        band=ErrorBand(),
+        reduction=Reduction(method="median", count=4),
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[banded, bare])])]
+    _assert_same(project, tmp_path)

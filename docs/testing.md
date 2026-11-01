@@ -78,6 +78,11 @@ note the platform, the screen scaling and the theme in the pull request.
 14. **Where am I**: select an axis in the figure and in the outline; the
     path above the settings leads back to its panel and the figure. With a
     right y axis and a long label, the outline rows stay readable.
+15. **Fewer points**: on a plot of a few hundred rows switch on *Fewer
+    points* and try each of the four ways; the preview follows at once, error
+    bars show the standard error, and a right-click on a point says why no
+    row can be left out. Fit it, export the script and run it: the same
+    figure.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

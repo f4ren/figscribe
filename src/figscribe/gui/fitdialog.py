@@ -32,7 +32,6 @@ from figscribe.fit import (
     free_names,
     in_range,
     initial_guess,
-    kept,
     outliers,
     parameter_names,
     run_fit,
@@ -40,7 +39,7 @@ from figscribe.fit import (
     within,
 )
 from figscribe.gui import theme
-from figscribe.gui.names import artist_name, with_error
+from figscribe.gui.names import REDUCED_NO_ROWS, artist_name, with_error
 from figscribe.gui.numbers import number
 from figscribe.gui.properties import GREEK
 from figscribe.gui.widgets import label
@@ -72,11 +71,11 @@ class FitDialog(QDialog):
         self.target = target
         self.existing = fit
         # In the units the plot shows, as the parameters will be read.
-        shown = plot_data(target, data)
+        self.shown = shown = plot_data(target, data)
         self.x, self.y = shown.x, shown.y
         self.yerr = shown.yerr if isinstance(target, ErrorbarPlot) else None
-        self.in_plot = shown.used
-        """Which rows lie within the plot's range; the others are never fitted."""
+        if shown.reduced:  # derived errors weight the fit of any reduced plot
+            self.yerr = shown.yerr
         self.result = None
         self.start: dict[str, QLineEdit] = {}
         self.fixed: dict[str, QCheckBox] = {}
@@ -110,6 +109,9 @@ class FitDialog(QDialog):
         self.outside.setToolTip(
             "In the left-out color and marker of the plot; they stay in the plot."
         )
+        if shown.reduced:
+            self.outside.setEnabled(False)
+            self.outside.setToolTip(REDUCED_NO_ROWS)
         self.k = QDoubleSpinBox()
         self.k.setRange(1.0, 10.0)
         self.k.setDecimals(1)
@@ -122,6 +124,9 @@ class FitDialog(QDialog):
         )
         self.find_outliers = QPushButton("Find outliers")
         self.find_outliers.clicked.connect(self._find_outliers)
+        if shown.reduced:
+            self.find_outliers.setEnabled(False)
+            self.find_outliers.setToolTip(REDUCED_NO_ROWS)
         self.outlier_text = label("", "caption")
         self.outlier_text.setWordWrap(True)
         self.leave_outliers_out = QPushButton("Leave them out")
@@ -157,11 +162,18 @@ class FitDialog(QDialog):
     # --- layout ---------------------------------------------------------------
 
     def _layout(self) -> None:
-        weighting = (
-            f"weighted by {self.target.yerr.column}"
-            if self.yerr is not None
-            else "unweighted: the plot has no y errors"
-        )
+        weighting = "unweighted: the plot has no y errors"
+        if self.shown.reduced:
+            weighting = "unweighted: the median of rows has no error"
+        if self.yerr is not None:
+            column = getattr(self.target, "yerr", None)
+            weighting = (
+                "weighted by the standard errors of the groups"
+                if column is None
+                else f"weighted by {column.column}, propagated"
+                if self.shown.reduced
+                else f"weighted by {column.column}"
+            )
         top = QVBoxLayout()
         top.setContentsMargins(24, 20, 24, 16)
         top.setSpacing(4)
@@ -450,7 +462,10 @@ class FitDialog(QDialog):
         except FitError:
             used = in_range(self.x, None)
         left_out = [*self.target.left_out, *(self.pending if pending else [])]
-        return used & kept(len(self.x), left_out) & self.in_plot
+        used &= self.shown.rows_kept(left_out)
+        if self.yerr is not None:  # a point without an error is not fitted
+            used &= np.isfinite(self.yerr)
+        return used
 
     def left_out_rows(self) -> list[int] | None:
         """The plot's rows to leave out with this fit; None if unchanged."""

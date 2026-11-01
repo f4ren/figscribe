@@ -1964,3 +1964,117 @@ newest; the cause turned out to be the wrappers of menus (above), which are
 kept now, so there is no reason to make users upgrade.
 **A second Python version in the minimum job**: 3.11 is the floor of
 `requires-python`; 3.13 runs in the main matrix.
+
+## 0045 — Fewer points drawn: averaged or thinned
+
+**Date:** 2026-11-01
+**Status:** accepted
+
+### Context
+
+Roadmap F12, asked for by the user (2026-10-29): show a long measurement with
+fewer points. This is not E1.3, which thins the preview alone for speed: here
+the figure, the export and the script show the reduced data, and the data
+file stays as it is. It is an analysis in the sense of decision 0036 and
+computes with the numbers, so it gets rules before code.
+
+### Decision
+
+- **`reduction: Reduction | None`** on line, points and error bar plots,
+  like `band` on the error bars. No schema bump: a file without it is
+  unreduced. `Reduction.method` is one of four:
+  - `mean`: the mean of every `count` rows (at least 2);
+  - `median`: the median of every `count` rows;
+  - `every`: every `count`-th row, the first of each group, as is;
+  - `interval`: the mean over x intervals of `width`, in the x the plot shows,
+    for unevenly sampled data.
+  `keep_last` (default true) keeps or drops the incomplete last group of the
+  first three; `replace_left_out` (default false) is below.
+- **The order of the steps**, in the module `figscribe/reduce.py` beside
+  `convert.py`, which `plot_data` calls so that the renderer, the fits, the
+  code generator and the dialogs all get the same numbers: conversion, x range,
+  left-out rows (removed, or replaced), non-finite values, then the reduction.
+  A row with a non-finite x, y or error in a column the plot uses is removed.
+- **Groups are fixed to rows of the file**: rows 1 to 10, 11 to 20, …
+  (`row // count`), also when rows are left out or outside the range, so
+  that the groups after a left-out row do not shift. Intervals count from the
+  smallest x of the rows in the range (left-out rows included, so that they do
+  not move the edges) and are `(x − start) // width`. The incomplete last group
+  is the one of the last row of the file, when the number of rows is no
+  multiple of `count`.
+- **The point of a group** is at the mean x of its rows and the mean (or
+  median) of their y. For `every` it is the row itself.
+- **Errors.** A mean (`mean`, `interval`) gets the **standard error** if the
+  plot has no error column: the standard deviation of the group's measured
+  rows (ddof = 1) over √their number, so SciPy's `std` (ddof = 0) over
+  √(number − 1). With an error column the errors are **propagated**: √Σσ² over
+  the number of rows. x errors are propagated the same; there is no derived x
+  error. The **median gets no error bar** (1.2533 · std / √n is a poor
+  estimate just where the median is chosen, for data with outliers); `every`
+  keeps the row's own errors. A group with one row and no error column, or
+  whose rows are all alike, would get an error of 0; it gets none (NaN)
+  instead, so that a fit never sees a zero or a NaN as a weight. A line or
+  points plot has no error bars to draw, but its fit still uses the derived
+  errors.
+- **A left-out row** (F2) means a row of the file and is removed before the
+  reduction. With `replace_left_out` it is instead replaced by the mean of the
+  nearest kept rows before and after it (one of them at the start or end of
+  the data), so that its group keeps its number of values. The mean is over
+  all of them, the **error counts only the measured rows**: the invented value
+  must not make the point look more certain. A row replaced under `every`
+  has no error.
+- **Fits and residuals use the reduced points**; a plot with derived or propagated errors
+  is fitted with `sigma` and `absolute_sigma=True`, as one with an error column
+  already is: the errors are uncertainties estimated from the data, so the
+  parameters' uncertainties follow from them and χ²ᵣ keeps its meaning. A point
+  without an error is **not fitted** (the user, 2026-11-01), and
+  "Points fitted" says so; the fit is not made unweighted and no error is
+  invented.
+- **Clicking a reduced plot.** A drawn point is a group, not a row (the user,
+  2026-11-01): "Leave out row …" in the preview and "Find outliers" in the fit
+  dialog are disabled while a plot is reduced, with the reason. Rows already
+  left out still count, but are not drawn grey, and the points outside a fit
+  range are not drawn like left-out ones either. The settings that only style
+  them are greyed (rules in `gui/effect.py`, checked against the renderer).
+- **Points plots** are reduced like line plots (the user, 2026-11-01).
+- **The script** has a section "Fewer points" that reads as written by hand:
+  `group = rows // 10`, `scipy.stats.binned_statistic` for the mean, median,
+  count and sum of each group (SciPy is already a dependency), `[::10]`-style
+  picking for `every`; the reduced columns are named `t_red`, `U_red`,
+  `U_err`, and the plots, the fits and the residuals use them. The renderer
+  makes the very same calls, so the equivalence test holds them to it.
+
+### Settled while building it
+
+- **Where `plot_data` returns the reduced points**, `PlotData.reduced` says so
+  and `rows_kept(left_out)` says which points a fit may use: all of them when
+  reduced, else the rows in the range that are not left out. Every user that
+  indexed the arrays by row of the file calls it, or a left-out row would
+  have raised "row N is left out, but the data has M rows" for a group.
+- **A zero standard error is none** (also a propagated error of 0): the
+  point is drawn without a bar and not fitted. A fit refuses an error of 0,
+  and a NaN is dropped, which is what "not fitted" asks.
+- **Rows with a value that is not finite** in a column the plot uses (x, y,
+  and the error columns it has) are removed before the groups are made. A
+  left-out row is replaced only if its x is finite.
+- **Residuals and "Points fitted"** leave out the points without an error,
+  as the fit does; the script masks them with `np.isfinite`.
+- **A band** still shades the plot's own y error column; a plot with
+  derived errors draws bars. An error band follows the reduced points.
+- **Intervals** start at the smallest x of the rows in the range, also those
+  left out, and are `(x − start) // width`; the script writes the same
+  expression, not edges made with `np.arange`, so that no point falls on the
+  other side of an edge by a rounding.
+
+### Alternatives considered
+
+**Reducing in the data source** (a derived column): the data file and the
+columns it offers would then depend on the plot, and a second plot of the same
+column would need a copy. **Groups counted after the left-out rows are
+removed**: simpler, but one left-out row would shift every group after it and
+make the picture jump. **Weighting a group's mean by its errors**: a different
+estimate than "the mean of n rows", and not asked for. **Fitting without
+weights when an error is missing**, or **giving such a point the median of the
+other errors**: the first loses the meaning of χ²ᵣ for all points, the second
+invents an uncertainty. **`pandas.groupby` in the script**: no new dependency
+for a few lines.

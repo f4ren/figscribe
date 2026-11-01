@@ -385,7 +385,7 @@ def data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
 
 def _nothing_in_range(artist, data) -> list[str]:
     """A range that keeps no row draws nothing."""
-    from figscribe.convert import convert, plot_data, within
+    from figscribe.convert import convert, within
     from figscribe.io.errors import DataError
 
     try:
@@ -393,7 +393,7 @@ def _nothing_in_range(artist, data) -> list[str]:
             values = convert(data(artist.values), artist.x_conversion)
             what = "value"
         else:
-            values = plot_data(artist, data).x
+            values = convert(data(artist.x), artist.x_conversion)
             what = "row"
     except DataError:
         return []

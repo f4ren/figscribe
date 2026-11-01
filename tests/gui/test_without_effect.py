@@ -39,6 +39,7 @@ from figscribe.model import (
     LinePlot,
     PredefinedFit,
     Project,
+    Reduction,
     ReferenceLine,
     ResidualPlot,
     validate_references,
@@ -82,7 +83,9 @@ def _fit(**fields) -> tuple[LinePlot, FitCurve]:
 
 Case = tuple[Callable[[], tuple[Axes, object]], object, tuple, object]
 """Makes (the panel, the object) with the field doing nothing; a new value
-for the field; the setting that makes it count, and its value."""
+for the field; the setting that makes it count, and its value. That setting may
+be a function of the panel and the object instead, for one the object cannot
+reach."""
 
 
 def _panel(**fields) -> Case:
@@ -110,6 +113,16 @@ def _fitted(**fields):
         return Axes(artists=[data, fit]), fit
 
     return make
+
+
+def _fitted_to_fewer_points():
+    data, fit = _fit(fit_range=(2.0, 6.0))
+    data.reduction = Reduction(count=3)
+    return Axes(artists=[data, fit]), fit
+
+
+def _draw_every_row(axes: Axes, fit: FitCurve) -> None:
+    axes.artists[0].reduction = None
 
 
 def _residuals(data_fields=None, **fields):
@@ -143,7 +156,8 @@ SECOND_PANEL = [
 
 RIGHT = {"y_right": AxisSpec(limits=(-10.0, 10.0))}
 
-CASES: dict[tuple[str, tuple], Case] = {
+# A key is the class and the path, and, for a second reason, a word more.
+CASES: dict[tuple, Case] = {
     ("Axes", ("grid_axis",)): (_panel(), "x", ("grid",), True),
     ("Axes", ("grid_which",)): (_panel(), "both", ("grid",), True),
     ("Axes", ("grid_color",)): (_panel(), "red", ("grid",), True),
@@ -271,6 +285,49 @@ CASES: dict[tuple[str, tuple], Case] = {
         ("fit_range",),
         (2.0, 6.0),
     ),
+    ("FitCurve", ("outside_as_left_out",), "reduced"): (
+        _fitted_to_fewer_points,
+        True,
+        _draw_every_row,
+        None,
+    ),
+    **{
+        ("LinePlot", (name,), "reduced"): (
+            _alone(lambda: _line(marker="o", left_out=[3, 4], reduction=Reduction())),
+            value,
+            ("reduction",),
+            None,
+        )
+        for name, value in (
+            ("left_out_color", "red"),
+            ("left_out_marker", "x"),
+            ("left_out_linestyle", ":"),
+        )
+    },
+    ("LinePlot", ("reduction", "count")): (
+        _alone(lambda: _line(reduction=Reduction(method="interval", width=1.0))),
+        3,
+        ("reduction", "method"),
+        "mean",
+    ),
+    ("LinePlot", ("reduction", "width")): (
+        _alone(lambda: _line(reduction=Reduction(count=3))),
+        2.0,
+        ("reduction", "method"),
+        "interval",
+    ),
+    ("LinePlot", ("reduction", "keep_last")): (
+        _alone(lambda: _line(reduction=Reduction(method="every", count=4))),
+        False,
+        ("reduction", "method"),
+        "mean",
+    ),
+    ("LinePlot", ("reduction", "replace_left_out")): (
+        _alone(lambda: _line(reduction=Reduction(count=4))),
+        True,
+        ("left_out",),
+        [3],
+    ),
 }
 
 
@@ -308,13 +365,17 @@ def test_every_rule_is_checked_here() -> None:
         for cls in rule.owners
         for path in rule.paths
     }
-    assert set(CASES) <= ruled
+    assert {key[:2] for key in CASES} <= ruled
 
 
-@pytest.mark.parametrize("key", CASES, ids=lambda k: f"{k[0]}.{'.'.join(k[1])}")
+def _name(key: tuple) -> str:
+    return ".".join([key[0], *key[1], *key[2:]])
+
+
+@pytest.mark.parametrize("key", CASES, ids=_name)
 def test_a_rule_is_true_to_the_figure(key) -> None:
     make, value, (switch, on) = CASES[key][0], CASES[key][1], CASES[key][2:]
-    _, path = key
+    path = key[1]
 
     axes, obj = make()
     reason = without_effect(obj, path, _project(axes))
@@ -324,7 +385,10 @@ def test_a_rule_is_true_to_the_figure(key) -> None:
     assert _drawn(axes) == before, "the rule says it does nothing, but it does"
 
     axes, obj = make()
-    _set(obj, switch, on)
+    if callable(switch):
+        switch(axes, obj)
+    else:
+        _set(obj, switch, on)
     assert without_effect(obj, path, _project(axes)) is None
     before = _drawn(axes)
     _set(obj, path, value)
