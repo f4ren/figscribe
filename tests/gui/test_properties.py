@@ -627,6 +627,31 @@ def test_errors_are_shaded_as_a_band_and_drawn_as_bars_again(
     assert _artist(document).band.alpha == 0.5
 
 
+def test_fewer_points_are_switched_on_and_set_up(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_artist(document).id)
+    assert "Fewer points" not in panel.sections
+    panel.editors[("reduction",)].widget.click()
+    assert _artist(document).reduction.count == 10
+    assert document.history.undo_text == "Draw fewer points"
+    assert "Fewer points" in panel.sections
+    _type(panel, ("reduction", "count"), "5")
+    assert _artist(document).reduction.count == 5
+    assert not panel.editors[("reduction", "width")].widget.isEnabled()
+    method = panel.editors[("reduction", "method")].widget
+    index = method.findText("mean over x intervals")
+    method.setCurrentIndex(index)
+    method.activated.emit(index)
+    assert _artist(document).reduction.method == "interval"
+    assert panel.editors[("reduction", "width")].widget.isEnabled()
+    assert not panel.editors[("reduction", "count")].widget.isEnabled()
+    panel.editors[("reduction",)].widget.click()
+    assert _artist(document).reduction is None
+    assert document.history.undo_text == "Draw every row"
+    assert "Fewer points" not in panel.sections
+
+
 def test_panel_labels_are_switched_on_and_set_up(
     panel: PropertyPanel, document: Document
 ) -> None:
@@ -680,6 +705,7 @@ def test_the_basic_settings_come_first_the_rest_under_more(
         "x_conversion",
         "y_conversion",
         "x_range",
+        "reduction",
     ]  # all data stays
     assert "markersize" in fields["More"] and "band" in fields["More"]
     assert fields["More"][-2:] == ["visible", "zorder"]

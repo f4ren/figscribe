@@ -400,27 +400,34 @@ def _draw_points(
     clicks."""
     from figscribe.fit import FitError, kept
 
-    converted = plot_data(artist, data)
+    try:
+        converted = plot_data(artist, data)
+    except FitError as exc:  # a reduction counts the rows left out
+        raise DataError(f"{artist.label or artist.kind}: {exc}") from None
     columns = {
         name: values
         for name in ("x", "y", "xerr", "yerr")
         if (values := getattr(converted, name)) is not None
+        and (name in ("x", "y") or hasattr(artist, name))  # a line has no errors
     }
     # Errors drawn as a band are not drawn as bars, of the left-out rows neither.
-    spread = columns.pop("yerr") if banded(artist) else None
+    spread = columns.pop("yerr", None) if banded(artist) else None
     count = len(columns["x"])
-    try:
-        shown = kept(count, artist.left_out)
-    except FitError as exc:
-        raise DataError(f"{artist.label or artist.kind}: {exc}") from None
-    # Rows outside the plot's range are not drawn at all, not even apart.
     used = converted.used
-    shown &= _inside_fits(artist, artists, columns["x"]) & used
+    if converted.reduced:  # the rows left out and outside the range are gone
+        shown = np.ones(count, dtype=bool)
+    else:
+        try:
+            shown = kept(count, artist.left_out)
+        except FitError as exc:
+            raise DataError(f"{artist.label or artist.kind}: {exc}") from None
+        # Rows outside the plot's range are not drawn at all, not even apart.
+        shown &= _inside_fits(artist, artists, columns["x"]) & used
     y = columns["y"]
     if not shown.all():
         columns["y"] = np.where(shown, y, np.nan)
     part = _draw_part(artist, ax, columns, {}, common)
-    part.rows = np.arange(count)
+    part.rows = np.arange(count) if converted.rows is None else converted.rows
     if spread is not None:
         _draw_band(artist, ax, columns["x"], y, spread, shown, part.get_color())
     if shown.all():
@@ -735,7 +742,7 @@ def _draw_residuals(
 ) -> None:
     """Data minus fit at every fitted point, with the data's y errors, around
     a dashed zero line."""
-    from figscribe.fit import evaluate, in_range, kept
+    from figscribe.fit import evaluate, in_range
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
     target = _referenced(artists, fit.target, FITTABLE, "fit")
@@ -751,7 +758,9 @@ def _draw_residuals(
         return
     shown = plot_data(target, data)
     x, y, yerr = shown.x, shown.y, shown.yerr
-    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out) & shown.used
+    used = in_range(x, fit.fit_range) & shown.rows_kept(target.left_out)
+    if yerr is not None:  # a point without an error is not fitted
+        used &= np.isfinite(yerr)
     if not used.all():
         x, y = x[used], y[used]
         yerr = None if yerr is None else yerr[used]

@@ -198,6 +198,13 @@ class _Writer:
         """Masks defined while drawing, so that each gets a name of its own."""
         self.kept = self._name_kept()
         """{plot id: name of the mask of its rows that are not left out}."""
+        self._retired: set[str] = set()
+        """Names the section "Fewer points" defines or uses up."""
+        self.reduced_from: dict[str, dict[str, str]] = {}
+        """{plot id: {field: variable}} of the columns a reduction reads."""
+        self.reduced = self._name_reduced()
+        """{plot id: {field: variable}} of the reduced points of each plot with
+        a reduction: x, y, and the errors it has."""
         self.fits = self._name_fits()
         self.allan = self._name_allan()
         """{Allan deviation plot id: names of its τ0, phase, m and σ}."""
@@ -279,6 +286,7 @@ class _Writer:
             *self.columns.values(),
             *getattr(self, "units", {}).values(),
             *getattr(self, "used", {}).values(),
+            *getattr(self, "_retired", ()),
         }
 
     def _name_converted(self) -> dict[tuple[str, str], str]:
@@ -332,6 +340,44 @@ class _Writer:
     def shown(self, plot, field: str) -> str:
         """The variable of the plot's column `field` as the plot shows it."""
         return self.units.get((plot.id, field)) or self.column(getattr(plot, field))
+
+    def _name_reduced(self) -> dict[str, dict[str, str]]:
+        """The variables of the reduced points of each reduced plot: t_h_red,
+        U_red, U_err. Plots, fits and residuals read these as the plot's
+        columns, so they are entered as its columns as shown."""
+        fitted = {a.target for a in self.artists.values() if isinstance(a, FitCurve)}
+        names: dict[str, dict[str, str]] = {}
+        for plot in self.artists.values():
+            how = getattr(plot, "reduction", None)
+            if how is None:
+                continue
+            columns = ("x", "y", "xerr", "yerr")
+            before = {
+                f: self.shown(plot, f)
+                for f in columns
+                if f in ("x", "y") or getattr(plot, f, None) is not None
+            }
+            drawn = isinstance(plot, ErrorbarPlot)
+            fields = {"x": "_red", "y": "_red"}
+            if how.method != "median":
+                has = getattr(plot, "yerr", None) is not None
+                if drawn or plot.id in fitted:
+                    if has or how.method != "every":
+                        fields["yerr"] = "_err"
+                if drawn and getattr(plot, "xerr", None) is not None:
+                    fields["xerr"] = "_err"
+            named = {}
+            for field, ending in fields.items():
+                name = before["x" if field.startswith("x") else "y"] + ending
+                while name in self._taken():
+                    name += "_"
+                self._retired.add(name)
+                named[field] = name
+            self.reduced_from[plot.id] = before
+            names[plot.id] = named
+            for field, name in named.items():
+                self.units[(plot.id, field)] = name
+        return names
 
     def _name_kept(self) -> dict[str, str]:
         plots = [
@@ -446,6 +492,7 @@ class _Writer:
         self._data(script_dir)
         self._units()
         self._left_out()
+        self._reduce()
         self._fit_models()
         self._fits()
         self._allan_deviations()
@@ -458,7 +505,8 @@ class _Writer:
 
     def _header(self) -> None:
         figure = self.figure
-        needs = "NumPy, Matplotlib and SciPy" if self.fits else "NumPy and Matplotlib"
+        scipy = self.fits or self._grouped()
+        needs = "NumPy, Matplotlib and SciPy" if scipy else "NumPy and Matplotlib"
         self.emit(
             f'"""{figure.name}: {_num(figure.width_mm)} × {_num(figure.height_mm)} mm '
             f"at {_num(figure.dpi)} dpi.",
@@ -489,6 +537,8 @@ class _Writer:
             self.emit("from matplotlib.colors import LogNorm")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
+        if self._grouped():
+            self.emit("from scipy.stats import binned_statistic")
         self.emit("", "HERE = Path(__file__).resolve().parent")
         if self.figure.stylesheet is not None:
             self.emit(f"plt.style.use({_str(self.figure.stylesheet)})")
@@ -651,7 +701,7 @@ class _Writer:
             self.emit(f"{name} = {text}  # {comment}")
         for plot_id, mask in self.used.items():
             plot = self.artists[plot_id]
-            x = self.shown(plot, "x")
+            x = self.reduced_from.get(plot_id, {}).get("x") or self.shown(plot, "x")
             low, high = plot.x_range
             self.emit(
                 f"# {_describe(plot).capitalize()}: only the rows with {x} from "
@@ -681,6 +731,195 @@ class _Writer:
                 f"{name} = np.ones({x}.size, dtype=bool)",
                 f"{name}[{plot.left_out}] = False",
             )
+
+    def _grouped(self) -> bool:
+        """Whether a reduction averages groups, which takes SciPy."""
+        return any(
+            self.artists[plot_id].reduction.method != "every"
+            for plot_id in self.reduced
+        )
+
+    def _reduce(self) -> None:
+        """Fewer points drawn (decision 0045): the same steps and calls as
+        `figscribe.reduce`, so that the script agrees with the preview."""
+        if not self.reduced:
+            return
+        self.section("Fewer points")
+        several = len(self.reduced) > 1
+        for number, plot_id in enumerate(self.reduced, start=1):
+            self._reduce_plot(self.artists[plot_id], f"_{number}" if several else "")
+        for plot_id in self.reduced:  # the masks are used up: the points are final
+            for masks in (self.kept, self.used):
+                if plot_id in masks:
+                    self._retired.add(masks.pop(plot_id))
+
+    def _scratch(self, base: str, suffix: str) -> str:
+        name = base + suffix
+        while name in self._taken():
+            name += "_"
+        self._retired.add(name)
+        return name
+
+    def _reduce_plot(self, plot, suffix: str) -> None:
+        how = plot.reduction
+        before, out = self.reduced_from[plot.id], self.reduced[plot.id]
+        x, y = before["x"], before["y"]
+        kept, used = self.kept.get(plot.id), self.used.get(plot.id)
+        n = how.count
+        rows = self._scratch("rows", suffix)
+        what = {
+            "mean": f"every {n} rows of the file are averaged",
+            "median": f"the median of every {n} rows of the file is taken",
+            "every": f"every {n}th row of the file is kept",
+            "interval": f"the rows are averaged over intervals of {how.width:g} in {x}",
+        }[how.method]
+        error = ""
+        if "yerr" in out and how.method in ("mean", "interval"):
+            error = (
+                ", the errors are propagated"
+                if "yerr" in before
+                else ", the error is the standard error of the mean"
+            )
+        self.emit(
+            f"# {_describe(plot).capitalize()}: {what}{error}.",
+            "# Rows left out are taken out first; the groups stay where they are",
+            "# in the file.",
+            f"{rows} = np.arange(len({x}))",
+        )
+
+        def pick(name: str, mask: str | None) -> str:
+            return name if mask is None else f"{name}[{mask}]"
+
+        refs = [getattr(plot, f, None) for f in ("x", "y", "xerr", "yerr")]
+        columns = [x, y, *(before[f] for f in ("xerr", "yerr") if f in before)]
+        finite = None
+        if not self._all_finite([ref for ref in refs if ref is not None]):
+            finite = self._scratch("finite", suffix)
+            checks = " & ".join(f"np.isfinite({c})" for c in columns)
+            self.emit(f"{finite} = {checks}")
+        measured = None
+        if parts := [m for m in (finite, kept, used) if m is not None]:
+            measured = self._scratch("measured", suffix)
+            self.emit(f"{measured} = {' & '.join(parts)}")
+        member, filled = measured, y
+        if how.replace_left_out and kept is not None:
+            good, replaced, filled, member = (
+                self._scratch(base, suffix)
+                for base in ("good", "replaced", "filled", "member")
+            )
+            where = " & ".join([f"~{kept}", f"np.isfinite({x})", *filter(None, [used])])
+            self.emit(
+                "# A row left out is replaced by the mean of the nearest rows kept",
+                "# before and after it.",
+                f"{good} = np.flatnonzero({measured})",
+                f"{replaced} = {where}",
+                f"{filled} = {y}.copy()",
+                f"for row in np.flatnonzero({replaced}):",
+                f"    at = np.searchsorted({good}, row)",
+                f"    near = {good}[[max(at - 1, 0), min(at, {good}.size - 1)]]",
+                f"    {filled}[row] = {y}[near].mean()",
+                f"{member} = {measured} | {replaced}",
+            )
+        if how.method in ("mean", "median") and not how.keep_last:
+            last = f"{rows} < len({x}) // {n} * {n}"
+            self.emit("# The last group has fewer rows than the others and is dropped.")
+            if member is None:
+                member = measured = self._scratch("measured", suffix)
+                self.emit(f"{member} = {last}")
+            elif member == measured:
+                self.emit(f"{measured} = {measured} & ({last})")
+            else:
+                self.emit(
+                    f"{member} = {member} & ({last})",
+                    f"{measured} = {measured} & {member}",
+                )
+
+        if how.method == "every":
+            self._reduce_every(plot, suffix, rows, member, measured, filled)
+            return
+        group, bins, among, count = (
+            self._scratch(base, suffix) for base in ("group", "bins", "among", "count")
+        )
+        if how.method == "interval":
+            start = self._scratch("start", suffix)
+            inside = " & ".join(m for m in (finite, used) if m is not None)
+            self.emit(
+                f"{start} = {pick(x, inside or None)}.min()",
+                f"{group} = (({pick(x, member)} - {start}) // {how.width!r})"
+                ".astype(int)",
+            )
+        else:
+            self.emit(f"{group} = {pick(rows, member)} // {n}")
+        self.emit(
+            f"_, {group} = np.unique({group}, return_inverse=True)",
+            f"{bins} = np.arange({group}.max() + 2)",
+        )
+
+        def statistic(values: str, kind: str, groups: str = group) -> str:
+            return (
+                f'binned_statistic({groups}, {values}, "{kind}", bins={bins}).statistic'
+            )
+
+        self.emit(
+            f"{out['x']} = {statistic(pick(x, member), 'mean')}",
+            f"{out['y']} = "
+            + statistic(
+                pick(filled, member), "median" if how.method == "median" else "mean"
+            ),
+        )
+        if how.method == "median" or not {"xerr", "yerr"} & set(out):
+            return
+        # The errors count the rows measured, not the ones replaced.
+        groups = group
+        if member != measured:
+            groups = among
+            self.emit(f"{among} = {group}[{pick(measured, member)}]")
+        self.emit(f"{count} = {statistic(pick(y, measured), 'count', groups)}")
+        for field in ("xerr", "yerr"):
+            if field not in out:
+                continue
+            if field in before:
+                sigma = pick(before[field], measured)
+                steps = [
+                    statistic(f"{sigma} ** 2", "sum", groups),
+                    f"np.sqrt({out[field]}) / np.maximum({count}, 1)",
+                ]
+            else:
+                steps = [
+                    statistic(pick(y, measured), "std", groups),
+                    f"{out[field]} / np.sqrt(np.maximum({count} - 1, 1))",
+                ]
+            self.emit(
+                *(f"{out[field]} = {step}" for step in steps),
+                f"{out[field]}[{out[field]} == 0] = np.nan  # no error to weight by",
+            )
+
+    def _reduce_every(self, plot, suffix, rows, member, measured, filled) -> None:
+        """Every n-th row as it is; the rows left out and replaced have no error."""
+        before, out, n = (
+            self.reduced_from[plot.id],
+            self.reduced[plot.id],
+            plot.reduction.count,
+        )
+        if member is None:
+
+            def taken(name: str) -> str:
+                return f"{name}[::{n}]"
+        else:
+            picked = self._scratch("picked", suffix)
+            self.emit(f"{picked} = {member} & ({rows} % {n} == 0)")
+
+            def taken(name: str) -> str:
+                return f"{name}[{picked}]"
+
+        lines = [(out["x"], taken(before["x"])), (out["y"], taken(filled))]
+        for field in ("xerr", "yerr"):
+            if field in out:
+                own = taken(before[field])
+                if measured is not None:
+                    own = f"np.where({taken(measured)}, {own}, np.nan)"
+                lines.append((out[field], own))
+        self.emit(*(f"{name} = {text}" for name, text in lines))
 
     def _fit_models(self) -> None:
         if not self.fits:
@@ -787,11 +1026,7 @@ class _Writer:
             target = self.artists[fit.target]
             self.section(f"Fit: {_describe(fit)} to {_describe(target)}")
             x, y = self.shown(target, "x"), self.shown(target, "y")
-            yerr = (
-                self.shown(target, "yerr")
-                if isinstance(target, ErrorbarPlot) and target.yerr is not None
-                else None
-            )
+            yerr = self._yerr(target)
             names = parameter_names(fit.model)
             arrays = [a for a in (x, y, yerr) if a is not None]
             used = []
@@ -855,6 +1090,8 @@ class _Writer:
 
     def _finite(self, fit: FitCurve) -> bool | None:
         """Whether all data of the fit is finite; None if unknown."""
+        if fit.target in self.reduced:  # means are finite; an error may be missing
+            return None if self._yerr(self.artists[fit.target]) else True
         if self.data is None:
             return None
         target = self.artists[fit.target]
@@ -1217,9 +1454,9 @@ class _Writer:
         errors = {
             name: self.shown(artist, name)
             for name in ("xerr", "yerr")
-            if getattr(artist, name, None) is not None
+            if self._has_errors(artist, name)
         }
-        spread = errors.pop("yerr") if banded(artist) else None
+        spread = errors.pop("yerr", None) if banded(artist) else None
         mask = self._shown(artist)
         used = self.used.get(artist.id)
         shown = f"np.where({mask}, {y}, np.nan)" if mask else y
@@ -1271,11 +1508,28 @@ class _Writer:
         low, high = f"{y} - {spread}", f"{y} + {spread}"
         self.call(f"{ax}.fill_between", x, low, high, **kwargs)
 
+    def _has_errors(self, plot, field: str) -> bool:
+        """Whether the plot draws the errors `field` ("xerr", "yerr"): those of
+        its column, or, reduced, the ones the reduction made."""
+        if plot.id in self.reduced:
+            return field in self.reduced[plot.id] and isinstance(plot, ErrorbarPlot)
+        return getattr(plot, field, None) is not None
+
+    def _yerr(self, target) -> str | None:
+        """The variable of the y errors a fit to `target` is weighted by."""
+        if target.id in self.reduced:
+            return self.reduced[target.id].get("yerr")
+        if isinstance(target, ErrorbarPlot) and target.yerr is not None:
+            return self.shown(target, "yerr")
+        return None
+
     def _shown(self, artist) -> str | None:
         """The mask of the rows drawn as the plot draws them: not left out,
         within its range, and inside the range of each fit that draws the
         others like left out. Defined here when it joins several; None when
         all rows are."""
+        if artist.id in self.reduced:
+            return None  # the rows left out and outside the range are gone
         parts = []
         if artist.id in self.kept:
             parts.append((self.kept[artist.id], "not left out"))
@@ -1347,7 +1601,7 @@ class _Writer:
         if target.id in self.used:  # NaN lies outside the range too
             low = f"{x}[{self.used[target.id]}].min()"
             high = f"{x}[{self.used[target.id]}].max()"
-        elif self._finite(fit):
+        elif self._finite(fit) or target.id in self.reduced:
             low, high = f"{x}.min()", f"{x}.max()"
         else:
             low = f"{x}[np.isfinite({x})].min()"
@@ -1383,8 +1637,8 @@ class _Writer:
         target = self.artists[fit.target]
         x, y = self.shown(target, "x"), self.shown(target, "y")
         kwargs = {}
-        if isinstance(target, ErrorbarPlot) and target.yerr is not None:
-            kwargs["yerr"] = self.shown(target, "yerr")
+        if yerr := self._yerr(target):
+            kwargs["yerr"] = yerr
         masks = [
             mask
             for mask in (
@@ -1394,6 +1648,8 @@ class _Writer:
             )
             if mask is not None
         ]
+        if yerr and self._finite(fit) is not True:  # a point without an error
+            masks.append(f"np.isfinite({yerr})")  # is not fitted
         if masks:  # only the fitted points
             mask = " & ".join(masks)
             x, y = f"{x}[{mask}]", f"{y}[{mask}]"

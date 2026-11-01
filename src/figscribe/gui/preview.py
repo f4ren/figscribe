@@ -64,7 +64,7 @@ from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.inplace import Editable, open_editor
 from figscribe.gui.markings import ENTRIES, add, marking
-from figscribe.gui.names import artist_name, size_text
+from figscribe.gui.names import REDUCED_NO_ROWS, artist_name, size_text
 from figscribe.gui.resize import (
     HANDLE,
     Corner,
@@ -766,17 +766,23 @@ class Preview(QWidget):
         found = self.point_at(point)
         if found is not None:
             plot_id, row = found
-            left_out = list(find(self.document.project, plot_id).left_out)
-            if row in left_out:
-                text, rows = (
-                    f"Take row {row + 1} back in",
-                    [r for r in left_out if r != row],
-                )
-            else:
-                text, rows = f"Leave out row {row + 1}", [*left_out, row]
+            plot = find(self.document.project, plot_id)
             if menu.actions():
                 menu.addSeparator()
-            menu.addAction(text, lambda: self._leave_out(plot_id, rows))
+            if plot.reduction is not None:  # a point is a group of rows
+                entry = menu.addAction("Leave out a row")
+                entry.setEnabled(False)
+                entry.setToolTip(REDUCED_NO_ROWS)
+            else:
+                left_out = list(plot.left_out)
+                if row in left_out:
+                    text, rows = (
+                        f"Take row {row + 1} back in",
+                        [r for r in left_out if r != row],
+                    )
+                else:
+                    text, rows = f"Leave out row {row + 1}", [*left_out, row]
+                menu.addAction(text, lambda: self._leave_out(plot_id, rows))
         ax = self.axes_at(point)
         if ax is not None:
             if menu.actions():

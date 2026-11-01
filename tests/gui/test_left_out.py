@@ -51,6 +51,26 @@ def test_a_point_is_left_out_and_taken_back_in(preview: Preview) -> None:
     assert plot.id == document.figure.axes[0].artists[0].id
 
 
+def test_a_reduced_plot_cannot_have_a_row_left_out(preview: Preview) -> None:
+    from figscribe.commands import SetField
+    from figscribe.gui.names import REDUCED_NO_ROWS
+    from figscribe.model import Reduction
+
+    document = preview.document
+    plot = document.figure.axes[0].artists[0]
+    document.push(SetField(plot.id, ("reduction",), Reduction(count=4)))
+    preview.grab()
+    group_x = document.data(plot.x)[12:16].mean()  # rows 13 to 16, a point
+    group_y = document.data(plot.y)[12:16].mean()
+    ax = next(
+        a for a in preview._figure.axes if a.get_gid() == document.figure.axes[0].id
+    )
+    point = preview._to_widget(*ax.transData.transform((group_x, group_y)))
+    entry = _entry(preview.context_menu(point), "Leave out a row")
+    assert not entry.isEnabled()
+    assert entry.toolTip() == REDUCED_NO_ROWS
+
+
 def test_no_menu_away_from_the_points(preview: Preview) -> None:
     assert preview.context_menu(QPointF(3, 3)) is None
 

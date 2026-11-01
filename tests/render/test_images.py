@@ -32,6 +32,7 @@ from figscribe.model import (
     LinePlot,
     PanelLabels,
     PredefinedFit,
+    Reduction,
     ReferenceLine,
     ResidualPlot,
     ScatterPlot,
@@ -219,6 +220,48 @@ def _figures(ref) -> dict[str, Figure]:
             ],
         ),
         "residuals": _residuals_figure(ref),
+        "reduced": Figure(
+            dpi=100.0,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(
+                    **labelled,
+                    artists=[
+                        LinePlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            linestyle="none",
+                            marker=".",
+                            color="0.7",
+                        ),
+                        ErrorbarPlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            left_out=[10],
+                            reduction=Reduction(count=4),
+                        ),
+                    ],
+                ),
+                Axes(
+                    col=1,
+                    **labelled,
+                    artists=[
+                        LinePlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            marker="o",
+                            reduction=Reduction(method="median", count=3),
+                        ),
+                        ScatterPlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            color="tab:orange",
+                            reduction=Reduction(method="interval", width=1.5),
+                        ),
+                    ],
+                ),
+            ],
+        ),
         "note_background": Figure(
             dpi=100.0,
             axes=[
@@ -257,6 +300,7 @@ def _figures(ref) -> dict[str, Figure]:
         "error_band",
         "converted",
         "residuals",
+        "reduced",
         "note_background",
     ],
 )

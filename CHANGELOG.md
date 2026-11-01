@@ -5,6 +5,17 @@ release open in every later one.
 
 ## Unreleased
 
+- **Fewer points drawn.** A line, points or error bar plot can show the mean
+  or median of every *n* rows, every *n*-th row, or the mean over intervals
+  of x (*Fewer points*, under *Data*). The data file stays as it is; the
+  figure, the export and the script show the reduced points and fits use
+  them. An averaged point has its standard error as error bar (propagated
+  when the plot has y errors); the median has none. Rows left out count as
+  before and can be replaced by the mean of their neighbours. While a plot is
+  reduced, leaving rows out and finding outliers are off. Saved files are
+  drawn as before.
+- Fixed: the residuals, and the count of points fitted, no longer include
+  points whose y error is missing (NaN); the fit never used them.
 - Fixed: with PySide6 before 6.12, running a command from a submenu in the
   command palette (Ctrl+K), such as *Add Panel*, did nothing and printed an
   error.

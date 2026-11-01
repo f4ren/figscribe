@@ -109,18 +109,39 @@ class PlotData:
     yerr: np.ndarray | None
     used: np.ndarray
     """Which rows lie within the plot's x range; all for none."""
+    reduced: bool = False
+    """The columns are the plot's reduced points (decision 0045), not its rows
+    of the file: the range and the rows left out are already taken out."""
+    rows: np.ndarray | None = None
+    """For reduced points, the first row of the file of each."""
+
+    def rows_kept(self, left_out) -> np.ndarray:
+        """Which of the points a fit may use: the rows within the plot's range
+        that are not in `left_out`; every point of a reduced plot, where those
+        are already taken out."""
+        if self.reduced:
+            return np.ones(len(self.x), dtype=bool)
+        from figscribe.fit.run import kept
+
+        return kept(len(self.x), left_out) & self.used
 
 
 def plot_data(plot, data: Callable[[ColumnRef], np.ndarray]) -> PlotData:
     """The plot's columns converted to the units it shows them in, every row
-    of the file, and which rows its x range keeps."""
+    of the file, and which rows its x range keeps; with a reduction, its
+    reduced points."""
     x = convert(data(plot.x), plot.x_conversion)
     xerr = getattr(plot, "xerr", None)
     yerr = getattr(plot, "yerr", None)
-    return PlotData(
+    shown = PlotData(
         x=x,
         y=convert(data(plot.y), plot.y_conversion),
         xerr=None if xerr is None else scale(data(xerr), plot.x_conversion),
         yerr=None if yerr is None else scale(data(yerr), plot.y_conversion),
         used=within(x, plot.x_range),
     )
+    if plot.reduction is None:
+        return shown
+    from figscribe.reduce import reduced
+
+    return reduced(plot, shown)

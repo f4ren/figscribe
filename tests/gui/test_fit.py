@@ -372,6 +372,47 @@ def test_the_dialog_skips_the_points_left_out_of_the_plot(
     assert dialog.points.text().startswith("39 of 41 points")
 
 
+def test_a_reduced_plot_has_no_outliers_to_find(qtbot, document: Document) -> None:
+    from figscribe.model import Reduction
+
+    document.push(SetField(_data(document).id, ("reduction",), Reduction(count=4)))
+    dialog = FitDialog(_data(document), document.data)
+    qtbot.addWidget(dialog)
+    assert not dialog.find_outliers.isEnabled()
+    assert "fewer points" in dialog.find_outliers.toolTip()
+    assert dialog.points.text().startswith("11 points")  # 41 rows, 4 to a point
+
+
+def test_a_reduced_line_is_fitted_with_the_standard_errors(
+    qtbot, document: Document
+) -> None:
+    """A line has no error column: the groups' standard errors weight the fit,
+    and a last group of one row has none and is not fitted."""
+    from figscribe.fit import residuals
+    from figscribe.model import ColumnRef, LinePlot, Reduction
+
+    source = document.project.sources[0]
+    line = LinePlot(
+        x=ColumnRef(source=source.id, column="t"),
+        y=ColumnRef(source=source.id, column="U"),
+        reduction=Reduction(count=10),
+    )
+    document.figure.axes[0].artists.append(line)  # 41 rows: the last group is one
+    dialog = FitDialog(line, document.data)
+    qtbot.addWidget(dialog)
+    assert dialog.points.text() == (
+        "4 of 5 points · weighted by the standard errors of the groups"
+    )
+    assert not dialog.outside.isEnabled()
+    assert "fewer points" in dialog.outside.toolTip()
+    fit = FitCurve(target=line.id, model=PredefinedFit(name="linear"))
+    document.figure.axes[0].artists.append(fit)
+    dialog._used_mask()  # the points of the groups that have an error
+    assert dialog._used_mask().sum() == 4
+    document.push(refit(document.project, fit.id, document.data))
+    assert residuals(document.project, fit.id, document.data).used == 4
+
+
 def test_outliers_are_proposed_and_left_out_on_confirmation(
     qtbot, window: MainWindow
 ) -> None:

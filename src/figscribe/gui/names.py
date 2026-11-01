@@ -128,6 +128,12 @@ FIELD_NAMES = {
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
     "band": "Error band",
+    "reduction": "Fewer points",
+    "method": "Draw",
+    "count": "Rows per group (n)",
+    "width": "Interval width (x)",
+    "keep_last": "Keep the last, shorter group",
+    "replace_left_out": "Replace rows left out",
     "orientation": "Direction",
     "at": "At",
     "start": "From",
@@ -269,3 +275,10 @@ def with_error(value: float, error: float | None) -> str:
     if digits > 8 or abs(value) >= 1e6 or (value != 0 and abs(value) < 1e-4):
         return f"{value:.3e} ± {error:.2e}"
     return f"{value:.{digits}f} ± {error:.{digits}f}"
+
+
+REDUCED_NO_ROWS = (
+    "Does nothing while the plot draws fewer points: a point is then a group of "
+    "rows, not a row. Switch the reduction off first."
+)
+"""Why rows cannot be left out, or outliers found, on a reduced plot."""

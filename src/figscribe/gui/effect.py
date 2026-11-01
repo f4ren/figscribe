@@ -84,6 +84,14 @@ def _no_residual_line(residuals: ResidualPlot, project: Project) -> bool:
     return getattr(data, "yerr", None) is None
 
 
+def _target_reduced(fit: FitCurve, project: Project) -> bool:
+    """The plot the fit is made to draws fewer points."""
+    try:
+        return getattr(find(project, fit.target), "reduction", None) is not None
+    except CommandError:
+        return False
+
+
 GRID = ("grid_axis", "grid_which", "grid_color", "grid_linewidth", "grid_linestyle")
 LEGEND = ("position", "frame", "ncols", "fontsize")
 LEFT_OUT = ("left_out_color", "left_out_marker", "left_out_linestyle")
@@ -148,6 +156,36 @@ RULES: list[Rule] = [
     Rule(
         (LinePlot, ScatterPlot, ErrorbarPlot),
         tuple((name,) for name in LEFT_OUT),
+        "the plot draws fewer points: rows left out are not drawn apart",
+        lambda plot, _: plot.reduction is not None,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "count"),),
+        "the points are averaged over intervals of x, not counted in rows",
+        lambda plot, _: plot.reduction.method == "interval",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "width"),),
+        "the points are grouped by rows, not by intervals of x",
+        lambda plot, _: plot.reduction.method != "interval",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "keep_last"),),
+        "only the mean or median of every n rows has a last, shorter group",
+        lambda plot, _: plot.reduction.method in ("every", "interval"),
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "replace_left_out"),),
+        "no rows are left out",
+        lambda plot, _: not plot.left_out,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        tuple((name,) for name in LEFT_OUT),
         "no points are left out (right-click a point in the figure to leave it out)",
         _left_out_nowhere,
     ),
@@ -175,6 +213,12 @@ RULES: list[Rule] = [
         (("extend_curve",), ("outside_as_left_out",)),
         "the fit uses all the data: set a range in the fit dialog",
         lambda fit, _: fit.fit_range is None,
+    ),
+    Rule(
+        (FitCurve,),
+        (("outside_as_left_out",),),
+        "the plot it fits draws fewer points: none are drawn apart",
+        _target_reduced,
     ),
 ]
 

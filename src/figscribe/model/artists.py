@@ -52,6 +52,28 @@ class Conversion(StrictModel):
     the axis' unit as it is."""
 
 
+class Reduction(StrictModel):
+    """Fewer points drawn: groups of rows averaged or thinned (decision 0045).
+    The data file stays as it is; the figure, the export and the script show
+    the reduced points, and fits use them."""
+
+    method: Literal["mean", "median", "every", "interval"] = "mean"
+    """"mean" or "median" of every `count` rows, "every" `count`-th row as it
+    is, or the "interval" mean over x intervals of `width`."""
+    count: int = Field(10, ge=2)
+    """Rows per group, counted in the file: rows 1 to 10, 11 to 20, ... for
+    10. Not used by "interval"."""
+    width: float = Field(1.0, gt=0.0)
+    """Width of an x interval in the x the plot shows; only for "interval"."""
+    keep_last: bool = True
+    """Keep the incomplete last group (averaged over the rows it has, with a
+    larger error) rather than drop it; not used by "every" and "interval"."""
+    replace_left_out: bool = False
+    """Replace a row left out by the mean of the kept rows before and after
+    it, so that its group keeps its number of values, instead of removing it.
+    The error counts only the measured rows."""
+
+
 class ArtistBase(Identified):
     label: str | None = None
     """Legend entry; None means the artist is not listed."""
@@ -103,6 +125,9 @@ class LinePlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    reduction: Reduction | None = None
+    """Draw fewer points: groups of rows averaged or thinned; None draws every
+    row. Fits use the reduced points."""
 
 
 class ScatterPlot(ArtistBase):
@@ -138,6 +163,9 @@ class ScatterPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    reduction: Reduction | None = None
+    """Draw fewer points: groups of rows averaged or thinned; None draws every
+    row. Fits use the reduced points."""
 
 
 class ErrorBand(StrictModel):
@@ -200,6 +228,9 @@ class ErrorbarPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    reduction: Reduction | None = None
+    """Draw fewer points: groups of rows averaged or thinned; None draws every
+    row. Fits use the reduced points."""
 
 
 class Histogram(ArtistBase):

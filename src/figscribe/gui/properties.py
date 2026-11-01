@@ -85,6 +85,7 @@ from figscribe.model import (
     PanelLabels,
     PredefinedFit,
     Project,
+    Reduction,
 )
 from figscribe.model.styles import style_problem
 from figscribe.render.figure import style_context
@@ -164,6 +165,7 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "colorbar": Colorbar,
     "panel_labels": PanelLabels,
     "band": ErrorBand,
+    "reduction": Reduction,
 }
 """Optional nested models switched on and off with a check box; when on, their
 fields get a section of their own."""
@@ -218,6 +220,7 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 
 SECTIONS = {
+    "reduction": "Data",
     "x_conversion": "Data",
     "y_conversion": "Data",
     "x_range": "Data",
@@ -299,6 +302,7 @@ SECTION_NAMES = {
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
     "band": "Error band",
+    "reduction": "Fewer points",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
@@ -530,6 +534,21 @@ TIPS = {
     "PanelLabels.style": "How the letters are written.",
     "band": "Shade the y errors as a band around the line instead of drawing bars, "
     "for dense data; x errors stay bars.",
+    "reduction": "Draw fewer points: groups of rows averaged or thinned. The data "
+    "file stays as it is; the figure, the export and the script show the reduced "
+    "points, and fits use them.",
+    "Reduction.method": "The mean or the median of every n rows, every n-th row as "
+    "it is, or the mean over intervals of x (for unevenly sampled data). An "
+    "averaged point gets the standard error as its error bar, or, with y errors, "
+    "their propagation; the median gets none.",
+    "Reduction.count": "How many rows of the file make a group: rows 1 to n, "
+    "n + 1 to 2n and so on, whichever rows are left out.",
+    "Reduction.width": "Width of an interval of x, in the unit shown.",
+    "Reduction.keep_last": "Keep the last group when it has fewer rows than the "
+    "others (averaged over those it has, with a larger error), or drop it.",
+    "Reduction.replace_left_out": "Replace a row left out by the mean of the rows "
+    "kept before and after it, so that its group keeps its number of values. "
+    "The error counts only the measured rows.",
     "ErrorBand.color": "Color of the band; empty takes the plot's.",
     "ErrorBand.alpha": "Opacity of the band, 1 opaque, 0 invisible; times the "
     "plot's own.",
@@ -987,6 +1006,10 @@ class PropertyPanel(QScrollArea):
                     "Letter the panels", [SetField(obj.id, path, PanelLabels())]
                 )
             return Macro("Remove the panel labels", [SetField(obj.id, path, None)])
+        if path == ("reduction",):
+            if value:
+                return Macro("Draw fewer points", [SetField(obj.id, path, Reduction())])
+            return Macro("Draw every row", [SetField(obj.id, path, None)])
         if path == ("band",):
             if value:
                 return Macro("Shade the errors", [SetField(obj.id, path, ErrorBand())])
@@ -1524,6 +1547,12 @@ CHOICES = {
         ("both", "both"),
     ],
 }
+CHOICES["method"] = [
+    ("mean of n rows", "mean"),
+    ("median of n rows", "median"),
+    ("every n-th row", "every"),
+    ("mean over x intervals", "interval"),
+]
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
 CHOICES["zero_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
@@ -2000,7 +2029,15 @@ def _shape(obj: BaseModel) -> tuple:
     """What decides the form's layout: the object, and its optional parts."""
     parts = tuple(
         getattr(obj, name, None) is None
-        for name in ("y_right", "colorbar", "panel_labels", "band", "inset", "result")
+        for name in (
+            "y_right",
+            "colorbar",
+            "panel_labels",
+            "band",
+            "reduction",
+            "inset",
+            "result",
+        )
     )
     layout = getattr(obj, "layout", None)
     grid = (layout.rows, layout.cols) if layout is not None else None
