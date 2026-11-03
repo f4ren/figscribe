@@ -75,6 +75,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
   (`[decide]`, judged by decision 0036).
+- **F14** fit an Allan deviation (M): a gap the user found on 2026-11-03.
+  **F15** draw a function (M), also from the user; F14 first.
 
 **Phase 3 — Speed and working faster**
 - **E1** large data: render off the GUI thread (2), thin the preview only
@@ -1399,6 +1401,64 @@ and a formula conversion must never be taken for a unit of the list because
 its slope is 1/60. *Follow-ups, only if asked:* 1/T and other non-linear
 conversions (a decision of their own); a formula in the plot dialog; a
 formula for a color mesh's positions.
+
+### F14 Fit an Allan deviation — M
+
+Found by the user (2026-11-03), a gap rather than a regression: an Allan
+deviation cannot be fitted. *Fit…* does not offer it, and `add_fit` says "a
+allan plot cannot be fitted" (`FITTABLE` holds line, points and error bars).
+Wanted: fit 1/√τ, the slope of white frequency noise, and the other noise
+types that make up a stability plot (σ² = a/τ + b + c·τ …).
+
+What is needed, in the way of decision 0045 (reduction):
+- **One place for the points.** The points to fit are the points drawn: τ as
+  the plot shows it (after its conversion or formula), σ_y, and the error
+  bars σ/√(N − 2m) when they are on. They are computed in `figscribe/allan.py`
+  and reached through `plot_data` as a `PlotData` (x = τ, y = σ, yerr), so that
+  the renderer, `refit`, `residuals`, the fit dialog and the code generator
+  all use the same ones. The script has them as variables already (the
+  τ and σ it draws); the fit section names those.
+- **Which plots**: `FITTABLE` gains the Allan deviation. Leaving rows out and
+  finding outliers stay off for it (they would cut the series, F4.9), as for a
+  reduced plot (a B8.4 rule with the reason); the fit range, in τ as shown,
+  stays, since the longest τ rest on few samples and are rightly left out.
+- **The curve** is sampled evenly in log τ when the axis is logarithmic, or the
+  kinks of a model that is not a straight line there would show.
+- **Expressions already work** for `a / sqrt(x)`, `sqrt(a**2 / x + b**2 + c**2
+  * x)` and so on (the fit language has `sqrt`); the dialog's model list has
+  none for this.
+- `[decide]` **Weights**: the error bars as absolute sigma (they are an estimate,
+  so χ²ᵣ means little, but the weights are about right: about the same
+  relative error each), or a fit in log σ against log τ (every decade counts
+  alike, the usual way to fit a power law), or unweighted. Proposed: the error
+  bars, as for any plot, and the fit range to leave out the long τ.
+- `[decide]` **Predefined models**: *power law* a·τ^b (also F1.6) and
+  perhaps a few of the standard noise terms, so that nobody has to type them.
+- The whole chain of rule 5: a fit of an Allan deviation in the script (an
+  equivalence case, with a range and a conversion), residuals, the panel, the
+  assistant's `fit` tool and the problem list.
+
+### F15 Draw a function — M
+
+Suggested by the user (2026-11-03), with F14: draw a function without data.
+On an Allan plot a line of slope −1/2 is the usual guide for white noise; in
+any figure it is a theory curve to compare with the data. A fit curve is
+already such a curve, but it needs data and a fit.
+
+Proposed (to be agreed before building):
+- A new artist `FunctionPlot`: an expression in x with the fit language of
+  `fit/expression.py` (so `1e-11 / sqrt(x)` or `a * exp(-x / tau)`), its own
+  constants given as numbers (named, as the parameters of a fit are, or typed
+  in the formula), a color, line width and style, a label for the legend.
+- Drawn over the panel's range, or over a range of its own; evenly in log x on
+  a logarithmic axis. The axis limits are not changed by it.
+- The script defines `x` with `np.linspace` or `np.geomspace` and evaluates the
+  same expression, as the fit curve does; an equivalence case and a baseline.
+- Reached from *Insert > Add Line or Range* (beside reference lines and
+  shaded ranges, F4.1) and the context menu of a panel.
+- `[decide]` whether parameters are named values the panel edits (a slider
+  would be nice, a field is enough), and whether the function can also be
+  fitted to a plot (which is what *Fit…* does), or stays a drawing.
 
 ---
 
