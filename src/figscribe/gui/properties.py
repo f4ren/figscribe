@@ -243,14 +243,14 @@ SECTIONS = {
     "dpi": "Format",
     "unit_format": "Text",
     "stylesheet": "Format",
-    "title": "Panel",
-    "title_size": "Panel",
-    "grid": "Panel",
-    "grid_axis": "Panel",
-    "grid_which": "Panel",
-    "grid_color": "Panel",
-    "grid_linewidth": "Panel",
-    "grid_linestyle": "Panel",
+    "title": "Title and axes",
+    "title_size": "Title and axes",
+    "grid": "Grid",
+    "grid_axis": "Grid",
+    "grid_which": "Grid",
+    "grid_color": "Grid",
+    "grid_linewidth": "Grid",
+    "grid_linestyle": "Grid",
     "font_size": "Text",
     "tick_direction": "Ticks and frame",
     "ticks_all_sides": "Ticks and frame",
@@ -271,12 +271,12 @@ SECTIONS = {
     "at": "Data",
     "start": "Data",
     "end": "Data",
-    "y_right": "Panel",
+    "y_right": "Title and axes",
     "data": "Data",
-    "row": "Position",
-    "col": "Position",
-    "rowspan": "Position",
-    "colspan": "Position",
+    "row": "Place in layout",
+    "col": "Place in layout",
+    "rowspan": "Place in layout",
+    "colspan": "Place in layout",
 }
 """Where a top-level field is shown; the rest goes to "Look" for plots and
 "Reading" for data files. Nested models get a section of their own."""
@@ -305,6 +305,7 @@ SECTION_NAMES = {
     "band": "Error band",
     "reduction": "Fewer points",
     "layout": "Panel layout",
+    "inset": "Place in panel",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
@@ -315,14 +316,15 @@ ORDER = [
     "Text",
     "Ticks and frame",
     "Widths and lengths",
-    "Panel",
-    "Axes",
-    "Position",
+    "Title and axes",
     "File",
     "Reading",
     "Look",
     "Style",
+    "Grid",
     "Legend",
+    "Place in layout",
+    "Place in panel",
     "Export",
 ]
 BASIC = {
@@ -356,16 +358,32 @@ BASIC = {
         "minor_tick_width",
         "minor_tick_length",
     ),
-    "Axes": ("title", "grid", "y_right"),
+    "Axes": (
+        "title",
+        "title_size",
+        "y_right",
+        "grid",
+        "grid_axis",
+        "grid_which",
+        "grid_color",
+        "grid_linewidth",
+        "grid_linestyle",
+    ),
 }
 """The settings shown at first, per kind of object, apart from its data and
 position: the most asked for, in the assistant's benchmark and otherwise.
 The rest is under "More", folded, and found by the search."""
-WHOLE = {"Data", "File", "Reading", "Position", "Axes", "More"}
+WHOLE = {"Data", "File", "Reading", "Place in layout", "Title and axes", "More"}
 """Sections shown whole: what is plotted and where, not how it looks; and
 the PNG resolution, kept apart from the size (decision 0006)."""
 
-COLLAPSED = {"More", "Panel layout", "Widths and lengths"}
+COLLAPSED = {
+    "More",
+    "Panel layout",
+    "Widths and lengths",
+    "Place in layout",
+    "Place in panel",
+}
 """Sections that start folded: rarely needed, but always there. Every section
 folds with a click on its title, and stays as the user left it."""
 
@@ -664,6 +682,8 @@ FORMULA = "a formula"
 
 CAPTIONS = {
     ("PanelLabels", "fontsize"): "Letter size (pt)",
+    ("Legend", "ncols"): "Columns of entries",
+    ("Legend", "position"): "Position (dragged)",
     ("Histogram", "x_range"): "Use only values",
     ("AllanDeviationPlot", "x_range"): "Use only times",
 }
@@ -704,6 +724,10 @@ def _set_on_all(objs: list[BaseModel], path: Path, value: Any) -> Macro:
     steps = [SetField(obj.id, path, value) for obj in objs if _get(obj, path) != value]
     return Macro(f"Change {len(objs)} plots", steps)
 
+
+AXES_TITLE = "Title and axes"
+"""The panel's first section: its title, then its axes with the box for a right
+y axis."""
 
 IN_THE_ORDER_OF_BASIC = {"Figure"}
 """Kinds of object whose settings are shown in the order of `BASIC`, not of the
@@ -1233,7 +1257,7 @@ class PropertyPanel(QScrollArea):
                 and not (isinstance(obj, Axes) and name in AXIS_FIELDS)
             ):
                 nested.append(name)
-            if inset and SECTIONS.get(name) == "Position":
+            if inset and SECTIONS.get(name) == "Place in layout":
                 continue  # an inset is placed by its bounds, not in the grid
             if isinstance(obj, Axes) and name in ("x", "y"):
                 continue  # each axis has its own form, linked from "Axes"
@@ -1254,21 +1278,30 @@ class PropertyPanel(QScrollArea):
                     groups[title].sort(key=basic.index)
         titles = {_section_name(n): n for n in nested if n not in INLINE}
         if isinstance(obj, Axes):
-            groups.setdefault("Axes", [])
-        order = [t for t in ORDER if t in groups]
-        order += [t for t in titles if t not in groups]
+            groups.setdefault(AXES_TITLE, [])
+        order = [t for t in ORDER if t in groups or t in titles]
+        order += [t for t in titles if t not in order]
         order += [t for t in groups if t not in order]
         for title in order:
             form = self._section(title, layout)
-            for name in groups.get(title, []):
+            rows = groups.get(title, [])
+            if title == AXES_TITLE and isinstance(obj, Axes):
+                # The title, then the axes, the box for a right y axis with its
+                # own card right after it.
+                for name in [n for n in rows if n != "y_right"]:
+                    self._row(form, obj, (name,))
+                self._axis_links(form, obj, ("x", "y"))
+                for name in [n for n in rows if n == "y_right"]:
+                    self._row(form, obj, (name,))
+                self._axis_links(form, obj, ("y_right",))
+                rows = []
+            for name in rows:
                 self._row(form, obj, (name,))
                 if name in INLINE and getattr(obj, name) is not None:
                     self._nested(form, getattr(obj, name), (name,))
             if title in titles:
                 name = titles[title]
                 self._nested(form, getattr(obj, name), (name,))
-            if title == "Axes":
-                self._axis_links(form, obj)
             if title == "Data" and isinstance(obj, FitCurve):
                 layout.addWidget(self._fit_card(obj))
         self._fit_result = getattr(obj, "result", None)
@@ -1335,9 +1368,11 @@ class PropertyPanel(QScrollArea):
                 self._row(form, value, (*path, "factor"))
                 self._row(form, value, (*path, "unit"))
 
-    def _axis_links(self, form: QFormLayout, axes: Axes) -> None:
+    def _axis_links(
+        self, form: QFormLayout, axes: Axes, fields: tuple[str, ...] = AXIS_FIELDS
+    ) -> None:
         """One line per axis; clicking it opens the axis's own form."""
-        for field in AXIS_FIELDS:
+        for field in fields:
             spec = getattr(axes, field)
             if spec is None:
                 continue

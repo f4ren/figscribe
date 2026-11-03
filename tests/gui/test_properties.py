@@ -801,3 +801,62 @@ def test_a_section_folded_for_one_kind_of_object_stays_open_for_another(
     assert panel.sections["Data"].expanded  # a histogram's data is not hidden by it
     document.select(data.id)
     assert not panel.sections["Data"].expanded  # the error bars keep their own
+
+
+def test_the_panel_follows_what_the_settings_are_for(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    document.select(_axes(document).id)
+    assert list(panel.sections) == [
+        "Title and axes",
+        "Grid",
+        "Legend",
+        "Place in layout",
+    ]
+    assert [t for t, s in panel.sections.items() if not s.expanded] == [
+        "Place in layout"
+    ]
+    fields = _section_fields(panel)
+    assert fields["Title and axes"] == ["title", "title_size", "y_right"]
+    assert fields["Grid"] == [
+        "grid",
+        "grid_axis",
+        "grid_which",
+        "grid_color",
+        "grid_linewidth",
+        "grid_linestyle",
+    ]
+    assert fields["Place in layout"] == ["row", "col", "rowspan", "colspan"]
+    assert "More" not in fields
+    # The title comes first, then the axes with the box for a right y axis, and
+    # the card of that axis right after the box.
+    first = panel.sections["Title and axes"]
+    below = [
+        child.text()
+        for child in first.body.findChildren(QLabel)
+        if child.objectName() == "caption"
+    ]
+    assert below[:2] == ["Title", "Title size (pt)"]
+    assert set(panel.axis_links) == {"x", "y"}  # the example has no right axis
+    # The legend's captions say what they mean without the figure's grid.
+    legend = [
+        child.text()
+        for child in panel.sections["Legend"].body.findChildren(QLabel)
+        if child.objectName() == "caption"
+    ]
+    assert "Columns of entries" in legend and "Position (dragged)" in legend
+
+
+def test_the_right_y_axis_box_adds_and_removes_its_card(
+    panel: PropertyPanel, document
+) -> None:
+    document.select(_axes(document).id)
+    assert "y_right" not in panel.axis_links
+    panel.editors[("y_right",)].widget.click()
+    assert "y_right" in panel.axis_links  # its card appears right after the box
+    assert _axes(document).y_right is not None
+    panel.editors[("y_right",)].widget.click()
+    assert "y_right" not in panel.axis_links
+    assert _axes(document).y_right is None

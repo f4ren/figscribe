@@ -2303,3 +2303,50 @@ settings in view**: the user asked for two.
   plot has a wider line. The rule tests judge on plain ticks, as they were
   written: a line on the second layer and a tick mark at the frame differ by one
   pixel.
+
+## 0049 — The panel's settings by what they are for
+
+**Date:** 2026-11-05
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the second element, after the figure (0048). A panel had *Panel*
+(title, a box for a right y axis, a box for the grid lines), *Axes* (a card for
+each axis), *Position* (its cell), *Legend* and *More*, which held the six
+settings of the grid and the title size. The grid's box was far from its
+settings, the right y axis had a box in one section and a card in another, and
+"Position" meant the cell in one place and the dragged legend in another. The
+advisor reviewed a first proposal; the user chose the order and the names.
+
+### Decision
+
+Top to bottom, for the rules of 0048:
+- **Title and axes**, open: the *Title* and *Title size* first (the user's
+  choice; the advisor would have had the axes first), then the cards of the X
+  and Y axes, the box *Right y axis* and, once it is on, the card of that axis
+  right after it. A box and a card in one place, not two.
+- **Grid**, open and before the legend (the user's choice): the box *Grid
+  lines* and under it its five settings; the rules that grey them out while the
+  grid is off were there already. The minor grid lines of F5.10 will go under
+  it.
+- **Legend**, open: visible, location, *Position (dragged)* (the user's
+  name), frame, *Columns of entries* (the figure's *Panel layout* has columns
+  of a grid), font size.
+- **Place in layout**, folded: the cell of the panel in the figure's grid;
+  for an inset **Place in panel**, folded: the panel it is in and its bounds.
+- No *More*. The sections of a panel are open or folded like those of every
+  other element, and what the user folds is remembered per kind of object.
+
+The code: the nested sections of a panel (*Legend*, *Place in panel*) are placed
+by `ORDER` like the others, `BASIC["Axes"]` holds the grid and the title size so
+that they are not sent to *More*, `_axis_links` can build the cards in two
+turns, and two captions are set for the legend (`CAPTIONS`).
+
+### Alternatives considered
+
+**The axes before the title** (the advisor): people open a panel for its axes,
+and the title is often empty in a paper. **The grid's details folded under the
+box**: a shorter column, but the box would then be out of reach without
+unfolding. **The legend's rare settings folded**: not asked for; the legend
+stays whole.

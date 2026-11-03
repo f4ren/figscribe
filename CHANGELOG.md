@@ -15,6 +15,11 @@ release open in every later one.
   on its title; the panel remembers it for each kind of object while you work. The
   section titles are larger (14 px, as large as the figure's name in the outline;
   the object's title 17 px), to be read at a glance.
+- **A panel's settings are arranged by what they are for:** *Title and axes*
+  (the title, then the cards of the axes, the right y axis with its card right
+  after its box), *Grid* (the box with all its settings under it, no longer
+  hidden under *More*), *Legend*, and the folded *Place in layout*. The legend's
+  *Columns* is *Columns of entries*, and its *Position* is *Position (dragged)*.
 - **A formula for a plot's units.** *x in* and *y in* offer "a formula" next to
   "another factor": `x / 60 - 273.15`, `(x - 32) / 1.8`. It is written in `x`
   and numbers and must be linear and rise with x, so that error bars, axis,

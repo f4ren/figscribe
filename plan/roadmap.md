@@ -849,9 +849,13 @@ section of one or two fields and no *More* unless several rare settings are in
 it; short nouns; the same word means the same everywhere; a folded section's
 name says whether to open it; a caption makes sense on its own, since the search
 shows rows alone; the groups in one order everywhere (what it is, what it shows,
-how it looks, the rare). *Still to do, one element at a time:* the panel, the axes (the axis form), each kind of
-plot, the fit and residuals, the note, reference lines and ranges, the data
-files. *Also:* a thin line under every section (the stylesheet had always asked for
+how it looks, the rare). **The panel: done** (2026-11-05, decision 0049): *Title and axes* (the title first,
+then the cards of the axes, the box for a right y axis with its card right after
+it), *Grid* (the box with its settings under it), *Legend*, and the folded
+*Place in layout* (an inset: *Place in panel*); no *More*; the legend's captions
+*Columns of entries* and *Position (dragged)*. *Still to do, one element at a
+time:* the axes (the axis form), each kind of plot, the fit and residuals, the
+note, reference lines and ranges, the data files. *Also:* a thin line under every section (the stylesheet had always asked for
 one, but a plain `QWidget` paints no border without `WA_StyledBackground`, so it
 never showed) and every section folds with a click, the rare ones starting
 folded, kept per kind of object while the program runs (the user's wishes; not

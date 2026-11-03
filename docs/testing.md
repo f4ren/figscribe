@@ -113,5 +113,11 @@ note the platform, the screen scaling and the theme in the pull request.
     *Widths and lengths*. Every title folds its section with a click and
     keeps that while another object is selected.
 
+19. **The panel's settings**: select a panel, then an inset. *Title and axes*
+    (the title, the cards of the axes, the box for a right y axis), *Grid*,
+    *Legend* and the folded *Place in layout* (an inset: *Place in panel*) come
+    in that order. Tick *Right y axis*: its card appears right after the box and
+    nothing crashes; untick it. Switch *Grid lines* off: its settings grey out.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.
