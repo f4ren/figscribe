@@ -56,6 +56,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Phase 1 — The settings** (U1 to U5 and U7 to U10 are done)
 - **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
   bump).
+- **U11** the settings panel rearranged, element by element, with the user
+  (figure, panel, axes, each kind of plot, …). Nothing is built for an
+  element before the user has agreed to its arrangement.
 
 **Phase 2 — What a scientist needs**
 - **F1** fits (L): the range dragged in the preview (1); the result as text
@@ -69,6 +72,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
   a second x axis on top that converts (3); hiding and offsetting spines
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
   broken axes (6, later).
+- **F13** a linear formula for a plot's units (S to M), agreed 2026-11-03;
+  starts once B7.4 is merged.
 - **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
@@ -787,6 +792,27 @@ named in `model/styles.py` (`KINDS`), or a typed "2" is taken by the model
 and breaks the drawing; the every-field test found it. *Not done:* the fit
 dialog still offers no look for the residuals it adds; the panel does.
 
+### U11 The settings panel rearranged, element by element — M
+
+Asked for by the user (2026-11-03): go through the settings panel once more
+and change the arrangement, for each kind of element on its own and talked
+through with the user: the figure, a panel, an axis, each kind of plot, a
+fit, a note, and so on.
+
+How to work on it:
+- One element at a time. For each, show the user how the panel looks now
+  (the sections, the order of the fields, what is under *More*), propose
+  another arrangement, and only build what the user has agreed to. Several
+  small elements may share a branch, a large one has its own.
+- It changes `SECTIONS`, `SECTION_NAMES` and the basic settings in
+  `gui/properties.py`, not the model; the field coverage, the every-field
+  and the search tests must stay green, and the manual checklist
+  (`docs/testing.md`) is gone through for each element, since this is what
+  is seen.
+- Record what was agreed for each element in `docs/decisions.md` (the next
+  free number, one entry for the work or one per element), so that the next
+  session does not undo it.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
@@ -1276,6 +1302,44 @@ asked:* an error band from derived errors (a band still needs the plot's y
 error column); a weighted mean; reduction for the Allan deviation and
 histograms; a script of a reduced plot whose range keeps no row stops with an
 error (the problem list says so before).
+
+### F13 A linear formula for a plot's units — S to M
+
+Asked for by the user (2026-11-03): "another factor" in a plot's units is a
+multiplier only; dividing, adding and subtracting are wanted too, so a
+formula field instead. Does it break the concept of decision 0041? Not while
+the formula stays **linear** in x (`a·x + b`), and that is the limit:
+
+- Errors are only scaled, never shifted, and a plot's axis, limits, ticks,
+  marks, notes, ranges and fit ranges are remapped when the conversion
+  changes (`units.py`); all of that is an affine map and stays one. A
+  formula such as `log(x)` or `1/x` would need the derivative for the error
+  bars, the inverse for the axis and the marks, a rule for a reversed order
+  and for values at or below zero: a column formula, which the brief excludes
+  and decision 0036 admits only as a standard figure of a field. 1/T for an
+  Arrhenius plot would be a decision of its own, later.
+
+Decided with the user (2026-11-03):
+- **Order**: the start is subtracted first (`from_start`), the formula is
+  applied to what is left, as the factor is today.
+- **What is stored is the text**, e.g. `x / 7.5 - 273.15`, so that the
+  script reads as typed (`/ 7.5` rather than `* 0.1333…`). Its factor and
+  offset are found when the plot is drawn, with the fit language of
+  `fit/expression.py` (x and numbers, no parameters), and the formula is
+  refused in words unless it is linear in x, finite and not constant.
+- **Model**: `Conversion` gets the formula beside `factor` (a file without it
+  is drawn as before, so no schema bump); say in the decision whether the
+  formula replaces the factor or stands beside it.
+- **Where it acts**: errors scale by the absolute factor and are not
+  shifted, everything that follows a conversion (axis, marks, ranges, fits)
+  goes through the factor and the offset; a negative factor reverses the
+  order of the values, which the range and the axis must cope with, or the
+  formula is refused.
+- **Script**: one line per converted column, with the formula as typed and a
+  comment, in the same place as today's conversion; an equivalence case.
+- **The whole chain** of rule 5, the panel (a "Formula" entry next to
+  "another factor", with a tooltip and examples), the assistant's
+  `set_field`, `everything.py`, the edge-data matrix and a decision.
 
 ---
 
