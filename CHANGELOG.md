@@ -14,6 +14,9 @@ release open in every later one.
   before and can be replaced by the mean of their neighbours. While a plot is
   reduced, leaving rows out and finding outliers are off. Saved files are
   drawn as before.
+- Fixed: `figscribe script` showed a Python traceback when it could not write
+  the script (a folder that is not there, a read-only one); it now says so
+  in one line.
 - Fixed: *Add Panel* and *Duplicate* on a panel of a grid whose column
   widths or row heights do not match its columns or rows (after the number
   of columns was changed while widths were set, say) stopped with an error;

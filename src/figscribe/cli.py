@@ -79,13 +79,17 @@ def _script(args: list[str]) -> int:
         return 1
     if options.all:
         folder = options.target or project_path.parent
-        folder.mkdir(parents=True, exist_ok=True)
-        for figure, stem in zip(
-            project.figures, file_stems(project.figures), strict=True
-        ):
-            target = folder / f"{stem}.py"
-            _write_script(project, figure, project_path, target)
-            print(target)
+        target = folder
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            for figure, stem in zip(
+                project.figures, file_stems(project.figures), strict=True
+            ):
+                target = folder / f"{stem}.py"
+                _write_script(project, figure, project_path, target)
+                print(target)
+        except OSError as exc:
+            return _cannot_write(target, exc)
         return 0
     figure = project.figures[0]
     if options.figure is not None:
@@ -99,10 +103,20 @@ def _script(args: list[str]) -> int:
             )
             return 1
     target = options.target
-    script = _write_script(project, figure, project_path, target)
+    try:
+        script = _write_script(project, figure, project_path, target)
+    except OSError as exc:
+        return _cannot_write(target, exc)
     if target is None:
         sys.stdout.write(script)
     return 0
+
+
+def _cannot_write(target, exc: OSError) -> int:
+    """Say that `target` cannot be written, and why, as `figscribe script` does
+    for a project it cannot read."""
+    print(f"figscribe: cannot write {target}: {exc.strerror or exc}", file=sys.stderr)
+    return 1
 
 
 def _write_script(project, figure, project_path, target) -> str:

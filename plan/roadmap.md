@@ -38,10 +38,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 0 — Bugs and robustness** (B1 to B6 are done)
 - **B7**, the bug hunt, repeated before every release. Done: item 1 (the
-  edge-data matrix), item 2 (undo stress) and item 3 (fits that fail
-  politely). Open: item 4 files (read-only
-  folder, a file deleted while open, network paths; a project of a newer
-  figscribe is refused and tested); item 5 the GUI at 1024 × 700, 150 % and
+  edge-data matrix), item 2 (undo stress), item 3 (fits that fail politely)
+  and item 4 (files; only the Windows network share and other drive are left
+  to the manual checklist). Open: item 5 the GUI at 1024 × 700, 150 % and
   200 % scaling, dark mode, keyboard only; item 6 every bench case through
   the equivalence test (the project in `examples/` already is).
 - **An open bug from F12**: the script of a reduced plot whose x range keeps
@@ -96,8 +95,10 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 5** is later and optional.
 
-**Where to start** (rule 1): the first open task is B7, and its open items 4
-to 6 need no answer, so B7.4 is next. The user may name another task.
+**Where to start** (rule 1): the first open task is B7, and its open items 5
+and 6 need no answer. The user named the order on 2026-11-03: B7.4, then F13
+(a linear formula for units), then U11 (the settings panel arranged element
+by element); see those tasks.
 
 ---
 
@@ -376,6 +377,30 @@ they find.
    the code generator), network paths on Windows, read-only directories, a data
    file deleted while the project is open, a project file saved by a newer
    figscribe.
+   **Done** (2026-11-03), as far as it can be from one machine. Probed: every
+   menu action and every entry of the outline's menus, in a window whose data
+   files were deleted and in one whose folder was read-only (12 runs, none
+   ended in a bug message; kept out of the suite, it takes two minutes on
+   four cores); the data provider on an unreadable file, a directory, an empty
+   file, binary garbage, a symlink and a dangling one (all a `DataError`
+   naming the file); `figscribe script` on a project that is a directory, empty,
+   half-written, missing or of a newer version (all a message); a folder named
+   `Mäß Daten ü` with a script named `Größe 1.py`, which ran. Found and fixed:
+   `figscribe script` showed a traceback when its output could not be written
+   (a folder that is not there, a path below a file, a read-only one); it
+   says `figscribe: cannot write …` and exits with 1 now. Kept as tests:
+   those cases that work the same on every platform (no `chmod` where it would
+   not bind: Windows, root), the window saving and exporting into a folder
+   that is not there and exporting with the data gone, the unusual folder
+   names, the fallback to a whole path for a file on another drive
+   (`os.path.relpath` raises `ValueError` there) and `stored_path`. A data file
+   on a Windows network share or another drive is a step of the manual
+   checklist (16), as it cannot be tried here. *Learned:* the program was
+   better prepared than the list assumed; the one bug was in the command line,
+   which the window's tests never reach. *Follow-ups, only if asked:* the
+   window's *Export Script* stops when a data file is missing, while
+   `figscribe script` writes the script without it; a script whose data file
+   is missing ends with Python's `FileNotFoundError`, naming the path.
 5. **GUI**: small window (1024 × 700), high-DPI scaling 150 % and 200 %, dark
    mode on all three platforms, keyboard-only use of the import dialog, fit
    dialog and property panel.
@@ -1373,7 +1398,11 @@ interaction up to about 1e6 points, with downsampling in the preview only.
 
 Autosave to a recovery file every minute while there are unsaved changes;
 offer recovery on the next start after a crash. Keep the last saved version as
-`.bak` when saving.
+`.bak` when saving. Write the project atomically (a temporary file, then
+`os.replace`): `Document.save` truncates the file before it writes, so a
+failure partway, a full disk say, destroys the saved project. Keep refusing a
+file the user made read-only, which a plain `os.replace` would overwrite
+(found in B7.4).
 
 ### E3 Start from your own figure — S
 
