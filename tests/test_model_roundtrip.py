@@ -354,3 +354,14 @@ def test_an_allan_deviation_takes_a_scaling_formula_but_no_shift() -> None:
     assert AllanDeviationPlot(values=values, x_conversion=scaled).x_conversion == scaled
     with pytest.raises(ValueError, match="duration"):
         AllanDeviationPlot(values=values, x_conversion=Conversion(formula="x + 1"))
+
+
+def test_a_new_figure_has_inward_ticks_on_all_sides_and_a_saved_one_keeps_its_own() -> (
+    None
+):
+    from figscribe.model import Figure, Project, dumps, loads
+
+    assert Figure().tick_direction == "in" and Figure().ticks_all_sides
+    old = Figure(tick_direction=None, ticks_all_sides=False)  # as 0.2.0 wrote them
+    back = loads(dumps(Project(figures=[old]))).figures[0]
+    assert back.tick_direction is None and not back.ticks_all_sides

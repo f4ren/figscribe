@@ -237,30 +237,30 @@ SECTIONS = {
     "bins": "Data",
     "c": "Data",
     "target": "Data",
-    "name": "Size",
-    "width_mm": "Size",
-    "height_mm": "Size",
-    "dpi": "Export",
-    "unit_format": "Style",
-    "stylesheet": "Style",
-    "title": "Panel",
-    "title_size": "Panel",
-    "grid": "Panel",
-    "grid_axis": "Panel",
-    "grid_which": "Panel",
-    "grid_color": "Panel",
-    "grid_linewidth": "Panel",
-    "grid_linestyle": "Panel",
-    "font_size": "Style",
-    "tick_direction": "Style",
-    "ticks_all_sides": "Style",
-    "align_labels": "Style",
-    "frame_width": "Style",
-    "tick_width": "Style",
-    "tick_length": "Style",
-    "minor_tick_width": "Style",
-    "minor_tick_length": "Style",
-    "panel_labels": "Style",
+    "name": "Format",
+    "width_mm": "Format",
+    "height_mm": "Format",
+    "dpi": "Format",
+    "unit_format": "Text",
+    "stylesheet": "Format",
+    "title": "Title and axes",
+    "title_size": "Title and axes",
+    "grid": "Grid",
+    "grid_axis": "Grid",
+    "grid_which": "Grid",
+    "grid_color": "Grid",
+    "grid_linewidth": "Grid",
+    "grid_linestyle": "Grid",
+    "font_size": "Text",
+    "tick_direction": "Ticks and frame",
+    "ticks_all_sides": "Ticks and frame",
+    "align_labels": "Text",
+    "frame_width": "Widths and lengths",
+    "tick_width": "Widths and lengths",
+    "tick_length": "Widths and lengths",
+    "minor_tick_width": "Widths and lengths",
+    "minor_tick_length": "Widths and lengths",
+    "panel_labels": "Text",
     "path": "File",
     "sha256": "File",
     "label": "Legend",
@@ -271,12 +271,12 @@ SECTIONS = {
     "at": "Data",
     "start": "Data",
     "end": "Data",
-    "y_right": "Panel",
+    "y_right": "Title and axes",
     "data": "Data",
-    "row": "Position",
-    "col": "Position",
-    "rowspan": "Position",
-    "colspan": "Position",
+    "row": "Place in layout",
+    "col": "Place in layout",
+    "rowspan": "Place in layout",
+    "colspan": "Place in layout",
 }
 """Where a top-level field is shown; the rest goes to "Look" for plots and
 "Reading" for data files. Nested models get a section of their own."""
@@ -304,27 +304,94 @@ SECTION_NAMES = {
     "panel_labels": "Panel labels",
     "band": "Error band",
     "reduction": "Fewer points",
+    "layout": "Panel layout",
+    "inset": "Place in panel",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
 
 ORDER = [
     "Data",
-    "Size",
-    "Panel",
-    "Axes",
-    "Position",
+    "Format",
+    "Text",
+    "Ticks and frame",
+    "Widths and lengths",
+    "Title and axes",
+    "Label and data",
+    "Units and rows",
     "File",
     "Reading",
     "Look",
+    "Error bars",
+    "Left-out points",
     "Style",
+    "Grid",
     "Legend",
+    "Place in layout",
+    "Place in panel",
     "Export",
 ]
 BASIC = {
-    "LinePlot": ("color", "marker", "linestyle", "linewidth", "label"),
-    "ScatterPlot": ("color", "marker", "size", "edgecolor", "label"),
-    "ErrorbarPlot": ("color", "marker", "linestyle", "capsize", "label"),
+    "LinePlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_linestyle",
+        "left_out_note",
+    ),
+    "ScatterPlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "edgecolor",
+        "marker",
+        "size",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_note",
+    ),
+    "ErrorbarPlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "xerr",
+        "yerr",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "capsize",
+        "elinewidth",
+        "band",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_linestyle",
+        "left_out_note",
+    ),
     "Histogram": ("color", "histtype", "density", "label"),
     "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
     "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
@@ -334,18 +401,53 @@ BASIC = {
     "ShadedSpan": ("color", "alpha", "label"),
     "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
     "ColorMesh": ("cmap", "norm", "vmin", "vmax", "colorbar"),
-    "Figure": ("name", "width_mm", "height_mm", "font_size", "panel_labels"),
-    "Axes": ("title", "grid", "y_right"),
+    "Figure": (
+        "name",
+        "width_mm",
+        "height_mm",
+        "dpi",
+        "stylesheet",
+        "font_size",
+        "unit_format",
+        "align_labels",
+        "panel_labels",
+        "tick_direction",
+        "ticks_all_sides",
+        "frame_width",
+        "tick_width",
+        "tick_length",
+        "minor_tick_width",
+        "minor_tick_length",
+    ),
+    "Axes": (
+        "title",
+        "title_size",
+        "y_right",
+        "grid",
+        "grid_axis",
+        "grid_which",
+        "grid_color",
+        "grid_linewidth",
+        "grid_linestyle",
+    ),
 }
 """The settings shown at first, per kind of object, apart from its data and
 position: the most asked for, in the assistant's benchmark and otherwise.
 The rest is under "More", folded, and found by the search."""
-WHOLE = {"Data", "File", "Reading", "Position", "Axes", "Export", "More"}
+WHOLE = {"Data", "File", "Reading", "Place in layout", "Title and axes", "More"}
 """Sections shown whole: what is plotted and where, not how it looks; and
 the PNG resolution, kept apart from the size (decision 0006)."""
 
-COLLAPSED = {"More", "Layout"}
-"""Sections that start folded: rarely needed, but always there."""
+COLLAPSED = {
+    "More",
+    "Panel layout",
+    "Widths and lengths",
+    "Place in layout",
+    "Place in panel",
+    "Left-out points",
+}
+"""Sections that start folded: rarely needed, but always there. Every section
+folds with a click on its title, and stays as the user left it."""
 
 PLACEHOLDERS = {
     "band.color": "the plot's",
@@ -641,6 +743,14 @@ OTHER_FACTOR = "another factor"
 FORMULA = "a formula"
 
 CAPTIONS = {
+    ("PanelLabels", "fontsize"): "Letter size (pt)",
+    ("LinePlot", "label"): "Legend entry",
+    ("ScatterPlot", "label"): "Legend entry",
+    ("ErrorbarPlot", "label"): "Legend entry",
+    ("ErrorBand", "color"): "Band color",
+    ("ErrorBand", "alpha"): "Band opacity",
+    ("Legend", "ncols"): "Columns of entries",
+    ("Legend", "position"): "Position (dragged)",
     ("Histogram", "x_range"): "Use only values",
     ("AllanDeviationPlot", "x_range"): "Use only times",
 }
@@ -680,6 +790,59 @@ def _common(objs: list[BaseModel], path: Path) -> Any:
 def _set_on_all(objs: list[BaseModel], path: Path, value: Any) -> Macro:
     steps = [SetField(obj.id, path, value) for obj in objs if _get(obj, path) != value]
     return Macro(f"Change {len(objs)} plots", steps)
+
+
+AXES_TITLE = "Title and axes"
+"""The panel's first section: its title, then its axes with the box for a right
+y axis."""
+
+PLOT_KINDS = ("LinePlot", "ScatterPlot", "ErrorbarPlot")
+"""The kinds of plot whose settings follow `PLOT_SECTIONS` (decision 0051)."""
+
+PLOT_SECTIONS = {
+    "label": "Label and data",
+    "axis": "Label and data",
+    "x": "Label and data",
+    "y": "Label and data",
+    "xerr": "Label and data",
+    "yerr": "Label and data",
+    "x_conversion": "Units and rows",
+    "y_conversion": "Units and rows",
+    "x_range": "Units and rows",
+    "reduction": "Units and rows",
+    "color": "Look",
+    "edgecolor": "Look",
+    "marker": "Look",
+    "markersize": "Look",
+    "size": "Look",
+    "linestyle": "Look",
+    "linewidth": "Look",
+    "capsize": "Error bars",
+    "elinewidth": "Error bars",
+    "band": "Error bars",
+    "left_out_color": "Left-out points",
+    "left_out_marker": "Left-out points",
+    "left_out_linestyle": "Left-out points",
+    "left_out_note": "Left-out points",
+}
+"""Where the settings of a line, points or error bar plot are shown. Other
+kinds of plot keep `SECTIONS` until their turn."""
+
+
+def section_of(obj: BaseModel, name: str, fallback: str) -> str:
+    """The section a field of `obj` is shown in."""
+    if type(obj).__name__ in PLOT_KINDS and name in PLOT_SECTIONS:
+        return PLOT_SECTIONS[name]
+    return SECTIONS.get(name, fallback)
+
+
+IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS}
+"""Kinds of object whose settings are shown in the order of `BASIC`, not of the
+model, so that what belongs together is next to each other."""
+
+INLINE = {"panel_labels", "band", "reduction"}
+"""Optional parts whose settings follow their check box in its own section
+instead of having a section of their own."""
 
 
 def _basic_first(groups: dict[str, list[str]], basic: tuple[str, ...] | None):
@@ -769,7 +932,10 @@ class PropertyPanel(QScrollArea):
         """The range an axis shows right now; the window asks the preview."""
         self.edit_fit: Callable[[str], None] = lambda fit_id: None
         """Opens the fit dialog on a fit that is there; the window does."""
-        self._folded = {title: True for title in COLLAPSED}
+        self._folded: dict[tuple[str, str], bool] = {}
+        """Whether the user left a section folded, by kind of object and title;
+        until then it starts as `COLLAPSED` says. Kept while the program runs."""
+        self._kind = ""
         self.search = QLineEdit()
         """Filters the fields by name and tooltip; the window puts it above
         the panel, where it stays when the form is built anew."""
@@ -806,7 +972,7 @@ class PropertyPanel(QScrollArea):
         for title, section in self.sections.items():
             # What the search opened is not what the user unfolded.
             if isinstance(section.header, QToolButton) and not self._searched:
-                self._folded[title] = not section.expanded
+                self._folded[self._kind, title] = not section.expanded
         self.editors = {}
         self._captions: dict[Path, tuple[QLabel, str | None]] = {}
         self.sections = {}
@@ -843,6 +1009,7 @@ class PropertyPanel(QScrollArea):
             self._fill_several(several, layout)
         elif axis is not None and obj is not None:
             oid = self.document.selected
+            self._kind = "Axis"  # the key of what is folded
             self.axis_form = AxisForm(
                 self, axis[0], axis[1], layout, lambda: self.axis_range(oid)
             )
@@ -1086,6 +1253,7 @@ class PropertyPanel(QScrollArea):
     def _fill_several(self, objs: list[BaseModel], layout: QVBoxLayout) -> None:
         """The settings the plots share, each showing their value if they
         agree; a change sets it on all of them, as one undo step."""
+        self._kind = "Several"
         form = self._section("Together", layout)
         for name in SHARED:
             spec = _shared_spec(objs, name)
@@ -1180,6 +1348,7 @@ class PropertyPanel(QScrollArea):
         self._title.setText(title)
 
     def _fill(self, obj: BaseModel, layout: QVBoxLayout) -> None:
+        self._kind = type(obj).__name__
         fallback = "Reading" if hasattr(obj, "format") else "Look"
         groups: dict[str, list[str]] = {}
         nested: list[str] = []
@@ -1197,7 +1366,7 @@ class PropertyPanel(QScrollArea):
                 and not (isinstance(obj, Axes) and name in AXIS_FIELDS)
             ):
                 nested.append(name)
-            if inset and SECTIONS.get(name) == "Position":
+            if inset and SECTIONS.get(name) == "Place in layout":
                 continue  # an inset is placed by its bounds, not in the grid
             if isinstance(obj, Axes) and name in ("x", "y"):
                 continue  # each axis has its own form, linked from "Axes"
@@ -1207,34 +1376,48 @@ class PropertyPanel(QScrollArea):
                 continue
             if spec is None and name not in READ_ONLY:
                 continue
-            groups.setdefault(SECTIONS.get(name, fallback), []).append(name)
+            groups.setdefault(section_of(obj, name, fallback), []).append(name)
         if "Look" in groups:
             groups["Look"].sort(key=lambda n: LOOK.index(n) if n in LOOK else 99)
         _basic_first(groups, BASIC.get(type(obj).__name__))
-        titles = {_section_name(n): n for n in nested}
+        if type(obj).__name__ in IN_THE_ORDER_OF_BASIC:
+            basic = BASIC[type(obj).__name__]
+            for title in groups:
+                if title != "More":
+                    groups[title].sort(key=basic.index)
+        titles = {_section_name(n): n for n in nested if n not in INLINE}
         if isinstance(obj, Axes):
-            groups.setdefault("Axes", [])
-        order = [t for t in ORDER if t in groups]
-        order += [t for t in titles if t not in groups]
+            groups.setdefault(AXES_TITLE, [])
+        order = [t for t in ORDER if t in groups or t in titles]
+        order += [t for t in titles if t not in order]
         order += [t for t in groups if t not in order]
         for title in order:
             form = self._section(title, layout)
-            for name in groups.get(title, []):
+            rows = groups.get(title, [])
+            if title == AXES_TITLE and isinstance(obj, Axes):
+                # The title, then the axes, the box for a right y axis with its
+                # own card right after it.
+                for name in [n for n in rows if n != "y_right"]:
+                    self._row(form, obj, (name,))
+                self._axis_links(form, obj, ("x", "y"))
+                for name in [n for n in rows if n == "y_right"]:
+                    self._row(form, obj, (name,))
+                self._axis_links(form, obj, ("y_right",))
+                rows = []
+            for name in rows:
                 self._row(form, obj, (name,))
+                if name in INLINE and getattr(obj, name) is not None:
+                    self._nested(form, getattr(obj, name), (name,))
             if title in titles:
                 name = titles[title]
                 self._nested(form, getattr(obj, name), (name,))
-            if title == "Axes":
-                self._axis_links(form, obj)
             if title == "Data" and isinstance(obj, FitCurve):
                 layout.addWidget(self._fit_card(obj))
         self._fit_result = getattr(obj, "result", None)
 
     def _section(self, title: str, layout: QVBoxLayout) -> QFormLayout:
-        collapsible = title in COLLAPSED
-        section = Section(
-            title, collapsible, expanded=not self._folded.get(title, False)
-        )
+        folded = self._folded.get((self._kind, title), title in COLLAPSED)
+        section = Section(title, True, expanded=not folded)
         self.sections[title] = section
         form = QFormLayout(section.body)
         form.setContentsMargins(0, 0, 0, 0)
@@ -1275,6 +1458,9 @@ class PropertyPanel(QScrollArea):
         editor.show(value)
         self.editors[path] = editor
         text = CAPTIONS.get((type(obj).__name__, name))
+        if len(path) == 2 and path[0] in CONVERSIONS:
+            # Under "x in" and "y in" both can be on: say which one a row is of.
+            text = f"{path[0][0]}: {field_name(name)}"
         caption = _caption(text) if text else _form_label(name)
         tip = tip_for(type(obj), name)
         self._captions[path] = (caption, tip)
@@ -1294,9 +1480,11 @@ class PropertyPanel(QScrollArea):
                 self._row(form, value, (*path, "factor"))
                 self._row(form, value, (*path, "unit"))
 
-    def _axis_links(self, form: QFormLayout, axes: Axes) -> None:
+    def _axis_links(
+        self, form: QFormLayout, axes: Axes, fields: tuple[str, ...] = AXIS_FIELDS
+    ) -> None:
         """One line per axis; clicking it opens the axis's own form."""
-        for field in AXIS_FIELDS:
+        for field in fields:
             spec = getattr(axes, field)
             if spec is None:
                 continue
