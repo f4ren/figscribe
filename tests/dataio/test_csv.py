@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -218,3 +220,82 @@ def test_a_file_without_rows_of_data_says_so(tmp_path: Path) -> None:
     source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
     with pytest.raises(DataError, match="s.csv has no rows of data"):
         _load(tmp_path, source, "y")
+
+
+# --- files that are not what they were (B7.4) -------------------------------------
+
+
+def _damage_by_chmod(path: Path) -> None:
+    path.chmod(0)
+
+
+def _damage_by_directory(path: Path) -> None:
+    path.unlink()
+    path.mkdir()
+
+
+def _damage_by_emptying(path: Path) -> None:
+    path.write_bytes(b"")
+
+
+def _damage_by_garbage(path: Path) -> None:
+    path.write_bytes(bytes(range(256)) * 20)
+
+
+def _damage_by_dangling_link(path: Path) -> None:
+    path.unlink()
+    path.symlink_to(path.parent / "nowhere.csv")
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        pytest.param(
+            _damage_by_chmod,
+            marks=pytest.mark.skipif(
+                sys.platform == "win32"
+                or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                reason="a file cannot be made unreadable here",
+            ),
+        ),
+        pytest.param(
+            _damage_by_directory,
+            marks=pytest.mark.skipif(
+                sys.platform == "win32", reason="differs on Windows"
+            ),
+        ),
+        _damage_by_emptying,
+        _damage_by_garbage,
+        pytest.param(
+            _damage_by_dangling_link,
+            marks=pytest.mark.skipif(sys.platform == "win32", reason="needs rights"),
+        ),
+    ],
+    ids=lambda f: f.__name__.removeprefix("_damage_by_"),
+)
+def test_a_file_that_cannot_be_read_as_imported_is_a_data_error(
+    tmp_path: Path, damage
+) -> None:
+    path = write(tmp_path / "s.csv", "t,U\n0,1\n1,2\n")
+    source = csv_source(path, base_dir=tmp_path)
+    damage(path)
+    try:
+        with pytest.raises(DataError, match="s.csv"):
+            _load(tmp_path, source, "U")
+    finally:
+        if path.exists() and not path.is_dir():
+            path.chmod(0o644)  # or pytest cannot remove the folder
+
+
+def test_a_file_outside_the_project_folder_is_stored_by_its_whole_path(
+    tmp_path: Path,
+) -> None:
+    from figscribe.io.files import resolve_path, stored_path
+
+    project = tmp_path / "project"
+    inside = project / "data" / "a.csv"
+    outside = tmp_path / "elsewhere" / "b.csv"
+    assert stored_path(inside, project) == "data/a.csv"
+    assert stored_path(outside, project) == str(outside)
+    assert resolve_path("data/a.csv", project) == inside
+    assert resolve_path(str(outside), project) == outside

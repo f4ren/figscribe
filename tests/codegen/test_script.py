@@ -184,3 +184,79 @@ def test_text_literals_are_valid_python_on_one_line(text: str) -> None:
     literal = _str(text)
     assert "\n" not in literal
     assert eval(literal) == text  # noqa: S307 - our own literal
+
+
+# --- files that cannot be written, and folders with unusual names (B7.4) ---------
+
+
+def test_a_script_that_cannot_be_written_is_told_in_words(
+    example: Path, tmp_path: Path, capsys
+) -> None:
+    from figscribe.cli import _script
+
+    folder = tmp_path / "copy"
+    shutil.copytree(example.parent, folder)
+    path = folder / example.name
+    (tmp_path / "a.txt").write_text("a file, not a folder", encoding="utf-8")
+    missing = tmp_path / "nodir" / "x.py"
+    below_a_file = tmp_path / "a.txt" / "out"
+
+    assert _script([str(path), "-o", str(missing)]) == 1
+    error = capsys.readouterr().err
+    assert error.startswith("figscribe: cannot write ") and "x.py" in error
+    assert "Traceback" not in error
+
+    assert _script([str(path), "--all", "-o", str(below_a_file)]) == 1
+    error = capsys.readouterr().err
+    assert error.startswith("figscribe: cannot write ") and "out" in error
+
+
+def test_a_folder_with_spaces_and_letters_beyond_ascii_gives_a_script_that_runs(
+    example: Path, tmp_path: Path
+) -> None:
+    folder = tmp_path / "Mäß Daten ü"
+    shutil.copytree(example.parent, folder)
+    project = folder / example.name
+    script = folder / "Größe 1.py"
+    env = {"PYTHONPATH": str(Path(__file__).parents[2] / "src"), **_env()}
+    made = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "figscribe.cli",
+            "script",
+            str(project),
+            "-o",
+            str(script),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+    )
+    assert made.returncode == 0, made.stderr
+    ran = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+        cwd=tmp_path,
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert (folder / "Größe 1.pdf").stat().st_size > 0
+
+
+def test_a_data_file_on_another_drive_is_written_by_its_whole_path(
+    monkeypatch, tmp_path: Path
+) -> None:
+    # On Windows os.path.relpath raises ValueError across drives; the script
+    # then names the file in full, and `HERE / "D:/data/a.csv"` is that file.
+    from figscribe.codegen.script import _relative
+
+    def other_drive(path, start):
+        raise ValueError("path is on mount 'D:', start on mount 'C:'")
+
+    monkeypatch.setattr(os.path, "relpath", other_drive)
+    far = tmp_path / "data" / "a.csv"
+    assert _relative(far, tmp_path / "script") == str(far)

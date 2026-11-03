@@ -93,5 +93,11 @@ note the platform, the screen scaling and the theme in the pull request.
     row can be left out. Fit it, export the script and run it: the same
     figure.
 
+16. **Files on a network share and on another drive** (Windows; B7.4 could
+    not try it): import a data file that lies on a network share, then one on
+    another drive than the project. Save, close and open the project again,
+    and export the script and run it: the figure is the same, and the script
+    names the file by its whole path.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.
