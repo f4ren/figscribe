@@ -5,6 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed: *Save As* into another folder no longer loses the data (every file was
+  "missing" there). A data file outside the project's folder, or imported before
+  the first save, is now stored relative to the project (`../data/scan.csv`),
+  where it used to be stored by its whole path, so a project and its data can be
+  moved or shared together; a file on another volume or drive keeps its whole path.
 - **A formula for a plot's units.** *x in* and *y in* offer "a formula" next to
   "another factor": `x / 60 - 273.15`, `(x - 32) / 1.8`. It is written in `x`
   and numbers and must be linear and rise with x, so that error bars, axis,

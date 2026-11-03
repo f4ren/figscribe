@@ -2219,3 +2219,53 @@ to say what one line of text says, and nothing for `(x − 32) / 1.8`.
 **Filling `factor` from the formula's slope** when the conversion is made:
 the file would hold two values that must agree, and a change to one of them
 alone would break that.
+
+## 0052 — Data paths that follow the project file
+
+**Date:** 2026-11-05
+**Status:** accepted
+
+### Context
+
+Roadmap B9, raised by a lab user (2026-11-04: "the absolute path is used; one
+relative to the figscribe file would be better") and checked the same day.
+Decision 0007 stored a data file's path relative to the project's folder only
+where the file lies below it. Three things followed: a file in a neighbouring or
+parent folder was stored by its whole path, a file imported before the first save
+had no folder to be relative to and kept its whole path after saving, and *Save
+As* into another folder left the relative paths as they were, so every data file
+was "missing" from the new place.
+
+### Decision
+
+- **A path is relative to the project's folder, with `..` where the file is not
+  below it** (`io/files.stored_path`, by `os.path.relpath`, forward slashes). It
+  is absolute where a relative path would run through the root of the file
+  system: another drive on Windows (`commonpath` raises `ValueError`, as the
+  script does already, `codegen/script._relative`) or another volume such as
+  `/Volumes/USB`, which `../../../../Volumes/USB` would not survive a move of
+  the project to, where the whole path would. A project and its data can
+  otherwise be moved or shared together, wherever they lie in the tree.
+- **Saving re-bases the paths.** `Document.save` writes each source's path as
+  it must be for the folder it is saved to (`io/files.rebase_path`): at *Save
+  As* into another folder and at the first save, so the data is found from the
+  new place and a path that was whole can now be relative. The model changes only
+  once the file is written, so a failed save leaves it as it was. Saving in the
+  same folder changes nothing.
+- **Not a command, so not an undo step** (the plan proposed commands; the user
+  agreed to this instead, 2026-11-04). A path says where a file lies seen from
+  where the project is; it is not an edit of the figure. As a command, undo after
+  a save would point the data back at the old folder. The cost: undoing the
+  removal of a data file after a *Save As* elsewhere restores that file's old
+  path, which then shows as missing, and *Locate file…* repairs it.
+- A project that has an absolute path still opens, and is made relative when it
+  is saved elsewhere. A folder copied by hand keeps working, as before.
+
+### Alternatives considered
+
+**Absolute paths for files outside the folder** (decision 0007): they survive no
+move or sharing. **A command that sets the paths before saving**: see above.
+**Paths relative to the file's own folder or the user's home**: neither says
+anything a relative path from the project does not.
+
+Decision 0007 is not rewritten; this changes its rule "relative when below".

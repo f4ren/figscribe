@@ -97,7 +97,8 @@ note the platform, the screen scaling and the theme in the pull request.
     not try it): import a data file that lies on a network share, then one on
     another drive than the project. Save, close and open the project again,
     and export the script and run it: the figure is the same, and the script
-    names the file by its whole path.
+    names the file by its whole path. Also *Save As* into another folder than the
+    data's and open the copy: the data is still found.
 
 17. **A formula for the units**: on a plot choose *x in* ▸ *a formula* and
     type `x / 60 - 273.15` with the unit `°C`; the axis, its numbers, a
