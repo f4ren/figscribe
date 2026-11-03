@@ -38,9 +38,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 0 — Bugs and robustness** (B1 to B6 are done)
 - **B7**, the bug hunt, repeated before every release. Done: item 1 (the
-  edge-data matrix). Open: item 2 undo stress (`[decide]` `hypothesis`);
-  item 3 fits that fail politely (the matrix already shows fewer points than
-  parameters refused; the rest is unchecked); item 4 files (read-only
+  edge-data matrix) and item 3 (fits that fail politely). Open: item 2 undo
+  stress (`[decide]` `hypothesis`); item 4 files (read-only
   folder, a file deleted while open, network paths; a project of a newer
   figscribe is refused and tested); item 5 the GUI at 1024 × 700, 150 % and
   200 % scaling, dark mode, keyboard only; item 6 every bench case through
@@ -93,8 +92,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Phase 5** is later and optional.
 
 **Where to start** (rule 1): the first open task is B7. Its item 2 needs an
-answer; items 3 to 6 do not, so B7.3 is the first that can be built without
-asking. The user may name another task.
+answer; items 3 to 6 do not, so B7.4 is the first that can be built without
+asking (item 3 is done). The user may name another task.
 
 ---
 
@@ -321,6 +320,24 @@ they find.
 3. **Fits that should fail politely**: fewer points than parameters, all NaN,
    exponential on negative data, start values that overflow. Each gives a
    message in the fit dialog, never a traceback.
+   **Done** (2026-11-01): the four named cases already gave a message or a
+   result; a probe of every model on awkward data (all NaN, one or two
+   points, constant x or y, 1e-300 and 1e300, zero errors, infinities) and a
+   fuzz of expression fits with bounds found three more things, all fixed.
+   The start-value guess (`models.guess`, documented as never raising) raised
+   `LinAlgError` for values near the limits of floating point, in a slot of
+   the dialog, which left the start fields of the old model. A bounded fit
+   whose model turned non-finite at a value it tried (`sqrt(a*x+b)`) leaked
+   scipy's `ValueError` ("array must not contain infs or NaNs") past
+   `run_fit`; it is a `FitError` now, so the assistant's tools and the
+   dialog say it in words. And a result whose uncertainties cannot be
+   estimated (the covariance is singular: a product of two parameters, a
+   constant x, data an exponential cannot follow) was shown as bare numbers;
+   the dialog now says which uncertainties are missing and why. *Learned:*
+   the covariance check was already there; only the telling was missing.
+   *Follow-up, only if asked:* the same note on the panel's result card and
+   in "Copy the result", which still show a parameter without its
+   uncertainty and say nothing.
 4. **Files**: paths with spaces and non-ASCII characters (verified fine for
    the code generator), network paths on Windows, read-only directories, a data
    file deleted while the project is open, a project file saved by a newer

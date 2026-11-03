@@ -330,3 +330,37 @@ def test_without_outliers_none_are_found() -> None:
     y = 2.0 * x + 1.0
     found = outliers(model, {"a": 1.0, "b": 0.0}, x, y + 0.01 * np.sin(x), yerr)
     assert not found.any()
+
+
+# --- fits that fail politely (B7.3) ------------------------------------------------
+
+
+def test_a_model_that_turns_non_finite_while_fitting_is_a_fit_error() -> None:
+    # sqrt of a negative number once the bounded fit moves a: finite at the start
+    model = ExpressionFit(expression="sqrt(a*x+b)", parameters=["a", "b"])
+    x = np.linspace(-2, 2, 12)
+    with pytest.raises(FitError, match="not finite") as raised:
+        run_fit(model, {"a": 0.5, "b": 1.1}, x, np.zeros(12), bounds={"a": (-1e3, 1e3)})
+    assert "array must not contain" not in str(raised.value).lower()
+
+
+@pytest.mark.parametrize("scale", [1e-300, 1e-200, 1e300])
+@pytest.mark.parametrize(
+    "model",
+    [
+        PredefinedFit(name="linear"),
+        PredefinedFit(name="polynomial", degree=3),
+        PredefinedFit(name="gaussian"),
+        PredefinedFit(name="lorentzian"),
+        PredefinedFit(name="exponential"),
+    ],
+    ids=lambda model: model.name,
+)
+def test_start_values_are_guessed_for_values_at_the_limits_of_floating_point(
+    model, scale: float
+) -> None:
+    x = np.linspace(0.0, 1.0, 21) * scale
+    y = (1.0 + np.sin(np.arange(21.0))) * scale
+    guess = initial_guess(model, x, y)
+    assert set(guess) == set(parameter_names(model))
+    assert all(math.isfinite(value) for value in guess.values())

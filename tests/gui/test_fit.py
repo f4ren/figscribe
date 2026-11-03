@@ -8,7 +8,7 @@ import pytest
 from PySide6.QtWidgets import QDialogButtonBox, QLabel
 
 from figscribe.commands import InsertItem, SetField
-from figscribe.fit import FitError, add_fit, refit
+from figscribe.fit import FitError, add_fit, parameter_names, refit
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
@@ -491,3 +491,85 @@ def test_the_result_tells_the_residuals_and_can_be_copied(
     assert copied.startswith("peak: Gaussian fit to ")
     assert "mu = 4.96" in copied and "Residual RMS" in copied
     assert "Points fitted = 40 of 41" in copied
+
+
+# --- fits that fail politely (B7.3) ------------------------------------------------
+
+
+def test_a_result_without_uncertainties_says_so(dialog: FitDialog) -> None:
+    dialog.choose("expression")
+    dialog.expression.setText("a * b + 0 * x")  # only the product is fixed
+    dialog.expression.editingFinished.emit()
+    dialog.refit()
+    assert dialog.result is not None and _ok(dialog)
+    message = dialog.error.text()
+    assert message.startswith("The uncertainties of a and b cannot be estimated")
+    assert "did not converge" not in message
+
+
+def test_a_result_with_uncertainties_says_nothing(dialog: FitDialog) -> None:
+    dialog.refit()
+    assert dialog.error.text() == ""
+
+
+@pytest.mark.parametrize("scale", [1e-300, 1e300])
+def test_values_at_the_limits_of_floating_point_open_the_dialog(
+    qtbot, scale: float
+) -> None:
+    import numpy as np
+
+    from figscribe.gui.fitdialog import MODELS
+    from figscribe.model import ColumnRef, LinePlot
+
+    columns = {
+        "t": np.linspace(0.0, 1.0, 21) * scale,
+        "U": (1.0 + np.sin(np.arange(21.0))) * scale,
+    }
+    plot = LinePlot(
+        x=ColumnRef(source="s", column="t"), y=ColumnRef(source="s", column="U")
+    )
+    widget = FitDialog(plot, lambda ref: columns[ref.column])
+    qtbot.addWidget(widget)
+    for key, _, _ in MODELS:
+        if key != "expression":
+            widget.choose(key)  # a slot that raises fails the test
+            assert list(widget.start) == list(parameter_names(widget.model())), key
+
+
+def _columns_dialog(qtbot, t, u) -> FitDialog:
+    from figscribe.model import ColumnRef, LinePlot
+
+    columns = {"t": t, "U": u}
+    plot = LinePlot(
+        x=ColumnRef(source="s", column="t"), y=ColumnRef(source="s", column="U")
+    )
+    widget = FitDialog(plot, lambda ref: columns[ref.column])
+    qtbot.addWidget(widget)
+    return widget
+
+
+def test_a_column_of_nothing_but_gaps_is_told_in_words(qtbot) -> None:
+    import numpy as np
+
+    t = np.linspace(0.0, 10.0, 21)
+    widget = _columns_dialog(qtbot, t, np.full(21, np.nan))
+    assert not _ok(widget) and "valid points" in widget.error.text()
+
+
+def test_start_values_that_overflow_are_told_in_words(dialog: FitDialog) -> None:
+    dialog.choose("exponential")
+    dialog.start["tau"].setText("-0,001")  # exp(10 / 0.001) is not a number
+    dialog.start["tau"].editingFinished.emit()
+    assert not _ok(dialog) and "not finite" in dialog.error.text()
+
+
+def test_an_exponential_on_data_that_only_falls_still_gives_a_result(qtbot) -> None:
+    import numpy as np
+
+    t = np.linspace(0.0, 10.0, 21)
+    widget = _columns_dialog(qtbot, t, -t - 5)  # no decay to find
+    widget.choose("exponential")
+    result = widget.result
+    assert result is not None
+    unknown = any(not np.isfinite(e) for e in result.uncertainties.values())
+    assert unknown == ("uncertaint" in widget.error.text())

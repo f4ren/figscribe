@@ -119,6 +119,13 @@ def run_fit(
                 reduced_chi_square=None,
                 converged=False,
             )
+        except ValueError:
+            # Raised when the model, finite at the start, is not at a value
+            # the fit then tried (a root or logarithm of a negative number).
+            raise FitError(
+                "the model is not finite for some parameter values the fit tried; "
+                "give it other start values or bounds"
+            ) from None
 
     fitted = {**p0, **dict(zip(free, map(float, popt), strict=True))}
     variances = np.full(len(free), np.inf) if _singular(pcov) else np.diag(pcov)
