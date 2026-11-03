@@ -37,6 +37,10 @@ A map of the tasks below that are not finished; the tasks hold the detail.
 here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 0 — Bugs and robustness** (B1 to B6 are done)
+- **B9** data paths that follow the project file (S to M, verified bug):
+  *Save As* into another folder loses the data, and a file outside the
+  project folder, or imported before the first save, is stored by its
+  absolute path. Found 2026-11-04 from a user's remark.
 - **B7**, the bug hunt, repeated before every release. Done: item 1 (the
   edge-data matrix), item 2 (undo stress), item 3 (fits that fail politely)
   and item 4 (files; only the Windows network share and other drive are left
@@ -63,14 +67,17 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **F1** fits (L): the range dragged in the preview (1); the result as text
   in the figure (3); CSV and a LaTeX row (4); a confidence band (5); more
   models, such as sine, power law, logistic, Voigt, two peaks (6); weighting
-  by none, y errors or Poisson (7); x errors (8, `[decide]`).
+  by none, y errors or Poisson (7); x errors (8, `[decide]`); the curve
+  drawn beyond the data (9).
 - **F4** plot types (M each): hollow markers, error bar colour and caps, an
   error bar on every n-th point (3); step plot (4); points coloured by a
   third column (5); waterfall (6); contours (7); bar chart (8).
 - **F5** axes: number format and the decimal comma (1); inverted axes (2);
   a second x axis on top that converts (3); hiding and offsetting spines
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
-  broken axes (6, later).
+  **broken axes (6, wanted for a measurement at a fixed point,
+  `[decide]`)**; minor grid lines of their own, thinner than the major ones
+  (10).
 - **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
@@ -83,7 +90,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
   (3), a performance test (4); item 1 is done for zoom and pan only, changes
   from the property panel still render at once.
 - **E2** autosave and `.bak`. **E3** save a figure as a template. **E4**
-  fewer steps for the common path (everything except the plot dialog).
+  fewer steps for the common path (everything except the plot dialog),
+  among them *Export* remembering its format and a source's file changed
+  after all (`[decide]`, a question for the user who asked).
 
 **Phase 4 — M7: polish and release**
 - **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
@@ -569,6 +578,50 @@ the project. It found:
 *Done when:* items 1 to 5 above have failing tests and fixes; the field test
 and the action test run in CI; `docs/testing.md` exists; how-to rule 10 holds.
 
+### B9 Data paths that follow the project file (verified) — S to M
+
+Raised by a lab user (2026-11-04): "the absolute path is used; one relative
+to the figscribe file would be better". Looked at the same day, with a bug
+on top:
+
+- **Save As loses the data** (verified): open a project with its data next to
+  it (the example), *Save As…* into another folder. `Document.save` writes
+  the project as it is and takes the new folder as the base, so the relative
+  path `scan.csv` points at nothing there: `data_states()` says "missing"
+  for every source. A project copied by hand works only if its data goes
+  with it, but *Save As* offers a copy without it.
+- **A file outside the project folder is stored by its whole path**:
+  `io/files.stored_path` is relative only when the file lies *below* the
+  project folder (`Path.relative_to`), so data in a neighbouring folder
+  (`../daten/x.csv`) or a parent is absolute. Such a project does not
+  survive being moved or shared, and the script it writes (which computes its
+  own relative path, `_relative`) is better off than the project.
+- **Imported before the first save**: a project with no file has no folder,
+  so `ImportDialog` and `import_numpy` store the absolute path
+  (`str(path.resolve())`), and saving does not turn it relative, even when the
+  data lies right next to the new file.
+
+*Do* (test first; each of the three has a failing test):
+1. **`stored_path` writes `..`** where the file is not below the folder:
+   `os.path.relpath` with forward slashes, and the absolute path only where
+   there is no relative one (another drive, a network share: `ValueError`,
+   the same fallback as `codegen/script._relative`). Decision 0007 says
+   "relative when below"; record the change.
+2. **Saving re-bases the paths.** At *Save As* into another folder, and the
+   first save of a project, each source's path is rewritten to be right
+   from the new folder (relative where it can be, else absolute), so the
+   data is found there. `[decide]` whether this is one undo step before the
+   save (`SetField` on each source's `path`, which `PROTECTED_SOURCE_FIELDS`
+   keeps from the assistant but not from the program) or happens silently
+   when the file is written; proposed: the commands, so that the project the
+   window shows is the one that was saved and the "saved" mark stays true.
+3. **A hand-made copy** of a folder keeps working, as it does now.
+4. Tests: *Save As* into a sibling and a child folder, the first save after an
+   import, a file in a neighbouring folder, and the other-drive fallback
+   (monkeypatched, as in B7.4); an old project with an absolute path still
+   opens; a roundtrip; the checklist step for a project moved to another
+   folder.
+
 ---
 
 ## Phase 1 — The settings: complete, tidy, easy to find
@@ -755,7 +808,9 @@ first among the swatches; empty means none. The box has rounded corners and
 no frame, in the renderer and in the script. Also named in `model/styles.py`
 (`KINDS`) and the panel's color fields, as every color field must be.
 *Follow-ups, only if asked:* a frame around the note; the same for panel
-labels drawn inside the corner (F3).
+labels drawn inside the corner (F3). A lab user asked for it again on
+2026-11-04 ("text fields with a white background, because of the grid
+lines"); it is done.
 
 ### U9 Where am I: a path in the panel, and the axes in the outline — M
 
@@ -886,6 +941,18 @@ covariance detected). Missing:
 7. **Weighting** choice: none, y errors (today's default), Poisson (√y).
 8. `[decide]` **x errors**: orthogonal distance regression via `scipy.odr`
    when x errors exist, or document that they are ignored.
+9. **The curve beyond the data.** Asked for by a lab user (2026-11-04): draw
+   the fit over a larger range than the points, to extrapolate to a value
+   not measured yet. Today `_draw_fit` draws over the fit range, or with
+   `extend_curve` over all the data, never beyond. Proposed:
+   `FitCurve.curve_range: tuple[float, float] | None` (None as now; no schema
+   bump), typed in the fit dialog and in the panel as *Draw the curve from …
+   to …*, in the unit the plot shows. `[decide]` whether a typed range is
+   enough or "to the axis limits" is wanted as well. On a logarithmic axis
+   the curve is sampled evenly in log x; the script makes the same
+   `np.linspace` or `np.geomspace`; an equivalence case and a baseline; the
+   assistant's `fit` tool and `set_field`; a range that does not reach the
+   data is a problem in the list. Leave `extend_curve` as it is.
 
 ### F2 Leave points out, reproducibly — M
 
@@ -1053,7 +1120,21 @@ In order of demand:
    expression, like the right y axis.
 4. **Frame**: hide the top/right spines; offset spines.
 5. `[decide]` **Date and time** axes for logged data.
-6. `[later]` Broken axes.
+6. **Broken axes.** No longer later: asked for by a lab user (2026-11-04),
+   who will add a measurement at the zinc point to a diagram after a break
+   in an axis. `[decide]` before building; this is an L. Matplotlib has no
+   broken axis, so it is drawn as two or more axes side by side (or one
+   above the other) that share the other axis, with a gap and the usual
+   slanted break marks, the widths following the lengths of the ranges. To
+   settle with the user: one break or several; x only, or y too; how the
+   ranges are given (`AxisSpec.breaks`, a list of (from, to)); what a plot,
+   a fit, a note, a reference line, a shaded range and an inset do at a
+   break (each is drawn in every part it reaches); the legend; shared axes,
+   residual panels and colour bars next to it; the problem list; and the
+   script, which must draw the same with the parts written out as a person
+   would (`fig.add_subplot`, `sharey`, break marks). The model field and the
+   assistant's tools come with it, and the property panel and the axis form
+   (rows for each range).
 7. `[decide]` **Which side an axis is on.** Matplotlib has four cases, and
    figscribe covers two:
 
@@ -1131,6 +1212,18 @@ In order of demand:
    pulled its label out of the figure; a test with the bar in the second
    column found it. *Not done:* a distance cannot be greyed without a label
    (the axis form has no such mechanism, the tooltip says it needs one).
+
+10. **Minor grid lines of their own.** Asked for by a lab user (2026-11-04):
+    thinner than the major lines, set apart. Today one width, style and color
+    serve both (`ax.grid(True, which=…, **style)`). Proposed per panel, beside
+    the grid's own settings: `grid_minor_linewidth`, `grid_minor_linestyle` and
+    `grid_minor_color`, each empty meaning "as the major grid" so that saved
+    files are drawn as before (no schema bump); the renderer and the script
+    make a second `grid(which="minor")` call when any is set; greyed out
+    while the grid shows only major lines (a B8.4 rule); the whole chain of rule
+    5 and an image baseline with both kinds of lines. `[decide]` whether the
+    minor lines should be thinner by default (say half) when *Grid lines at*
+    is "both", instead of equal.
 
 ### F6 Several files as one series — M
 
@@ -1510,6 +1603,25 @@ template to an existing figure is one undo step.
   is offered right after for error bar data.
 - After *Add fit*, offer *Show result in figure* and *Add residuals*.
 - Remember per file type the last import options and column choice.
+- **Export remembers its format and folder.** Asked for by a lab user
+  (2026-11-04): *Export Figure…* opens on PDF each time (`EXPORT_FILTER`,
+  no remembered filter) and in the working folder, so PNG has to be chosen
+  again and again. Keep the last format and folder (`QSettings`, as the
+  recent projects are) and suggest the figure's name as the file name, as the
+  script export already does; *Export All Figures…* too. A test with the
+  dialog answered, and the setting kept between two windows.
+- **A source's file changed after all** (`[decide]`, unclear). The same user
+  "wanted to change the name of the .csv in the template and did not manage"
+  (the absolute path of B9 may be what got in the way: ask).
+  Today the file of a source can only be taken again when it is missing
+  (*Locate file…*) or changed (*Use the new version*), and the panel shows
+  the path read-only. Ask the user what was meant: use another file for the
+  plots of the example or a project (the data replaced), or change a name
+  that is shown (the file name is in the column lists, `scan.csv: t`, and in
+  the script's comments). Proposed for the first: *Use Another File…* on a
+  source in the outline: choose a file, read it with the source's options,
+  keep the plots whose columns it has and list those it does not (B2's
+  machinery, `io/refresh.py`); one undo step.
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,
@@ -1665,7 +1777,6 @@ request halfway. `figscribe bench` could then run on a free tier too.
 - `[decide]` A German user interface (Qt translations); number formats
   follow the figure setting from F5 regardless.
 - Global fits sharing parameters across several data sets.
-- Broken axes.
 
 ---
 
@@ -1679,6 +1790,10 @@ answer in `docs/decisions.md` when the task is started.
 | U6 | Gaps between panels in mm: new model fields in mm (schema bump), converted by the renderer and the code generator? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
+| F5.6 | Broken axes: one break or several, x and y, how ranges are given, what happens to fits, notes, lines and the legend at a break? |
+| F5.10 | Minor grid lines: thinner by default when both kinds are shown? |
+| F1.9 | The curve beyond the data: a typed range, or also "to the axis limits"? |
+| E4 | A source's file: what did the user mean by changing the name of the .csv in the template? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
