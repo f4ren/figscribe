@@ -20,7 +20,7 @@ import numpy as np
 
 from figscribe import __version__
 from figscribe.allan import samples
-from figscribe.convert import expression, scaled
+from figscribe.convert import expression, scale_expression
 from figscribe.fit import free_parameters, numpy_source, parameter_names
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
@@ -301,7 +301,13 @@ class _Writer:
                 if ref is None or conversion is None:
                     continue
                 raw = self.column(ref)
-                key = (raw, conversion.factor, conversion.from_start, error)
+                key = (
+                    raw,
+                    conversion.factor,
+                    conversion.formula,
+                    conversion.from_start,
+                    error,
+                )
                 if key not in defined:
                     unit = re.sub(r"\W+", "_", conversion.unit or "").strip("_")
                     base = f"{raw}_{unit or 'scaled'}"
@@ -311,7 +317,7 @@ class _Writer:
                     taken.add(name)
                     defined[key] = name
                     text = (
-                        scaled(raw, conversion.factor)
+                        scale_expression(raw, conversion)
                         if error
                         else expression(raw, conversion)
                     )
@@ -968,13 +974,14 @@ class _Writer:
                     if plot.time is not None
                     else f"np.arange({values}.size) * {tau0}"
                 )
-                factor = plot.x_conversion.factor if plot.x_conversion else 1.0
-                unit = plot.x_conversion.unit if plot.x_conversion else None
+                shown = plot.x_conversion
+                unit = shown.unit if shown else None
                 low, high = plot.x_range
                 self.emit(
                     f"# Only the samples from {low:g} to {high:g} {unit or 's'} "
                     "after the first.",
-                    f"{since} = {scaled(elapsed, factor)}",
+                    f"{since} = "
+                    f"{scale_expression(elapsed, shown) if shown else elapsed}",
                     f"{kept} = {values}[({since} >= {_num(low)}) & ({since} <= "
                     f"{_num(high)})]",
                 )
@@ -1016,8 +1023,9 @@ class _Writer:
             "linestyle": _str(plot.linestyle),
             "linewidth": _num(plot.linewidth),
         }
-        factor = plot.x_conversion.factor if plot.x_conversion else 1.0
-        taus = scaled(f"{m} * {tau0}", factor)
+        taus = f"{m} * {tau0}"
+        if plot.x_conversion:
+            taus = scale_expression(taus, plot.x_conversion)
         self.call(f"{ax}.errorbar", taus, adev, **kwargs, **common)
 
     def _fits(self) -> None:
@@ -1759,6 +1767,12 @@ def _converted_fields(artist) -> list[tuple[str, Conversion | None, bool]]:
 
 def _unit_comment(conversion: Conversion, error: bool) -> str:
     unit, factor = conversion.unit, f"{conversion.factor:g}"
+    if conversion.formula is not None:
+        if error:
+            return f"in {unit}" if unit else "scaled like the values"
+        if conversion.from_start:
+            return f"{unit} since the start" if unit else "counted from the start"
+        return f"in {unit}" if unit else "by a formula"
     if conversion.from_start and not error:
         if unit:
             return f"{unit} since the start"

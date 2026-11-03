@@ -99,5 +99,11 @@ note the platform, the screen scaling and the theme in the pull request.
     and export the script and run it: the figure is the same, and the script
     names the file by its whole path.
 
+17. **A formula for the units**: on a plot choose *x in* ▸ *a formula* and
+    type `x / 60 - 273.15` with the unit `°C`; the axis, its numbers, a
+    reference line and a fit follow at once, error bars keep their size, and
+    `log(x)` is refused with the reason. Export the script and run it: the
+    same figure, with the formula written as typed.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.commands import CommandError, Macro, SetField, find
+from figscribe.convert import linear, scaled
 from figscribe.fit import FitError, refit, residuals
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
@@ -351,6 +352,7 @@ PLACEHOLDERS = {
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
     "label": "not in the legend",
+    "formula": "x / 60 - 273.15",
     "background": "none",
     "color": "automatic",
     "edgecolor": "automatic",
@@ -583,12 +585,12 @@ TIPS = {
     "dataset": "Where the data lies inside the HDF5 file, e.g. /run3/voltage.",
     "array": "Which array of the .npz archive to plot.",
     "x_conversion": "Show x in another unit: min, h or days for times measured in s, "
-    "ms, or another factor. The axis, the plot's range, its fits and the lines and "
-    "notes on the axis follow.",
-    "y_conversion": "Show y in another unit, e.g. mV with another factor of 1000. The "
-    "axis, the fits and the lines and notes on the axis follow.",
+    "ms, another factor, or a formula such as x / 60 - 273.15. The axis, the "
+    "plot's range, its fits and the lines and notes on the axis follow.",
+    "y_conversion": "Show y in another unit, e.g. mV with another factor of 1000, "
+    "or a formula. The axis, the fits and the lines and notes on the axis follow.",
     "Histogram.x_conversion": "Count the values in another unit: min, h or days "
-    "for times in s, ms, or another factor.",
+    "for times in s, ms, another factor, or a formula.",
     "AllanDeviationPlot.x_conversion": "Show τ in another unit: min, h or days, ms, "
     "or another factor.",
     "from_start": "Count from the smallest value, so that the values start at 0: "
@@ -596,6 +598,10 @@ TIPS = {
     "factor": "What each value is multiplied by, e.g. 1000 for V in mV or 0.001 for "
     "mV in V.",
     "Conversion.unit": "The unit of the shown values; the axis takes it.",
+    "formula": "What the value (after Start at 0) is turned into, written with x "
+    "and numbers: + - * / and brackets, e.g. x / 60 - 273.15 for K in °C or "
+    "(x - 32) / 1.8 for °F. It must rise with x, so no log(x), 1/x or x ** 2. "
+    "Errors are scaled by its slope and not shifted.",
     "x_range": "Use only the rows with x from … to …, in the unit shown; the others "
     "are not drawn, fitted or counted. Both empty use every row.",
     "Histogram.x_range": "Count only the values from … to …, in the unit shown; the "
@@ -632,6 +638,7 @@ UNITS = [
 ]
 """The units a plot's values are most often shown in: times measured in s."""
 OTHER_FACTOR = "another factor"
+FORMULA = "a formula"
 
 CAPTIONS = {
     ("Histogram", "x_range"): "Use only values",
@@ -989,7 +996,9 @@ class PropertyPanel(QScrollArea):
                 try:
                     conversion = Conversion.model_validate({**current, path[1]: value})
                 except ValidationError as exc:
-                    reason = "; ".join(e["msg"] for e in exc.errors())
+                    reason = "; ".join(
+                        e["msg"].removeprefix("Value error, ") for e in exc.errors()
+                    )
                     raise CommandError(f"{field_name(path[1])}: {reason}") from None
             data = self.document.data
             axis = path[0][0]
@@ -1277,7 +1286,11 @@ class PropertyPanel(QScrollArea):
             # τ of an Allan deviation starts at τ0 whatever: nothing to start.
             if not isinstance(obj, AllanDeviationPlot):
                 self._row(form, value, (*path, "from_start"))
-            if _unit_of_the_list(value) is None:
+            kind = _kind_of_conversion(value)
+            if kind == FORMULA:
+                self._row(form, value, (*path, "formula"))
+                self._row(form, value, (*path, "unit"))
+            elif kind == OTHER_FACTOR:
                 self._row(form, value, (*path, "factor"))
                 self._row(form, value, (*path, "unit"))
 
@@ -1784,7 +1797,7 @@ def _ratios(values: list[float | None]) -> list[float] | None:
 
 class ConversionEditor(Editor):
     """The unit a plot's x or y is shown in: as in the file, one of the
-    common units, or another factor, which is then typed below."""
+    common units, another factor or a formula, which is then typed below."""
 
     def __init__(self, spec, path, panel):
         super().__init__(spec, path, panel)
@@ -1793,6 +1806,7 @@ class ConversionEditor(Editor):
             *((text, (factor, unit)) for text, factor, unit in UNITS),
             (OTHER_FACTOR, OTHER_FACTOR),
         ]
+        self.choices.append((FORMULA, FORMULA))
         self.widget = QComboBox()
         for text, _ in self.choices:
             self.widget.addItem(text)
@@ -1803,9 +1817,9 @@ class ConversionEditor(Editor):
         if value is None:
             index = 0
         else:
-            listed = _unit_of_the_list(value)
             texts = [text for text, _ in self.choices]
-            index = texts.index(listed) if listed else len(texts) - 1
+            shown = _kind_of_conversion(value)
+            index = texts.index(shown)
         self.widget.blockSignals(True)
         self.widget.setCurrentIndex(index)
         self.widget.blockSignals(False)
@@ -1817,22 +1831,42 @@ class ConversionEditor(Editor):
         if choice is None:
             self.commit(None)
         elif choice == OTHER_FACTOR:
-            if current is not None and _unit_of_the_list(current) is None:
+            if current is not None and _kind_of_conversion(current) == OTHER_FACTOR:
                 return  # already another factor
-            factor = current.factor if current is not None else 1.0
-            # The factor stays as it was; the unit is typed with the new one.
-            self.commit(Conversion(factor=factor, from_start=start))
+            factor = linear(current)[0]
+            # The factor stays as it was (a formula's slope); the unit is typed
+            # with the new one, or stays when it came with a formula.
+            unit = current.unit if current is not None and current.formula else None
+            self.commit(Conversion(factor=factor, from_start=start, unit=unit))
+        elif choice == FORMULA:
+            if current is not None and current.formula is not None:
+                return  # already a formula
+            # What the plot does now, written as a formula to change.
+            text = scaled("x", current.factor) if current is not None else "x"
+            unit = current.unit if current is not None else None
+            self.commit(Conversion(formula=text, from_start=start, unit=unit))
         else:
             factor, unit = choice
             self.commit(Conversion(factor=factor, from_start=start, unit=unit))
 
 
 def _unit_of_the_list(conversion: Conversion) -> str | None:
-    """The entry of UNITS a conversion is, by factor and unit; None if none."""
+    """The entry of UNITS a conversion is, by factor and unit; None if none.
+    A formula is never one, whatever its slope."""
+    if conversion.formula is not None:
+        return None
     for text, factor, unit in UNITS:
         if conversion.unit == unit and math.isclose(conversion.factor, factor):
             return text
     return None
+
+
+def _kind_of_conversion(conversion: Conversion) -> str:
+    """The entry of the choice a conversion is: a unit of the list, a formula or
+    another factor."""
+    if conversion.formula is not None:
+        return FORMULA
+    return _unit_of_the_list(conversion) or OTHER_FACTOR
 
 
 def _range_ends(values: list[float | None]) -> tuple[float, float] | None:
@@ -2042,9 +2076,7 @@ def _shape(obj: BaseModel) -> tuple:
     layout = getattr(obj, "layout", None)
     grid = (layout.rows, layout.cols) if layout is not None else None
     units = tuple(
-        "none"
-        if (c := getattr(obj, name, None)) is None
-        else _unit_of_the_list(c) or OTHER_FACTOR
+        "none" if (c := getattr(obj, name, None)) is None else _kind_of_conversion(c)
         for name in CONVERSIONS
     )
     return (obj.id, type(obj), parts, grid, units)

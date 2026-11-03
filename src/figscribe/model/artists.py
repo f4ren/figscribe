@@ -39,17 +39,35 @@ Range = Annotated[tuple[float, float], AfterValidator(_lower_below_upper)]
 class Conversion(StrictModel):
     """Values shown in another unit, and counted from the start if asked:
     shown = (value − start) × factor, where the start is the column's
-    smallest value with `from_start`, else 0 (decision 0041). Errors are
-    scaled by the factor, never shifted."""
+    smallest value with `from_start`, else 0 (decision 0041). With a
+    `formula`, shown = formula(value − start) instead (decision 0047). Errors
+    are scaled by the factor or the formula's slope, never shifted."""
 
-    factor: float = Field(gt=0.0)
-    """What every value is multiplied by, e.g. 1/3600 to show s in h."""
+    factor: float = Field(1.0, gt=0.0)
+    """What every value is multiplied by, e.g. 1/3600 to show s in h. Not used
+    while there is a formula."""
+    formula: str | None = None
+    """What the value is turned into, written in x and numbers, linear in x
+    with a positive slope: ``x / 60 - 273.15``. None multiplies by `factor`."""
     from_start: bool = False
     """Count from the column's smallest value, so that the values start at 0:
     hours since the start of a measurement rather than since 1970."""
     unit: str | None = None
     """The unit of the shown values, e.g. "h"; the axis takes it. None leaves
     the axis' unit as it is."""
+
+    @field_validator("formula")
+    @classmethod
+    def _formula_is_linear(cls, formula: str | None) -> str | None:
+        if formula is None:
+            return None
+        from figscribe.fit.expression import ExpressionError, affine
+
+        try:
+            affine(formula)
+        except ExpressionError as exc:
+            raise ValueError(str(exc)) from None
+        return formula
 
 
 class Reduction(StrictModel):
@@ -288,10 +306,25 @@ class AllanDeviationPlot(ArtistBase):
     """Line width in pt."""
     x_conversion: Conversion | None = None
     """τ in another unit, e.g. h; only the factor counts here, τ starts at τ0
-    whatever `from_start` says. None shows τ in s."""
+    whatever `from_start` says. A formula may scale τ (``x * 2.88 / 3600``) but
+    not shift it, which could move τ to zero on a logarithmic axis. None shows
+    τ in s."""
     x_range: Range | None = None
     """(lower, upper) of the time since the first sample, in τ's shown unit:
     only the samples within it are used, τ0 stays; None uses every sample."""
+
+    @field_validator("x_conversion")
+    @classmethod
+    def _no_shift(cls, conversion: Conversion | None) -> Conversion | None:
+        if conversion is not None and conversion.formula is not None:
+            from figscribe.fit.expression import affine
+
+            if affine(conversion.formula)[1] != 0:
+                raise ValueError(
+                    "τ is a duration: the formula may scale it, but not add or "
+                    "subtract a number, which could move it to zero"
+                )
+        return conversion
 
 
 class Colorbar(StrictModel):

@@ -2135,3 +2135,87 @@ no memory of failures, and a smaller range of sequences for the same time.
 **Not testing undo at random**: every command has an undo test, but the bugs
 that matter come from the order of commands (a redo after a new step, a
 macro that fails halfway) and are not found by testing each one alone.
+
+## 0047 — A linear formula for a plot's units
+
+**Date:** 2026-11-03
+**Status:** accepted
+
+### Context
+
+Roadmap F13, asked for by the user (2026-11-03). Decision 0041 lets a plot
+show a column as `(value − start) × factor`; dividing is a factor, but adding
+and subtracting (K to °C) cannot be said, and "another factor" is a
+multiplier only. The user asked whether a formula field would break the
+concept, and decided the two open points: the start is subtracted first, and
+the text is stored.
+
+### Decision
+
+- **`Conversion.formula: str | None`** beside `factor`, on every conversion
+  (line, points, error bars, histogram). A file without it is drawn as
+  before, so no schema bump. `factor` stays, now with a default of 1, for the
+  units of the list and "another factor"; **with a formula it is ignored**,
+  and the panel does not show it.
+- **Linear in x, rising.** The formula is written in `x` and numbers (`pi`
+  too), with `+ - * /`, brackets and functions of numbers; it must be
+  `a·x + b` with `a > 0`. The model refuses anything else when the formula is
+  set, by reading the syntax tree (`fit.expression.affine`) and not by trying
+  values, so `x * x / x`, `abs(x)` or `log(x)` are refused outright with
+  the reason and no tolerance to tune. A slope of 0 or below is refused
+  because the values would lose or reverse their order, which the plot's
+  range, a fit range and an axis would all have to cope with. This is what
+  keeps the concept of 0041: errors are only scaled (by the slope), and the
+  axis, its marks, the notes, the plot's range and its fits' ranges are
+  remapped by an affine map, as they are for a factor. A formula such as
+  `log(x)` or `1/x` would need the derivative for the error bars and the
+  inverse for the axis: a column formula, which the brief excludes (0036).
+  1/T for an Arrhenius plot would be a decision of its own.
+- **Order**: the start is subtracted first (`from_start`), the formula is
+  applied to what is left, as the factor is.
+- **The text is stored**, so the script reads as the person wrote it, in
+  Python's spacing and number forms (`x*1e3` becomes `t * 1000.0`). The renderer
+  evaluates the text itself (`compile_expression`), and the script writes the
+  same operations with `x` replaced by the column, or by `(t - np.nanmin(t))`
+  with a start: `T_C = T - 273.15`. The slope and the offset (`convert.linear`)
+  are only used where an affine map is needed: the errors, and the remapping
+  of axis, marks and ranges (`units._mapping`).
+- **Errors** are scaled by the slope and not shifted; the script writes it as a
+  division when the slope's inverse is a whole number or a short decimal, so
+  `x / 7.5 - 273.15` scales its errors with `dT / 7.5`. The short decimal is
+  only for a formula: factors are written as before.
+- **An Allan deviation takes a formula that scales τ, not one that shifts
+  it.** τ is a duration on a logarithmic axis, and an added or subtracted
+  number could move it to zero or below. So the model refuses a conversion there
+  whose formula has an offset (`a·x` is fine, `a·x + b` is not), and the
+  panel says why. This covers the common case of a series counted in cycles
+  (93, 94, 95, … of 2.88 s each) shown in hours: `x * 2.88 / 3600`. The
+  renderer and the script scale τ and the range by the slope only, written as
+  a division when the slope is one over a short decimal. A change to the
+  formula alone (a nested `SetField`) only checks the formula, so the problem
+  list says that a shifting formula is not used.
+- **The panel** has "a formula" beside "another factor": it starts as what the
+  plot does now (`x * 1000` for ms), has rows for the formula and the unit,
+  and going back to "another factor" keeps the slope. A conversion with a
+  formula is never one of the units of the list, whatever its slope.
+
+- **The problem list judges values as the plot shows them**: the zeros and
+  values below zero on a log axis are counted after the conversion, since a
+  formula such as `x - 10` can move positive values below zero, and one that
+  moves zeros up hides none. This also holds for a factor with *Start at 0*,
+  whose smallest value becomes 0. No new image baseline: the drawing is that of
+  0041, covered by `converted`, and the formula only changes numbers, which
+  `tests/test_convert.py` and the equivalence cases hold to the script.
+
+### Alternatives considered
+
+**Any formula in x** (log, 1/x, powers): the error bars would need the
+derivative, the axis the inverse, the order may reverse and values at or
+below zero need rules; and it is the first step towards column formulas.
+**Storing a factor and an offset** instead of the text: simpler to read back,
+but the script would show `* 0.13333333333333333` for `/ 7.5`. **An offset
+field beside the factor** ("subtract …"): enough for K to °C, but two fields
+to say what one line of text says, and nothing for `(x − 32) / 1.8`.
+**Filling `factor` from the formula's slope** when the conversion is made:
+the file would hold two values that must agree, and a change to one of them
+alone would break that.

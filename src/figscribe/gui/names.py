@@ -149,6 +149,7 @@ FIELD_NAMES = {
     "y_conversion": "y in",
     "from_start": "Start at 0",
     "factor": "Factor",
+    "formula": "Formula",
     "x_range": "Use only x",
     "delimiter": "Separator",
     "decimal": "Decimal mark",

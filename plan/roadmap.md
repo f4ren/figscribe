@@ -71,8 +71,6 @@ here is done; its follow-ups ("only if asked") stay in its text.
   a second x axis on top that converts (3); hiding and offsetting spines
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
   broken axes (6, later).
-- **F13** a linear formula for a plot's units (S to M), agreed 2026-11-03;
-  starts once B7.4 is merged.
 - **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
@@ -96,9 +94,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Phase 5** is later and optional.
 
 **Where to start** (rule 1): the first open task is B7, and its open items 5
-and 6 need no answer. The user named the order on 2026-11-03: B7.4, then F13
-(a linear formula for units), then U11 (the settings panel arranged element
-by element); see those tasks.
+and 6 need no answer. The user named the order on 2026-11-03: B7.4 and F13 are
+done, then comes U11 (the settings panel arranged element by element); see
+that task.
 
 ---
 
@@ -1365,6 +1363,42 @@ Decided with the user (2026-11-03):
 - **The whole chain** of rule 5, the panel (a "Formula" entry next to
   "another factor", with a tooltip and examples), the assistant's
   `set_field`, `everything.py`, the edge-data matrix and a decision.
+
+**Done** (2026-11-03; decision 0047; no schema bump, a file without
+`formula` is drawn as before): `Conversion.formula` beside `factor`, which is
+ignored with a formula. The model refuses a formula unless it is `a·x + b`
+with `a > 0`, found from the syntax tree (`fit.expression.affine`) so that
+`x * x / x` or `abs(x)` are refused outright. The Allan deviation takes a
+formula that scales τ but does not shift it (an offset could move τ to zero on
+its log axis), so cycles of 2.88 s shown in hours are `x * 2.88 / 3600`.
+`convert.py`
+evaluates the text itself and keeps slope and offset (`linear`) for the
+errors and for `units._mapping`, which now remaps through an offset as well;
+the script writes the formula, in Python's spacing and number forms
+(`x*1e3` becomes `t * 1000.0`), with `x` replaced by the column
+(`T - 273.15`, `(t - np.nanmin(t)) / 7.5`), the errors as `dT / 7.5` when
+the slope is one over a short decimal. The panel has "a formula" beside
+"another factor", starting as what the plot does now. Tests: the analysis
+(accepted and refused formulas), the arithmetic bit for bit against the
+script, the axis, marks, ranges and fits following, three equivalence cases
+(x and y with a band, a fit and a range; a histogram; two formulas on one
+column), the panel, the assistant, the roundtrip and an old file; the
+`everything.py` scatter plot has a formula on y so that the sweeps and the
+undo stress reach it; a case in the edge-data matrix, a formula that takes
+values below zero on a log axis. No image baseline: the drawing is that of
+0041 (`converted`) and only the numbers change, held to the script bit for
+bit. *Learned:* the problem list for values at or below zero on a log axis
+read the raw column, so a formula with an offset lost points without a word;
+it judges the values as shown now (also a factor with *Start at 0*, whose
+smallest value becomes 0); a change to the formula alone on an Allan
+deviation gets past the plot's own check, so the problem list says that a
+shifting formula is not used (the user's point: not a blanket refusal, only
+the offset); the second sweep failure was the texts it
+types ("2" is a constant, refused), so `TYPED` gets a formula that rises;
+and a formula conversion must never be taken for a unit of the list because
+its slope is 1/60. *Follow-ups, only if asked:* 1/T and other non-linear
+conversions (a decision of their own); a formula in the plot dialog; a
+formula for a color mesh's positions.
 
 ---
 

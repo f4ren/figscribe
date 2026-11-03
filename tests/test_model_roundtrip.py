@@ -327,3 +327,30 @@ def test_a_file_without_bands_still_reads() -> None:
     text = Path(__file__).parents[1] / "examples/gaussian-scan/scan.figscribe"
     plot = loads(text.read_text(encoding="utf-8")).figures[0].axes[0].artists[0]
     assert plot.band is None
+
+
+def test_a_conversion_with_a_formula_survives_saving_and_an_old_one_loads() -> None:
+    from figscribe.model import ColumnRef, Conversion, LinePlot
+
+    plot = LinePlot(
+        x=ColumnRef(source="s", column="t"),
+        y=ColumnRef(source="s", column="U"),
+        y_conversion=Conversion(formula="(x - 32) / 1.8", from_start=True, unit="°C"),
+    )
+    back = LinePlot.model_validate_json(plot.model_dump_json())
+    assert back == plot and back.y_conversion.formula == "(x - 32) / 1.8"
+    # A file from before the formula: a factor, no formula.
+    old = Conversion.model_validate({"factor": 0.5, "from_start": False, "unit": None})
+    assert old.formula is None and old.factor == 0.5
+    with pytest.raises(ValueError, match="not linear"):
+        Conversion.model_validate({"formula": "x ** 2"})
+
+
+def test_an_allan_deviation_takes_a_scaling_formula_but_no_shift() -> None:
+    from figscribe.model import AllanDeviationPlot, ColumnRef, Conversion
+
+    values = ColumnRef(source="s", column="y")
+    scaled = Conversion(formula="x * 2.88 / 3600", unit="h")
+    assert AllanDeviationPlot(values=values, x_conversion=scaled).x_conversion == scaled
+    with pytest.raises(ValueError, match="duration"):
+        AllanDeviationPlot(values=values, x_conversion=Conversion(formula="x + 1"))
