@@ -119,5 +119,12 @@ note the platform, the screen scaling and the theme in the pull request.
     in that order. Tick *Right y axis*: its card appears right after the box and
     nothing crashes; untick it. Switch *Grid lines* off: its settings grey out.
 
+20. **The axis form**: click an axis card of a panel. *Label*, *Scale* and
+    *Ticks* are open, in that order, and fit a screen of 1080 pixels. Choose
+    *every …* for the major ticks: the row below says *Distance*; choose *at these
+    values*: it says *Values* and *Tick labels* appears. Choose a symmetric log
+    type: *Linear within ±* appears. Fold *Scale*, select the figure and the axis
+    again: it stays folded.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

@@ -20,6 +20,10 @@ release open in every later one.
   after its box), *Grid* (the box with all its settings under it, no longer
   hidden under *More*), *Legend*, and the folded *Place in layout*. The legend's
   *Columns* is *Columns of entries*, and its *Position* is *Position (dragged)*.
+- **The axis form has three sections:** *Label* (with the label's size and
+  distance), *Scale* (type, range, the linear zone of a symmetric log axis and
+  the size of the numbers) and *Ticks* (major and minor, the row under the major
+  ticks says *Distance* or *Values*). A section folded on an axis stays folded.
 - **A formula for a plot's units.** *x in* and *y in* offer "a formula" next to
   "another factor": `x / 60 - 273.15`, `(x - 32) / 1.8`. It is written in `x`
   and numbers and must be linear and rise with x, so that error bars, axis,

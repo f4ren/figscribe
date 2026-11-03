@@ -2350,3 +2350,53 @@ and the title is often empty in a paper. **The grid's details folded under the
 box**: a shorter column, but the box would then be out of reach without
 unfolding. **The legend's rare settings folded**: not asked for; the legend
 stays whole.
+
+## 0050 — The axis form by what its settings are for
+
+**Date:** 2026-11-05
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the third element: the form that opens when a panel's axis is
+chosen (x, y, right y). It had five sections: *Label* (label, unit, distance,
+show values in), *Range* (scale, from … to, linear within ±), *Major ticks*,
+*Minor ticks* (one row) and *Text size* (two rows, one for the label and one
+for the numbers). The advisor gave an opinion, and the user chose the names.
+
+### Decision
+
+Three sections, all open, no *More*:
+- **Label**: label, unit, *Show values in* (the user's choice, since it changes
+  the unit text, kHz), *Label size (pt)* and *Label distance (pt)* ("Distance
+  (pt)" alone did not say from what).
+- **Scale** (the user's choice; it was *Range*): *Type* (linear, logarithmic,
+  symmetric log; the row was called *Scale* and would have shared its name with
+  its section), *From … to*, *Linear within ±* for a symmetric log axis, and
+  *Number size (pt)*. The user's point: the numbers along an axis are what one
+  takes for its scale, so their size belongs here and not among the ticks.
+- **Ticks**: *Major ticks* with a row below it that says what it takes,
+  *Distance* for "every …" and *Values* for "at these values" (it had no
+  caption, so the search could not find it), *Tick labels*, and *Minor ticks*
+  with its count. One section for both kinds, so the captions carry the
+  difference (before: *Placed* twice).
+
+*Text size* is gone, as a section of two rows: *Label size* is in *Label* and
+*Number size* in *Scale*.
+
+Also fixed, a bug of 0048's fold memory: the axis form was built under the
+kind of the object selected before it, so a section folded on an axis came
+back open after another selection. An axis and a selection of several plots
+now have their own kinds.
+
+### Alternatives considered
+
+**The numbers' size among the ticks** (the advisor's first order, and the
+proposal): the user expected it with the scale. **Two sections for the ticks**:
+*Minor ticks* was a section of one row. **Names** *Numbers and range* (clear,
+but hides linear or log) and *Scale and numbers*. **The row *Scale* inside the
+section *Scale***: renamed *Type*, as the user chose, though *Label* has the
+same doubling. **Show values in under *Scale*** (it divides the numbers by a
+power of ten): kept with the unit, which it also changes.
+
+The older decisions (0006, 0025) name the old sections; they are not rewritten.

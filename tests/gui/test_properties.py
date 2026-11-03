@@ -860,3 +860,18 @@ def test_the_right_y_axis_box_adds_and_removes_its_card(
     panel.editors[("y_right",)].widget.click()
     assert "y_right" not in panel.axis_links
     assert _axes(document).y_right is None
+
+
+def test_a_section_folded_on_an_axis_stays_folded_whatever_was_selected_before(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.gui.document import axis_id
+
+    x_axis = axis_id(_axes(document).id, "x")
+    document.select(_figure(document).id)
+    document.select(x_axis)
+    panel.sections["Scale"].header.click()  # fold it
+    assert not panel.sections["Scale"].expanded
+    document.select(_artist(document).id)
+    document.select(x_axis)
+    assert not panel.sections["Scale"].expanded  # as the user left it

@@ -902,6 +902,7 @@ class PropertyPanel(QScrollArea):
             self._fill_several(several, layout)
         elif axis is not None and obj is not None:
             oid = self.document.selected
+            self._kind = "Axis"  # the key of what is folded
             self.axis_form = AxisForm(
                 self, axis[0], axis[1], layout, lambda: self.axis_range(oid)
             )
@@ -1145,6 +1146,7 @@ class PropertyPanel(QScrollArea):
     def _fill_several(self, objs: list[BaseModel], layout: QVBoxLayout) -> None:
         """The settings the plots share, each showing their value if they
         agree; a change sets it on all of them, as one undo step."""
+        self._kind = "Several"
         form = self._section("Together", layout)
         for name in SHARED:
             spec = _shared_spec(objs, name)

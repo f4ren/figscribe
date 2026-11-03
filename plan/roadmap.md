@@ -853,9 +853,13 @@ how it looks, the rare). **The panel: done** (2026-11-05, decision 0049): *Title
 then the cards of the axes, the box for a right y axis with its card right after
 it), *Grid* (the box with its settings under it), *Legend*, and the folded
 *Place in layout* (an inset: *Place in panel*); no *More*; the legend's captions
-*Columns of entries* and *Position (dragged)*. *Still to do, one element at a
-time:* the axes (the axis form), each kind of plot, the fit and residuals, the
-note, reference lines and ranges, the data files. *Also:* a thin line under every section (the stylesheet had always asked for
+*Columns of entries* and *Position (dragged)*. **The axis form: done** (2026-11-05, decision 0050): *Label* (with *Label size* and
+*Label distance*), *Scale* (type, from … to, the linear zone, *Number size*) and
+*Ticks* (major with *Distance* or *Values*, tick labels, minor), no *Text size*.
+*Fixed on the way:* a section folded on an axis came back open, because the form
+was built under the kind of the object before it. *Still to do, one element at a
+time:* each kind of plot, the fit and residuals, the note, reference lines and
+ranges, the data files. *Also:* a thin line under every section (the stylesheet had always asked for
 one, but a plain `QWidget` paints no border without `WA_StyledBackground`, so it
 never showed) and every section folds with a click, the rare ones starting
 folded, kept per kind of object while the program runs (the user's wishes; not
