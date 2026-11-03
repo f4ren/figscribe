@@ -38,8 +38,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 0 — Bugs and robustness** (B1 to B6 are done)
 - **B7**, the bug hunt, repeated before every release. Done: item 1 (the
-  edge-data matrix) and item 3 (fits that fail politely). Open: item 2 undo
-  stress (`[decide]` `hypothesis`); item 4 files (read-only
+  edge-data matrix), item 2 (undo stress) and item 3 (fits that fail
+  politely). Open: item 4 files (read-only
   folder, a file deleted while open, network paths; a project of a newer
   figscribe is refused and tested); item 5 the GUI at 1024 × 700, 150 % and
   200 % scaling, dark mode, keyboard only; item 6 every bench case through
@@ -91,9 +91,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 5** is later and optional.
 
-**Where to start** (rule 1): the first open task is B7. Its item 2 needs an
-answer; items 3 to 6 do not, so B7.4 is the first that can be built without
-asking (item 3 is done). The user may name another task.
+**Where to start** (rule 1): the first open task is B7, and its open items 4
+to 6 need no answer, so B7.4 is next. The user may name another task.
 
 ---
 
@@ -317,6 +316,36 @@ they find.
    panels, fit), then undo all: the project equals the start; redo all: equals
    the end. `[decide]` whether to add `hypothesis` as a dev dependency for this
    and for model roundtrips with generated projects.
+   **Done** (2026-11-03, decision 0046; the user chose `hypothesis`):
+   `tests/commands/test_undo_stress.py`, a state machine over the project of
+   `tests/gui/everything.py` that drives `History` without Qt. Its rules are
+   the primitives and the program's operations (remove, duplicate, add panel
+   or figure, paste style, bring to front, same range, fit, refit, leave rows
+   out, units, range), with undo, redo and save between them; the fields to
+   set are found from the model, bad values included. After each step it
+   checks that the project saves and loads to the same text, ids are unique,
+   no panel is outside its grid, fits still have their plot, a refused step
+   changed nothing, and each undo and redo reaches the state recorded when
+   the step was made; at the end, undo all gives the start and redo all the
+   end. It is the "model roundtrip with generated projects" too. Checked by
+   breaking `RemoveItem.revert` on purpose: it fails at once, with a
+   sequence of two or three steps. 1,000 sequences were clean; a
+   run of 3,000 found one bug, and 3,000 more were clean once it was fixed.
+   *Add panel* (and *Duplicate* on a panel) in a grid whose column widths or
+   row heights did not match its columns or rows stopped with an
+   `IndexError` or, with too many values, made the mismatch worse without a
+   word. Such ratios come from changing the number of columns or rows while
+   ratios are set (the open follow-up of B8.2), from a loaded file or from
+   the assistant's `set_field`; the panel's own editor always offers one
+   field per column. It is refused now, with the reason, in the dialog the
+   GUI already shows for a refused panel (`commands/ops._insert_line`; a
+   test in `test_panels.py`). *Learned:* the undo itself held up: every
+   command and operation went back to the state it came from. The model
+   still accepts such ratios, and the stress test would find other places
+   that assume they fit; *Add fit with residuals* has its own row insertion
+   that does not check them and silently keeps the mismatch (it does not
+   crash). Run the test with more sequences before each release
+   (`FIGSCRIBE_STRESS_EXAMPLES`, see `docs/testing.md`).
 3. **Fits that should fail politely**: fewer points than parameters, all NaN,
    exponential on negative data, start values that overflow. Each gives a
    message in the fit dialog, never a traceback.
@@ -1460,7 +1489,6 @@ answer in `docs/decisions.md` when the task is started.
 
 | Task | Question |
 |---|---|
-| B7.2 | Add `hypothesis` as a dev dependency for property-based tests? |
 | U6 | Gaps between panels in mm: new model fields in mm (schema bump), converted by the renderer and the code generator? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |

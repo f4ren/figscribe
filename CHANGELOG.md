@@ -14,6 +14,10 @@ release open in every later one.
   before and can be replaced by the mean of their neighbours. While a plot is
   reduced, leaving rows out and finding outliers are off. Saved files are
   drawn as before.
+- Fixed: *Add Panel* and *Duplicate* on a panel of a grid whose column
+  widths or row heights do not match its columns or rows (after the number
+  of columns was changed while widths were set, say) stopped with an error;
+  they now say what to put right.
 - Fixed: the fit dialog no longer fails on data near the limits of floating
   point (about 1e-300 or 1e300), says in words when a fit stops because the
   model is not finite for values it tried, and says which uncertainties

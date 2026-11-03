@@ -402,6 +402,12 @@ def _insert_line(figure: Figure, across: bool, at: int) -> list:
     )
     ratios = getattr(layout, ratios_name)
     update = {count: getattr(layout, count) + 1}
+    if ratios is not None and len(ratios) != getattr(layout, count):
+        what, unit = ("column widths", "columns") if across else ("row heights", "rows")
+        raise CommandError(
+            f"The {what} of the grid do not match its number of {unit}; "
+            f"give {getattr(layout, count)} values, or none, first."
+        )
     if ratios is not None:
         neighbour = ratios[at - 1] if at > 0 else ratios[0]
         update[ratios_name] = [*ratios[:at], neighbour, *ratios[at:]]

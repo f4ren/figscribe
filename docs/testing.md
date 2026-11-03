@@ -18,6 +18,15 @@ the GUI as a whole and need no upkeep when something is added:
   the rule holds, a change of the field leaves the figure as it was; once
   the setting it waits for is made, the same change shows. A new rule needs
   a case there, or the test fails.
+- **`tests/commands/test_undo_stress.py`** (B7.2, decision 0046) applies
+  random sequences of the program's commands and operations to the same
+  project, without Qt, with undo, redo and save in between, and checks that
+  every step can be undone and redone to the state it was made from and that
+  a refused step changes nothing. It is not `slow`: 40 sequences take a few
+  seconds, and on CI they are the same each time. Before a release run it
+  with more: `FIGSCRIBE_STRESS_EXAMPLES=2000 python -m pytest
+  tests/commands/test_undo_stress.py`. A failure comes with the shortest
+  sequence that shows it; turn that into an ordinary test before fixing it.
 - **`tests/gui/test_every_action.py`** triggers every menu action of the main
   window and every entry of the outline's context menus. Dialogs are answered
   in the test; no action may end in an error that figscribe calls a bug.

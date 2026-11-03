@@ -109,3 +109,22 @@ def test_an_inset_needs_a_panel_in_the_grid() -> None:
     issues = validate_references(_project(axes, stray))
     assert [i.object_id for i in issues] == [stray.id]
     assert "not a panel" in issues[0].message
+
+
+@pytest.mark.parametrize(
+    ("side", "layout"),
+    [
+        ("right", {"width_ratios": []}),
+        ("left", {"width_ratios": [1.0, 1.0]}),
+        ("below", {"height_ratios": [1.0, 1.0, 1.0]}),
+        ("above", {"height_ratios": []}),
+    ],
+)
+def test_a_panel_is_refused_where_the_ratios_do_not_fit_the_grid(side, layout) -> None:
+    # Found by the undo stress (B7.2): an IndexError, where a message is wanted.
+    axes = Axes(row=0, col=0)
+    project = _project(axes, **layout)
+    before = project.model_dump_json()
+    with pytest.raises(CommandError, match="widths|heights"):
+        History(project).push(add_panel(project, axes.id, side)[0])
+    assert project.model_dump_json() == before

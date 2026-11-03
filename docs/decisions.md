@@ -2078,3 +2078,60 @@ weights when an error is missing**, or **giving such a point the median of the
 other errors**: the first loses the meaning of χ²ᵣ for all points, the second
 invents an uncertainty. **`pandas.groupby` in the script**: no new dependency
 for a few lines.
+
+## 0046 — `hypothesis` for the tests of undo and redo
+
+**Date:** 2026-11-03
+**Status:** accepted
+
+### Context
+
+Roadmap B7.2: random sequences of commands, undone and redone, must give
+back the project as it was. Written by hand, that is a loop over a seeded
+random number generator. When it fails it hands over a sequence of thirty
+steps, and finding the two that matter is left to the person. The user
+decided (2026-11-03) to add `hypothesis`, after being told this and the
+alternative.
+
+### Decision
+
+- **`hypothesis` is a development dependency**: under `[dev]` in
+  `pyproject.toml`, with the version it was run at (6.170) as floor, as
+  decision 0044 asks. Nothing of it reaches a user: figscribe does not import
+  it.
+- **One state machine, `tests/commands/test_undo_stress.py`**, drives
+  `History` without Qt on the project of `tests/gui/everything.py`. Its rules
+  are the commands and the operations of the program, and the fields to set
+  are found from the model, so a new field is in the test without anyone
+  adding it. After every step the project must save and load to the same
+  text, ids stay unique, no panel lies outside its grid and fits and residuals
+  still have what they refer to; a refused step changes nothing; every undo
+  and redo leads to the state that was recorded when the step was made;
+  undoing everything gives the start, redoing everything the end. The same
+  test covers the second half of B7.2, "model roundtrips with generated
+  projects".
+- **Random at the desk, fixed on CI.** With the `CI` variable set (GitHub
+  sets it) the sequences are the same each time (`derandomize`), so that a
+  pull request is not stopped by a bug found by chance that it did not
+  bring. "The same" holds for one version of Hypothesis, of Python and of the
+  test: a new release of Hypothesis, or the other Python of the matrix, draws
+  other sequences, and a find may then show on any pull request. That is
+  accepted: a find is a bug of the program, with its shortest sequence
+  attached. Elsewhere the sequences are random and `.hypothesis/` (ignored by
+  git) remembers a failure. `FIGSCRIBE_STRESS_EXAMPLES` raises the number of
+  sequences (40 by default, a few seconds) for the run before a release, as
+  B7 asks.
+- **A bug it finds becomes an ordinary test** in `tests/commands/`, written
+  from the shrunk sequence, before the fix: the bug then stays covered even
+  when the fixed sequences of CI no longer reach it.
+- The CI job `minimum-versions` installs `hypothesis` with the other test
+  tools, and the test module skips without it (`importorskip`), as B6 does for
+  the optional parts.
+
+### Alternatives considered
+
+**Seeded random sequences of our own**: no new dependency, but no shrinking,
+no memory of failures, and a smaller range of sequences for the same time.
+**Not testing undo at random**: every command has an undo test, but the bugs
+that matter come from the order of commands (a redo after a new step, a
+macro that fails halfway) and are not found by testing each one alone.

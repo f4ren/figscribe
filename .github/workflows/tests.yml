@@ -112,7 +112,7 @@ jobs:
           python -m pip install uv
           uv venv .venv-min
           uv pip install --python .venv-min/bin/python --resolution lowest-direct -e .
-          uv pip install --python .venv-min/bin/python pytest pytest-qt pytest-xdist
+          uv pip install --python .venv-min/bin/python pytest pytest-qt pytest-xdist hypothesis
       - name: Run tests
         if: steps.changes.outputs.docs_only != 'true'
         run: .venv-min/bin/python -m pytest -q -n auto --dist worksteal -m "not slow" --ignore=tests/render/test_images.py
