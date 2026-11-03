@@ -15,7 +15,7 @@ from PySide6.QtCore import QObject, Signal
 from figscribe import __version__
 from figscribe.commands import Command, CommandError, History, find
 from figscribe.io import load_data
-from figscribe.io.files import rebase_path, resolve_path
+from figscribe.io.files import rebase_path, resolve_path, write_atomically
 from figscribe.io.refresh import source_state
 from figscribe.model import ArrayRef, ColumnRef, Figure, Project, dumps, loads
 from figscribe.render import DataProvider
@@ -75,7 +75,7 @@ class Document(QObject):
         written = self.project.model_copy(deep=True)
         for source in written.sources:
             source.path = moved[source.id]
-        target.write_text(dumps(written), encoding="utf-8")
+        write_atomically(target, dumps(written))
         for source in self.project.sources:
             if source.path != moved[source.id]:
                 source.path = moved[source.id]

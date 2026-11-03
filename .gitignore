@@ -28,3 +28,6 @@ tests/**/output/
 # Editors
 .idea/
 .vscode/
+
+# Backups of saved projects (figscribe keeps the version before the last save)
+*.figscribe.bak

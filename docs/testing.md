@@ -135,5 +135,11 @@ note the platform, the screen scaling and the theme in the pull request.
     *y:*. The panel may need a scroll on a small screen; fold what you do not use
     and select another plot of the same kind: it stays folded.
 
+23. **Saving**: save a project twice with a change between: next to it a
+    `.figscribe.bak` holds the version before the last save. Make the project
+    read-only in the file manager and press Ctrl+S: the window says it cannot
+    write the file, and nothing changes. Save onto a network share or a USB
+    stick and pull it out during the save, if you can: the saved file is whole.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

@@ -50,6 +50,11 @@ release open in every later one.
   the first save, is now stored relative to the project (`../data/scan.csv`),
   where it used to be stored by its whole path, so a project and its data can be
   moved or shared together; a file on another volume or drive keeps its whole path.
+- **Saving cannot destroy the saved project.** The project is written to a
+  temporary file and put in place when that is complete, so a full disk or a
+  lost share leaves the last saved version; that version also stays next to it
+  as `NAME.figscribe.bak`. A project made read-only is still refused. Project
+  files are written with the same line ends on every platform.
 - Fixed: `figscribe script` showed a Python traceback when it could not write
   the script (a folder that is not there, a read-only one); it now says so
   in one line.

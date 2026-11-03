@@ -81,3 +81,33 @@ def test_a_data_file_that_goes_while_the_figure_is_open_leaves_the_figure_as_dra
     window.export_to(tmp_path / "after.pdf")  # what is shown is what is exported
     assert (tmp_path / "after.pdf").stat().st_size > 0
     assert not window.messages
+
+
+def test_saving_over_a_read_only_project_is_told_and_changes_nothing(
+    window: MainWindow,
+) -> None:
+    import os
+    import stat
+
+    path = window.document.path
+    before = path.read_bytes()
+    path.chmod(stat.S_IREAD)
+    try:
+        if os.access(path, os.W_OK):
+            pytest.skip("this account may write to a read-only file")
+        assert not window.save()
+        _said_plainly(window)
+        assert path.read_bytes() == before
+    finally:
+        path.chmod(stat.S_IREAD | stat.S_IWRITE)
+
+
+def test_saving_twice_keeps_the_version_before_as_bak(window: MainWindow) -> None:
+    path = window.document.path
+    assert window.save()
+    first = path.read_bytes()
+    window.document.project.figures[0].name = "Renamed"
+    assert window.save()
+    bak = path.with_name(path.name + ".bak")
+    assert bak.read_bytes() == first
+    assert b"Renamed" in path.read_bytes()
