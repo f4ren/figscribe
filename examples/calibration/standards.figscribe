@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "9522c65c0c1d",
+      "format": "csv",
+      "path": "standards.csv",
+      "sha256": "98863208e219d67432eff73c1ca9b6c43f78386a9d5a55c6f56ebb9947afa612",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "c",
+        "dc",
+        "A",
+        "dA"
+      ],
+      "row_count": 24
+    }
+  ],
+  "figures": [
+    {
+      "id": "bf639c4042f2",
+      "name": "Calibration",
+      "width_mm": 100.0,
+      "height_mm": 105.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 2,
+        "cols": 1,
+        "share_x": "col",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": [
+          3.0,
+          1.0
+        ],
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "fcd789ca533f",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": null,
+            "unit": null,
+            "scale": "linear",
+            "limits": [
+              0.0,
+              10.5
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Absorbance",
+            "unit": null,
+            "scale": "linear",
+            "limits": [
+              0.0,
+              0.9
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper left",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "e4ff7139ad33",
+              "label": "linear range",
+              "visible": true,
+              "zorder": 0.5,
+              "alpha": 0.15,
+              "axis": "left",
+              "kind": "span",
+              "orientation": "vertical",
+              "start": 1.0,
+              "end": 7.0,
+              "color": "C2"
+            },
+            {
+              "id": "ab650fdd1a5f",
+              "label": "detection limit",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "refline",
+              "orientation": "horizontal",
+              "at": 0.045,
+              "color": "C3",
+              "linestyle": "--",
+              "linewidth": 1.0
+            },
+            {
+              "id": "863eafad969a",
+              "label": "standards",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "9522c65c0c1d",
+                "column": "c"
+              },
+              "y": {
+                "source": "9522c65c0c1d",
+                "column": "A"
+              },
+              "xerr": {
+                "source": "9522c65c0c1d",
+                "column": "dc"
+              },
+              "yerr": {
+                "source": "9522c65c0c1d",
+                "column": "dA"
+              },
+              "color": "C0",
+              "linestyle": "none",
+              "linewidth": 1.5,
+              "marker": "o",
+              "markersize": 3.5,
+              "capsize": 1.5,
+              "elinewidth": 1.0,
+              "band": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "13ffb883e8a5",
+              "label": "quadratic fit",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "fit",
+              "target": "863eafad969a",
+              "model": {
+                "kind": "predefined",
+                "name": "polynomial",
+                "degree": 2
+              },
+              "initial_values": {
+                "c0": 0.010225886760951949,
+                "c1": 0.09290895754315201,
+                "c2": -0.002197857322290658
+              },
+              "fixed": [],
+              "parameter_bounds": {},
+              "fit_range": null,
+              "extend_curve": false,
+              "outside_as_left_out": false,
+              "result": {
+                "parameters": {
+                  "c0": 0.010225886760951949,
+                  "c1": 0.09290895754315201,
+                  "c2": -0.002197857322290658
+                },
+                "uncertainties": {
+                  "c0": 0.006111978526577897,
+                  "c1": 0.002770712836066612,
+                  "c2": 0.0002630281737759352
+                },
+                "reduced_chi_square": 1.399114054615742,
+                "converged": true
+              },
+              "color": "C1",
+              "linestyle": "-",
+              "linewidth": 1.5
+            }
+          ]
+        },
+        {
+          "id": "c63760d7bc44",
+          "row": 1,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Concentration",
+            "unit": "mg/L",
+            "scale": "linear",
+            "limits": [
+              0.0,
+              10.5
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Residual",
+            "unit": null,
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "a75e8439788a",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "residual",
+              "target": "13ffb883e8a5",
+              "color": null,
+              "marker": "o",
+              "markersize": 4.0,
+              "linestyle": "none",
+              "linewidth": null,
+              "zero_line": true,
+              "zero_color": "0.6",
+              "zero_linewidth": 0.8,
+              "zero_linestyle": "--"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

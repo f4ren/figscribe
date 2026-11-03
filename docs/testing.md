@@ -49,7 +49,7 @@ changes what is seen. Use a real mouse or trackpad, on the platform at hand;
 note the platform, the screen scaling and the theme in the pull request.
 
 1. **Start**: open figscribe without a project. The start page shows; open
-   `examples/gaussian-scan/scan.figscribe` from it. The Dock or taskbar
+   the *A Gaussian scan* tile from its gallery and choose a folder: a copy opens. The Dock or taskbar
    shows figscribe's icon, not Python's.
 2. **Look**: the preview equals an exported PDF of the same figure, by eye.
    Labels are not cut off; the property panel has no clipped text. Every
@@ -134,6 +134,14 @@ note the platform, the screen scaling and the theme in the pull request.
     its settings appear under it. Turn on both conversions: the rows say *x:* and
     *y:*. The panel may need a scroll on a small screen; fold what you do not use
     and select another plot of the same kind: it stays folded.
+
+22. **The gallery**: on the start page the twelve example tiles show their
+    pictures, titles and two lines of text in three columns, with nothing cut
+    off, at the smallest window too (the page scrolls). Open three of them
+    (a plot with fits, the color map, the paper figure with two tabs): each
+    opens a copy in the folder chosen, looks like its picture, and a second
+    click on the same tile opens the copy again, with your changes. Cancel the
+    folder dialog: nothing opens.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

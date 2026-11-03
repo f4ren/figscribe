@@ -82,7 +82,16 @@ def _assert_same(project: Project, folder: Path, figure: Figure | None = None) -
     return script
 
 
-@pytest.mark.parametrize("path", EXAMPLES, ids=lambda p: p.parent.name)
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(
+            p, marks=[] if p.parent.name == "gaussian-scan" else pytest.mark.slow
+        )
+        for p in EXAMPLES
+    ],
+    ids=lambda p: p.parent.name,
+)
 def test_examples(path: Path, tmp_path: Path) -> None:
     folder = tmp_path / path.parent.name
     shutil.copytree(path.parent, folder)

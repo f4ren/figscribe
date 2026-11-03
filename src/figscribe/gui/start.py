@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QPainter, QPen
+from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -23,12 +23,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe.examples import Example, gallery
 from figscribe.gui import theme
 from figscribe.gui.widgets import label
 from figscribe.model import Figure
 from figscribe.templates import TEMPLATES, Template
 
 DOCS_URL = "https://github.com/f4ren/figscribe#readme"
+EXAMPLE_COLUMNS = 3
+EXAMPLE_PICTURE_PX = 280
+THUMBNAIL_RATIO = 340 / 520  # the pictures of the examples are all this shape
 
 
 class StartPage(QScrollArea):
@@ -37,7 +41,8 @@ class StartPage(QScrollArea):
     choose_file = Signal()
     open_project = Signal()
     template_chosen = Signal(str)
-    example_requested = Signal()
+    example_requested = Signal(str)
+    """The folder name of the example chosen."""
     assistant_requested = Signal()
     recent_chosen = Signal(Path)
     docs_requested = Signal()
@@ -51,6 +56,7 @@ class StartPage(QScrollArea):
         self.setAcceptDrops(True)
         self.recent_rows: list[QPushButton] = []
         self.template_tiles: dict[str, QPushButton] = {}
+        self.example_tiles: dict[str, QPushButton] = {}
 
         body = QWidget()
         body.setObjectName("startBody")
@@ -75,6 +81,7 @@ class StartPage(QScrollArea):
         self._content.addLayout(self._intro())
         self._content.addLayout(self._start_row())
         self._content.addLayout(self._templates())
+        self._content.addLayout(self._examples())
         self._recent_box = QVBoxLayout()
         self._recent_box.setSpacing(8)
         self._content.addLayout(self._recent_box)
@@ -152,11 +159,6 @@ class StartPage(QScrollArea):
         side = QVBoxLayout()
         side.setSpacing(10)
         side.addWidget(label("New to figscribe?", "sectionTitle"))
-        self.example_tile = _tile(
-            "Open the example", "A Gaussian scan with error bars", "errorbar"
-        )
-        self.example_tile.clicked.connect(self.example_requested)
-        side.addWidget(self.example_tile)
         assistant = _tile(
             "Describe it instead",
             "Connect an assistant and say what you want",
@@ -185,6 +187,28 @@ class StartPage(QScrollArea):
             )
             self.template_tiles[template.key] = tile
             grid.addWidget(tile, 0, i)
+        column.addLayout(grid)
+        return column
+
+    def _examples(self) -> QVBoxLayout:
+        column = QVBoxLayout()
+        column.setSpacing(12)
+        heading = QHBoxLayout()
+        heading.addWidget(label("Examples", "sectionHeading"))
+        caption = label(
+            "Open one and change its settings to see what figscribe can do", "caption"
+        )
+        heading.addWidget(caption, 1)
+        column.addLayout(heading)
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        for i, example in enumerate(gallery()):
+            tile = _example_tile(example)
+            tile.clicked.connect(
+                lambda _=False, name=example.folder: self.example_requested.emit(name)
+            )
+            self.example_tiles[example.folder] = tile
+            grid.addWidget(tile, i // EXAMPLE_COLUMNS, i % EXAMPLE_COLUMNS)
         column.addLayout(grid)
         return column
 
@@ -265,6 +289,41 @@ def _tile(title: str, detail: str, icon: str) -> QPushButton:
     text.addWidget(_passive(label(detail, "caption")))
     row.addLayout(text, 1)
     tile.setMinimumHeight(row.sizeHint().height())
+    return tile
+
+
+def _example_tile(example: Example) -> QPushButton:
+    tile = _button("", "tile")
+    tile.setToolTip(f"{example.title} · {example.detail}")
+    column = QVBoxLayout(tile)
+    column.setContentsMargins(12, 12, 12, 12)
+    column.setSpacing(4)
+    picture = QLabel()
+    picture.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    pixmap = QPixmap(str(example.thumbnail))
+    if not pixmap.isNull():
+        picture.setPixmap(
+            pixmap.scaledToWidth(
+                EXAMPLE_PICTURE_PX, Qt.TransformationMode.SmoothTransformation
+            )
+        )
+    column.addWidget(_passive(picture))
+    column.addSpacing(6)
+    column.addWidget(_passive(label(example.title, "tileTitle")))
+    detail = label(example.detail, "caption")
+    detail.setWordWrap(True)
+    detail.setMinimumHeight(detail.fontMetrics().height() * 2 + 4)
+    column.addWidget(_passive(detail))
+    column.addStretch(1)
+    tile.setMinimumHeight(
+        column.contentsMargins().top()
+        + EXAMPLE_PICTURE_PX * THUMBNAIL_RATIO
+        + 6
+        + 48
+        + detail.minimumHeight()
+        + column.contentsMargins().bottom()
+    )
+    tile.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     return tile
 
 

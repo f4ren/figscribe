@@ -59,6 +59,7 @@ def window(qtbot, tmp_path: Path) -> MainWindow:
     qtbot.addWidget(win)
     win.ask = lambda title, question: True
     win.examples_dir = tmp_path / "examples"
+    win.choose_example_folder = lambda: tmp_path / "examples"
     win.errors = []
     win.show_error = lambda title, exc: win.errors.append((title, str(exc)))
     return win
@@ -93,7 +94,7 @@ def test_a_layout_asks_before_replacing_changes(window: MainWindow) -> None:
 
 
 def test_the_example_is_copied_and_opened(window: MainWindow) -> None:
-    window.start.example_tile.click()
+    window.start.example_tiles["gaussian-scan"].click()
     copy = window.examples_dir / "gaussian-scan" / "scan.figscribe"
     assert window.document.path == copy
     assert window.document.data is not None and window.preview.error is None
@@ -102,8 +103,31 @@ def test_the_example_is_copied_and_opened(window: MainWindow) -> None:
     window.document.push(_rename(window.document, "Mine"))
     window.save()
     window.show_start()
-    window.start.example_tile.click()
+    window.start.example_tiles["gaussian-scan"].click()
     assert window.document.figure.name == "Mine"
+
+
+def test_every_example_has_a_tile_that_opens_a_copy(window: MainWindow) -> None:
+    from figscribe.examples import gallery
+
+    assert set(window.start.example_tiles) == {e.folder for e in gallery()}
+    assert len(window.start.example_tiles) >= 12
+    for example in gallery():
+        window.show_start()
+        window.start.example_tiles[example.folder].click()
+        copy = window.examples_dir / example.folder / example.project
+        assert window.document.path == copy and window.preview.error is None, (
+            example.folder
+        )
+        assert not window.document.data_states()  # its data came with it
+    assert window.errors == []
+
+
+def test_declining_the_folder_opens_nothing(window: MainWindow) -> None:
+    window.choose_example_folder = lambda: None
+    window.start.example_tiles["noisy-sensor"].click()
+    assert window.on_start_page
+    assert not (window.examples_dir / "noisy-sensor").exists()
 
 
 def test_back_returns_to_the_open_project(window: MainWindow, example: Path) -> None:

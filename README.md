@@ -70,7 +70,7 @@ To add an extra later, install again with `--force`. To update:
 
 ## Getting started
 
-Start `figscribe`. The start page offers three ways in:
+Start `figscribe`. The start page offers four ways in:
 
 - **Open a data file** (CSV, `.npy`, `.npz`). The import dialog detects
   delimiter, decimal comma, header and unit rows, shows a preview and suggests
@@ -78,7 +78,10 @@ Start `figscribe`. The start page offers three ways in:
 - **Pick a layout**: single column (85 × 60 mm), double column
   (175 × 70 mm), data with fit and residuals, two panels side by side, or a
   16:9 slide.
-- **Open the example**, a Gaussian scan with error bars.
+- **Open an example** from the gallery: a Gaussian scan, a noisy sensor
+  with its means over the raw line, an RC discharge with fit and residuals,
+  a resonance, a color map and more, twelve in all. Each is a copy in a
+  folder you choose, with its data, ready to change.
 
 Then click anything in the figure or in the contents list to select it, and
 change it in the property panel on the right. *Insert* adds data, plots,

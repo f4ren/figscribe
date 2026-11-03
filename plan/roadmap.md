@@ -42,7 +42,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   and item 4 (files; only the Windows network share and other drive are left
   to the manual checklist). Open: item 5 the GUI at 1024 × 700, 150 % and
   200 % scaling, dark mode, keyboard only; item 6 every bench case through
-  the equivalence test (the project in `examples/` already is).
+  the equivalence test (the projects in `examples/` already are).
 - **An open bug from F12**: the script of a reduced plot whose x range keeps
   no row stops with an error (`group.max()` of an empty array), where B7.1
   asks that nothing crashes; the problem list warns about the range before.
@@ -1775,8 +1775,13 @@ from the example.
 **0.2.0 released** (2026-10-29, PR #93 and #94): several figures, units and a
 range per plot, the Allan deviation, error bands, a search and a command
 palette for settings, editing where it is drawn, and the everyday actions.
-Still open from R4: item 2 (installers), the screenshots of item 3, and
-item 4 (`examples/` holds one project, the Gaussian scan).
+Still open from R4: item 2 (installers) and the screenshots of item 3.
+
+**R4.4 done** (decision 0053): `examples/` holds twelve projects of synthetic,
+fixed-seed data, made by `examples/make.py`, each with a thumbnail, listed in
+`examples/index.json` and offered as tiles on the start page, which copies the
+chosen one into a folder. Every one is in the equivalence test. The series of
+spectra waits for the waterfall of F4.6.
 
 ### R5 The assistant: measure models (carried over from the brief) — M
 

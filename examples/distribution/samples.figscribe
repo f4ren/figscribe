@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "8e7f34058d4e",
+      "format": "csv",
+      "path": "samples.csv",
+      "sha256": "f03e56e171107c1ddc060dc5fc1dd86a66e67845a7aeade3ed0940749be1489a",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "first",
+        "second"
+      ],
+      "row_count": 1500
+    }
+  ],
+  "figures": [
+    {
+      "id": "407a8dd7126c",
+      "name": "Batches",
+      "width_mm": 95.0,
+      "height_mm": 65.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "05ebbeb4b34e",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Diameter",
+            "unit": "mm",
+            "scale": "linear",
+            "limits": [
+              0.0,
+              12.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Density",
+            "unit": "1/mm",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper right",
+            "position": null,
+            "frame": false,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "c2b1d8c96d55",
+              "label": "batch A",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.55,
+              "axis": "left",
+              "kind": "histogram",
+              "values": {
+                "source": "8e7f34058d4e",
+                "column": "first"
+              },
+              "bins": 36,
+              "density": true,
+              "histtype": "bar",
+              "color": "C0",
+              "x_conversion": null,
+              "x_range": null
+            },
+            {
+              "id": "4c99fd83a34c",
+              "label": "batch B",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.55,
+              "axis": "left",
+              "kind": "histogram",
+              "values": {
+                "source": "8e7f34058d4e",
+                "column": "second"
+              },
+              "bins": 36,
+              "density": true,
+              "histtype": "bar",
+              "color": "C1",
+              "x_conversion": null,
+              "x_range": null
+            },
+            {
+              "id": "ac72d11d588a",
+              "label": "A: mean ± σ",
+              "visible": true,
+              "zorder": 0.5,
+              "alpha": 0.12,
+              "axis": "left",
+              "kind": "span",
+              "orientation": "vertical",
+              "start": 4.0,
+              "end": 6.0,
+              "color": "C0"
+            },
+            {
+              "id": "4db1333acff2",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "refline",
+              "orientation": "vertical",
+              "at": 5.0,
+              "color": "C0",
+              "linestyle": "-",
+              "linewidth": 1.2
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "4c0777ff08ec",
+      "format": "csv",
+      "path": "oscillators.csv",
+      "sha256": "0c957204128c44976bba023cfb96f6260a4c3cb591230f3eac211b6c8e866706",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "cycle",
+        "y_a",
+        "x_b"
+      ],
+      "row_count": 2000
+    }
+  ],
+  "figures": [
+    {
+      "id": "0ffabfb9927c",
+      "name": "Stability",
+      "width_mm": 95.0,
+      "height_mm": 70.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "d93d5a7339aa",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Averaging time τ",
+            "unit": "h",
+            "scale": "log",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Allan deviation σ_y(τ)",
+            "unit": null,
+            "scale": "log",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper right",
+            "position": null,
+            "frame": false,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": true,
+          "grid_axis": "both",
+          "grid_which": "both",
+          "grid_color": "0.9",
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "a135c8b5a99c",
+              "label": "oscillator A (fractional frequency)",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "allan",
+              "values": {
+                "source": "4c0777ff08ec",
+                "column": "y_a"
+              },
+              "data_type": "frequency",
+              "sample_interval": 1.0,
+              "time": {
+                "source": "4c0777ff08ec",
+                "column": "cycle"
+              },
+              "taus": "octave",
+              "error_bars": true,
+              "color": "C0",
+              "marker": "o",
+              "markersize": 4.0,
+              "linestyle": "-",
+              "linewidth": 1.5,
+              "x_conversion": {
+                "factor": 1.0,
+                "formula": "x * 2.88 / 3600",
+                "from_start": false,
+                "unit": "h"
+              },
+              "x_range": null
+            },
+            {
+              "id": "77e2c353f837",
+              "label": "oscillator B (phase)",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "allan",
+              "values": {
+                "source": "4c0777ff08ec",
+                "column": "x_b"
+              },
+              "data_type": "phase",
+              "sample_interval": 1.0,
+              "time": {
+                "source": "4c0777ff08ec",
+                "column": "cycle"
+              },
+              "taus": "octave",
+              "error_bars": true,
+              "color": "C3",
+              "marker": "s",
+              "markersize": 4.0,
+              "linestyle": "-",
+              "linewidth": 1.5,
+              "x_conversion": {
+                "factor": 1.0,
+                "formula": "x * 2.88 / 3600",
+                "from_start": false,
+                "unit": "h"
+              },
+              "x_range": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

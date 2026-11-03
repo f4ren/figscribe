@@ -63,7 +63,7 @@ from figscribe.commands import (
     same_range,
 )
 from figscribe.commands.core import noun, walk
-from figscribe.examples import bundled_example
+from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import clipboard, markings, reveal, theme
 from figscribe.gui.about import about_text
@@ -348,18 +348,31 @@ class MainWindow(QMainWindow):
         self.set_document(document)
         self._add_recent(document.path)
 
-    def open_example(self) -> None:
-        """Open a copy of the example project that can be changed and saved."""
-        if not self.confirm_discard():
+    def choose_example_folder(self) -> Path | None:
+        """Where the user wants the example copied to; None if they decline."""
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Copy the example to", str(self.examples_dir)
+        )
+        return Path(chosen) if chosen else None
+
+    def open_example(self, name: str = "gaussian-scan") -> None:
+        """Copy the example `name` into a folder the user chooses and open the
+        copy, which can be changed and saved; the shipped one is never edited."""
+        example = next((e for e in gallery() if e.folder == name), None)
+        if example is None or not self.confirm_discard():
             return
-        target = self.examples_dir / "gaussian-scan"
-        if not (target / "scan.figscribe").is_file():
+        folder = self.choose_example_folder()
+        if folder is None:
+            return
+        self.examples_dir = folder
+        target = folder / example.folder
+        if not (target / example.project).is_file():
             try:
-                shutil.copytree(bundled_example(), target, dirs_exist_ok=True)
+                shutil.copytree(example.path, target, dirs_exist_ok=True)
             except OSError as exc:
                 self.show_error("Cannot copy the example", exc)
                 return
-        self.open_path(target / "scan.figscribe")
+        self.open_path(target / example.project)
 
     # --- start page -----------------------------------------------------------
 

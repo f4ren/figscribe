@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "a687cd9bd70e",
+      "format": "csv",
+      "path": "discharge.csv",
+      "sha256": "5c5d283f5e8cb8d09812060bbd3183b782e8e4bdc3d480e9f9172e3cd9baa642",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "t",
+        "U",
+        "dU"
+      ],
+      "row_count": 60
+    }
+  ],
+  "figures": [
+    {
+      "id": "8b93775fa2c9",
+      "name": "Discharge",
+      "width_mm": 100.0,
+      "height_mm": 100.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 2,
+        "cols": 1,
+        "share_x": "col",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": [
+          3.0,
+          1.0
+        ],
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "9093b4125022",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": null,
+            "unit": null,
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Voltage",
+            "unit": "V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper right",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "1331b14b9dc7",
+              "label": "capacitor voltage",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "a687cd9bd70e",
+                "column": "t"
+              },
+              "y": {
+                "source": "a687cd9bd70e",
+                "column": "U"
+              },
+              "xerr": null,
+              "yerr": {
+                "source": "a687cd9bd70e",
+                "column": "dU"
+              },
+              "color": "C3",
+              "linestyle": "none",
+              "linewidth": 1.5,
+              "marker": "s",
+              "markersize": 3.5,
+              "capsize": 2.0,
+              "elinewidth": 1.0,
+              "band": null,
+              "left_out": [
+                21
+              ],
+              "left_out_color": "0.55",
+              "left_out_marker": "x",
+              "left_out_linestyle": "same",
+              "left_out_note": "row 22: a switching spike",
+              "x_conversion": {
+                "factor": 1000.0,
+                "formula": null,
+                "from_start": false,
+                "unit": "ms"
+              },
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "fc052d67441b",
+              "label": "exponential, offset held at 0",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "fit",
+              "target": "1331b14b9dc7",
+              "model": {
+                "kind": "predefined",
+                "name": "exponential",
+                "degree": null
+              },
+              "initial_values": {
+                "a": 4.0,
+                "tau": 1.0,
+                "c": 0.0
+              },
+              "fixed": [
+                "c"
+              ],
+              "parameter_bounds": {},
+              "fit_range": [
+                0.2,
+                5.0
+              ],
+              "extend_curve": false,
+              "outside_as_left_out": false,
+              "result": {
+                "parameters": {
+                  "a": 4.200754408970981,
+                  "tau": 1.200702312357741,
+                  "c": 0.0
+                },
+                "uncertainties": {
+                  "a": 0.03809406822343983,
+                  "tau": 0.01314963838833632,
+                  "c": 0.0
+                },
+                "reduced_chi_square": 1.3737778867890607,
+                "converged": true
+              },
+              "color": "C0",
+              "linestyle": "-",
+              "linewidth": 1.5
+            }
+          ]
+        },
+        {
+          "id": "9d3d8b3ad2eb",
+          "row": 1,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Time",
+            "unit": "ms",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Residual",
+            "unit": "V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "297f9140f370",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "residual",
+              "target": "fc052d67441b",
+              "color": "C0",
+              "marker": "o",
+              "markersize": 4.0,
+              "linestyle": "none",
+              "linewidth": null,
+              "zero_line": true,
+              "zero_color": "C3",
+              "zero_linewidth": 1.2,
+              "zero_linestyle": ":"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
