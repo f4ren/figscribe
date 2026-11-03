@@ -216,7 +216,14 @@ def panel(qtbot, document: Document) -> PropertyPanel:
 
 def test_fields_are_grouped_in_sections(panel: PropertyPanel, document) -> None:
     document.select(document.figure.axes[0].artists[0].id)
-    assert list(panel.sections) == ["Data", "Look", "Legend", "More"]
+    assert list(panel.sections) == [
+        "Label and data",
+        "Units and rows",
+        "Look",
+        "Error bars",
+        "Left-out points",
+        "More",
+    ]
     assert not panel.sections["Look"].body.isHidden()
     assert panel.sections["More"].body.isHidden()
     assert panel._kicker.text() == "ERROR BAR PLOT"

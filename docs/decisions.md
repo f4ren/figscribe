@@ -2400,3 +2400,55 @@ same doubling. **Show values in under *Scale*** (it divides the numbers by a
 power of ten): kept with the unit, which it also changes.
 
 The older decisions (0006, 0025) name the old sections; they are not rewritten.
+
+## 0051 — The settings of a line, points and error bar plot by what they are for
+
+**Date:** 2026-11-05
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the fourth element, for the three plots that draw data against x
+and y. They had *Data* (the columns, the unit of each axis, the range and the
+box for fewer points, up to 20 rows), *Look*, *Legend* (one field), a section
+of its own for each switched-on box, and *More*, which held the marker size,
+the line widths, the box for an error band, the look of the left-out points,
+*Visible* and the drawing order. The advisor reviewed it; the user chose the
+rest.
+
+### Decision
+
+Top to bottom:
+- **Label and data**, open: *Legend entry* (it was *Label*, which in the axis
+  form means the axis label), the y axis, x, y, and for error bars the x and y
+  errors.
+- **Units and rows**, open (the user's choice): *x in* and *y in* with their
+  rows, *Use only x* and the box *Fewer points* with its settings right under
+  it. The rows of the two conversions say *x:* and *y:* (the user's choice),
+  as both can be on.
+- **Look**, open: color, marker, *Marker size*, line style, *Line width* (for
+  points: color, edge color, marker, marker size), so that a pair is together.
+- **Error bars** (only for them), open: cap size, *Error bar width* and the box
+  *Error band* with its color and opacity under it (*Band color*, *Band
+  opacity*).
+- **Left-out points**, folded: the look of the rows left out, which only counts
+  once rows are.
+- **More**, folded, three rarely used settings: opacity, *Visible* (the outline
+  has the eye) and the drawing order (the context menu has *Bring to front*).
+
+The names are the user's. The panel opens longer than it did, about 1000
+instead of 770 pixels, since the marker size and the line widths are in view.
+
+The code: the sections of a plot are kept per kind (`PLOT_SECTIONS`), because
+`SECTIONS` is by field name for every kind and would have moved histograms, the
+Allan deviation, fits and notes before their turn; `BASIC` lists every shown
+field of the three kinds in order (`IN_THE_ORDER_OF_BASIC`), and the boxes
+`band` and `reduction` show their settings under them (`INLINE`). A test holds
+the sections of the other kinds as they are.
+
+### Alternatives considered
+
+**Keeping *Legend* for the label**: a section of one field. **A section of its
+own for *Fewer points* settings**: far from its box. **Units and rows folded**:
+the user uses them often. **Left-out points in *More***: five fields that only
+count once rows are left out.

@@ -317,9 +317,13 @@ ORDER = [
     "Ticks and frame",
     "Widths and lengths",
     "Title and axes",
+    "Label and data",
+    "Units and rows",
     "File",
     "Reading",
     "Look",
+    "Error bars",
+    "Left-out points",
     "Style",
     "Grid",
     "Legend",
@@ -328,9 +332,66 @@ ORDER = [
     "Export",
 ]
 BASIC = {
-    "LinePlot": ("color", "marker", "linestyle", "linewidth", "label"),
-    "ScatterPlot": ("color", "marker", "size", "edgecolor", "label"),
-    "ErrorbarPlot": ("color", "marker", "linestyle", "capsize", "label"),
+    "LinePlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_linestyle",
+        "left_out_note",
+    ),
+    "ScatterPlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "edgecolor",
+        "marker",
+        "size",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_note",
+    ),
+    "ErrorbarPlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "xerr",
+        "yerr",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "capsize",
+        "elinewidth",
+        "band",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_linestyle",
+        "left_out_note",
+    ),
     "Histogram": ("color", "histtype", "density", "label"),
     "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
     "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
@@ -383,6 +444,7 @@ COLLAPSED = {
     "Widths and lengths",
     "Place in layout",
     "Place in panel",
+    "Left-out points",
 }
 """Sections that start folded: rarely needed, but always there. Every section
 folds with a click on its title, and stays as the user left it."""
@@ -682,6 +744,11 @@ FORMULA = "a formula"
 
 CAPTIONS = {
     ("PanelLabels", "fontsize"): "Letter size (pt)",
+    ("LinePlot", "label"): "Legend entry",
+    ("ScatterPlot", "label"): "Legend entry",
+    ("ErrorbarPlot", "label"): "Legend entry",
+    ("ErrorBand", "color"): "Band color",
+    ("ErrorBand", "alpha"): "Band opacity",
     ("Legend", "ncols"): "Columns of entries",
     ("Legend", "position"): "Position (dragged)",
     ("Histogram", "x_range"): "Use only values",
@@ -729,11 +796,51 @@ AXES_TITLE = "Title and axes"
 """The panel's first section: its title, then its axes with the box for a right
 y axis."""
 
-IN_THE_ORDER_OF_BASIC = {"Figure"}
+PLOT_KINDS = ("LinePlot", "ScatterPlot", "ErrorbarPlot")
+"""The kinds of plot whose settings follow `PLOT_SECTIONS` (decision 0051)."""
+
+PLOT_SECTIONS = {
+    "label": "Label and data",
+    "axis": "Label and data",
+    "x": "Label and data",
+    "y": "Label and data",
+    "xerr": "Label and data",
+    "yerr": "Label and data",
+    "x_conversion": "Units and rows",
+    "y_conversion": "Units and rows",
+    "x_range": "Units and rows",
+    "reduction": "Units and rows",
+    "color": "Look",
+    "edgecolor": "Look",
+    "marker": "Look",
+    "markersize": "Look",
+    "size": "Look",
+    "linestyle": "Look",
+    "linewidth": "Look",
+    "capsize": "Error bars",
+    "elinewidth": "Error bars",
+    "band": "Error bars",
+    "left_out_color": "Left-out points",
+    "left_out_marker": "Left-out points",
+    "left_out_linestyle": "Left-out points",
+    "left_out_note": "Left-out points",
+}
+"""Where the settings of a line, points or error bar plot are shown. Other
+kinds of plot keep `SECTIONS` until their turn."""
+
+
+def section_of(obj: BaseModel, name: str, fallback: str) -> str:
+    """The section a field of `obj` is shown in."""
+    if type(obj).__name__ in PLOT_KINDS and name in PLOT_SECTIONS:
+        return PLOT_SECTIONS[name]
+    return SECTIONS.get(name, fallback)
+
+
+IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS}
 """Kinds of object whose settings are shown in the order of `BASIC`, not of the
 model, so that what belongs together is next to each other."""
 
-INLINE = {"panel_labels"}
+INLINE = {"panel_labels", "band", "reduction"}
 """Optional parts whose settings follow their check box in its own section
 instead of having a section of their own."""
 
@@ -1269,7 +1376,7 @@ class PropertyPanel(QScrollArea):
                 continue
             if spec is None and name not in READ_ONLY:
                 continue
-            groups.setdefault(SECTIONS.get(name, fallback), []).append(name)
+            groups.setdefault(section_of(obj, name, fallback), []).append(name)
         if "Look" in groups:
             groups["Look"].sort(key=lambda n: LOOK.index(n) if n in LOOK else 99)
         _basic_first(groups, BASIC.get(type(obj).__name__))
@@ -1351,6 +1458,9 @@ class PropertyPanel(QScrollArea):
         editor.show(value)
         self.editors[path] = editor
         text = CAPTIONS.get((type(obj).__name__, name))
+        if len(path) == 2 and path[0] in CONVERSIONS:
+            # Under "x in" and "y in" both can be on: say which one a row is of.
+            text = f"{path[0][0]}: {field_name(name)}"
         caption = _caption(text) if text else _form_label(name)
         tip = tip_for(type(obj), name)
         self._captions[path] = (caption, tip)

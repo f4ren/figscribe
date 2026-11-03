@@ -24,6 +24,11 @@ release open in every later one.
   distance), *Scale* (type, range, the linear zone of a symmetric log axis and
   the size of the numbers) and *Ticks* (major and minor, the row under the major
   ticks says *Distance* or *Values*). A section folded on an axis stays folded.
+- **The settings of a line, points or error bar plot are arranged by what they
+  are for:** *Label and data* (the legend entry is *Legend entry*), *Units and
+  rows* (with *Fewer points* right under its box), *Look* (marker size and line
+  width next to their marker and line), *Error bars* (the band under its box) and
+  the folded *Left-out points* and *More*.
 - **A formula for a plot's units.** *x in* and *y in* offer "a formula" next to
   "another factor": `x / 60 - 273.15`, `(x - 32) / 1.8`. It is written in `x`
   and numbers and must be linear and rise with x, so that error bars, axis,

@@ -126,5 +126,13 @@ note the platform, the screen scaling and the theme in the pull request.
     type: *Linear within ±* appears. Fold *Scale*, select the figure and the axis
     again: it stays folded.
 
+21. **A plot's settings**: select error bars, a line and points in turn. The
+    sections come as *Label and data*, *Units and rows*, *Look* (an error bar
+    plot also *Error bars*), the folded *Left-out points* and *More*. Tick *Error
+    band*: its color and opacity appear right under the box; tick *Fewer points*:
+    its settings appear under it. Turn on both conversions: the rows say *x:* and
+    *y:*. The panel may need a scroll on a small screen; fold what you do not use
+    and select another plot of the same kind: it stays folded.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.
