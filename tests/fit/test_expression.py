@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 
 import numpy as np
@@ -122,3 +123,70 @@ def test_numpy_source_runs_as_plain_numpy() -> None:
 )
 def test_free_names_are_the_parameters(source, expected) -> None:
     assert free_names(source) == expected
+
+
+# --- a formula that is linear in x (F13) -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("source", "slope", "offset"),
+    [
+        ("x", 1.0, 0.0),
+        ("x / 7.5 - 273.15", 1 / 7.5, -273.15),
+        ("(x - 32) / 1.8", 1 / 1.8, -32 / 1.8),
+        ("2 * pi * x", 2 * math.pi, 0.0),
+        ("x * 1e3", 1000.0, 0.0),
+        ("1 + x", 1.0, 1.0),
+        ("x / 3600 + 1e6", 1 / 3600, 1e6),
+        ("--x", 1.0, 0.0),
+        ("exp(2) * x", math.exp(2), 0.0),
+        ("(x + 5) * 2 - 1", 2.0, 9.0),
+        ("x ** 1", 1.0, 0.0),
+    ],
+)
+def test_a_formula_linear_in_x_has_a_slope_and_an_offset(source, slope, offset) -> None:
+    from figscribe.fit.expression import affine
+
+    a, b = affine(source)
+    assert a == pytest.approx(slope, rel=1e-12) and b == pytest.approx(
+        offset, rel=1e-12
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("x ** 2", "not linear"),
+        ("log(x)", "not linear"),
+        ("1 / x", "divide by a number"),
+        ("x * x / x", "not linear"),
+        ("abs(x)", "not linear"),
+        ("sqrt(x ** 2)", "not linear"),
+        ("-x", "increase"),
+        ("5", "increase"),
+        ("0 * x", "increase"),
+        ("t / 60", "write the value as x"),
+        ("sin", "function"),
+        ("x / 0", "zero"),
+        ("x / (x - 1)", "divide by a number"),
+        ("2 ** x", "not linear"),
+        ("", "empty"),
+        ("x +", "syntax"),
+    ],
+)
+def test_a_formula_that_is_not_linear_is_refused_in_words(source, message) -> None:
+    from figscribe.fit.expression import ExpressionError, affine
+
+    with pytest.raises(ExpressionError, match=message):
+        affine(source)
+
+
+def test_the_formula_as_numpy_code_puts_a_column_in_the_place_of_x() -> None:
+    from figscribe.fit.expression import numpy_source
+
+    assert numpy_source("x / 7.5 - 273.15", "T") == "T / 7.5 - 273.15"
+    assert (
+        numpy_source("(x - 32) / 1.8", "t - np.nanmin(t)")
+        == "(t - np.nanmin(t) - 32) / 1.8"
+    )
+    assert numpy_source("exp(x)") == "np.exp(x)"  # as before

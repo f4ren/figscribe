@@ -119,8 +119,9 @@ script.
   is: the points are drawn apart, in light grey or a color and marker of
   your choice, and the script leaves out the same rows, with the reason.
 - Show a plot's values in other units, e.g. seconds as hours since the
-  start of the measurement or volts as mV, and draw it from part of its data
-  only. The axis, its marks and the fits follow in the same step.
+  start of the measurement or volts as mV, or by a formula such as
+  `x / 60 - 273.15`, and draw it from part of its data only. The axis, its
+  marks and the fits follow in the same step.
 - Draw fewer points than the file has: the mean or median of every *n* rows,
   every *n*-th row, or the mean over intervals of x for unevenly sampled
   data. An averaged point gets its standard error as error bar (propagated

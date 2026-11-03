@@ -98,7 +98,13 @@ def build(folder: Path) -> Path:
                 y_conversion=Conversion(factor=0.5),
                 x_range=(0.5, 3.5),
             ),
-            ScatterPlot(x=col("t"), y=col("U"), label="points", left_out=[7]),
+            ScatterPlot(
+                x=col("t"),
+                y=col("U"),
+                label="points",
+                left_out=[7],
+                y_conversion=Conversion(formula="x * 2 - 1", unit="V"),
+            ),
             LinePlot(x=col("t"), y=col("T"), axis="right", label="temperature"),
             Annotation(text="peak", position=(2.0, 5.0), arrow_to=(2.5, 6.0)),
             ErrorbarPlot(

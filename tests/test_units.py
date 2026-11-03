@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from figscribe.commands import History
+from figscribe.convert import plot_data
 from figscribe.fit import FitError, refit
 from figscribe.model import (
     Annotation,
@@ -198,3 +199,65 @@ def test_an_allan_deviation_needs_an_unbroken_range() -> None:
     assert any("needs an unbroken series" in p for p in _problems(late))
     nothing = AllanDeviationPlot(values=col("gap"), time=col("t"), x_range=(9e9, 1e10))
     assert any("no sample lies within" in p for p in _problems(nothing))
+
+
+# --- a formula for the units (F13, decision 0047) ---------------------------------
+
+KELVIN_TO_CELSIUS = Conversion(formula="x - 273.15", unit="°C")
+
+
+def test_a_formula_moves_the_axis_and_everything_on_it_by_its_offset() -> None:
+    project = _project()
+    before = dumps(project)
+    history = History(project)
+    plot = _parts(project)[1][0]
+    history.push(set_conversion(project, plot.id, "x", KELVIN_TO_CELSIUS, data))
+
+    axes, (plot, fit, line, span, note) = _parts(project)
+    assert history.undo_text == "Show x in °C"
+    assert plot.x_conversion == KELVIN_TO_CELSIUS
+    assert plot.x_range == pytest.approx((3600 - 273.15, 12000 - 273.15))
+    assert fit.fit_range == pytest.approx((4000 - 273.15, 11000 - 273.15))
+    assert axes.x.unit == "°C"
+    assert axes.x.limits == pytest.approx((1000 - 273.15, 15400 - 273.15))
+    assert axes.x.major_step == pytest.approx(3600.0)  # a width is not shifted
+    assert line.at == pytest.approx(8200 - 273.15)
+    assert (span.start, span.end) == pytest.approx((4600 - 273.15, 8200 - 273.15))
+    assert note.position == pytest.approx((8200 - 273.15, 1.0))
+
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_changing_from_one_formula_to_another_maps_through_the_raw_values() -> None:
+    project = _project()
+    history = History(project)
+    plot = _parts(project)[1][0]
+    history.push(set_conversion(project, plot.id, "x", KELVIN_TO_CELSIUS, data))
+    history.push(
+        set_conversion(
+            project, plot.id, "x", Conversion(formula="(x - 32) / 1.8"), data
+        )
+    )
+    axes, (plot, fit, line, *_) = _parts(project)
+    assert axes.x.limits == pytest.approx(((1000 - 32) / 1.8, (15400 - 32) / 1.8))
+    assert axes.x.major_step == pytest.approx(3600 / 1.8)
+    assert line.at == pytest.approx((8200 - 32) / 1.8)
+
+    history.push(set_conversion(project, plot.id, "x", None, data))
+    axes, (plot, *_) = _parts(project)
+    assert axes.x.limits == pytest.approx((1000.0, 15400.0))
+    assert plot.x_range == pytest.approx((3600.0, 12000.0))
+
+
+def test_a_formula_on_y_scales_the_errors_but_does_not_shift_them() -> None:
+    project = _project()
+    plot = _parts(project)[1][0]
+    History(project).push(
+        set_conversion(
+            project, plot.id, "y", Conversion(formula="x * 1000 + 5", unit="mV"), data
+        )
+    )
+    shown = plot_data(_parts(project)[1][0], data)
+    assert np.allclose(shown.y, COLUMNS["U"] * 1000 + 5)
+    assert np.allclose(shown.yerr, 50.0)  # 0.05 V

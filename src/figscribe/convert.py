@@ -8,6 +8,7 @@ for bit; the pixel equivalence test holds them to it.
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -20,42 +21,76 @@ WHOLE = 1e-9
 1 / (1 / 3600) is 3600.0000000000005 in floating point."""
 
 
-def operation(factor: float) -> tuple[str, float] | None:
+def operation(factor: float, short: bool = False) -> tuple[str, float] | None:
     """How a factor is applied: ("/", 3600) when its inverse is a whole
     number above 1, as a person would write it, else ("*", factor); None
-    for 1, which changes nothing."""
+    for 1, which changes nothing. With `short` (the slope of a formula, which
+    is never exactly what was typed), the inverse may also be a short decimal,
+    7.5 for a slope of 1 / 7.5."""
     if factor == 1.0:
         return None
     inverse = 1.0 / factor
     whole = round(inverse)
     if whole > 1 and abs(inverse - whole) <= WHOLE * whole:
         return ("/", whole)
+    if short and inverse > 1:
+        decimal = float(f"{inverse:.6g}")
+        if abs(inverse - decimal) <= WHOLE * decimal:
+            return ("/", decimal)
     return ("*", factor)
 
 
-def _apply(values: np.ndarray, factor: float) -> np.ndarray:
-    how = operation(factor)
+def _apply(values: np.ndarray, factor: float, short: bool = False) -> np.ndarray:
+    how = operation(factor, short)
     if how is None:
         return values
     op, number = how
     return values / number if op == "/" else values * number
 
 
+@functools.lru_cache(maxsize=256)
+def _linear(formula: str) -> tuple[float, float]:
+    from figscribe.fit.expression import affine
+
+    return affine(formula)
+
+
+@functools.lru_cache(maxsize=256)
+def _formula(formula: str) -> Callable[[np.ndarray], np.ndarray]:
+    from figscribe.fit.expression import compile_expression
+
+    return compile_expression(formula, ())
+
+
+def linear(conversion: Conversion | None) -> tuple[float, float]:
+    """The slope and the offset of a conversion: shown = slope × (value −
+    start) + offset. The factor and 0 without a formula."""
+    if conversion is None:
+        return 1.0, 0.0
+    if conversion.formula is not None:
+        return _linear(conversion.formula)
+    return conversion.factor, 0.0
+
+
 def convert(values, conversion: Conversion | None) -> np.ndarray:
-    """`values` as shown: (value − start) × factor, the start being the
-    smallest value (NaN skipped) when counting from the start."""
+    """`values` as shown: (value − start) × factor, or the formula of that, the
+    start being the smallest value (NaN skipped) when counting from the start."""
     values = np.asarray(values, dtype=float)
     if conversion is None:
         return values
     if conversion.from_start:
         values = values - start(values, conversion)
+    if conversion.formula is not None:
+        return _formula(conversion.formula)(values)
     return _apply(values, conversion.factor)
 
 
 def scale(errors, conversion: Conversion | None) -> np.ndarray:
     """Errors or a spread as shown: scaled with their axis, never shifted."""
     errors = np.asarray(errors, dtype=float)
-    return errors if conversion is None else _apply(errors, conversion.factor)
+    if conversion is None:
+        return errors
+    return _apply(errors, linear(conversion)[0], conversion.formula is not None)
 
 
 def start(values, conversion: Conversion | None) -> float:
@@ -70,6 +105,11 @@ def start(values, conversion: Conversion | None) -> float:
 def expression(name: str, conversion: Conversion) -> str:
     """The script's expression for the column `name` as shown, e.g.
     "(t - np.nanmin(t)) / 3600"; the same operations as `convert`."""
+    if conversion.formula is not None:
+        from figscribe.fit.expression import numpy_source
+
+        shifted = f"{name} - np.nanmin({name})" if conversion.from_start else name
+        return numpy_source(conversion.formula, shifted)
     if not conversion.from_start:
         return scaled(name, conversion.factor)
     shifted = f"{name} - np.nanmin({name})"
@@ -78,10 +118,16 @@ def expression(name: str, conversion: Conversion) -> str:
     return scaled(f"({shifted})", conversion.factor)
 
 
-def scaled(text: str, factor: float) -> str:
+def scale_expression(text: str, conversion: Conversion) -> str:
+    """The script's expression for the errors, or the durations, `text` shown
+    with `conversion`: scaled, never shifted, the same operation as `scale`."""
+    return scaled(text, linear(conversion)[0], conversion.formula is not None)
+
+
+def scaled(text: str, factor: float, short: bool = False) -> str:
     """The script's expression `text` scaled by `factor`, as `scale` does it:
     "dU * 1000", "m * tau0 / 60"."""
-    how = operation(factor)
+    how = operation(factor, short)
     if how is None:
         return text
     op, number = how

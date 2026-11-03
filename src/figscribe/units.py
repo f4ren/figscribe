@@ -15,7 +15,7 @@ from typing import Literal
 import numpy as np
 
 from figscribe.commands import Command, CommandError, Macro, SetField, find
-from figscribe.convert import start
+from figscribe.convert import linear, start
 from figscribe.fit import FitError, refit
 from figscribe.model import (
     AllanDeviationPlot,
@@ -111,11 +111,11 @@ def _mapping(plot, axis: str, old, new, data):
         column = getattr(plot, "values" if isinstance(plot, Histogram) else axis)
         raw = data(column)
         old_start, new_start = start(raw, old), start(raw, new)
-    old_factor = old.factor if old is not None else 1.0
-    new_factor = new.factor if new is not None else 1.0
+    (old_factor, old_offset), (new_factor, new_offset) = linear(old), linear(new)
 
     def remap(value: float) -> float:
-        return float((value / old_factor + old_start - new_start) * new_factor)
+        back = (value - old_offset) / old_factor + old_start - new_start
+        return float(back * new_factor + new_offset)
 
     def rescale(width: float) -> float:
         return float(width / old_factor * new_factor)
@@ -198,6 +198,8 @@ def _describe(axis: str, conversion: Conversion | None) -> str:
         return f"Show {axis} as in the file"
     if conversion.unit:
         return f"Show {axis} in {conversion.unit}"
+    if conversion.formula:
+        return f"Show {axis} as {conversion.formula}"
     return f"Show {axis} scaled by {conversion.factor:g}"
 
 

@@ -69,6 +69,12 @@ CASES: dict[str, dict] = {
     "converted from the start": {"x": _X, "y": [1.0, 2.0] * 4, "convert": "x"},
     "only NaN, converted": {"x": _X, "y": [math.nan] * 8, "convert": "y"},
     "a range without rows": {"x": _X, "y": [1.0, 2.0] * 4, "range": (100.0, 200.0)},
+    "a formula takes values below zero on a log axis": {
+        "x": _X,
+        "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        "scale": "log",
+        "formula": "x - 3",
+    },
 }
 
 KINDS = ["line", "points", "error bars", "histogram", "Allan deviation", "fit"]
@@ -78,6 +84,7 @@ SAID = {
     "only NaN, converted": "has no values to draw",
     "a range without rows": "lies within the range",
     "zero and below on a log axis": "are zero or below",
+    "a formula takes values below zero on a log axis": "are zero or below",
     "zero and below with a log scale": "are zero or below",
 }
 """Cases that draw, but not everything: the problem list must say what."""
@@ -144,6 +151,14 @@ def _build(folder: Path, kind: str, case: dict) -> Project:
         minutes = Conversion(factor=1 / 60, from_start=True, unit="min")
         data = load_data(project, folder)
         history.push(set_conversion(project, plot.id, axis, minutes, data))
+    if "formula" in case:
+        # An Allan deviation takes no formula (decision 0047): that is refused.
+        has_y = "y_conversion" in type(plot).model_fields
+        data = load_data(project, folder)
+        shifted = Conversion(formula=case["formula"], unit="V")
+        history.push(
+            set_conversion(project, plot.id, "y" if has_y else "x", shifted, data)
+        )
     if "range" in case:
         data = load_data(project, folder)
         history.push(set_range(project, plot.id, case["range"], data))

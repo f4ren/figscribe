@@ -864,3 +864,27 @@ def test_units_and_a_range_keep_the_axis_and_fits_in_step(tools, workspace) -> N
         tools.call(
             "set_field", {"object_id": artist, "path": ["x_range"], "value": [2, 1]}
         )
+
+
+def test_a_formula_for_the_units_is_set_and_refused_in_words(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "set_field",
+        {
+            "object_id": artist,
+            "path": ["y_conversion"],
+            "value": {"formula": "x * 1000 + 5", "unit": "mV"},
+        },
+    )
+    assert result["undo_step"] == "Show y in mV"
+    assert find(workspace.project, artist).y_conversion.formula == "x * 1000 + 5"
+    with pytest.raises(ToolError, match="not linear"):
+        tools.call(
+            "set_field",
+            {
+                "object_id": artist,
+                "path": ["y_conversion", "formula"],
+                "value": "log(x)",
+            },
+        )
+    assert find(workspace.project, artist).y_conversion.formula == "x * 1000 + 5"

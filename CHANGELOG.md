@@ -5,6 +5,13 @@ release open in every later one.
 
 ## Unreleased
 
+- **A formula for a plot's units.** *x in* and *y in* offer "a formula" next to
+  "another factor": `x / 60 - 273.15`, `(x - 32) / 1.8`. It is written in `x`
+  and numbers and must be linear and rise with x, so that error bars, axis,
+  marks, ranges and fits follow as they do for a factor; the start (*Start at
+  0*) is taken off first. The script shows the formula in Python's spacing. For
+  the τ of an Allan deviation it may scale but not shift, e.g. cycles of 2.88 s
+  in hours as `x * 2.88 / 3600`. Saved files are drawn as before.
 - **Fewer points drawn.** A line, points or error bar plot can show the mean
   or median of every *n* rows, every *n*-th row, or the mean over intervals
   of x (*Fewer points*, under *Data*). The data file stays as it is; the

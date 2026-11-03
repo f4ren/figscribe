@@ -66,6 +66,7 @@ TYPED = {
     "comment": ["%"],
     "major_value": ["1"],
     "minor_tick_length": ["4"],  # 2 pt is Matplotlib's own
+    "formula": ["x * 3 - 1", "x + 4"],  # linear, rising, and not the one it has
 }
 """What is typed instead into fields where those texts would not do, tried
 in turn like the entries of a list until what is drawn changes."""

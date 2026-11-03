@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import functools
 import keyword
+import math
 import re
 from collections.abc import Callable, Sequence
 
@@ -107,17 +108,113 @@ def _compile(source: str, parameters: tuple[str, ...]) -> Model:
     return model
 
 
-def numpy_source(source: str) -> str:
-    """The expression as NumPy code: ``exp(x)`` becomes ``np.exp(x)``."""
+def numpy_source(source: str, x: str | None = None) -> str:
+    """The expression as NumPy code: ``exp(x)`` becomes ``np.exp(x)``. With
+    `x`, the code that stands for the variable replaces it: ``numpy_source(
+    "x / 60", "t - t0")`` is ``(t - t0) / 60``."""
     tree = _parse(source)
+    value = None if x is None else ast.parse(x, mode="eval").body
 
     class Prefix(ast.NodeTransformer):
         def visit_Name(self, node: ast.Name) -> ast.AST:
             if node.id in FUNCTIONS or node.id in CONSTANTS:
                 return ast.Attribute(ast.Name("np", ast.Load()), node.id, ast.Load())
+            if node.id == VARIABLE and value is not None:
+                return value
             return node
 
     return ast.unparse(Prefix().visit(tree))
+
+
+def affine(source: str) -> tuple[float, float]:
+    """The slope and offset of `source` as a function of x, which must be
+    ``a * x + b`` with a above 0 (decision 0047): sums and differences, a
+    product with a number, a division by a number, and functions of numbers.
+    An ExpressionError, in words, for anything else."""
+    slope, offset = _affine(_parse(source).body)
+    if not (math.isfinite(slope) and math.isfinite(offset)):
+        raise ExpressionError("the formula does not give a finite number")
+    if slope <= 0:
+        raise ExpressionError(
+            "the formula must increase with x: a number alone, x with a minus "
+            "sign or a zero times x would not keep the values in order"
+        )
+    return slope, offset
+
+
+def _affine(node: ast.AST) -> tuple[float, float]:
+    """(slope, offset) of a node; a slope of 0 is a constant."""
+    with np.errstate(all="ignore"):
+        return _affine_of(node)
+
+
+def _affine_of(node: ast.AST) -> tuple[float, float]:
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+        return 0.0, float(node.value)
+    if isinstance(node, ast.Name):
+        if node.id == VARIABLE:
+            return 1.0, 0.0
+        if node.id in CONSTANTS:
+            return 0.0, float(CONSTANTS[node.id])
+        if node.id in FUNCTIONS:
+            raise ExpressionError(
+                f"{node.id!r} is a function; call it as {node.id}(...)",
+                node.col_offset,
+            )
+        raise ExpressionError(
+            f"unknown name {node.id!r}; write the value as {VARIABLE}", node.col_offset
+        )
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
+        a, b = _affine_of(node.operand)
+        return (-a, -b) if isinstance(node.op, ast.USub) else (a, b)
+    if isinstance(node, ast.BinOp) and type(node.op) in _OPERATORS:
+        (a1, b1), (a2, b2) = _affine_of(node.left), _affine_of(node.right)
+        if isinstance(node.op, ast.Add):
+            return a1 + a2, b1 + b2
+        if isinstance(node.op, ast.Sub):
+            return a1 - a2, b1 - b2
+        if isinstance(node.op, ast.Mult):
+            if a1 == 0:
+                return b1 * a2, b1 * b2
+            if a2 == 0:
+                return a1 * b2, b1 * b2
+            raise ExpressionError(
+                f"{VARIABLE} times {VARIABLE} is not linear", node.col_offset
+            )
+        if isinstance(node.op, ast.Div):
+            if a2 != 0:
+                raise ExpressionError(
+                    f"the formula can only divide by a number, not by {VARIABLE}",
+                    node.col_offset,
+                )
+            if b2 == 0:
+                raise ExpressionError("the formula divides by zero", node.col_offset)
+            return a1 / b2, b1 / b2
+        if a1 == 0 and a2 == 0:  # a power of numbers
+            return 0.0, float(np.power(b1, b2))
+        if a2 == 0 and b2 == 1:
+            return a1, b1
+        raise ExpressionError(f"a power of {VARIABLE} is not linear", node.col_offset)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        name = node.func.id
+        if name not in FUNCTIONS:
+            raise ExpressionError(f"unknown function {name!r}", node.col_offset)
+        if len(node.args) != 1 or node.keywords:
+            raise ExpressionError(
+                f"{name}() takes exactly one argument", node.col_offset
+            )
+        a, b = _affine_of(node.args[0])
+        if a != 0:
+            raise ExpressionError(
+                f"{name}({VARIABLE}) is not linear; only + - * / with numbers "
+                f"and {VARIABLE} are allowed",
+                node.col_offset,
+            )
+        return 0.0, float(FUNCTIONS[name](b))
+    raise ExpressionError(
+        f"{_describe(node)} is not allowed in a formula",
+        getattr(node, "col_offset", None),
+    )
 
 
 def free_names(source: str) -> list[str]:

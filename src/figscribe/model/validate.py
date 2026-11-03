@@ -317,16 +317,23 @@ def _off_the_log_scale(artist, axes: Axes) -> str | None:
 
 def _not_drawn(artist, axes: Axes, data) -> list[str]:
     """What of the artist's data cannot be seen: a column without a finite
-    value, or values at or below zero on a log axis or color scale."""
+    value, or values at or below zero on a log axis or color scale; as the plot
+    shows them, after its units."""
     # Imported here: the data package imports the model, and NumPy is only
     # needed once there is data.
     import numpy as np
 
+    from figscribe.convert import convert
     from figscribe.io.errors import DataError
 
     right = getattr(artist, "axis", "left") == "right" and axes.y_right is not None
     y_scale = (axes.y_right if right else axes.y).scale
     shown: list[tuple[str, object, str]] = []  # (name, reference, scale)
+    conversions = {
+        "x": getattr(artist, "x_conversion", None),
+        "y": getattr(artist, "y_conversion", None),
+        "values": getattr(artist, "x_conversion", None),
+    }
     if isinstance(artist, FITTABLE):
         shown = [("x", artist.x, axes.x.scale), ("y", artist.y, y_scale)]
     elif isinstance(artist, Histogram):
@@ -358,6 +365,7 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
         what = (
             f"{name} ({reference.column})" if isinstance(reference, ColumnRef) else name
         )
+        values = convert(values, conversions[name])
         finite = values[np.isfinite(values)]
         if values.size and not finite.size:
             found.append(f"{what} has no values to draw")
@@ -412,30 +420,43 @@ def _allan_not_drawn(artist: AllanDeviationPlot, data) -> list[str]:
     from figscribe.allan import samples
     from figscribe.io.errors import DataError
 
+    # A formula set on the conversion alone gets past the plot's own check.
+    ignored = []
+    if artist.x_conversion is not None and artist.x_conversion.formula is not None:
+        from figscribe.convert import linear
+
+        if linear(artist.x_conversion)[1] != 0:
+            ignored = [
+                "τ is a duration: the formula adds or subtracts a number, which is "
+                "not used (decision 0047)"
+            ]
     try:
         values, _ = samples(artist, data)
     except DataError:
-        return []  # the preview says why
+        return ignored  # the preview says why
     if artist.x_range is not None and not values.size:
         low, high = artist.x_range
         return [
+            *ignored,
             f"no sample lies within the range {low:g} to {high:g} after the "
-            "first, so nothing is drawn"
+            "first, so nothing is drawn",
         ]
     what = f"values ({artist.values.column})"
     gaps = int(np.count_nonzero(~np.isfinite(values)))
     if gaps:
         return [
+            *ignored,
             f"{what} has {gaps} of {values.size} entries that are not numbers; an "
-            "Allan deviation needs an unbroken series, so it is not drawn"
+            "Allan deviation needs an unbroken series, so it is not drawn",
         ]
     points = values.size + (1 if artist.data_type == "frequency" else 0)
     if points < 3:
         return [
+            *ignored,
             f"{what} has {values.size} values, too few for an Allan deviation "
-            f"({3 - points + values.size} at the least)"
+            f"({3 - points + values.size} at the least)",
         ]
-    return []
+    return ignored
 
 
 def _check_unique_ids(project: Project, issues: list[ReferenceIssue]) -> None:

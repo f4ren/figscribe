@@ -1156,6 +1156,31 @@ def test_an_allan_deviation_in_minutes_over_a_range(tmp_path: Path) -> None:
     assert "/ 60" in script
 
 
+def test_an_allan_deviation_in_hours_from_cycles_of_2_88_s(tmp_path: Path) -> None:
+    # Cycles numbered 93, 94, ... each take 2.88 s; τ is shown in hours by a
+    # formula that scales the cycles: 2.88 / 3600 = 0.0008 h per cycle.
+    from figscribe.model import AllanDeviationPlot, Conversion
+
+    rng = np.random.default_rng(12)
+    y = rng.normal(scale=2e-12, size=400)
+    rows = "\n".join(f"{93 + i},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "cycles.csv").write_text(f"cycle,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "cycles.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    hours = Conversion(formula="x * 2.88 / 3600", unit="h")
+    plot = AllanDeviationPlot(
+        values=col["y"], time=col["cycle"], x_conversion=hours, x_range=(0.0, 0.2)
+    )
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[Axes(**log, artists=[plot])])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "* 0.0008" in script or "/ 1250" in script  # 3600 / 2.88 = 1250
+
+
 def test_a_mean_of_rows_with_a_fit_and_its_residuals(tmp_path: Path) -> None:
     from figscribe.model import Reduction
 
@@ -1253,3 +1278,63 @@ def test_a_band_over_reduced_points_and_a_median_without_one(tmp_path: Path) -> 
     )
     project.figures = [Figure(dpi=150, axes=[Axes(artists=[banded, bare])])]
     _assert_same(project, tmp_path)
+
+
+def test_a_formula_for_x_and_y_with_a_band_a_fit_and_a_range(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, ErrorBand
+
+    project, ref = _run_csv(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        linestyle="-",
+        band=ErrorBand(),
+        x_conversion=Conversion(formula="x / 3600 + 1", from_start=True, unit="h"),
+        y_conversion=Conversion(formula="(x - 0.1) / 7.5", unit="V"),
+        x_range=(1.5, 4.5),
+        left_out=[2, 30],
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "t_h = (t - np.nanmin(t)) / 3600 + 1  # h since the start" in script
+    assert "U_V = (U - 0.1) / 7.5  # in V" in script
+    assert "dU_V = dU / 7.5" in script
+    assert "used = (t_h >= 1.5) & (t_h <= 4.5)" in script
+
+
+def test_a_formula_for_the_values_of_a_histogram(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, Histogram
+
+    project, ref = _run_csv(tmp_path)
+    counts = Histogram(
+        values=ref["U"],
+        bins=8,
+        x_conversion=Conversion(formula="x * 1000 - 50", unit="mV"),
+        x_range=(0.0, 900.0),
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[counts])])]
+    script = _assert_same(project, tmp_path)
+    assert "U * 1000 - 50" in script
+
+
+def test_two_plots_of_one_column_with_different_formulas_do_not_share_a_variable(
+    tmp_path: Path,
+) -> None:
+    from figscribe.model import Conversion
+
+    project, ref = _run_csv(tmp_path)
+    same_factor = {"unit": "V"}
+    first = LinePlot(
+        x=ref["t"], y=ref["U"], y_conversion=Conversion(formula="x + 1", **same_factor)
+    )
+    second = LinePlot(
+        x=ref["t"], y=ref["U"], y_conversion=Conversion(formula="x - 1", **same_factor)
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[first, second])])]
+    script = _assert_same(project, tmp_path)
+    assert "U_V = U + 1" in script and "U_V2 = U - 1" in script
