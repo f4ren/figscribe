@@ -93,7 +93,7 @@ QLabel#projectName {{ font-weight: 600; font-size: 14px; padding: 0 8px 0 4px; }
 QLabel#saveState {{ color: {MUTED}; }}
 
 QWidget#sidePanel {{ background: {SURFACE}; }}
-QLabel#panelTitle {{ font-weight: 600; font-size: 14px; }}
+QLabel#panelTitle {{ font-weight: 600; font-size: 17px; }}
 QLabel#sectionTitle {{ font-weight: 600; padding-top: 6px; }}
 QLabel#caption, QLabel#hint {{ color: {MUTED}; }}
 QLabel#kicker {{ color: {MUTED}; font-size: 11px; font-weight: 500; }}
@@ -170,7 +170,7 @@ QLabel#chip {{
 }}
 QWidget#section {{ border-bottom: 1px solid {BORDER}; }}
 QToolButton#sectionToggle {{
-    border: 0; background: transparent; font-weight: 600; padding: 0;
+    border: 0; background: transparent; font-weight: 600; font-size: 14px; padding: 0;
 }}
 QFrame#card {{
     background: {GROUND}; border: 1px solid {BORDER}; border-radius: 10px;

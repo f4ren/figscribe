@@ -836,6 +836,29 @@ How to work on it:
   free number, one entry for the work or one per element), so that the next
   session does not undo it.
 
+**The figure: done** (2026-11-04, decision 0048). *Format* (name, size, PNG
+resolution, style sheet), *Text* (font size, units in labels, line up axis
+labels, panel labels with their letters under the box), *Ticks and frame* (the
+two tick settings in view), *Widths and lengths* and *Panel layout* (both
+folded); no *More* where one field would be in it. New figures start with
+inward ticks on all sides; saved files keep what they have. **The sections stay
+a column** (the user, on pictures and the advisor's opinion); tabs may be looked
+at again after some days of use. **Rules for every element** (the advisor's, in
+0048): a section name says what is in it without repeating the header; no
+section of one or two fields and no *More* unless several rare settings are in
+it; short nouns; the same word means the same everywhere; a folded section's
+name says whether to open it; a caption makes sense on its own, since the search
+shows rows alone; the groups in one order everywhere (what it is, what it shows,
+how it looks, the rare). *Still to do, one element at a time:* the panel, the axes (the axis form), each kind of
+plot, the fit and residuals, the note, reference lines and ranges, the data
+files. *Also:* a thin line under every section (the stylesheet had always asked for
+one, but a plain `QWidget` paints no border without `WA_StyledBackground`, so it
+never showed) and every section folds with a click, the rare ones starting
+folded, kept per kind of object while the program runs (the user's wishes; not
+saved between runs). *Learned:* a test that passed on one pixel (a grey stretch
+of a line in a small inset) failed when the new ticks hid it; check what a sweep
+sees before a change of defaults.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
@@ -1443,6 +1466,19 @@ file the user made read-only, which a plain `os.replace` would overwrite
 *Save as template*: a figure's size, fonts, ticks, colors and layout without
 the data, offered on the start page next to the built-in layouts. Applying a
 template to an existing figure is one undo step.
+
+**A default file of one's own** (the user, 2026-11-04): a `figscribe` JSON in
+the user's settings folder, in which one's own settings are kept and which new
+figures and projects start from, instead of the program's. Fits here: it is a
+template that is used without choosing. Proposed: *File > Save Look as
+Default* writes the shown figure's settings (size, fonts, ticks, frame, grid
+and unit format, the panel's grid and legend look; no data, no plots) to
+`defaults.figscribe` in the settings folder; the start page, *New* and *Add
+Figure* take it; *Reset to the program's defaults* removes it. `[decide]`
+which settings count (the figure only, or a panel's grid and axis look too),
+and whether a project with another look is left alone when it is opened (it
+is: the file has what it has). The program's own defaults stay as decision
+0048 has them.
 
 ### E4 Fewer steps for the common path — S each
 

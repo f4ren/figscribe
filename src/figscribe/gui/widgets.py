@@ -105,6 +105,9 @@ class Section(QWidget):
     ):
         super().__init__(parent)
         self.setObjectName("section")
+        # Without this a plain QWidget paints no border of its stylesheet, and
+        # the line under each section (theme.py) never showed.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 14)
         layout.setSpacing(8)

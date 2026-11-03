@@ -338,7 +338,11 @@ def _set(obj, path: tuple, value) -> None:
 
 
 def _figure(shown: Axes | Figure) -> Figure:
-    return shown if isinstance(shown, Figure) else Figure(dpi=72, axes=[shown])
+    # Plain ticks, as the rules were judged: with inward ticks on all sides a
+    # line on the second layer meets a tick mark at the frame, and one pixel there
+    # tells which layer it is on.
+    plain = {"tick_direction": None, "ticks_all_sides": False}
+    return shown if isinstance(shown, Figure) else Figure(dpi=72, axes=[shown], **plain)
 
 
 def _drawn(axes: Axes | Figure) -> str:

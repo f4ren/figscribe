@@ -158,6 +158,7 @@ def build(folder: Path) -> Path:
                 yerr=col("t"),  # wide enough to be seen in the small inset
                 label="shaded",
                 left_out=[4],
+                linewidth=3.0,  # wide enough for the grey stretch to show at 72 dpi
                 band=ErrorBand(),
             ),
         ],

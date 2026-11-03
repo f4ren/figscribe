@@ -237,12 +237,12 @@ SECTIONS = {
     "bins": "Data",
     "c": "Data",
     "target": "Data",
-    "name": "Size",
-    "width_mm": "Size",
-    "height_mm": "Size",
-    "dpi": "Export",
-    "unit_format": "Style",
-    "stylesheet": "Style",
+    "name": "Format",
+    "width_mm": "Format",
+    "height_mm": "Format",
+    "dpi": "Format",
+    "unit_format": "Text",
+    "stylesheet": "Format",
     "title": "Panel",
     "title_size": "Panel",
     "grid": "Panel",
@@ -251,16 +251,16 @@ SECTIONS = {
     "grid_color": "Panel",
     "grid_linewidth": "Panel",
     "grid_linestyle": "Panel",
-    "font_size": "Style",
-    "tick_direction": "Style",
-    "ticks_all_sides": "Style",
-    "align_labels": "Style",
-    "frame_width": "Style",
-    "tick_width": "Style",
-    "tick_length": "Style",
-    "minor_tick_width": "Style",
-    "minor_tick_length": "Style",
-    "panel_labels": "Style",
+    "font_size": "Text",
+    "tick_direction": "Ticks and frame",
+    "ticks_all_sides": "Ticks and frame",
+    "align_labels": "Text",
+    "frame_width": "Widths and lengths",
+    "tick_width": "Widths and lengths",
+    "tick_length": "Widths and lengths",
+    "minor_tick_width": "Widths and lengths",
+    "minor_tick_length": "Widths and lengths",
+    "panel_labels": "Text",
     "path": "File",
     "sha256": "File",
     "label": "Legend",
@@ -304,13 +304,17 @@ SECTION_NAMES = {
     "panel_labels": "Panel labels",
     "band": "Error band",
     "reduction": "Fewer points",
+    "layout": "Panel layout",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
 
 ORDER = [
     "Data",
-    "Size",
+    "Format",
+    "Text",
+    "Ticks and frame",
+    "Widths and lengths",
     "Panel",
     "Axes",
     "Position",
@@ -334,18 +338,36 @@ BASIC = {
     "ShadedSpan": ("color", "alpha", "label"),
     "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
     "ColorMesh": ("cmap", "norm", "vmin", "vmax", "colorbar"),
-    "Figure": ("name", "width_mm", "height_mm", "font_size", "panel_labels"),
+    "Figure": (
+        "name",
+        "width_mm",
+        "height_mm",
+        "dpi",
+        "stylesheet",
+        "font_size",
+        "unit_format",
+        "align_labels",
+        "panel_labels",
+        "tick_direction",
+        "ticks_all_sides",
+        "frame_width",
+        "tick_width",
+        "tick_length",
+        "minor_tick_width",
+        "minor_tick_length",
+    ),
     "Axes": ("title", "grid", "y_right"),
 }
 """The settings shown at first, per kind of object, apart from its data and
 position: the most asked for, in the assistant's benchmark and otherwise.
 The rest is under "More", folded, and found by the search."""
-WHOLE = {"Data", "File", "Reading", "Position", "Axes", "Export", "More"}
+WHOLE = {"Data", "File", "Reading", "Position", "Axes", "More"}
 """Sections shown whole: what is plotted and where, not how it looks; and
 the PNG resolution, kept apart from the size (decision 0006)."""
 
-COLLAPSED = {"More", "Layout"}
-"""Sections that start folded: rarely needed, but always there."""
+COLLAPSED = {"More", "Panel layout", "Widths and lengths"}
+"""Sections that start folded: rarely needed, but always there. Every section
+folds with a click on its title, and stays as the user left it."""
 
 PLACEHOLDERS = {
     "band.color": "the plot's",
@@ -641,6 +663,7 @@ OTHER_FACTOR = "another factor"
 FORMULA = "a formula"
 
 CAPTIONS = {
+    ("PanelLabels", "fontsize"): "Letter size (pt)",
     ("Histogram", "x_range"): "Use only values",
     ("AllanDeviationPlot", "x_range"): "Use only times",
 }
@@ -680,6 +703,15 @@ def _common(objs: list[BaseModel], path: Path) -> Any:
 def _set_on_all(objs: list[BaseModel], path: Path, value: Any) -> Macro:
     steps = [SetField(obj.id, path, value) for obj in objs if _get(obj, path) != value]
     return Macro(f"Change {len(objs)} plots", steps)
+
+
+IN_THE_ORDER_OF_BASIC = {"Figure"}
+"""Kinds of object whose settings are shown in the order of `BASIC`, not of the
+model, so that what belongs together is next to each other."""
+
+INLINE = {"panel_labels"}
+"""Optional parts whose settings follow their check box in its own section
+instead of having a section of their own."""
 
 
 def _basic_first(groups: dict[str, list[str]], basic: tuple[str, ...] | None):
@@ -769,7 +801,10 @@ class PropertyPanel(QScrollArea):
         """The range an axis shows right now; the window asks the preview."""
         self.edit_fit: Callable[[str], None] = lambda fit_id: None
         """Opens the fit dialog on a fit that is there; the window does."""
-        self._folded = {title: True for title in COLLAPSED}
+        self._folded: dict[tuple[str, str], bool] = {}
+        """Whether the user left a section folded, by kind of object and title;
+        until then it starts as `COLLAPSED` says. Kept while the program runs."""
+        self._kind = ""
         self.search = QLineEdit()
         """Filters the fields by name and tooltip; the window puts it above
         the panel, where it stays when the form is built anew."""
@@ -806,7 +841,7 @@ class PropertyPanel(QScrollArea):
         for title, section in self.sections.items():
             # What the search opened is not what the user unfolded.
             if isinstance(section.header, QToolButton) and not self._searched:
-                self._folded[title] = not section.expanded
+                self._folded[self._kind, title] = not section.expanded
         self.editors = {}
         self._captions: dict[Path, tuple[QLabel, str | None]] = {}
         self.sections = {}
@@ -1180,6 +1215,7 @@ class PropertyPanel(QScrollArea):
         self._title.setText(title)
 
     def _fill(self, obj: BaseModel, layout: QVBoxLayout) -> None:
+        self._kind = type(obj).__name__
         fallback = "Reading" if hasattr(obj, "format") else "Look"
         groups: dict[str, list[str]] = {}
         nested: list[str] = []
@@ -1211,7 +1247,12 @@ class PropertyPanel(QScrollArea):
         if "Look" in groups:
             groups["Look"].sort(key=lambda n: LOOK.index(n) if n in LOOK else 99)
         _basic_first(groups, BASIC.get(type(obj).__name__))
-        titles = {_section_name(n): n for n in nested}
+        if type(obj).__name__ in IN_THE_ORDER_OF_BASIC:
+            basic = BASIC[type(obj).__name__]
+            for title in groups:
+                if title != "More":
+                    groups[title].sort(key=basic.index)
+        titles = {_section_name(n): n for n in nested if n not in INLINE}
         if isinstance(obj, Axes):
             groups.setdefault("Axes", [])
         order = [t for t in ORDER if t in groups]
@@ -1221,6 +1262,8 @@ class PropertyPanel(QScrollArea):
             form = self._section(title, layout)
             for name in groups.get(title, []):
                 self._row(form, obj, (name,))
+                if name in INLINE and getattr(obj, name) is not None:
+                    self._nested(form, getattr(obj, name), (name,))
             if title in titles:
                 name = titles[title]
                 self._nested(form, getattr(obj, name), (name,))
@@ -1231,10 +1274,8 @@ class PropertyPanel(QScrollArea):
         self._fit_result = getattr(obj, "result", None)
 
     def _section(self, title: str, layout: QVBoxLayout) -> QFormLayout:
-        collapsible = title in COLLAPSED
-        section = Section(
-            title, collapsible, expanded=not self._folded.get(title, False)
-        )
+        folded = self._folded.get((self._kind, title), title in COLLAPSED)
+        section = Section(title, True, expanded=not folded)
         self.sections[title] = section
         form = QFormLayout(section.body)
         form.setContentsMargins(0, 0, 0, 0)

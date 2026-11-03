@@ -5,6 +5,16 @@ release open in every later one.
 
 ## Unreleased
 
+- **New figures have inward tick marks on all four sides**, as many journals
+  want, and the figure's settings are arranged by what they are for: *Format*
+  (name, size, PNG resolution, style sheet), *Text* (font size, units in
+  labels, panel letters), *Ticks and frame* with the two tick settings in view,
+  their widths and lengths and the panel layout (folded). Saved projects keep
+  their own ticks. A thin line now separates the sections of the property
+  panel, as the design had always meant, and every section folds with a click
+  on its title; the panel remembers it for each kind of object while you work. The
+  section titles are larger (14 px, as large as the figure's name in the outline;
+  the object's title 17 px), to be read at a glance.
 - **A formula for a plot's units.** *x in* and *y in* offer "a formula" next to
   "another factor": `x / 60 - 273.15`, `(x - 32) / 1.8`. It is written in `x`
   and numbers and must be linear and rise with x, so that error bars, axis,

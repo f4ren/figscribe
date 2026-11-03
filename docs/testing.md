@@ -105,5 +105,13 @@ note the platform, the screen scaling and the theme in the pull request.
     `log(x)` is refused with the reason. Export the script and run it: the
     same figure, with the formula written as typed.
 
+18. **The figure's settings**: select the figure. *Format*, *Text*, *Ticks and
+    frame* and the folded *Widths and lengths* and *Panel layout* come in that
+    order, without scrolling on a screen of 1080 pixels; a new project has
+    inward ticks on all four sides; switching *Panel labels* on shows its
+    letters under the box; the search (Ctrl+F) finds *Tick length* and opens
+    *Widths and lengths*. Every title folds its section with a click and
+    keeps that while another object is selected.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

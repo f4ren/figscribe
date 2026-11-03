@@ -2219,3 +2219,87 @@ to say what one line of text says, and nothing for `(x − 32) / 1.8`.
 **Filling `factor` from the formula's slope** when the conversion is made:
 the file would hold two values that must agree, and a change to one of them
 alone would break that.
+
+## 0048 — The figure's settings by what they are for, and new figures with inward ticks
+
+**Date:** 2026-11-04
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the first element: the figure. The user went through its panel
+(2026-11-04): *Tick marks point* and *Ticks on all sides* are set for every
+figure and were behind *More*, the check box for the panel letters was
+separated from its settings by *Export*, and the same two tick settings should
+simply be the default. "Line up axis labels", which the proposal had under the
+grid, is in *Text* with the labels, and the frame width and the tick widths
+and lengths are in a folded section of their own under *Ticks and frame*.
+
+### Decision
+
+- **New figures start with inward ticks on all sides** (`Figure.tick_direction`
+  "in", `Figure.ticks_all_sides` True), as most physics journals have them. A
+  saved project has both written out (`dumps` writes every field), so it is
+  drawn as it was; no schema bump and no migration. A project file that lacks
+  them, such as the example, now takes the new defaults. Style sheets and
+  `None` still mean "as the style has it". Eleven image baselines changed,
+  each looked at.
+- **The figure's panel**, top to bottom: *Format* (name, width, height, PNG
+  resolution, style sheet), *Text* (font size, units in labels, line up axis labels, panel
+  labels with their letters, bold, placement, size and insets right under the
+  box, the size captioned "Letter size (pt)"), *Ticks and frame* (the two tick
+  settings, open), *Widths and lengths* (frame width and the tick widths and
+  lengths, folded), and *Panel layout* (the grid, folded; it was "Layout").
+  There is no *More* for the figure: one field is not worth a fold, so the
+  style sheet is in *Format*, which sets the base look of the whole figure.
+  The names are the user's (*Format*, *Panel layout*, *Ticks and frame*) and
+  follow rules the advisor gave for every element: a section says what is in it
+  without repeating the header, no section for one or two fields and no *More*
+  unless several rare settings are in it, short nouns, the same word with the
+  same meaning in every element, a folded section's name says whether to open it,
+  a caption makes sense without its section (the search shows rows alone), and
+  the groups in the same order everywhere: what it is, what it shows, how it
+  looks, the rare. The figure's settings follow the order of `BASIC` instead of the
+  model's (`IN_THE_ORDER_OF_BASIC`), and an optional part can show its settings
+  in the section of its check box (`INLINE`) instead of a section of its own.
+- **The sections stay a column; tabs may come back.** The user asked whether
+  tabs would save scrolling and decided on pictures and an independent opinion
+  (the advisor): a prototype with four tabs fits the 380 px of the panel with
+  each group on one page, but the column is about 800 px tall with the folded
+  parts closed, and tabs hide three quarters of the settings, make a hit of
+  the search in another tab need special handling, and make the panel change
+  shape if they are used for some elements only. The user chose the column for
+  every element, to be looked at again after some days of use; tabs can be added
+  later without touching the model or a saved file. What would change it: a
+  short panel (a laptop) and much switching between groups of one object.
+
+### Alternatives considered
+
+**New defaults only in the start-page layouts and *Add Figure***: smaller, but
+a figure made by the assistant, the tests or a script would differ from one
+made by hand. **Tabs for the sections**: see above. **All tick and frame
+settings in view**: the user asked for two.
+
+### Settled while building it
+
+- **A line under each section.** `theme.py` had always asked for one
+  (`QWidget#section { border-bottom }`), but a plain `QWidget` paints no border
+  of its stylesheet without `WA_StyledBackground`, so no section was ever
+  separated. With the folded *Widths and lengths* and *Panel layout* right under
+  *Ticks and frame*, they read as part of it (the user's remark); they are
+  separate now, in every panel. The user then asked for every section to fold
+  (not only the rare ones): each title has an arrow and folds with a click, the
+  rare ones start folded (`COLLAPSED`: *Widths and lengths*, *Panel layout*,
+  *More*). What the user folds or opens is kept by kind of object and title,
+  so folding *Data* of the error bars does not hide a histogram's, and stays
+  so while another object is selected and in the search; it is kept while the
+  program runs, not between two runs (nothing is written to `QSettings`). The
+  titles are 14 px: 13 was too small and 16 too large, and the user asked for
+  the size of the figure's name in the outline (13 px, semi-bold, which looks
+  as large as 14 px in a button); the object's own title is 17 px, so that the
+  order of weight stays.
+- The sweep over every field relied on a single pixel (a grey stretch of a line
+  in a small inset at 72 dpi, which the new ticks hid); the test project's
+  plot has a wider line. The rule tests judge on plain ticks, as they were
+  written: a line on the second layer and a tick mark at the frame differ by one
+  pixel.

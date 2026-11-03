@@ -226,13 +226,14 @@ def test_points_take_their_marker_size_in_pt_like_lines(
     assert "-5" in panel.error and _axes(document).artists[-1].size == 25.0
 
 
-def test_the_resolution_is_an_export_setting(panel: PropertyPanel, document) -> None:
+def test_the_resolution_is_named_as_a_png_setting_beside_the_size(
+    panel: PropertyPanel, document
+) -> None:
     from figscribe.gui.names import field_name
 
     document.select(_figure(document).id)
     resolution = panel.editors[("dpi",)].widget
-    assert panel.sections["Export"].isAncestorOf(resolution)
-    assert not panel.sections["Size"].isAncestorOf(resolution)
+    assert panel.sections["Format"].isAncestorOf(resolution)
     assert "PNG" in field_name("dpi")
 
 
@@ -656,11 +657,14 @@ def test_panel_labels_are_switched_on_and_set_up(
     panel: PropertyPanel, document: Document
 ) -> None:
     document.select(_figure(document).id)
-    assert "Panel labels" not in panel.sections
+    assert ("panel_labels", "placement") not in panel.editors
     panel.editors[("panel_labels",)].widget.click()
     assert _figure(document).panel_labels is not None
     assert document.history.undo_text == "Letter the panels"
-    assert "Panel labels" in panel.sections
+    assert "Panel labels" not in panel.sections  # they are in Text, under the box
+    assert panel.sections["Text"].isAncestorOf(
+        panel.editors[("panel_labels", "placement")].widget
+    )
     placement = panel.editors[("panel_labels", "placement")].widget
     placement.activated.emit(placement.findText("inside the corner"))
     assert _figure(document).panel_labels.placement == "inside"
@@ -713,7 +717,87 @@ def test_the_basic_settings_come_first_the_rest_under_more(
 
     document.select(_figure(document).id)
     fields = _section_fields(panel)
-    assert fields["Size"] == ["name", "width_mm", "height_mm"]
-    assert fields["Style"] == ["font_size", "panel_labels"]
-    assert "tick_length" in fields["More"]
-    assert fields["Export"] == ["dpi"]
+    assert fields["Format"] == ["name", "width_mm", "height_mm", "dpi", "stylesheet"]
+    assert fields["Text"] == [
+        "font_size",
+        "unit_format",
+        "align_labels",
+        "panel_labels",
+    ]
+    assert fields["Ticks and frame"] == ["tick_direction", "ticks_all_sides"]
+    assert fields["Widths and lengths"] == [
+        "frame_width",
+        "tick_width",
+        "tick_length",
+        "minor_tick_width",
+        "minor_tick_length",
+    ]
+    assert "More" not in fields  # nothing rare enough is left to fold
+    assert "Export" not in fields and "Style" not in fields
+
+
+def test_the_figure_panel_follows_what_the_settings_are_for(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    document.select(_figure(document).id)
+    assert list(panel.sections) == [
+        "Format",
+        "Text",
+        "Ticks and frame",
+        "Widths and lengths",
+        "Panel layout",
+    ]
+    # The two tick settings are in view; the details and the grid are folded.
+    assert panel.sections["Ticks and frame"].expanded
+    assert not panel.sections["Widths and lengths"].expanded
+    assert not panel.sections["Panel layout"].expanded
+    # The letters of the panels sit under their check box in Text, with a
+    # caption that is not the figure's font size.
+    panel.editors[("panel_labels",)].widget.click()
+    text = panel.sections["Text"]
+    assert text.isAncestorOf(panel.editors[("panel_labels", "placement")].widget)
+    captions = [
+        label.text()
+        for label in text.body.findChildren(QLabel)
+        if label.objectName() == "caption"
+    ]
+    assert captions.count("Font size (pt)") == 1
+    assert "Letter size (pt)" in captions
+    assert captions.index("Font size (pt)") < captions.index("Letters")
+
+
+def test_every_section_folds_and_stays_as_the_user_left_it(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QToolButton
+
+    document.select(_figure(document).id)
+    assert all(isinstance(s.header, QToolButton) for s in panel.sections.values())
+    opened = [title for title, s in panel.sections.items() if s.expanded]
+    assert opened == ["Format", "Text", "Ticks and frame"]  # as it opens
+    panel.sections["Text"].header.click()  # fold what is not needed
+    assert not panel.sections["Text"].expanded
+    document.select(_axes(document).id)
+    document.select(_figure(document).id)
+    assert not panel.sections["Text"].expanded  # still as it was left
+    assert panel.sections["Format"].expanded
+
+
+def test_a_section_folded_for_one_kind_of_object_stays_open_for_another(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import ColumnRef, Histogram
+
+    data = _artist(document)
+    histogram = Histogram(values=ColumnRef(source=data.y.source, column="U"))
+    document.push(InsertItem(_axes(document).id, "artists", histogram))
+    document.select(data.id)
+    panel.sections["Data"].header.click()  # fold it for the error bars
+    assert not panel.sections["Data"].expanded
+    document.select(histogram.id)
+    assert panel.sections["Data"].expanded  # a histogram's data is not hidden by it
+    document.select(data.id)
+    assert not panel.sections["Data"].expanded  # the error bars keep their own
