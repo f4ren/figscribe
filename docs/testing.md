@@ -135,5 +135,11 @@ note the platform, the screen scaling and the theme in the pull request.
     *y:*. The panel may need a scroll on a small screen; fold what you do not use
     and select another plot of the same kind: it stays folded.
 
+24. **Export remembers**: *Export Figure…* to PNG in another folder, then open
+    it again: that folder and PNG are offered, with the figure's name. Close
+    figscribe, start it again: still so. Type a name without a suffix: the
+    format's suffix is added. *Export All Figures…* offers the folder and format
+    of the last time.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

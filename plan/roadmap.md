@@ -1660,13 +1660,12 @@ is: the file has what it has). The program's own defaults stay as decision
   is offered right after for error bar data.
 - After *Add fit*, offer *Show result in figure* and *Add residuals*.
 - Remember per file type the last import options and column choice.
-- **Export remembers its format and folder.** Asked for by a lab user
-  (2026-11-04): *Export Figure…* opens on PDF each time (`EXPORT_FILTER`,
-  no remembered filter) and in the working folder, so PNG has to be chosen
-  again and again. Keep the last format and folder (`QSettings`, as the
-  recent projects are) and suggest the figure's name as the file name, as the
-  script export already does; *Export All Figures…* too. A test with the
-  dialog answered, and the setting kept between two windows.
+- **Export remembers its format and folder** (done): *Export Figure…* and
+  *Export All Figures…* open in the last folder used (the project's, when it
+  has gone or there is none yet) with the last format chosen, kept in
+  `QSettings` between runs; the file name is the figure's, as the script
+  export suggests it, and a name typed without a suffix gets the one of the
+  chosen format. A suffix typed decides the format that is remembered.
 - **A source's file changed after all** (`[decide]`, unclear). The same user
   "wanted to change the name of the .csv in the template and did not manage"
   (the absolute path of B9 may be what got in the way: ask).
