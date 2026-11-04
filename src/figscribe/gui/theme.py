@@ -388,6 +388,11 @@ _ICONS = {
     '<rect x="8" y="2" width="6" height="6" fill="{c}" opacity="0.75"/>'
     '<rect x="2" y="8" width="6" height="6" fill="{c}"/>'
     '<rect x="8" y="8" width="6" height="6" fill="{c}" opacity="0.5"/>',
+    "panel": '<rect x="2" y="3" width="5" height="10" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="9" y="3" width="5" height="10" '
+    'rx="1" fill="none" stroke="{c}" stroke-width="1.3"/>',
+    "reference": '<rect x="3" y="2" width="6" height="12" fill="{c}" opacity="0.35"/>'
+    '<path d="M12 1.5 V14.5" stroke="{c}" stroke-width="1.6" stroke-dasharray="3 2"/>',
     "chat": '<path d="M2.5 3.5 H13.5 V10.5 H7 L4 13 V10.5 H2.5 Z" fill="none" '
     'stroke="{c}" stroke-width="1.4" stroke-linejoin="round"/>',
     "code": '<path d="M6 4 L2 8 L6 12 M10 4 L14 8 L10 12" stroke="{c}" '

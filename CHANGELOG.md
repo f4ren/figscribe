@@ -5,6 +5,15 @@ release open in every later one.
 
 ## Unreleased
 
+- **The toolbar's adding buttons show what they make.** *Data*, *Figure*,
+  *Panel*, *Plot*, *Fit*, *Note* and a new *Reference* each have a picture of
+  their own instead of the same plus, in two groups (what holds, and what goes
+  into a panel). *Plot* has an arrow that lists the kinds (*Histogram*, *Allan
+  deviation*, *Color mesh* …) and opens the dialog on the one chosen;
+  *Reference* adds a vertical or horizontal line or a shaded range. *Insert >
+  Add Line or Range* is now *Insert > Add Reference*, and *Insert > Add Plot
+  As* lists the kinds. In a narrow window the toolbar shows the icons alone
+  instead of hiding buttons behind the » menu.
 - **A gallery of twelve examples on the start page**, with a picture each: a
   Gaussian scan, a noisy sensor (the means of a minute over the raw line), an
   RC discharge, a freezing plateau (°C by a formula, a second axis), a

@@ -29,11 +29,11 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSizePolicy,
     QSplitter,
     QStackedWidget,
-    QToolBar,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -78,11 +78,12 @@ from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
 from figscribe.gui.palette import CommandPalette, Entry, menu_entries
-from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
+from figscribe.gui.plotdialog import KINDS, NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
 from figscribe.gui.start import DOCS_URL, GUIDE_URL, StartPage
+from figscribe.gui.widgets import AdaptiveToolBar
 from figscribe.io import DataError, numpy_source
 from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import array_names, read_numpy
@@ -682,8 +683,9 @@ class MainWindow(QMainWindow):
         ]
         return [*steps, InsertItem(axes.id, "artists", artist)]
 
-    def add_plot(self) -> None:
-        """Add a plot of the data's columns, to the panel chosen in the dialog."""
+    def add_plot(self, kind: str | None = None) -> None:
+        """Add a plot of the data's columns, to the panel chosen in the dialog,
+        which opens on `kind` (a name of `KINDS`) when the data can make it."""
         columns = self.document.column_choices()
         arrays = self.document.array_choices()
         figure = self.document.figure
@@ -702,6 +704,7 @@ class MainWindow(QMainWindow):
             target=target,
             data=self.document.data,
             summary=self._data_summary(columns),
+            kind=kind,
         )
         if not self.run_dialog(dialog):
             return
@@ -1393,13 +1396,17 @@ class MainWindow(QMainWindow):
         self._action(insert, "D&uplicate Figure", lambda: self.duplicate_figure())
         insert.addSeparator()
         self.plot_action = self._action(
-            insert, "Add &Plot…", self.add_plot, "Ctrl+Shift+P"
+            insert, "Add &Plot…", lambda: self.add_plot(), "Ctrl+Shift+P"
         )
+        self.plot_menu = insert.addMenu("Add Plot &As")
+        for name, (_, glyph) in KINDS.items():
+            action = self.plot_menu.addAction(theme.icon(glyph), name)
+            action.triggered.connect(lambda _=False, n=name: self.add_plot(n))
         self.fit_action = self._action(
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
         self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
-        self.marking_menu = insert.addMenu("Add &Line or Range")
+        self.marking_menu = insert.addMenu("Add &Reference")
         for text, kind, orientation in markings.ENTRIES:
             action = self.marking_menu.addAction(text)
             action.triggered.connect(
@@ -1441,7 +1448,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self._mcp_status)
 
     def _build_toolbar(self) -> None:
-        bar = QToolBar("Main", self)
+        bar = AdaptiveToolBar("Main", self)
         bar.setObjectName("main")
         bar.setMovable(False)
         bar.setFloatable(False)
@@ -1451,7 +1458,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
         self.toolbar = bar
 
-        self.home_action.setIcon(theme.icon("fit", theme.ACCENT, 18))
+        self.home_action.setIcon(theme.app_icon())
         self.home_action.setToolTip("Start page")
         bar.addAction(self.home_action)
         home = bar.widgetForAction(self.home_action)
@@ -1469,31 +1476,42 @@ class MainWindow(QMainWindow):
         bar.addWidget(spacer)
 
         # What can be added, in the order a figure is built: data, then what
-        # holds what.
-        self.import_action.setIcon(theme.icon("plus"))
-        self.import_action.setIconText("Data")
-        bar.addAction(self.import_action)
-        self.add_figure_action.setIcon(theme.icon("plus"))
-        self.add_figure_action.setIconText("Figure")
-        self.add_figure_action.setToolTip("Add a figure after the shown one")
-        bar.addAction(self.add_figure_action)
-        panel = QToolButton()
-        panel.setText("Panel")
-        panel.setIcon(theme.icon("plus"))
-        panel.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        panel.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        panel.setMenu(self.panel_menu)
-        panel.setToolTip("Add a panel beside or inside the selected one")
-        bar.addWidget(panel)
-        self.plot_action.setIcon(theme.icon("plus"))
-        self.plot_action.setIconText("Plot")
-        bar.addAction(self.plot_action)
-        self.fit_action.setIcon(theme.icon("fit"))
-        self.fit_action.setIconText("Fit")
-        bar.addAction(self.fit_action)
-        self.note_action.setIcon(theme.icon("plus"))
-        self.note_action.setIconText("Note")
-        bar.addAction(self.note_action)
+        # holds what, then what goes into a panel. Each button shows what it
+        # makes; in a narrow window the icon stays and the words go (decision
+        # 0055), so that nothing is hidden behind the » menu.
+        self._adding_button(
+            self.import_action, "file", "Data", "Import a data file (CSV, .npy, .npz)"
+        )
+        self._adding_button(
+            self.add_figure_action,
+            "figure",
+            "Figure",
+            "Add a figure after the shown one",
+        )
+        self._adding_button(
+            self.panel_menu,
+            "panel",
+            "Panel",
+            "Add a panel beside or inside the selected one",
+        )
+        bar.addSeparator()
+        self._adding_button(
+            self.plot_action,
+            "line",
+            "Plot",
+            "Add a plot of the imported data; the arrow lists the kinds",
+            menu=self.plot_menu,
+        )
+        self._adding_button(self.fit_action, "fit", "Fit", "Fit a curve to a plot")
+        self._adding_button(
+            self.note_action, "annotation", "Note", "Add a note to the panel"
+        )
+        self._adding_button(
+            self.marking_menu,
+            "reference",
+            "Reference",
+            "Add a reference line or a shaded range",
+        )
         bar.addSeparator()
         for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):
             action.setIcon(theme.icon(name))
@@ -1504,15 +1522,44 @@ class MainWindow(QMainWindow):
         self.chat_action.setIcon(theme.icon("chat"))
         self.chat_action.setIconText("Assistant")
         bar.addAction(self.chat_action)
+        bar.wordy.append(bar.widgetForAction(self.chat_action))
         self.code_action.setIcon(theme.icon("code"))
         self.code_action.setIconText("Python code")
         bar.addAction(self.code_action)
+        bar.wordy.append(bar.widgetForAction(self.code_action))
         bar.addSeparator()
         self.export_action.setIconText("Export…")
         bar.addAction(self.export_action)
         export_button: QToolButton = bar.widgetForAction(self.export_action)
         export_button.setObjectName("primary")
         export_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+
+    def _adding_button(
+        self, what, glyph: str, text: str, tip: str, menu: QMenu | None = None
+    ) -> None:
+        """A toolbar button that adds something: `what` is the action it runs
+        or, for a button that only opens a menu, that menu. With `menu` the
+        action is the button's click and the menu its arrow."""
+        bar = self.toolbar
+        if isinstance(what, QMenu):
+            button = QToolButton()
+            button.setText(text)
+            button.setIcon(theme.icon(glyph))
+            button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            button.setMenu(what)
+            button.setToolTip(tip)
+            bar.addWidget(button)
+        else:
+            what.setIcon(theme.icon(glyph))
+            what.setIconText(text)
+            what.setToolTip(tip)
+            bar.addAction(what)
+            button = bar.widgetForAction(what)
+            if menu is not None:
+                button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+                button.setMenu(menu)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        bar.wordy.append(button)
 
     def _toggle(self, menu, text: str, slot) -> QAction:
         """A checkable action; `slot` runs on every change, also from code."""

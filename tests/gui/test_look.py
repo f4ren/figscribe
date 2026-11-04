@@ -362,9 +362,9 @@ def test_check_boxes_can_be_seen() -> None:
 
 
 def test_the_toolbar_adds_things_in_the_order_of_a_figure(window: MainWindow) -> None:
-    """Data first, then what holds what: panel, plot, fit, note."""
+    """Data first, then what holds what: panel, plot, fit, note, reference."""
     bar = window.toolbar
     shown = [bar.widgetForAction(a) for a in bar.actions()]
     texts = [w.text() for w in shown if isinstance(w, QToolButton) and w.text()]
-    adding = [t for t in texts if t in ("Data", "Panel", "Plot", "Fit", "Note")]
-    assert adding == ["Data", "Panel", "Plot", "Fit", "Note"]
+    names = ("Data", "Panel", "Plot", "Fit", "Note", "Reference")
+    assert [t for t in texts if t in names] == list(names)
