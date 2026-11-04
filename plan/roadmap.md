@@ -58,6 +58,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **U11** the settings panel rearranged, element by element, with the user
   (figure, panel, axes, each kind of plot, …). Nothing is built for an
   element before the user has agreed to its arrangement.
+- **U12** finding what the examples use (see below), once the examples are merged.
 
 **Phase 2 — What a scientist needs**
 - **F1** fits (L): the range dragged in the preview (1); the result as text
@@ -936,6 +937,20 @@ folded, kept per kind of object while the program runs (the user's wishes; not
 saved between runs). *Learned:* a test that passed on one pixel (a grey stretch
 of a line in a small inset) failed when the new ticks hid it; check what a sweep
 sees before a change of defaults.
+
+### U12 Finding the elements the examples use — S, with the user
+
+Asked for by the user (2026-11-04), after opening some of the gallery's
+examples: several elements they use are not easy to find, for instance the
+shaded range, and how a note gets its arrow. Go through the twelve examples,
+list every element and setting each one uses, and for each ask where a new
+user would look for it (the *Insert* menu, the outline's context menu, the
+command palette, the property panel, the search) and whether it is found
+there. Propose the changes, such as menu entries, names, a hint in the empty
+panel or an entry for *Insert > Add* that says what it makes; nothing is built
+before the user has agreed to them, as in U11. Hold the result with a test that
+every example's element kinds are reachable from the *Insert* menu or the
+command palette under a name a person would search for.
 
 ---
 

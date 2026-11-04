@@ -105,6 +105,23 @@ def _without_results(text: str) -> tuple[dict, list[dict]]:
     return json.loads(dumps(project)), results
 
 
+def _same(a, b, where: str = "") -> None:
+    """Equal as JSON, numbers to within the last digits: a fit's starting values
+    (a polynomial's coefficients, say) differ there between platforms."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        assert a.keys() == b.keys(), where
+        for key in a:
+            _same(a[key], b[key], f"{where}/{key}")
+    elif isinstance(a, list) and isinstance(b, list):
+        assert len(a) == len(b), where
+        for i, (x, y) in enumerate(zip(a, b, strict=True)):
+            _same(x, y, f"{where}[{i}]")
+    elif isinstance(a, float) or isinstance(b, float):
+        assert a == pytest.approx(b, rel=1e-9, abs=1e-14), where
+    else:
+        assert a == b, where
+
+
 @pytest.mark.slow
 def test_make_writes_what_is_committed(tmp_path: Path) -> None:
     """Nobody edits an example by hand and lets it drift: running the generator
@@ -132,7 +149,7 @@ def test_make_writes_what_is_committed(tmp_path: Path) -> None:
                     assert np.allclose(a[key], b[key], rtol=1e-9, atol=0)
         new, new_results = _without_results((written / project_file).read_text())
         old, old_results = _without_results((kept / project_file).read_text())
-        assert new == old, name
+        _same(new, old, name)
         for a, b in zip(new_results, old_results, strict=True):
             for key, value in a["parameters"].items():
                 assert value == pytest.approx(b["parameters"][key], rel=1e-5, abs=1e-12)

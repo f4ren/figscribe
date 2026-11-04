@@ -135,13 +135,16 @@ note the platform, the screen scaling and the theme in the pull request.
     *y:*. The panel may need a scroll on a small screen; fold what you do not use
     and select another plot of the same kind: it stays folded.
 
-22. **The gallery**: on the start page the twelve example tiles show their
-    pictures, titles and two lines of text in three columns, with nothing cut
-    off, at the smallest window too (the page scrolls). Open three of them
-    (a plot with fits, the color map, the paper figure with two tabs): each
-    opens a copy in the folder chosen, looks like its picture, and a second
-    click on the same tile opens the copy again, with your changes. Cancel the
-    folder dialog: nothing opens.
+22. **The gallery**: on the start page *Recent* (when there are recent projects)
+    comes right under the drop zone, then the layouts, then the twelve example
+    tiles, which show their pictures, titles and two lines of text in three
+    columns, with nothing cut off, at the smallest window too (the page
+    scrolls). *Try an example* scrolls to the gallery and *How it works* opens the
+    README at *Getting started* in the browser. Open three of the examples (a
+    plot with fits, the color map, the paper figure with two tabs): each opens a
+    copy in the folder chosen, looks like its picture, and a second click on the
+    same tile opens the copy again, with your changes. Cancel the folder dialog:
+    nothing opens.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

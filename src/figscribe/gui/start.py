@@ -30,6 +30,9 @@ from figscribe.model import Figure
 from figscribe.templates import TEMPLATES, Template
 
 DOCS_URL = "https://github.com/f4ren/figscribe#readme"
+GUIDE_URL = "https://github.com/f4ren/figscribe#getting-started"
+MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+"""Month names do not follow the system language: the page is in English."""
 EXAMPLE_COLUMNS = 3
 EXAMPLE_PICTURE_PX = 280
 THUMBNAIL_RATIO = 340 / 520  # the pictures of the examples are all this shape
@@ -46,6 +49,7 @@ class StartPage(QScrollArea):
     assistant_requested = Signal()
     recent_chosen = Signal(Path)
     docs_requested = Signal()
+    guide_requested = Signal()
     back_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
@@ -80,11 +84,12 @@ class StartPage(QScrollArea):
 
         self._content.addLayout(self._intro())
         self._content.addLayout(self._start_row())
-        self._content.addLayout(self._templates())
-        self._content.addLayout(self._examples())
+        # What a returning user wants first; empty, it takes no room.
         self._recent_box = QVBoxLayout()
         self._recent_box.setSpacing(8)
         self._content.addLayout(self._recent_box)
+        self._content.addLayout(self._templates())
+        self._content.addLayout(self._examples())
         self.set_recent([])
         self.setWidget(body)
 
@@ -159,6 +164,18 @@ class StartPage(QScrollArea):
         side = QVBoxLayout()
         side.setSpacing(10)
         side.addWidget(label("New to figscribe?", "sectionTitle"))
+        self.try_examples = _tile(
+            "Try an example", "Twelve figures to open and change", "fit"
+        )
+        self.try_examples.clicked.connect(self.show_examples)
+        side.addWidget(self.try_examples)
+        self.how_it_works = _tile(
+            "How it works",
+            "Data in, a figure at print size, a script that redraws it",
+            "file",
+        )
+        self.how_it_works.clicked.connect(self.guide_requested)
+        side.addWidget(self.how_it_works)
         assistant = _tile(
             "Describe it instead",
             "Connect an assistant and say what you want",
@@ -194,7 +211,8 @@ class StartPage(QScrollArea):
         column = QVBoxLayout()
         column.setSpacing(12)
         heading = QHBoxLayout()
-        heading.addWidget(label("Examples", "sectionHeading"))
+        self.examples_heading = label("Examples", "sectionHeading")
+        heading.addWidget(self.examples_heading)
         caption = label(
             "Open one and change its settings to see what figscribe can do", "caption"
         )
@@ -211,6 +229,12 @@ class StartPage(QScrollArea):
             grid.addWidget(tile, i // EXAMPLE_COLUMNS, i % EXAMPLE_COLUMNS)
         column.addLayout(grid)
         return column
+
+    def show_examples(self) -> None:
+        """Scroll the page so that the gallery starts at the top."""
+        heading = self.examples_heading
+        top = heading.mapTo(self.widget(), heading.rect().topLeft()).y()
+        self.verticalScrollBar().setValue(max(top - 24, 0))
 
     def set_back(self, name: str | None) -> None:
         """Offer a way back to the open project `name`, or none."""
@@ -356,7 +380,14 @@ def _recent_row(path: Path) -> QPushButton:
     text.addWidget(_passive(label(_short(path.parent), "caption")))
     line.addLayout(text, 1)
     edited = datetime.fromtimestamp(path.stat().st_mtime)
-    line.addWidget(_passive(label(f"edited {edited:%d %b %Y}", "caption")))
+    line.addWidget(
+        _passive(
+            label(
+                f"edited {edited.day} {MONTHS[edited.month - 1]} {edited.year}",
+                "caption",
+            )
+        )
+    )
     row.setMinimumHeight(line.sizeHint().height())
     row.setToolTip(str(path))
     return row

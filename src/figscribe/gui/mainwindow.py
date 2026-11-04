@@ -82,7 +82,7 @@ from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
-from figscribe.gui.start import DOCS_URL, StartPage
+from figscribe.gui.start import DOCS_URL, GUIDE_URL, StartPage
 from figscribe.io import DataError, numpy_source
 from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import array_names, read_numpy
@@ -410,6 +410,7 @@ class MainWindow(QMainWindow):
         start.recent_chosen.connect(self._open_recent)
         start.back_requested.connect(self.show_workspace)
         start.docs_requested.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
+        start.guide_requested.connect(lambda: QDesktopServices.openUrl(QUrl(GUIDE_URL)))
 
     def _choose_start_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Open", "", START_FILTER)
