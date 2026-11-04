@@ -43,10 +43,13 @@ here is done; its follow-ups ("only if asked") stay in its text.
   to the manual checklist). Open: item 5 the GUI at 1024 × 700, 150 % and
   200 % scaling, dark mode, keyboard only; item 6 every bench case through
   the equivalence test (the projects in `examples/` already are).
-- **An open bug from F12**: the script of a reduced plot whose x range keeps
-  no row stops with an error (`group.max()` of an empty array), where B7.1
-  asks that nothing crashes; the problem list warns about the range before.
-  Fix it with a failing equivalence case first.
+- **An open bug from B7.1**: fit a plot, then narrow its x range to one that
+  keeps no row: the figure draws no fit, but the script fits again and stops
+  (`curve_fit`: `ydata` must not be empty). The test is
+  `test_a_fit_stays_when_the_range_is_narrowed_to_nothing` (`xfail`, strict:
+  it says when it is fixed). The script's fit block and its residuals need a
+  check for rows, as the statistics of a reduced plot have since the fix of
+  the same range.
 - **B8**: about twenty dialog tests still set widgets instead of clicking
   them, and the preview's zoom, pan and legend drag lack mouse-event tests.
   Follow-ups: ratios that no longer match the grid; a lower bound for font
