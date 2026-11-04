@@ -50,6 +50,8 @@ release open in every later one.
   the first save, is now stored relative to the project (`../data/scan.csv`),
   where it used to be stored by its whole path, so a project and its data can be
   moved or shared together; a file on another volume or drive keeps its whole path.
+- Fixed: the script of a plot with fewer points drawn stopped with an error
+  when its range of x kept no row; it now draws no point, as figscribe does.
 - Fixed: `figscribe script` showed a Python traceback when it could not write
   the script (a folder that is not there, a read-only one); it now says so
   in one line.
