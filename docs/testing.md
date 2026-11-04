@@ -162,8 +162,8 @@ note the platform, the screen scaling and the theme in the pull request.
     and *Reference* each have a different picture, with their words beside
     them in a wide window. Make the window as narrow as it goes: the words go,
     the pictures stay, every button has a tip and nothing is behind the »
-    menu. Click the arrow of *Plot* and choose *Histogram*: the dialog opens on
-    it. *Reference* offers lines and shaded ranges, as *Insert > Add
+    menu. Click *Plot* and choose *Histogram*: the dialog opens on it; *Panel*,
+    *Plot* and *Reference* open their menus alike, with a picture at each entry. *Reference* offers lines and shaded ranges, as *Insert > Add
     Reference* does. Type "histogram" or "shaded" in Ctrl+K: they are found.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,

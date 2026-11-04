@@ -8,8 +8,9 @@ release open in every later one.
 - **The toolbar's adding buttons show what they make.** *Data*, *Figure*,
   *Panel*, *Plot*, *Fit*, *Note* and a new *Reference* each have a picture of
   their own instead of the same plus, in two groups (what holds, and what goes
-  into a panel). *Plot* has an arrow that lists the kinds (*Histogram*, *Allan
-  deviation*, *Color mesh* …) and opens the dialog on the one chosen;
+  into a panel). *Plot*, like *Panel* and *Reference*, opens a menu with *Add Plot…*
+  and the kinds (*Histogram*, *Allan deviation*, *Color mesh* …), which opens
+  the dialog on the one chosen; the entries of these menus have pictures;
   *Reference* adds a vertical or horizontal line or a shaded range. *Insert >
   Add Line or Range* is now *Insert > Add Reference*, and *Insert > Add Plot
   As* lists the kinds. In a narrow window the toolbar shows the icons alone

@@ -1402,20 +1402,28 @@ class MainWindow(QMainWindow):
         for name, (_, glyph) in KINDS.items():
             action = self.plot_menu.addAction(theme.icon(glyph), name)
             action.triggered.connect(lambda _=False, n=name: self.add_plot(n))
+        # The toolbar's button opens the same kinds under "Add Plot…" itself.
+        self.plot_button_menu = QMenu(self)
+        self.plot_button_menu.addAction(self.plot_action)
+        self.plot_button_menu.addSeparator()
+        self.plot_button_menu.addActions(self.plot_menu.actions())
         self.fit_action = self._action(
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
         self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
         self.marking_menu = insert.addMenu("Add &Reference")
         for text, kind, orientation in markings.ENTRIES:
-            action = self.marking_menu.addAction(text)
+            glyph = kind if orientation == "vertical" else f"{kind}_h"
+            action = self.marking_menu.addAction(theme.icon(glyph), text)
             action.triggered.connect(
                 lambda _=False, k=kind, o=orientation: self.add_marking(k, o)
             )
         self.panel_menu = insert.addMenu("Add Pa&nel")
         self.panel_actions = {}
         for side, text in PANEL_SIDES:
-            action = self.panel_menu.addAction(text.replace("Add ", "").capitalize())
+            action = self.panel_menu.addAction(
+                theme.icon(f"panel_{side}"), text.replace("Add ", "").capitalize()
+            )
             action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
             self.panel_actions[side] = action
 
@@ -1499,8 +1507,8 @@ class MainWindow(QMainWindow):
             self.plot_action,
             "line",
             "Plot",
-            "Add a plot of the imported data; the arrow lists the kinds",
-            menu=self.plot_menu,
+            "Add a plot of the imported data: choose a kind, or Add Plot…",
+            menu=self.plot_button_menu,
         )
         self._adding_button(self.fit_action, "fit", "Fit", "Fit a curve to a plot")
         self._adding_button(
@@ -1539,7 +1547,8 @@ class MainWindow(QMainWindow):
     ) -> None:
         """A toolbar button that adds something: `what` is the action it runs
         or, for a button that only opens a menu, that menu. With `menu` the
-        action is the button's click and the menu its arrow."""
+        button shows that menu instead of running `what`, which is its first
+        entry."""
         bar = self.toolbar
         if isinstance(what, QMenu):
             button = QToolButton()
@@ -1556,7 +1565,7 @@ class MainWindow(QMainWindow):
             bar.addAction(what)
             button = bar.widgetForAction(what)
             if menu is not None:
-                button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+                button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
                 button.setMenu(menu)
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         bar.wordy.append(button)

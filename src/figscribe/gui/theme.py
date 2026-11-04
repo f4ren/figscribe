@@ -393,6 +393,24 @@ _ICONS = {
     'rx="1" fill="none" stroke="{c}" stroke-width="1.3"/>',
     "reference": '<rect x="3" y="2" width="6" height="12" fill="{c}" opacity="0.35"/>'
     '<path d="M12 1.5 V14.5" stroke="{c}" stroke-width="1.6" stroke-dasharray="3 2"/>',
+    "refline_h": '<path d="M1.5 8 H14.5" stroke="{c}" stroke-width="1.6" '
+    'stroke-dasharray="3 2"/>',
+    "span_h": '<rect x="1.5" y="4.5" width="13" height="7" fill="{c}" opacity="0.4"/>',
+    "panel_right": '<rect x="2" y="3" width="5" height="10" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="9" y="3" width="5" height="10" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
+    "panel_left": '<rect x="9" y="3" width="5" height="10" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="2" y="3" width="5" height="10" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
+    "panel_above": '<rect x="3" y="9" width="10" height="5" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="3" y="2" width="10" height="5" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
+    "panel_inset": '<rect x="2" y="2" width="12" height="12" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="7.5" y="3.5" width="5" height="5" '
+    'rx="0.8" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.1"/>',
+    "panel_below": '<rect x="3" y="2" width="10" height="5" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="3" y="9" width="10" height="5" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
     "chat": '<path d="M2.5 3.5 H13.5 V10.5 H7 L4 13 V10.5 H2.5 Z" fill="none" '
     'stroke="{c}" stroke-width="1.4" stroke-linejoin="round"/>',
     "code": '<path d="M6 4 L2 8 L6 12 M10 4 L14 8 L10 12" stroke="{c}" '

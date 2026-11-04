@@ -2626,9 +2626,13 @@ the very things U12 wants found.
 - Grouped by level, as the figure is built: *Data*, *Figure*, *Panel* (what
   holds), a separator, then *Plot*, *Fit*, *Note*, *Reference* (what goes into
   a panel).
-- *Plot* is a split button: a click is *Add Plot…*, the arrow lists the kinds
-  (*Insert > Add Plot As*) and opens the dialog on that kind when the data can
-  make it, on the usual one when not.
+- *Plot*, *Panel* and *Reference* are alike: a click opens a menu, with the
+  arrow in the same place (a split button, tried first, draws its arrow apart
+  from the others). *Plot*'s menu has *Add Plot…* first (Ctrl+Shift+P as
+  before), then the kinds, which are also *Insert > Add Plot As*; a kind opens
+  the dialog on it when the data can make it, on the usual one when not. The
+  entries of the three menus have pictures too: the side of a new panel, a
+  vertical or horizontal line or range, the kind of plot.
 - *Reference* opens *Insert > Add Reference*: vertical and horizontal line,
   shaded x and y range, and later F15's *Function…*. The menu used to be
   called *Add Line or Range*; a name that also covers a theory curve is

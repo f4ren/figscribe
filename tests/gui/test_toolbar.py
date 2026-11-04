@@ -97,10 +97,28 @@ def test_the_reference_menu_holds_lines_and_ranges(window) -> None:
     ]
 
 
-def test_the_plot_button_lists_the_kinds_of_plot(window) -> None:
-    plot = _buttons(window)["Plot"]
-    assert plot.popupMode() == QToolButton.ToolButtonPopupMode.MenuButtonPopup
-    assert [a.text() for a in plot.menu().actions()] == list(KINDS)
+def test_the_three_menu_buttons_open_their_menu_alike(window) -> None:
+    """Panel, Plot and Reference all show their menu on a click, with the
+    arrow in the same place: no split button among them."""
+    buttons = _buttons(window)
+    for name in ("Panel", "Plot", "Reference"):
+        assert buttons[name].popupMode() == (
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        ), name
+    entries = [a.text() for a in buttons["Plot"].menu().actions()]
+    assert entries[0] == "Add &Plot…" and entries[1] == ""
+    assert entries[2:] == list(KINDS)
+
+
+def test_every_entry_of_the_adding_menus_has_a_picture_of_its_own(window) -> None:
+    for menu in (window.panel_menu, window.marking_menu, window.plot_menu):
+        pictures = []
+        for action in menu.actions():
+            picture = _picture(action.icon())
+            assert not picture.isNull(), action.text()
+            pictures.append(picture)
+        for i, one in enumerate(pictures):
+            assert all(one != other for other in pictures[:i]), menu.title()
 
 
 @pytest.mark.parametrize(
