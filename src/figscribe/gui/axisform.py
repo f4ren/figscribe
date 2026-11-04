@@ -92,17 +92,21 @@ class AxisForm:
         self.unit.editingFinished.connect(
             lambda: self._set(unit=self.unit.text().strip() or None)
         )
-        self.labelpad = self._line(form, "Distance (pt)", "labelpad", "default")
-        self.labelpad.editingFinished.connect(
-            lambda: self._number("labelpad", self.labelpad)
-        )
         self.prefix = self._combo(form, "Show values in", "prefix", [])
         self.prefix.activated.connect(
             lambda i: self._set(prefix=self.prefix.itemData(i))
         )
+        self.label_size = self._line(form, "Label size (pt)", "label_size", "default")
+        self.label_size.editingFinished.connect(
+            lambda: self._number("label_size", self.label_size)
+        )
+        self.labelpad = self._line(form, "Label distance (pt)", "labelpad", "default")
+        self.labelpad.editingFinished.connect(
+            lambda: self._number("labelpad", self.labelpad)
+        )
 
-        form = panel._section("Range", layout)
-        self.scale = self._combo(form, "Scale", "scale", SCALES)
+        form = panel._section("Scale", layout)
+        self.scale = self._combo(form, "Type", "scale", SCALES)
         self.scale.activated.connect(lambda i: self._set(scale=self.scale.itemData(i)))
         row = QWidget()
         line = QHBoxLayout(row)
@@ -119,16 +123,19 @@ class AxisForm:
         self.linthresh.editingFinished.connect(
             lambda: self._number("symlog_linthresh", self.linthresh, shown=True)
         )
+        self.tick_size = self._line(form, "Number size (pt)", "tick_size", "default")
+        self.tick_size.editingFinished.connect(
+            lambda: self._number("tick_size", self.tick_size)
+        )
 
-        form = panel._section("Major ticks", layout)
-        self.major = self._combo(form, "Placed", "major", MAJOR_MODES)
+        form = panel._section("Ticks", layout)
+        self.major = self._combo(form, "Major ticks", "major", MAJOR_MODES)
         self.major.activated.connect(self._set_major_mode)
-        self.major_value = self._line(form, "", "major")
+        self.major_value = self._line(form, "Distance", "major")
+        self.major_caption = form.labelForField(self.major_value)
         self.major_value.editingFinished.connect(self._set_major_value)
-        self.tick_labels = self._line(form, "Labels", "labels", "numbers")
+        self.tick_labels = self._line(form, "Tick labels", "labels", "numbers")
         self.tick_labels.editingFinished.connect(self._set_tick_labels)
-
-        form = panel._section("Minor ticks", layout)
         row = QWidget()
         line = QHBoxLayout(row)
         line.setContentsMargins(0, 0, 0, 0)
@@ -139,22 +146,12 @@ class AxisForm:
         self.count.setRange(1, 19)
         line.addWidget(self.minor, 1)
         line.addWidget(self.count)
-        self._add(form, "Placed", row, "minor")
+        self._add(form, "Minor ticks", row, "minor")
         self.minor.activated.connect(self._set_minor)
         self.count.valueChanged.connect(lambda _: self._set_minor())
         self.minor_hint = label("", "caption")
         self.minor_hint.setWordWrap(True)
         form.addRow(self.minor_hint)
-
-        form = panel._section("Text size", layout)
-        self.label_size = self._line(form, "Label (pt)", "label_size", "default")
-        self.label_size.editingFinished.connect(
-            lambda: self._number("label_size", self.label_size)
-        )
-        self.tick_size = self._line(form, "Numbers (pt)", "tick_size", "default")
-        self.tick_size.editingFinished.connect(
-            lambda: self._number("tick_size", self.tick_size)
-        )
 
     # --- showing --------------------------------------------------------------
 
@@ -220,6 +217,7 @@ class AxisForm:
         self._visible(self.major_value, mode != "auto")
         self._visible(self.tick_labels, mode == "values")
         unit = unit_shown(spec) or ""
+        self.major_caption.setText("Distance" if mode == "step" else "Values")
         if mode == "step":
             _text(self.major_value, self._shown(spec.major_step))
             self.major_value.setPlaceholderText(
@@ -300,6 +298,7 @@ class AxisForm:
         if mode == "auto":
             self._set(ticks=None, tick_labels=None, major_step=None)
         else:
+            self.major_caption.setText("Distance" if mode == "step" else "Values")
             self._visible(self.major_value, True)
             self._visible(self.tick_labels, mode == "values")
             self.major_value.clear()

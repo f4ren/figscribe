@@ -2220,6 +2220,239 @@ to say what one line of text says, and nothing for `(x − 32) / 1.8`.
 the file would hold two values that must agree, and a change to one of them
 alone would break that.
 
+## 0048 — The figure's settings by what they are for, and new figures with inward ticks
+
+**Date:** 2026-11-04
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the first element: the figure. The user went through its panel
+(2026-11-04): *Tick marks point* and *Ticks on all sides* are set for every
+figure and were behind *More*, the check box for the panel letters was
+separated from its settings by *Export*, and the same two tick settings should
+simply be the default. "Line up axis labels", which the proposal had under the
+grid, is in *Text* with the labels, and the frame width and the tick widths
+and lengths are in a folded section of their own under *Ticks and frame*.
+
+### Decision
+
+- **New figures start with inward ticks on all sides** (`Figure.tick_direction`
+  "in", `Figure.ticks_all_sides` True), as most physics journals have them. A
+  saved project has both written out (`dumps` writes every field), so it is
+  drawn as it was; no schema bump and no migration. A project file that lacks
+  them, such as the example, now takes the new defaults. Style sheets and
+  `None` still mean "as the style has it". Eleven image baselines changed,
+  each looked at.
+- **The figure's panel**, top to bottom: *Format* (name, width, height, PNG
+  resolution, style sheet), *Text* (font size, units in labels, line up axis labels, panel
+  labels with their letters, bold, placement, size and insets right under the
+  box, the size captioned "Letter size (pt)"), *Ticks and frame* (the two tick
+  settings, open), *Widths and lengths* (frame width and the tick widths and
+  lengths, folded), and *Panel layout* (the grid, folded; it was "Layout").
+  There is no *More* for the figure: one field is not worth a fold, so the
+  style sheet is in *Format*, which sets the base look of the whole figure.
+  The names are the user's (*Format*, *Panel layout*, *Ticks and frame*) and
+  follow rules the advisor gave for every element: a section says what is in it
+  without repeating the header, no section for one or two fields and no *More*
+  unless several rare settings are in it, short nouns, the same word with the
+  same meaning in every element, a folded section's name says whether to open it,
+  a caption makes sense without its section (the search shows rows alone), and
+  the groups in the same order everywhere: what it is, what it shows, how it
+  looks, the rare. The figure's settings follow the order of `BASIC` instead of the
+  model's (`IN_THE_ORDER_OF_BASIC`), and an optional part can show its settings
+  in the section of its check box (`INLINE`) instead of a section of its own.
+- **The sections stay a column; tabs may come back.** The user asked whether
+  tabs would save scrolling and decided on pictures and an independent opinion
+  (the advisor): a prototype with four tabs fits the 380 px of the panel with
+  each group on one page, but the column is about 800 px tall with the folded
+  parts closed, and tabs hide three quarters of the settings, make a hit of
+  the search in another tab need special handling, and make the panel change
+  shape if they are used for some elements only. The user chose the column for
+  every element, to be looked at again after some days of use; tabs can be added
+  later without touching the model or a saved file. What would change it: a
+  short panel (a laptop) and much switching between groups of one object.
+
+### Alternatives considered
+
+**New defaults only in the start-page layouts and *Add Figure***: smaller, but
+a figure made by the assistant, the tests or a script would differ from one
+made by hand. **Tabs for the sections**: see above. **All tick and frame
+settings in view**: the user asked for two.
+
+### Settled while building it
+
+- **A line under each section.** `theme.py` had always asked for one
+  (`QWidget#section { border-bottom }`), but a plain `QWidget` paints no border
+  of its stylesheet without `WA_StyledBackground`, so no section was ever
+  separated. With the folded *Widths and lengths* and *Panel layout* right under
+  *Ticks and frame*, they read as part of it (the user's remark); they are
+  separate now, in every panel. The user then asked for every section to fold
+  (not only the rare ones): each title has an arrow and folds with a click, the
+  rare ones start folded (`COLLAPSED`: *Widths and lengths*, *Panel layout*,
+  *More*). What the user folds or opens is kept by kind of object and title,
+  so folding *Data* of the error bars does not hide a histogram's, and stays
+  so while another object is selected and in the search; it is kept while the
+  program runs, not between two runs (nothing is written to `QSettings`). The
+  titles are 14 px: 13 was too small and 16 too large, and the user asked for
+  the size of the figure's name in the outline (13 px, semi-bold, which looks
+  as large as 14 px in a button); the object's own title is 17 px, so that the
+  order of weight stays.
+- The sweep over every field relied on a single pixel (a grey stretch of a line
+  in a small inset at 72 dpi, which the new ticks hid); the test project's
+  plot has a wider line. The rule tests judge on plain ticks, as they were
+  written: a line on the second layer and a tick mark at the frame differ by one
+  pixel.
+
+## 0049 — The panel's settings by what they are for
+
+**Date:** 2026-11-05
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the second element, after the figure (0048). A panel had *Panel*
+(title, a box for a right y axis, a box for the grid lines), *Axes* (a card for
+each axis), *Position* (its cell), *Legend* and *More*, which held the six
+settings of the grid and the title size. The grid's box was far from its
+settings, the right y axis had a box in one section and a card in another, and
+"Position" meant the cell in one place and the dragged legend in another. The
+advisor reviewed a first proposal; the user chose the order and the names.
+
+### Decision
+
+Top to bottom, for the rules of 0048:
+- **Title and axes**, open: the *Title* and *Title size* first (the user's
+  choice; the advisor would have had the axes first), then the cards of the X
+  and Y axes, the box *Right y axis* and, once it is on, the card of that axis
+  right after it. A box and a card in one place, not two.
+- **Grid**, open and before the legend (the user's choice): the box *Grid
+  lines* and under it its five settings; the rules that grey them out while the
+  grid is off were there already. The minor grid lines of F5.10 will go under
+  it.
+- **Legend**, open: visible, location, *Position (dragged)* (the user's
+  name), frame, *Columns of entries* (the figure's *Panel layout* has columns
+  of a grid), font size.
+- **Place in layout**, folded: the cell of the panel in the figure's grid;
+  for an inset **Place in panel**, folded: the panel it is in and its bounds.
+- No *More*. The sections of a panel are open or folded like those of every
+  other element, and what the user folds is remembered per kind of object.
+
+The code: the nested sections of a panel (*Legend*, *Place in panel*) are placed
+by `ORDER` like the others, `BASIC["Axes"]` holds the grid and the title size so
+that they are not sent to *More*, `_axis_links` can build the cards in two
+turns, and two captions are set for the legend (`CAPTIONS`).
+
+### Alternatives considered
+
+**The axes before the title** (the advisor): people open a panel for its axes,
+and the title is often empty in a paper. **The grid's details folded under the
+box**: a shorter column, but the box would then be out of reach without
+unfolding. **The legend's rare settings folded**: not asked for; the legend
+stays whole.
+
+## 0050 — The axis form by what its settings are for
+
+**Date:** 2026-11-05
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the third element: the form that opens when a panel's axis is
+chosen (x, y, right y). It had five sections: *Label* (label, unit, distance,
+show values in), *Range* (scale, from … to, linear within ±), *Major ticks*,
+*Minor ticks* (one row) and *Text size* (two rows, one for the label and one
+for the numbers). The advisor gave an opinion, and the user chose the names.
+
+### Decision
+
+Three sections, all open, no *More*:
+- **Label**: label, unit, *Show values in* (the user's choice, since it changes
+  the unit text, kHz), *Label size (pt)* and *Label distance (pt)* ("Distance
+  (pt)" alone did not say from what).
+- **Scale** (the user's choice; it was *Range*): *Type* (linear, logarithmic,
+  symmetric log; the row was called *Scale* and would have shared its name with
+  its section), *From … to*, *Linear within ±* for a symmetric log axis, and
+  *Number size (pt)*. The user's point: the numbers along an axis are what one
+  takes for its scale, so their size belongs here and not among the ticks.
+- **Ticks**: *Major ticks* with a row below it that says what it takes,
+  *Distance* for "every …" and *Values* for "at these values" (it had no
+  caption, so the search could not find it), *Tick labels*, and *Minor ticks*
+  with its count. One section for both kinds, so the captions carry the
+  difference (before: *Placed* twice).
+
+*Text size* is gone, as a section of two rows: *Label size* is in *Label* and
+*Number size* in *Scale*.
+
+Also fixed, a bug of 0048's fold memory: the axis form was built under the
+kind of the object selected before it, so a section folded on an axis came
+back open after another selection. An axis and a selection of several plots
+now have their own kinds.
+
+### Alternatives considered
+
+**The numbers' size among the ticks** (the advisor's first order, and the
+proposal): the user expected it with the scale. **Two sections for the ticks**:
+*Minor ticks* was a section of one row. **Names** *Numbers and range* (clear,
+but hides linear or log) and *Scale and numbers*. **The row *Scale* inside the
+section *Scale***: renamed *Type*, as the user chose, though *Label* has the
+same doubling. **Show values in under *Scale*** (it divides the numbers by a
+power of ten): kept with the unit, which it also changes.
+
+The older decisions (0006, 0025) name the old sections; they are not rewritten.
+
+## 0051 — The settings of a line, points and error bar plot by what they are for
+
+**Date:** 2026-11-05
+**Status:** accepted
+
+### Context
+
+Roadmap U11, the fourth element, for the three plots that draw data against x
+and y. They had *Data* (the columns, the unit of each axis, the range and the
+box for fewer points, up to 20 rows), *Look*, *Legend* (one field), a section
+of its own for each switched-on box, and *More*, which held the marker size,
+the line widths, the box for an error band, the look of the left-out points,
+*Visible* and the drawing order. The advisor reviewed it; the user chose the
+rest.
+
+### Decision
+
+Top to bottom:
+- **Label and data**, open: *Legend entry* (it was *Label*, which in the axis
+  form means the axis label), the y axis, x, y, and for error bars the x and y
+  errors.
+- **Units and rows**, open (the user's choice): *x in* and *y in* with their
+  rows, *Use only x* and the box *Fewer points* with its settings right under
+  it. The rows of the two conversions say *x:* and *y:* (the user's choice),
+  as both can be on.
+- **Look**, open: color, marker, *Marker size*, line style, *Line width* (for
+  points: color, edge color, marker, marker size), so that a pair is together.
+- **Error bars** (only for them), open: cap size, *Error bar width* and the box
+  *Error band* with its color and opacity under it (*Band color*, *Band
+  opacity*).
+- **Left-out points**, folded: the look of the rows left out, which only counts
+  once rows are.
+- **More**, folded, three rarely used settings: opacity, *Visible* (the outline
+  has the eye) and the drawing order (the context menu has *Bring to front*).
+
+The names are the user's. The panel opens longer than it did, about 1000
+instead of 770 pixels, since the marker size and the line widths are in view.
+
+The code: the sections of a plot are kept per kind (`PLOT_SECTIONS`), because
+`SECTIONS` is by field name for every kind and would have moved histograms, the
+Allan deviation, fits and notes before their turn; `BASIC` lists every shown
+field of the three kinds in order (`IN_THE_ORDER_OF_BASIC`), and the boxes
+`band` and `reduction` show their settings under them (`INLINE`). A test holds
+the sections of the other kinds as they are.
+
+### Alternatives considered
+
+**Keeping *Legend* for the label**: a section of one field. **A section of its
+own for *Fewer points* settings**: far from its box. **Units and rows folded**:
+the user uses them often. **Left-out points in *More***: five fields that only
+count once rows are left out.
+
 ## 0052 — Data paths that follow the project file
 
 **Date:** 2026-11-05

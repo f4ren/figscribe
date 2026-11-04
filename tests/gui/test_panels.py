@@ -165,11 +165,12 @@ def test_the_position_is_a_section_of_its_own(qtbot, window: MainWindow) -> None
     panel: PropertyPanel = window.properties
     host = window.document.figure.axes[0]
     window.document.select(host.id)
-    assert "Position" in panel.sections and ("row",) in panel.editors
+    assert "Place in layout" in panel.sections and ("row",) in panel.editors
     window.add_panel("inset", host.id)
     inset = window.document.figure.axes[1]
     assert window.document.selected == inset.id
-    assert "Position" not in panel.sections and "Inset" in panel.sections
+    assert "Place in layout" not in panel.sections
+    assert "Place in panel" in panel.sections
     line = panel.editors[("inset", "bounds")].line
     line.setText("0.1, 0.1, 0.3, 0.3")
     line.editingFinished.emit()

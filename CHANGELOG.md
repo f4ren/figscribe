@@ -5,11 +5,30 @@ release open in every later one.
 
 ## Unreleased
 
-- Fixed: *Save As* into another folder no longer loses the data (every file was
-  "missing" there). A data file outside the project's folder, or imported before
-  the first save, is now stored relative to the project (`../data/scan.csv`),
-  where it used to be stored by its whole path, so a project and its data can be
-  moved or shared together; a file on another volume or drive keeps its whole path.
+- **New figures have inward tick marks on all four sides**, as many journals
+  want, and the figure's settings are arranged by what they are for: *Format*
+  (name, size, PNG resolution, style sheet), *Text* (font size, units in
+  labels, panel letters), *Ticks and frame* with the two tick settings in view,
+  their widths and lengths and the panel layout (folded). Saved projects keep
+  their own ticks. A thin line now separates the sections of the property
+  panel, as the design had always meant, and every section folds with a click
+  on its title; the panel remembers it for each kind of object while you work. The
+  section titles are larger (14 px, as large as the figure's name in the outline;
+  the object's title 17 px), to be read at a glance.
+- **A panel's settings are arranged by what they are for:** *Title and axes*
+  (the title, then the cards of the axes, the right y axis with its card right
+  after its box), *Grid* (the box with all its settings under it, no longer
+  hidden under *More*), *Legend*, and the folded *Place in layout*. The legend's
+  *Columns* is *Columns of entries*, and its *Position* is *Position (dragged)*.
+- **The axis form has three sections:** *Label* (with the label's size and
+  distance), *Scale* (type, range, the linear zone of a symmetric log axis and
+  the size of the numbers) and *Ticks* (major and minor, the row under the major
+  ticks says *Distance* or *Values*). A section folded on an axis stays folded.
+- **The settings of a line, points or error bar plot are arranged by what they
+  are for:** *Label and data* (the legend entry is *Legend entry*), *Units and
+  rows* (with *Fewer points* right under its box), *Look* (marker size and line
+  width next to their marker and line), *Error bars* (the band under its box) and
+  the folded *Left-out points* and *More*.
 - **A formula for a plot's units.** *x in* and *y in* offer "a formula" next to
   "another factor": `x / 60 - 273.15`, `(x - 32) / 1.8`. It is written in `x`
   and numbers and must be linear and rise with x, so that error bars, axis,
@@ -26,6 +45,11 @@ release open in every later one.
   before and can be replaced by the mean of their neighbours. While a plot is
   reduced, leaving rows out and finding outliers are off. Saved files are
   drawn as before.
+- Fixed: *Save As* into another folder no longer loses the data (every file was
+  "missing" there). A data file outside the project's folder, or imported before
+  the first save, is now stored relative to the project (`../data/scan.csv`),
+  where it used to be stored by its whole path, so a project and its data can be
+  moved or shared together; a file on another volume or drive keeps its whole path.
 - Fixed: `figscribe script` showed a Python traceback when it could not write
   the script (a folder that is not there, a read-only one); it now says so
   in one line.

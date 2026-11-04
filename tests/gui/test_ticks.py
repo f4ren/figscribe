@@ -32,12 +32,15 @@ def _choose(panel: PropertyPanel, path: tuple, text: str) -> None:
 def test_the_figure_sets_the_tick_style(panel, document) -> None:
     document.select(document.figure.id)
     combo = panel.editors[("tick_direction",)].widget
-    assert combo.currentText() == "style default"
-    _choose(panel, ("tick_direction",), "inward")
+    # What a figure of the program starts with; the example project is old
+    # enough not to have the setting, so it takes the program's.
+    assert combo.currentText() == "inward"
+    assert panel.editors[("ticks_all_sides",)].widget.isChecked()
+    _choose(panel, ("tick_direction",), "outward")
     panel.editors[("ticks_all_sides",)].widget.click()
     figure = document.figure
-    assert figure.tick_direction == "in" and figure.ticks_all_sides
-    assert "Style" in panel.sections
+    assert figure.tick_direction == "out" and not figure.ticks_all_sides
+    assert "Ticks and frame" in panel.sections
 
 
 def test_the_figure_sets_frame_and_tick_widths(panel, document) -> None:

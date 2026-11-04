@@ -76,12 +76,15 @@ class Figure(Identified):
     font_size: float | None = Field(None, gt=0.0)
     """Base font size in pt; labels, ticks and legend scale with it. None
     keeps Matplotlib's (or the style sheet's)."""
-    tick_direction: Literal["in", "out", "inout"] | None = None
+    tick_direction: Literal["in", "out", "inout"] | None = "in"
     """Which way the tick marks point, in every panel; None keeps Matplotlib's
-    (or the style sheet's), which is "out"."""
-    ticks_all_sides: bool = False
+    (or the style sheet's), which is "out". A new figure points them in, as
+    most physics journals have them (decision 0048); a file keeps what it was
+    saved with."""
+    ticks_all_sides: bool = True
     """Tick marks also on the top and right edge of every panel, as many
-    physics journals have them; the numbers stay bottom and left."""
+    physics journals have them; the numbers stay bottom and left. On for a new
+    figure; a file keeps what it was saved with."""
     frame_width: float | None = Field(None, gt=0.0)
     """Line width of the frame around every panel in pt; None keeps
     Matplotlib's (or the style sheet's), which is 0.8."""

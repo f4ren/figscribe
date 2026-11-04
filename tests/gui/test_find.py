@@ -58,8 +58,8 @@ def test_the_search_keeps_only_the_fields_it_finds(window: MainWindow, qtbot) ->
     shown = _shown_captions(window)
     assert "Line width (pt)" in shown and "Error bar width (pt)" in shown
     assert "Marker" not in shown
-    _search(window, qtbot, "legend")  # a section's title finds its fields
-    assert _shown_captions(window) == ["Label"]
+    _search(window, qtbot, "legend")  # the caption of the legend entry says it
+    assert _shown_captions(window) == ["Legend entry"]
     QTest.keyClick(window.properties.search, Qt.Key.Key_Escape)
     qtbot.waitUntil(lambda: not window.properties._filtering.isActive())
     assert window.properties.search.text() == ""

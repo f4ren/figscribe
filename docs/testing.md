@@ -106,5 +106,34 @@ note the platform, the screen scaling and the theme in the pull request.
     `log(x)` is refused with the reason. Export the script and run it: the
     same figure, with the formula written as typed.
 
+18. **The figure's settings**: select the figure. *Format*, *Text*, *Ticks and
+    frame* and the folded *Widths and lengths* and *Panel layout* come in that
+    order, without scrolling on a screen of 1080 pixels; a new project has
+    inward ticks on all four sides; switching *Panel labels* on shows its
+    letters under the box; the search (Ctrl+F) finds *Tick length* and opens
+    *Widths and lengths*. Every title folds its section with a click and
+    keeps that while another object is selected.
+
+19. **The panel's settings**: select a panel, then an inset. *Title and axes*
+    (the title, the cards of the axes, the box for a right y axis), *Grid*,
+    *Legend* and the folded *Place in layout* (an inset: *Place in panel*) come
+    in that order. Tick *Right y axis*: its card appears right after the box and
+    nothing crashes; untick it. Switch *Grid lines* off: its settings grey out.
+
+20. **The axis form**: click an axis card of a panel. *Label*, *Scale* and
+    *Ticks* are open, in that order, and fit a screen of 1080 pixels. Choose
+    *every …* for the major ticks: the row below says *Distance*; choose *at these
+    values*: it says *Values* and *Tick labels* appears. Choose a symmetric log
+    type: *Linear within ±* appears. Fold *Scale*, select the figure and the axis
+    again: it stays folded.
+
+21. **A plot's settings**: select error bars, a line and points in turn. The
+    sections come as *Label and data*, *Units and rows*, *Look* (an error bar
+    plot also *Error bars*), the folded *Left-out points* and *More*. Tick *Error
+    band*: its color and opacity appear right under the box; tick *Fewer points*:
+    its settings appear under it. Turn on both conversions: the rows say *x:* and
+    *y:*. The panel may need a scroll on a small screen; fold what you do not use
+    and select another plot of the same kind: it stays folded.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.
