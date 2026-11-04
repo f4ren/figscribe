@@ -152,5 +152,11 @@ note the platform, the screen scaling and the theme in the pull request.
     write the file, and nothing changes. Save onto a network share or a USB
     stick and pull it out during the save, if you can: the saved file is whole.
 
+24. **Export remembers**: *Export Figure…* to PNG in another folder, then open
+    it again: that folder and PNG are offered, with the figure's name. Close
+    figscribe, start it again: still so. Type a name without a suffix: the
+    format's suffix is added. *Export All Figures…* offers the folder and format
+    of the last time.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

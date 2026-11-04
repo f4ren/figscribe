@@ -68,6 +68,10 @@ release open in every later one.
   lost share leaves the last saved version; that version also stays next to it
   as `NAME.figscribe.bak`. A project made read-only is still refused. Project
   files are written with the same line ends on every platform.
+- **Export remembers its format and folder.** *Export Figure…* and *Export All
+  Figures…* open in the folder last used with the format last chosen, and
+  suggest the figure's name as the file name; a name typed without a suffix gets
+  the chosen format's.
 - Fixed: `figscribe script` showed a Python traceback when it could not write
   the script (a folder that is not there, a read-only one); it now says so
   in one line.

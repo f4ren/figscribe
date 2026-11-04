@@ -122,7 +122,10 @@ DATA_FILTER = (
     "Data (*.csv *.tsv *.txt *.dat *.npy *.npz);;Delimited text (*.csv *.tsv "
     "*.txt *.dat);;NumPy (*.npy *.npz);;All files (*)"
 )
-EXPORT_FILTER = "PDF (*.pdf);;SVG (*.svg);;PNG (*.png)"
+EXPORT_FORMATS = {"PDF": ".pdf", "SVG": ".svg", "PNG": ".png"}
+EXPORT_FILTER = ";;".join(
+    f"{name} (*{suffix})" for name, suffix in EXPORT_FORMATS.items()
+)
 SCRIPT_FILTER = "Python script (*.py)"
 EXPORT_ALL_FORMATS = {
     "PDF": ".pdf",
@@ -156,6 +159,7 @@ class MainWindow(QMainWindow):
             lambda name: self.statusBar().showMessage(f"Assistant: {name}", 3000)
         )
         self._recent: list[Path] = []
+        self._kept: dict[str, str] = {}
         self._worked = False
         """Whether the workspace was shown: the start page then offers a way back."""
         self.ask: Callable[[str, str], bool] = self._ask_user
@@ -297,6 +301,26 @@ class MainWindow(QMainWindow):
     def _remember(self, key: str, value: bool) -> None:
         if self.settings is not None:
             self.settings.setValue(key, value)
+
+    def _text_setting(self, key: str, default: str = "") -> str:
+        """A text kept between runs, or only while this window lives when the
+        window has no settings."""
+        if self.settings is None:
+            return self._kept.get(key, default)
+        return str(self.settings.value(key, default) or default)
+
+    def _keep_text(self, key: str, value: str) -> None:
+        self._kept[key] = value
+        if self.settings is not None:
+            self.settings.setValue(key, value)
+
+    def _export_folder(self) -> str:
+        """Where an export starts: the last folder used, if it is still there,
+        else the project's."""
+        remembered = self._text_setting("export/folder")
+        if remembered and Path(remembered).is_dir():
+            return remembered
+        return str(self.document.project_dir or "")
 
     def _provider(self) -> Provider:
         """The assistant's model from the settings; API keys are never stored."""
@@ -513,16 +537,24 @@ class MainWindow(QMainWindow):
 
     def _export_all_dialog(self) -> None:
         folder = QFileDialog.getExistingDirectory(
-            self, "Export all figures into", str(self.document.project_dir or "")
+            self, "Export all figures into", self._export_folder()
         )
         if not folder:
             return
         formats = list(EXPORT_ALL_FORMATS)
+        last = self._text_setting("export/all-format", formats[0])
         chosen, ok = QInputDialog.getItem(
-            self, "Export all figures", "Each figure as:", formats, 0, False
+            self,
+            "Export all figures",
+            "Each figure as:",
+            formats,
+            formats.index(last) if last in formats else 0,
+            False,
         )
         if not ok:
             return
+        self._keep_text("export/all-format", chosen)
+        self._keep_text("export/folder", folder)
         suffix = EXPORT_ALL_FORMATS[chosen]
         names = export_names(self.document.project.figures, Path(folder), suffix)
         there = [p.name for p in names if p.exists()]
@@ -1249,9 +1281,41 @@ class MainWindow(QMainWindow):
             self.open_path(path)
 
     def _export_dialog(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Export figure", "", EXPORT_FILTER)
-        if path:
-            self.export_to(path)
+        figure = self.document.figure
+        if figure is None:
+            return
+        format_ = self._text_setting("export/format", "PDF")
+        if format_ not in EXPORT_FORMATS:
+            format_ = "PDF"
+        stems = file_stems(self.document.project.figures)
+        stem = stems[self.document.project.figures.index(figure)]
+        folder = self._export_folder()
+        suggested = f"{stem}{EXPORT_FORMATS[format_]}"
+        if folder:
+            suggested = str(Path(folder) / suggested)
+        path, chosen = QFileDialog.getSaveFileName(
+            self,
+            "Export figure",
+            suggested,
+            EXPORT_FILTER,
+            f"{format_} (*{EXPORT_FORMATS[format_]})",
+        )
+        if not path:
+            return
+        path = Path(path)
+        by_suffix = {suffix: name for name, suffix in EXPORT_FORMATS.items()}
+        if path.suffix.lower() in by_suffix:  # what is typed decides
+            format_ = by_suffix[path.suffix.lower()]
+        else:
+            format_ = (
+                chosen.split(" ")[0]
+                if chosen.split(" ")[0] in EXPORT_FORMATS
+                else format_
+            )
+            path = path.with_name(path.name + EXPORT_FORMATS[format_])
+        self._keep_text("export/format", format_)
+        self._keep_text("export/folder", str(path.parent))
+        self.export_to(path)
 
     def _run_dialog(self, dialog: QDialog) -> bool:
         return dialog.exec() == QDialog.DialogCode.Accepted
