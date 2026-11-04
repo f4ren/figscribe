@@ -130,29 +130,39 @@ def test_make_writes_what_is_committed(tmp_path: Path) -> None:
     make = _generator()
     make.main(root=tmp_path)
     assert (tmp_path / "index.json").read_text() == (ROOT / "index.json").read_text()
+    # All the differences at once: a platform may differ in more than one example.
+    problems = []
     for name in NAMES:
-        written, kept = tmp_path / name, ROOT / name
-        project_file = make.EXAMPLES[name][0]
-        if make.EXAMPLES[name][3] is None:  # written by hand: a thumbnail only
-            assert (written / "thumbnail.png").is_file()
-            continue
-        for data in kept.iterdir():
-            if data.suffix == ".csv":
-                assert (written / data.name).read_bytes() == data.read_bytes(), (
-                    name,
-                    data.name,
-                )
-            if data.suffix == ".npz":
-                a, b = np.load(written / data.name), np.load(data)
-                assert sorted(a.files) == sorted(b.files)
-                for key in a.files:
-                    assert np.allclose(a[key], b[key], rtol=1e-9, atol=0)
-        new, new_results = _without_results((written / project_file).read_text())
-        old, old_results = _without_results((kept / project_file).read_text())
-        _same(new, old, name)
-        for a, b in zip(new_results, old_results, strict=True):
-            for key, value in a["parameters"].items():
-                assert value == pytest.approx(b["parameters"][key], rel=1e-5, abs=1e-12)
+        try:
+            _same_as_committed(make, name, tmp_path / name, ROOT / name)
+        except AssertionError as exc:
+            problems.append(f"{name}: {str(exc).strip()[:400]}")
+    assert not problems, "\n".join(problems)
+
+
+def _same_as_committed(make, name: str, written: Path, kept: Path) -> None:
+    project_file = make.EXAMPLES[name][0]
+    if make.EXAMPLES[name][3] is None:  # written by hand: a thumbnail only
+        assert (written / "thumbnail.png").is_file()
+        return
+    for data in kept.iterdir():
+        if data.suffix == ".csv":
+            assert (written / data.name).read_bytes() == data.read_bytes(), data.name
+        if data.suffix == ".npz":
+            a, b = np.load(written / data.name), np.load(data)
+            assert sorted(a.files) == sorted(b.files)
+            for key in a.files:
+                assert np.allclose(a[key], b[key], rtol=1e-9, atol=0), data.name
+    new, new_results = _without_results((written / project_file).read_text())
+    old, old_results = _without_results((kept / project_file).read_text())
+    for project in (new, old):
+        for source in project["sources"]:
+            if source["format"] != "csv":  # the bytes of an .npz follow the last bits
+                source["sha256"] = None
+    _same(new, old, name)
+    for a, b in zip(new_results, old_results, strict=True):
+        for key, value in a["parameters"].items():
+            assert value == pytest.approx(b["parameters"][key], rel=1e-5, abs=1e-12)
 
 
 def test_a_png_is_a_png() -> None:
