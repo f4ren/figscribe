@@ -63,7 +63,7 @@ from figscribe.commands import (
     same_range,
 )
 from figscribe.commands.core import noun, walk
-from figscribe.examples import bundled_example
+from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import clipboard, markings, reveal, theme
 from figscribe.gui.about import about_text
@@ -82,7 +82,7 @@ from figscribe.gui.plotdialog import NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
-from figscribe.gui.start import DOCS_URL, StartPage
+from figscribe.gui.start import DOCS_URL, GUIDE_URL, StartPage
 from figscribe.io import DataError, numpy_source
 from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import array_names, read_numpy
@@ -372,18 +372,31 @@ class MainWindow(QMainWindow):
         self.set_document(document)
         self._add_recent(document.path)
 
-    def open_example(self) -> None:
-        """Open a copy of the example project that can be changed and saved."""
-        if not self.confirm_discard():
+    def choose_example_folder(self) -> Path | None:
+        """Where the user wants the example copied to; None if they decline."""
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Copy the example to", str(self.examples_dir)
+        )
+        return Path(chosen) if chosen else None
+
+    def open_example(self, name: str = "gaussian-scan") -> None:
+        """Copy the example `name` into a folder the user chooses and open the
+        copy, which can be changed and saved; the shipped one is never edited."""
+        example = next((e for e in gallery() if e.folder == name), None)
+        if example is None or not self.confirm_discard():
             return
-        target = self.examples_dir / "gaussian-scan"
-        if not (target / "scan.figscribe").is_file():
+        folder = self.choose_example_folder()
+        if folder is None:
+            return
+        self.examples_dir = folder
+        target = folder / example.folder
+        if not (target / example.project).is_file():
             try:
-                shutil.copytree(bundled_example(), target, dirs_exist_ok=True)
+                shutil.copytree(example.path, target, dirs_exist_ok=True)
             except OSError as exc:
                 self.show_error("Cannot copy the example", exc)
                 return
-        self.open_path(target / "scan.figscribe")
+        self.open_path(target / example.project)
 
     # --- start page -----------------------------------------------------------
 
@@ -421,6 +434,7 @@ class MainWindow(QMainWindow):
         start.recent_chosen.connect(self._open_recent)
         start.back_requested.connect(self.show_workspace)
         start.docs_requested.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
+        start.guide_requested.connect(lambda: QDesktopServices.openUrl(QUrl(GUIDE_URL)))
 
     def _choose_start_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Open", "", START_FILTER)

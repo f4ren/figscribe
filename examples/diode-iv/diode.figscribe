@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "2c64ebbe2abb",
+      "format": "csv",
+      "path": "diode.csv",
+      "sha256": "c6663166c6f8f5001087189968085993e4fa2d99726072f9e5957b21fa78f61c",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "V",
+        "I"
+      ],
+      "row_count": 70
+    }
+  ],
+  "figures": [
+    {
+      "id": "fd0a687bb088",
+      "name": "Diode",
+      "width_mm": 90.0,
+      "height_mm": 70.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "7caa1743fb7e",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Voltage",
+            "unit": "V",
+            "scale": "linear",
+            "limits": [
+              -1.0,
+              0.8
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Current",
+            "unit": "A",
+            "scale": "symlog",
+            "limits": [
+              -1e-8,
+              1.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": 1e-8,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper left",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": true,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": ":",
+          "artists": [
+            {
+              "id": "ef6e7bdf89d5",
+              "label": "measured",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.8,
+              "axis": "left",
+              "kind": "scatter",
+              "x": {
+                "source": "2c64ebbe2abb",
+                "column": "V"
+              },
+              "y": {
+                "source": "2c64ebbe2abb",
+                "column": "I"
+              },
+              "color": "C0",
+              "marker": "o",
+              "size": 7.0,
+              "edgecolor": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "50466d847c70",
+              "label": "a (exp(V / b) - 1)",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "fit",
+              "target": "ef6e7bdf89d5",
+              "model": {
+                "kind": "expression",
+                "expression": "a * (exp(x / b) - 1)",
+                "parameters": [
+                  "a",
+                  "b"
+                ]
+              },
+              "initial_values": {
+                "a": 2e-9,
+                "b": 0.05
+              },
+              "fixed": [],
+              "parameter_bounds": {},
+              "fit_range": [
+                0.2,
+                0.75
+              ],
+              "extend_curve": false,
+              "outside_as_left_out": false,
+              "result": {
+                "parameters": {
+                  "a": 2.5392060277478278e-9,
+                  "b": 0.04727417077907881
+                },
+                "uncertainties": {
+                  "a": 1.8186834720718255e-10,
+                  "b": 0.0002171397563885929
+                },
+                "reduced_chi_square": null,
+                "converged": true
+              },
+              "color": "C3",
+              "linestyle": "-",
+              "linewidth": 1.5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

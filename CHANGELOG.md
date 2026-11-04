@@ -5,6 +5,17 @@ release open in every later one.
 
 ## Unreleased
 
+- **A gallery of twelve examples on the start page**, with a picture each: a
+  Gaussian scan, a noisy sensor (the means of a minute over the raw line), an
+  RC discharge, a freezing plateau (°C by a formula, a second axis), a
+  resonance, a diode's current on a symmetric log axis, a growth curve, a
+  calibration, a distribution, the stability of a clock, a beam profile (a color
+  map) and a paper figure. A click asks for a folder and opens a copy of the
+  example there. The data are generated, not measured. On the start page, the recent
+  projects now come before the layouts and the examples, *New to figscribe?*
+  has *Try an example* (scrolls to the gallery) and *How it works* (the README's
+  *Getting started*) next to *Describe it instead*, and the date of a recent
+  project is written in English whatever the system language.
 - **New figures have inward tick marks on all four sides**, as many journals
   want, and the figure's settings are arranged by what they are for: *Format*
   (name, size, PNG resolution, style sheet), *Text* (font size, units in
@@ -50,6 +61,13 @@ release open in every later one.
   the first save, is now stored relative to the project (`../data/scan.csv`),
   where it used to be stored by its whole path, so a project and its data can be
   moved or shared together; a file on another volume or drive keeps its whole path.
+- Fixed: the script of a plot with fewer points drawn stopped with an error
+  when its range of x kept no row; it now draws no point, as figscribe does.
+- **Saving cannot destroy the saved project.** The project is written to a
+  temporary file and put in place when that is complete, so a full disk or a
+  lost share leaves the last saved version; that version also stays next to it
+  as `NAME.figscribe.bak`. A project made read-only is still refused. Project
+  files are written with the same line ends on every platform.
 - **Export remembers its format and folder.** *Export Figure…* and *Export All
   Figures…* open in the folder last used with the format last chosen, and
   suggest the figure's name as the file name; a name typed without a suffix gets

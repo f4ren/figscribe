@@ -49,7 +49,7 @@ changes what is seen. Use a real mouse or trackpad, on the platform at hand;
 note the platform, the screen scaling and the theme in the pull request.
 
 1. **Start**: open figscribe without a project. The start page shows; open
-   `examples/gaussian-scan/scan.figscribe` from it. The Dock or taskbar
+   the *A Gaussian scan* tile from its gallery and choose a folder: a copy opens. The Dock or taskbar
    shows figscribe's icon, not Python's.
 2. **Look**: the preview equals an exported PDF of the same figure, by eye.
    Labels are not cut off; the property panel has no clipped text. Every
@@ -134,6 +134,23 @@ note the platform, the screen scaling and the theme in the pull request.
     its settings appear under it. Turn on both conversions: the rows say *x:* and
     *y:*. The panel may need a scroll on a small screen; fold what you do not use
     and select another plot of the same kind: it stays folded.
+
+22. **The gallery**: on the start page *Recent* (when there are recent projects)
+    comes right under the drop zone, then the layouts, then the twelve example
+    tiles, which show their pictures, titles and two lines of text in three
+    columns, with nothing cut off, at the smallest window too (the page
+    scrolls). *Try an example* scrolls to the gallery and *How it works* opens the
+    README at *Getting started* in the browser. Open three of the examples (a
+    plot with fits, the color map, the paper figure with two tabs): each opens a
+    copy in the folder chosen, looks like its picture, and a second click on the
+    same tile opens the copy again, with your changes. Cancel the folder dialog:
+    nothing opens.
+
+23. **Saving**: save a project twice with a change between: next to it a
+    `.figscribe.bak` holds the version before the last save. Make the project
+    read-only in the file manager and press Ctrl+S: the window says it cannot
+    write the file, and nothing changes. Save onto a network share or a USB
+    stick and pull it out during the save, if you can: the saved file is whole.
 
 24. **Export remembers**: *Export Figure…* to PNG in another folder, then open
     it again: that folder and PNG are offered, with the figure's name. Close

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
+import uuid
 from pathlib import Path
 
 
@@ -49,3 +51,42 @@ def resolve_path(stored: str, base_dir: str | Path) -> Path:
     if path.is_absolute():
         return path
     return Path(os.path.abspath(Path(base_dir) / path))
+
+
+def write_atomically(path: str | Path, text: str) -> None:
+    """Write `text` (UTF-8, LF line ends) to `path` so that a failure leaves
+    the file as it was: the text goes to a temporary file next to it, which then
+    takes its place. The version it replaces stays as `<name>.bak`. A file that
+    may not be written is refused, which a plain replace would not do, and a
+    link to the file stays a link. In a folder that takes no new files the file is
+    written in place, as it always was, and no backup is made."""
+    target = Path(os.path.realpath(path))
+    exists = target.exists()
+    if exists and not os.access(target, os.W_OK):
+        raise PermissionError(13, "Permission denied", str(path))
+    temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex[:8]}.tmp")
+    # Opened with the usual mode of a new file (the umask applies), unlike mkstemp.
+    try:
+        handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+    except PermissionError:
+        if not exists:
+            raise
+        # A folder that takes no new file but a project that may be written
+        # (saving worked there before): write in place, without a backup.
+        target.write_bytes(text.encode("utf-8"))
+        return
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(text.encode("utf-8"))
+            out.flush()
+            os.fsync(out.fileno())
+        if exists:
+            shutil.copymode(target, temporary)
+            try:
+                shutil.copyfile(target, target.with_name(target.name + ".bak"))
+            except OSError:
+                pass  # a backup that cannot be written must not stop the save
+        os.replace(temporary, target)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise

@@ -1,0 +1,330 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "fd5ca95bf591",
+      "format": "csv",
+      "path": "resonator.csv",
+      "sha256": "1fd78540ffdb729311956714b1406f2df0922b43b9f163b17276b88bfd71d53f",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "f",
+        "A",
+        "dA",
+        "phi"
+      ],
+      "row_count": 90
+    }
+  ],
+  "figures": [
+    {
+      "id": "8b3da8b4d3de",
+      "name": "Resonance",
+      "width_mm": 100.0,
+      "height_mm": 95.0,
+      "dpi": 300.0,
+      "unit_format": "slash",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": {
+        "style": "a)",
+        "bold": true,
+        "placement": "outside",
+        "fontsize": null,
+        "insets": false
+      },
+      "layout": {
+        "rows": 2,
+        "cols": 1,
+        "share_x": "col",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": [
+          2.0,
+          1.0
+        ],
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "32ca5ac6d04d",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Frequency",
+            "unit": "Hz",
+            "scale": "log",
+            "limits": [
+              5000.0,
+              20000.0
+            ],
+            "ticks": [
+              5000.0,
+              7000.0,
+              10000.0,
+              14000.0,
+              20000.0
+            ],
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": "k"
+          },
+          "y": {
+            "label": "Amplitude",
+            "unit": "V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper left",
+            "position": null,
+            "frame": false,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "ead86b06f43c",
+              "label": "amplitude",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "fd5ca95bf591",
+                "column": "f"
+              },
+              "y": {
+                "source": "fd5ca95bf591",
+                "column": "A"
+              },
+              "xerr": null,
+              "yerr": {
+                "source": "fd5ca95bf591",
+                "column": "dA"
+              },
+              "color": "C2",
+              "linestyle": "none",
+              "linewidth": 1.5,
+              "marker": "o",
+              "markersize": 2.5,
+              "capsize": 0.0,
+              "elinewidth": 0.6,
+              "band": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "f12d6a43ead9",
+              "label": "Lorentzian",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "fit",
+              "target": "ead86b06f43c",
+              "model": {
+                "kind": "predefined",
+                "name": "lorentzian",
+                "degree": null
+              },
+              "initial_values": {
+                "a": 2.0,
+                "x0": 10000.0,
+                "gamma": 400.0,
+                "c": 0.0
+              },
+              "fixed": [],
+              "parameter_bounds": {
+                "gamma": [
+                  1.0,
+                  5000.0
+                ],
+                "c": [
+                  0.0,
+                  0.5
+                ]
+              },
+              "fit_range": null,
+              "extend_curve": false,
+              "outside_as_left_out": false,
+              "result": {
+                "parameters": {
+                  "a": 1.9631073790430353,
+                  "x0": 10000.793829292734,
+                  "gamma": 455.5123152089494,
+                  "c": 0.047540251400434344
+                },
+                "uncertainties": {
+                  "a": 0.01979369228446392,
+                  "x0": 4.593270365727093,
+                  "gamma": 7.233754945595509,
+                  "c": 0.003923505167942634
+                },
+                "reduced_chi_square": 0.9079414855622718,
+                "converged": true
+              },
+              "color": "C3",
+              "linestyle": "-",
+              "linewidth": 1.2
+            }
+          ]
+        },
+        {
+          "id": "71dc2d11f439",
+          "row": 1,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Frequency",
+            "unit": "Hz",
+            "scale": "log",
+            "limits": [
+              5000.0,
+              20000.0
+            ],
+            "ticks": [
+              5000.0,
+              7000.0,
+              10000.0,
+              14000.0,
+              20000.0
+            ],
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": "k"
+          },
+          "y": {
+            "label": "Phase",
+            "unit": "°",
+            "scale": "linear",
+            "limits": [
+              -200.0,
+              20.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": true,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": "0.88",
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "5edf659383bd",
+              "label": "phase",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "scatter",
+              "x": {
+                "source": "fd5ca95bf591",
+                "column": "f"
+              },
+              "y": {
+                "source": "fd5ca95bf591",
+                "column": "phi"
+              },
+              "color": "C4",
+              "marker": "o",
+              "size": 6.0,
+              "edgecolor": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
