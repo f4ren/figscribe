@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "7dd065cf8363",
+      "format": "csv",
+      "path": "growth.csv",
+      "sha256": "870e5b71fed932fdbab10aed8bec34c411327cc27165ca10cecbe4a34e35fa95",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "t",
+        "OD1",
+        "OD2",
+        "OD3",
+        "OD4",
+        "OD5"
+      ],
+      "row_count": 49
+    }
+  ],
+  "figures": [
+    {
+      "id": "cebf7bdd104a",
+      "name": "Growth",
+      "width_mm": 95.0,
+      "height_mm": 65.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "0325e423c7a9",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Time",
+            "unit": "d",
+            "scale": "linear",
+            "limits": [
+              0.0,
+              2.05
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Optical density",
+            "unit": null,
+            "scale": "linear",
+            "limits": [
+              0.0,
+              1.55
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "lower right",
+            "position": null,
+            "frame": false,
+            "ncols": 2,
+            "fontsize": 6.5
+          },
+          "grid": true,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": "0.9",
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "cf4644e01de2",
+              "label": "replicate 1",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.85,
+              "axis": "left",
+              "kind": "scatter",
+              "x": {
+                "source": "7dd065cf8363",
+                "column": "t"
+              },
+              "y": {
+                "source": "7dd065cf8363",
+                "column": "OD1"
+              },
+              "color": "C0",
+              "marker": "o",
+              "size": 14.0,
+              "edgecolor": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.041666666666666664,
+                "formula": null,
+                "from_start": false,
+                "unit": "d"
+              },
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "ab870c05e469",
+              "label": "replicate 2",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.85,
+              "axis": "left",
+              "kind": "scatter",
+              "x": {
+                "source": "7dd065cf8363",
+                "column": "t"
+              },
+              "y": {
+                "source": "7dd065cf8363",
+                "column": "OD2"
+              },
+              "color": "C1",
+              "marker": "s",
+              "size": 14.0,
+              "edgecolor": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.041666666666666664,
+                "formula": null,
+                "from_start": false,
+                "unit": "d"
+              },
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "abca6c37e1df",
+              "label": "replicate 3",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.85,
+              "axis": "left",
+              "kind": "scatter",
+              "x": {
+                "source": "7dd065cf8363",
+                "column": "t"
+              },
+              "y": {
+                "source": "7dd065cf8363",
+                "column": "OD3"
+              },
+              "color": "C2",
+              "marker": "^",
+              "size": 14.0,
+              "edgecolor": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.041666666666666664,
+                "formula": null,
+                "from_start": false,
+                "unit": "d"
+              },
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "153a8a0dd409",
+              "label": "replicate 4",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.85,
+              "axis": "left",
+              "kind": "scatter",
+              "x": {
+                "source": "7dd065cf8363",
+                "column": "t"
+              },
+              "y": {
+                "source": "7dd065cf8363",
+                "column": "OD4"
+              },
+              "color": "C3",
+              "marker": "D",
+              "size": 14.0,
+              "edgecolor": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.041666666666666664,
+                "formula": null,
+                "from_start": false,
+                "unit": "d"
+              },
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "9ebc56e826a4",
+              "label": "replicate 5",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.85,
+              "axis": "left",
+              "kind": "scatter",
+              "x": {
+                "source": "7dd065cf8363",
+                "column": "t"
+              },
+              "y": {
+                "source": "7dd065cf8363",
+                "column": "OD5"
+              },
+              "color": "C4",
+              "marker": "v",
+              "size": 14.0,
+              "edgecolor": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.041666666666666664,
+                "formula": null,
+                "from_start": false,
+                "unit": "d"
+              },
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "cf75d0189617",
+              "label": "logistic, replicate 1",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "fit",
+              "target": "cf4644e01de2",
+              "model": {
+                "kind": "expression",
+                "expression": "K / (1 + exp(-r * (x - t0))) + c",
+                "parameters": [
+                  "K",
+                  "r",
+                  "t0",
+                  "c"
+                ]
+              },
+              "initial_values": {
+                "K": 1.1,
+                "r": 6.0,
+                "t0": 0.8,
+                "c": 0.02
+              },
+              "fixed": [],
+              "parameter_bounds": {},
+              "fit_range": null,
+              "extend_curve": false,
+              "outside_as_left_out": false,
+              "result": {
+                "parameters": {
+                  "K": 1.2158489817822258,
+                  "r": 5.999584214744682,
+                  "t0": 0.8128975496128581,
+                  "c": 0.01866522872503344
+                },
+                "uncertainties": {
+                  "K": 0.00723414606008655,
+                  "r": 0.10574814805556074,
+                  "t0": 0.0032380726452754223,
+                  "c": 0.005465803031225447
+                },
+                "reduced_chi_square": null,
+                "converged": true
+              },
+              "color": "0.25",
+              "linestyle": "--",
+              "linewidth": 1.5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -82,7 +82,16 @@ def _assert_same(project: Project, folder: Path, figure: Figure | None = None) -
     return script
 
 
-@pytest.mark.parametrize("path", EXAMPLES, ids=lambda p: p.parent.name)
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(
+            p, marks=[] if p.parent.name == "gaussian-scan" else pytest.mark.slow
+        )
+        for p in EXAMPLES
+    ],
+    ids=lambda p: p.parent.name,
+)
 def test_examples(path: Path, tmp_path: Path) -> None:
     folder = tmp_path / path.parent.name
     shutil.copytree(path.parent, folder)
@@ -1253,6 +1262,63 @@ def test_a_median_every_nth_row_and_intervals(tmp_path: Path) -> None:
             axes=[Axes(artists=[median, every]), Axes(col=1, artists=[interval])],
         )
     ]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "reduction",
+    [
+        {"method": "mean", "count": 4},
+        {"method": "median", "count": 4},
+        {"method": "every", "count": 4},
+        {"method": "interval", "width": 1.3},
+        {"method": "mean", "count": 4, "replace_left_out": True},
+    ],
+    ids=["mean", "median", "every", "interval", "mean-replacing"],
+)
+def test_a_reduced_plot_whose_range_keeps_no_row_draws_nothing(
+    tmp_path: Path, reduction: dict
+) -> None:
+    """The renderer draws no point, so the script must not stop (B7.1)."""
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    nothing = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        left_out=[3],
+        x_range=(1e6, 2e6),
+        reduction=Reduction(**reduction),
+    )
+    other = LinePlot(x=ref["t"], y=ref["U"])
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[nothing, other])])]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="the script fits again and has no data to fit (roadmap, B7.1 follow-up)",
+)
+@pytest.mark.parametrize("reduced", [True, False], ids=["reduced", "plain"])
+def test_a_fit_stays_when_the_range_is_narrowed_to_nothing(
+    tmp_path: Path, reduced: bool
+) -> None:
+    """Fit first, then a range that keeps no row: the script must still run."""
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        reduction=Reduction(count=4) if reduced else None,
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    data.x_range = (1e6, 2e6)
     _assert_same(project, tmp_path)
 
 

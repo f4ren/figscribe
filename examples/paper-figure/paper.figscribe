@@ -1,0 +1,610 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "c83c43093b72",
+      "format": "csv",
+      "path": "results.csv",
+      "sha256": "066a1d9f7e2bb85b5d5814085c15f0e851c6508c2685e4430323685b44ebfa19",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "t",
+        "u",
+        "du",
+        "v",
+        "p"
+      ],
+      "row_count": 80
+    },
+    {
+      "id": "5646f2b66efd",
+      "format": "csv",
+      "path": "noise.csv",
+      "sha256": "5e0bbdc63aa548c7833c7968b86b161927f908f7e5e83e11898a4efd384d33d7",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "raw",
+        "filtered"
+      ],
+      "row_count": 900
+    }
+  ],
+  "figures": [
+    {
+      "id": "e06bc464bbd7",
+      "name": "Figure 1",
+      "width_mm": 175.0,
+      "height_mm": 120.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": 8.0,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": 0.6,
+      "tick_width": 0.6,
+      "tick_length": 3.0,
+      "minor_tick_width": 0.4,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": {
+        "style": "(a)",
+        "bold": true,
+        "placement": "outside",
+        "fontsize": null,
+        "insets": false
+      },
+      "layout": {
+        "rows": 2,
+        "cols": 2,
+        "share_x": "col",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "55d94d9ad55a",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Time",
+            "unit": "s",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Voltage",
+            "unit": "V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": {
+            "label": "Power",
+            "unit": "W",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper left",
+            "position": null,
+            "frame": false,
+            "ncols": 1,
+            "fontsize": 6.0
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "4785045c5caf",
+              "label": "signal",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "c83c43093b72",
+                "column": "t"
+              },
+              "y": {
+                "source": "c83c43093b72",
+                "column": "u"
+              },
+              "xerr": null,
+              "yerr": {
+                "source": "c83c43093b72",
+                "column": "du"
+              },
+              "color": null,
+              "linestyle": "none",
+              "linewidth": 1.5,
+              "marker": "o",
+              "markersize": 2.5,
+              "capsize": 1.0,
+              "elinewidth": 0.6,
+              "band": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "22d9c99eb7f7",
+              "label": "power",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "right",
+              "kind": "line",
+              "x": {
+                "source": "c83c43093b72",
+                "column": "t"
+              },
+              "y": {
+                "source": "c83c43093b72",
+                "column": "p"
+              },
+              "color": "C1",
+              "linestyle": "-",
+              "linewidth": 1.0,
+              "marker": null,
+              "markersize": 4.0,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            }
+          ]
+        },
+        {
+          "id": "d220b3540bfa",
+          "row": 0,
+          "col": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Noise before the filter",
+            "unit": "V",
+            "scale": "linear",
+            "limits": [
+              -4.0,
+              4.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Density",
+            "unit": "1/V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "967548d75b37",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.75,
+              "axis": "left",
+              "kind": "histogram",
+              "values": {
+                "source": "5646f2b66efd",
+                "column": "raw"
+              },
+              "bins": 28,
+              "density": true,
+              "histtype": "bar",
+              "color": "C4",
+              "x_conversion": null,
+              "x_range": null
+            }
+          ]
+        },
+        {
+          "id": "bfe2d4aaf7f0",
+          "row": 1,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Time",
+            "unit": "s",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Voltage",
+            "unit": "V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "74774239a6ca",
+              "label": "ringing",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "line",
+              "x": {
+                "source": "c83c43093b72",
+                "column": "t"
+              },
+              "y": {
+                "source": "c83c43093b72",
+                "column": "v"
+              },
+              "color": "C2",
+              "linestyle": "-",
+              "linewidth": 1.0,
+              "marker": null,
+              "markersize": 4.0,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            }
+          ]
+        },
+        {
+          "id": "3049c33ed4a4",
+          "row": 1,
+          "col": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Noise after the filter",
+            "unit": "V",
+            "scale": "linear",
+            "limits": [
+              -4.0,
+              4.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Density",
+            "unit": "1/V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "d9cf49cb3686",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 0.75,
+              "axis": "left",
+              "kind": "histogram",
+              "values": {
+                "source": "5646f2b66efd",
+                "column": "filtered"
+              },
+              "bins": 28,
+              "density": true,
+              "histtype": "bar",
+              "color": "C3",
+              "x_conversion": null,
+              "x_range": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "10facf295b3b",
+      "name": "Figure 1, single column",
+      "width_mm": 85.0,
+      "height_mm": 62.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": 8.0,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": 0.6,
+      "tick_width": 0.6,
+      "tick_length": 3.0,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "ed9dd080d13b",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Time",
+            "unit": "s",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Voltage",
+            "unit": "V",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "81a202a95756",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "c83c43093b72",
+                "column": "t"
+              },
+              "y": {
+                "source": "c83c43093b72",
+                "column": "u"
+              },
+              "xerr": null,
+              "yerr": {
+                "source": "c83c43093b72",
+                "column": "du"
+              },
+              "color": null,
+              "linestyle": "none",
+              "linewidth": 1.5,
+              "marker": "o",
+              "markersize": 2.5,
+              "capsize": 1.0,
+              "elinewidth": 0.6,
+              "band": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

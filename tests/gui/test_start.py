@@ -59,6 +59,7 @@ def window(qtbot, tmp_path: Path) -> MainWindow:
     qtbot.addWidget(win)
     win.ask = lambda title, question: True
     win.examples_dir = tmp_path / "examples"
+    win.choose_example_folder = lambda: tmp_path / "examples"
     win.errors = []
     win.show_error = lambda title, exc: win.errors.append((title, str(exc)))
     return win
@@ -93,7 +94,7 @@ def test_a_layout_asks_before_replacing_changes(window: MainWindow) -> None:
 
 
 def test_the_example_is_copied_and_opened(window: MainWindow) -> None:
-    window.start.example_tile.click()
+    window.start.example_tiles["gaussian-scan"].click()
     copy = window.examples_dir / "gaussian-scan" / "scan.figscribe"
     assert window.document.path == copy
     assert window.document.data is not None and window.preview.error is None
@@ -102,8 +103,31 @@ def test_the_example_is_copied_and_opened(window: MainWindow) -> None:
     window.document.push(_rename(window.document, "Mine"))
     window.save()
     window.show_start()
-    window.start.example_tile.click()
+    window.start.example_tiles["gaussian-scan"].click()
     assert window.document.figure.name == "Mine"
+
+
+def test_every_example_has_a_tile_that_opens_a_copy(window: MainWindow) -> None:
+    from figscribe.examples import gallery
+
+    assert set(window.start.example_tiles) == {e.folder for e in gallery()}
+    assert len(window.start.example_tiles) >= 12
+    for example in gallery():
+        window.show_start()
+        window.start.example_tiles[example.folder].click()
+        copy = window.examples_dir / example.folder / example.project
+        assert window.document.path == copy and window.preview.error is None, (
+            example.folder
+        )
+        assert not window.document.data_states()  # its data came with it
+    assert window.errors == []
+
+
+def test_declining_the_folder_opens_nothing(window: MainWindow) -> None:
+    window.choose_example_folder = lambda: None
+    window.start.example_tiles["noisy-sensor"].click()
+    assert window.on_start_page
+    assert not (window.examples_dir / "noisy-sensor").exists()
 
 
 def test_back_returns_to_the_open_project(window: MainWindow, example: Path) -> None:
@@ -157,3 +181,83 @@ def test_recent_projects_are_remembered(qtbot, tmp_path: Path, example: Path) ->
 
 def _rename(document: Document, name: str) -> SetField:
     return SetField(document.figure.id, ("name",), name)
+
+
+def test_recent_projects_come_before_the_layouts_and_the_examples(
+    qtbot, window: MainWindow, example: Path
+) -> None:
+    """What a returning user wants first; a new user has none, and the page
+    then looks as it did."""
+    from PySide6.QtWidgets import QLabel
+
+    window.show()
+    start = window.start
+    window.resize(1280, 1000)
+    start.set_recent([example])
+    qtbot.wait(50)  # the layout is made when the events come
+
+    def top(text: str) -> int:
+        heading = next(
+            w for w in start.findChildren(QLabel) if w.text().startswith(text)
+        )
+        return heading.mapTo(start.widget(), heading.rect().topLeft()).y()
+
+    assert top("Recent") < top("Start from a layout") < top("Examples")
+    start.set_recent([])
+    qtbot.waitUntil(
+        lambda: not [w for w in start.findChildren(QLabel) if w.text() == "Recent"]
+    )
+
+
+def test_try_an_example_scrolls_to_the_gallery(qtbot, window: MainWindow) -> None:
+    window.resize(1280, 700)
+    window.show()
+    start = window.start
+    qtbot.wait(50)
+    assert start.verticalScrollBar().value() == 0
+    start.try_examples.click()
+    qtbot.waitUntil(lambda: start.verticalScrollBar().value() > 0)
+    heading = start.examples_heading
+    top = heading.mapTo(start.viewport(), heading.rect().topLeft()).y()
+    assert 0 <= top < 120  # the heading is at the top, not out of sight
+    assert start.example_tiles["gaussian-scan"].isVisible()
+
+
+def test_how_it_works_opens_the_guide(window: MainWindow, monkeypatch) -> None:
+    from PySide6.QtGui import QDesktopServices
+
+    opened = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url))
+    window.start.how_it_works.click()
+    assert opened[0].toString().endswith("#getting-started")
+    window.start.docs_requested.emit()  # the header's link goes to the README
+    assert opened[1].toString().endswith("#readme")
+
+
+def test_the_first_steps_come_in_the_order_try_read_ask(window: MainWindow) -> None:
+    start = window.start
+    window.show()
+    tiles = [start.try_examples, start.how_it_works]
+    tops = [t.mapTo(start.widget(), t.rect().topLeft()).y() for t in tiles]
+    assert tops == sorted(tops)
+    assert (
+        start.how_it_works.mapTo(
+            start.widget(), start.how_it_works.rect().topLeft()
+        ).y()
+        < start.drop_zone.mapTo(start.widget(), start.drop_zone.rect().bottomLeft()).y()
+    )
+
+
+def test_a_recent_project_says_when_in_english_whatever_the_locale(
+    qtbot, window: MainWindow, example: Path
+) -> None:
+    import os
+    from datetime import datetime
+
+    from PySide6.QtWidgets import QLabel
+
+    stamp = datetime(2026, 10, 4, 12, 0).timestamp()
+    os.utime(example, (stamp, stamp))
+    window.start.set_recent([example])
+    texts = [w.text() for w in window.start.findChildren(QLabel)]
+    assert "edited 4 Oct 2026" in texts

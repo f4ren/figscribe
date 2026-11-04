@@ -12,6 +12,7 @@ from __future__ import annotations
 import keyword
 import os
 import re
+import textwrap
 from datetime import date
 from pathlib import Path
 from string import ascii_lowercase
@@ -818,7 +819,7 @@ class _Writer:
                 "# A row left out is replaced by the mean of the nearest rows kept",
                 "# before and after it.",
                 f"{good} = np.flatnonzero({measured})",
-                f"{replaced} = {where}",
+                f"{replaced} = {where} & ({good}.size > 0)",
                 f"{filled} = {y}.copy()",
                 f"for row in np.flatnonzero({replaced}):",
                 f"    at = np.searchsorted({good}, row)",
@@ -843,62 +844,84 @@ class _Writer:
         if how.method == "every":
             self._reduce_every(plot, suffix, rows, member, measured, filled)
             return
-        group, bins, among, count = (
-            self._scratch(base, suffix) for base in ("group", "bins", "among", "count")
-        )
-        if how.method == "interval":
-            start = self._scratch("start", suffix)
-            inside = " & ".join(m for m in (finite, used) if m is not None)
-            self.emit(
-                f"{start} = {pick(x, inside or None)}.min()",
-                f"{group} = (({pick(x, member)} - {start}) // {how.width!r})"
-                ".astype(int)",
-            )
-        else:
-            self.emit(f"{group} = {pick(rows, member)} // {n}")
-        self.emit(
-            f"_, {group} = np.unique({group}, return_inverse=True)",
-            f"{bins} = np.arange({group}.max() + 2)",
-        )
 
-        def statistic(values: str, kind: str, groups: str = group) -> str:
-            return (
-                f'binned_statistic({groups}, {values}, "{kind}", bins={bins}).statistic'
+        def groups_and_statistics() -> None:
+            group, bins, among, count = (
+                self._scratch(base, suffix)
+                for base in ("group", "bins", "among", "count")
             )
-
-        self.emit(
-            f"{out['x']} = {statistic(pick(x, member), 'mean')}",
-            f"{out['y']} = "
-            + statistic(
-                pick(filled, member), "median" if how.method == "median" else "mean"
-            ),
-        )
-        if how.method == "median" or not {"xerr", "yerr"} & set(out):
-            return
-        # The errors count the rows measured, not the ones replaced.
-        groups = group
-        if member != measured:
-            groups = among
-            self.emit(f"{among} = {group}[{pick(measured, member)}]")
-        self.emit(f"{count} = {statistic(pick(y, measured), 'count', groups)}")
-        for field in ("xerr", "yerr"):
-            if field not in out:
-                continue
-            if field in before:
-                sigma = pick(before[field], measured)
-                steps = [
-                    statistic(f"{sigma} ** 2", "sum", groups),
-                    f"np.sqrt({out[field]}) / np.maximum({count}, 1)",
-                ]
+            if how.method == "interval":
+                start = self._scratch("start", suffix)
+                inside = " & ".join(m for m in (finite, used) if m is not None)
+                self.emit(
+                    f"{start} = {pick(x, inside or None)}.min()",
+                    f"{group} = (({pick(x, member)} - {start}) // {how.width!r})"
+                    ".astype(int)",
+                )
             else:
-                steps = [
-                    statistic(pick(y, measured), "std", groups),
-                    f"{out[field]} / np.sqrt(np.maximum({count} - 1, 1))",
-                ]
+                self.emit(f"{group} = {pick(rows, member)} // {n}")
             self.emit(
-                *(f"{out[field]} = {step}" for step in steps),
-                f"{out[field]}[{out[field]} == 0] = np.nan  # no error to weight by",
+                f"_, {group} = np.unique({group}, return_inverse=True)",
+                f"{bins} = np.arange({group}.max() + 2)",
             )
+
+            def statistic(values: str, kind: str, groups: str = group) -> str:
+                return (
+                    f'binned_statistic({groups}, {values}, "{kind}", bins={bins})'
+                    ".statistic"
+                )
+
+            self.emit(
+                f"{out['x']} = {statistic(pick(x, member), 'mean')}",
+                f"{out['y']} = "
+                + statistic(
+                    pick(filled, member), "median" if how.method == "median" else "mean"
+                ),
+            )
+            if how.method == "median" or not {"xerr", "yerr"} & set(out):
+                return
+            # The errors count the rows measured, not the ones replaced.
+            groups = group
+            if member != measured:
+                groups = among
+                self.emit(f"{among} = {group}[{pick(measured, member)}]")
+            self.emit(f"{count} = {statistic(pick(y, measured), 'count', groups)}")
+            for field in ("xerr", "yerr"):
+                if field not in out:
+                    continue
+                if field in before:
+                    sigma = pick(before[field], measured)
+                    steps = [
+                        statistic(f"{sigma} ** 2", "sum", groups),
+                        f"np.sqrt({out[field]}) / np.maximum({count}, 1)",
+                    ]
+                else:
+                    steps = [
+                        statistic(pick(y, measured), "std", groups),
+                        f"{out[field]} / np.sqrt(np.maximum({count} - 1, 1))",
+                    ]
+                self.emit(
+                    *(f"{out[field]} = {step}" for step in steps),
+                    f"{out[field]}[{out[field]} == 0] = np.nan"
+                    "  # no error to weight by",
+                )
+
+        mark = len(self.lines)
+        groups_and_statistics()
+        if member is None:
+            return
+        # No row left (a range that holds none, say): the renderer draws no
+        # point, and the statistics of no rows would stop the script.
+        inner = self.lines[mark:]
+        del self.lines[mark:]
+        names = " = ".join(out[f] for f in ("x", "y", "xerr", "yerr") if f in out)
+        self.emit(
+            f"# Without a row left, nothing is drawn for {_describe(plot)}.",
+            f"if {member}.any():",
+            *(textwrap.indent(line, "    ") for line in inner),
+            "else:",
+            f"    {names} = np.empty(0)",
+        )
 
     def _reduce_every(self, plot, suffix, rows, member, measured, filled) -> None:
         """Every n-th row as it is; the rows left out and replaced have no error."""

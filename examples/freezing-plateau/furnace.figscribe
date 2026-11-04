@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "09226b3a20fe",
+      "format": "csv",
+      "path": "furnace.csv",
+      "sha256": "c133db4a40824342f2c000bef111ea1bef526ee08d122f8deb158b9bd1f1dcd1",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "t",
+        "T",
+        "P"
+      ],
+      "row_count": 540
+    }
+  ],
+  "figures": [
+    {
+      "id": "32e22e83ce9c",
+      "name": "Freezing curve",
+      "width_mm": 110.0,
+      "height_mm": 70.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": 8.0,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "4a8021dc55d5",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Time since the start",
+            "unit": "h",
+            "scale": "linear",
+            "limits": [
+              0.0,
+              9.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Temperature",
+            "unit": "°C",
+            "scale": "linear",
+            "limits": [
+              410.0,
+              428.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": {
+            "label": "Heater power",
+            "unit": "W",
+            "scale": "linear",
+            "limits": [
+              8.0,
+              26.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper right",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "57816199ed12",
+              "label": "plateau, 3 h",
+              "visible": true,
+              "zorder": 0.5,
+              "alpha": 0.18,
+              "axis": "left",
+              "kind": "span",
+              "orientation": "vertical",
+              "start": 1.6,
+              "end": 4.6,
+              "color": "C2"
+            },
+            {
+              "id": "453ae3a8886d",
+              "label": "Zn fixed point, 419.527 °C",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "refline",
+              "orientation": "horizontal",
+              "at": 419.527,
+              "color": "C3",
+              "linestyle": "--",
+              "linewidth": 0.9
+            },
+            {
+              "id": "3511316be2b7",
+              "label": "cell",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "line",
+              "x": {
+                "source": "09226b3a20fe",
+                "column": "t"
+              },
+              "y": {
+                "source": "09226b3a20fe",
+                "column": "T"
+              },
+              "color": "C0",
+              "linestyle": "-",
+              "linewidth": 1.0,
+              "marker": null,
+              "markersize": 4.0,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.0002777777777777778,
+                "formula": null,
+                "from_start": true,
+                "unit": "h"
+              },
+              "y_conversion": {
+                "factor": 1.0,
+                "formula": "x - 273.15",
+                "from_start": false,
+                "unit": "°C"
+              },
+              "x_range": null,
+              "reduction": {
+                "method": "mean",
+                "count": 5,
+                "width": 1.0,
+                "keep_last": true,
+                "replace_left_out": false
+              }
+            },
+            {
+              "id": "0932ca73a3c9",
+              "label": "heater power",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "right",
+              "kind": "line",
+              "x": {
+                "source": "09226b3a20fe",
+                "column": "t"
+              },
+              "y": {
+                "source": "09226b3a20fe",
+                "column": "P"
+              },
+              "color": "C1",
+              "linestyle": "-",
+              "linewidth": 0.8,
+              "marker": null,
+              "markersize": 4.0,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.0002777777777777778,
+                "formula": null,
+                "from_start": true,
+                "unit": "h"
+              },
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": {
+                "method": "mean",
+                "count": 5,
+                "width": 1.0,
+                "keep_last": true,
+                "replace_left_out": false
+              }
+            },
+            {
+              "id": "c1f1b45a2da4",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "annotation",
+              "text": "recalescence",
+              "position": [
+                1.7,
+                413.0
+              ],
+              "coords": "data",
+              "arrow_to": [
+                1.25,
+                417.6
+              ],
+              "fontsize": 7.0,
+              "color": null,
+              "background": "white"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
