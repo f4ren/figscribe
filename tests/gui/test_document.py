@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -120,3 +121,64 @@ def test_the_document_is_a_workspace_for_the_tools(qtbot, example: Path) -> None
         )
     assert document.history.undo_text == "Set color"
     assert document.title.endswith("* — figscribe")
+
+
+# --- data paths that follow the project file (B9) ---------------------------------
+
+
+def _data_found(document: Document) -> bool:
+    return not document.data_states() and bool(
+        len(document.data(document.project.figures[0].axes[0].artists[0].x))
+    )
+
+
+def test_save_as_into_another_folder_keeps_the_data_found(
+    qtbot, example: Path, tmp_path: Path
+) -> None:
+    document = Document.open(example)
+    assert document.project.sources[0].path == "scan.csv"
+    (tmp_path / "elsewhere").mkdir()
+    document.save(tmp_path / "elsewhere" / "copy.figscribe")
+    assert document.project.sources[0].path.endswith("gaussian-scan/scan.csv")
+    assert document.project.sources[0].path.startswith("..")  # still relative
+    assert _data_found(document)
+    # What was written reads the same from its new place.
+    again = Document.open(tmp_path / "elsewhere" / "copy.figscribe")
+    assert _data_found(again)
+
+
+def test_saving_next_to_the_data_changes_nothing(
+    qtbot, example: Path, tmp_path: Path
+) -> None:
+    document = Document.open(example)
+    before = document.project.sources[0].path
+    document.save(example.parent / "other.figscribe")
+    assert document.project.sources[0].path == before == "scan.csv"
+    assert _data_found(document)
+
+
+def test_an_import_before_the_first_save_becomes_relative_when_saved(
+    qtbot, example: Path, tmp_path: Path
+) -> None:
+    from figscribe.io import csv_source
+
+    data = example.parent / "scan.csv"
+    document = Document()
+    # No folder yet: the import stores the whole path.
+    source = csv_source(data, Path(os.getcwd()), header_row=1, skip_rows=1)
+    source = source.model_copy(update={"path": str(data.resolve())})
+    document.project.sources.append(source)
+    document.save(example.parent / "fresh.figscribe")
+    assert document.project.sources[0].path == "scan.csv"
+
+
+def test_a_project_with_an_absolute_path_still_opens(
+    qtbot, example: Path, tmp_path: Path
+) -> None:
+    project = loads(example.read_text(encoding="utf-8"))
+    project.sources[0].path = str((example.parent / "scan.csv").resolve())
+    from figscribe.model import dumps
+
+    elsewhere = tmp_path / "x.figscribe"
+    elsewhere.write_text(dumps(project), encoding="utf-8")
+    assert _data_found(Document.open(elsewhere))

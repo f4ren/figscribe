@@ -45,6 +45,11 @@ release open in every later one.
   before and can be replaced by the mean of their neighbours. While a plot is
   reduced, leaving rows out and finding outliers are off. Saved files are
   drawn as before.
+- Fixed: *Save As* into another folder no longer loses the data (every file was
+  "missing" there). A data file outside the project's folder, or imported before
+  the first save, is now stored relative to the project (`../data/scan.csv`),
+  where it used to be stored by its whole path, so a project and its data can be
+  moved or shared together; a file on another volume or drive keeps its whole path.
 - Fixed: `figscribe script` showed a Python traceback when it could not write
   the script (a folder that is not there, a read-only one); it now says so
   in one line.

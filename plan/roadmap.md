@@ -37,10 +37,6 @@ A map of the tasks below that are not finished; the tasks hold the detail.
 here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 0 — Bugs and robustness** (B1 to B6 are done)
-- **B9** data paths that follow the project file (S to M, verified bug):
-  *Save As* into another folder loses the data, and a file outside the
-  project folder, or imported before the first save, is stored by its
-  absolute path. Found 2026-11-04 from a user's remark.
 - **B7**, the bug hunt, repeated before every release. Done: item 1 (the
   edge-data matrix), item 2 (undo stress), item 3 (fits that fail politely)
   and item 4 (files; only the Windows network share and other drive are left
@@ -621,6 +617,18 @@ on top:
    (monkeypatched, as in B7.4); an old project with an absolute path still
    opens; a roundtrip; the checklist step for a project moved to another
    folder.
+
+**Done** (2026-11-05, decision 0052; no schema bump, the paths are text):
+`stored_path` writes `..` and is absolute only on another drive; `rebase_path`
+and `Document.save` write the paths for the folder the project is saved to, so
+*Save As* keeps the data found and an import before the first save becomes
+relative. Chosen against the proposed commands (the user agreed, 2026-11-04): a path is
+where a file lies seen from the project, not an edit, and as an undo step it would
+point the data back at the old folder after a save. A path through the root of the
+file system (another volume, another drive) stays absolute. *Learned:* the one thing it costs is that undoing
+the removal of a data file after a *Save As* elsewhere restores its old path, and
+*Locate file…* repairs it. `resolve_path` now returns a path without the dots, so
+messages name the file plainly.
 
 ---
 

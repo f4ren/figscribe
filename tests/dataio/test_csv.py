@@ -39,12 +39,12 @@ def test_csv_source_records_hash_and_columns(tmp_path: Path) -> None:
     assert source.columns == ["t", "U", "dU"]
 
 
-def test_csv_source_outside_base_dir_keeps_an_absolute_path(tmp_path: Path) -> None:
+def test_csv_source_outside_base_dir_is_relative_with_dots(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     write(data_dir / "scan.csv", "t\n0\n")
     source = csv_source(data_dir / "scan.csv", base_dir=tmp_path / "project")
-    assert Path(source.path).is_absolute()
+    assert source.path == "../data/scan.csv"
 
 
 def _load(tmp_path: Path, source: CsvSource, column: str | int) -> np.ndarray:
@@ -287,15 +287,58 @@ def test_a_file_that_cannot_be_read_as_imported_is_a_data_error(
             path.chmod(0o644)  # or pytest cannot remove the folder
 
 
-def test_a_file_outside_the_project_folder_is_stored_by_its_whole_path(
+def test_a_file_outside_the_project_folder_is_stored_relative_with_dots(
     tmp_path: Path,
 ) -> None:
     from figscribe.io.files import resolve_path, stored_path
 
     project = tmp_path / "project"
     inside = project / "data" / "a.csv"
-    outside = tmp_path / "elsewhere" / "b.csv"
+    neighbour = tmp_path / "elsewhere" / "b.csv"
+    parent = tmp_path / "c.csv"
     assert stored_path(inside, project) == "data/a.csv"
-    assert stored_path(outside, project) == str(outside)
-    assert resolve_path("data/a.csv", project) == inside
-    assert resolve_path(str(outside), project) == outside
+    assert stored_path(neighbour, project) == "../elsewhere/b.csv"
+    assert stored_path(parent, project) == "../c.csv"
+    for file in (inside, neighbour, parent):
+        assert resolve_path(stored_path(file, project), project) == Path(
+            os.path.abspath(file)
+        )
+
+
+def test_a_file_that_shares_only_the_root_with_the_project_is_stored_whole() -> None:
+    from figscribe.io.files import stored_path
+
+    # Another volume: a relative path would run through the root and would not
+    # survive the project being moved, where the whole path would.
+    far = os.path.abspath("/Volumes/USB/a.csv")
+    assert stored_path(Path(far), Path(os.path.abspath("/Users/me/proj"))) == far
+    near = os.path.abspath("/Users/me/data/a.csv")
+    assert stored_path(Path(near), Path(os.path.abspath("/Users/me/proj"))) == (
+        "../data/a.csv"
+    )
+
+
+def test_a_file_on_another_drive_is_stored_by_its_whole_path(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from figscribe.io.files import resolve_path, stored_path
+
+    def other_drive(path, start):
+        raise ValueError("path is on mount 'D:', start on mount 'C:'")
+
+    monkeypatch.setattr(os.path, "relpath", other_drive)
+    far = tmp_path / "elsewhere" / "b.csv"
+    assert stored_path(far, tmp_path / "project") == str(far)
+    assert resolve_path(str(far), tmp_path / "project") == far
+
+
+def test_a_stored_path_is_moved_to_where_the_project_is_saved(tmp_path: Path) -> None:
+    from figscribe.io.files import rebase_path
+
+    old, new = tmp_path / "a", tmp_path / "b"
+    assert rebase_path("scan.csv", old, new) == "../a/scan.csv"  # the data stays
+    assert rebase_path("../data/x.csv", old, new) == "../data/x.csv"
+    assert rebase_path("data/x.csv", old, old / "sub") == "../data/x.csv"
+    absolute = str(tmp_path / "data" / "x.csv")
+    assert rebase_path(absolute, old, new) == "../data/x.csv"  # now it can be relative
+    assert rebase_path("scan.csv", old, old) == "scan.csv"  # nothing moved

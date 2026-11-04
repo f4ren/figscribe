@@ -15,7 +15,7 @@ from PySide6.QtCore import QObject, Signal
 from figscribe import __version__
 from figscribe.commands import Command, CommandError, History, find
 from figscribe.io import load_data
-from figscribe.io.files import resolve_path
+from figscribe.io.files import rebase_path, resolve_path
 from figscribe.io.refresh import source_state
 from figscribe.model import ArrayRef, ColumnRef, Figure, Project, dumps, loads
 from figscribe.render import DataProvider
@@ -65,7 +65,20 @@ class Document(QObject):
         target = Path(path) if path is not None else self.path
         if target is None:
             raise ValueError("the project has no file yet; give a path")
-        target.write_text(dumps(self.project), encoding="utf-8")
+        # The data paths are relative to the project file: saved in another
+        # folder, they are written for that folder, and found there (B9). The
+        # model changes only once the file is written.
+        moved = {
+            source.id: rebase_path(source.path, self.base_dir, target.parent)
+            for source in self.project.sources
+        }
+        written = self.project.model_copy(deep=True)
+        for source in written.sources:
+            source.path = moved[source.id]
+        target.write_text(dumps(written), encoding="utf-8")
+        for source in self.project.sources:
+            if source.path != moved[source.id]:
+                source.path = moved[source.id]
         self.path = target
         self.history.mark_clean()
         self.state_changed.emit()
