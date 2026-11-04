@@ -1645,13 +1645,11 @@ interaction up to about 1e6 points, with downsampling in the preview only.
 
 ### E2 Never lose work — S
 
-Autosave to a recovery file every minute while there are unsaved changes;
-offer recovery on the next start after a crash. Keep the last saved version as
-`.bak` when saving. Write the project atomically (a temporary file, then
-`os.replace`): `Document.save` truncates the file before it writes, so a
-failure partway, a full disk say, destroys the saved project. Keep refusing a
-file the user made read-only, which a plain `os.replace` would overwrite
-(found in B7.4).
+**Done** (decision 0054): the project is written to a temporary file and
+replaced atomically, the version before stays as `<name>.figscribe.bak`, and a
+read-only file is still refused. **Open:** autosave to a recovery file every
+minute while there are unsaved changes, and an offer to recover it on the next
+start after a crash.
 
 ### E3 Start from your own figure — S
 

@@ -2502,6 +2502,7 @@ move or sharing. **A command that sets the paths before saving**: see above.
 anything a relative path from the project does not.
 
 Decision 0007 is not rewritten; this changes its rule "relative when below".
+
 ## 0053 — A gallery of examples made by one script
 
 ### Context
@@ -2561,3 +2562,44 @@ read-only installation and lets *Save* write into the package. **Thumbnails
 drawn at start**: twelve figures of a few hundred points each take seconds the
 start page should not wait for. **A series of spectra**: waits for the waterfall
 of task F4.6.
+
+## 0054 — Saving writes a temporary file and keeps the last version
+
+### Context
+
+`Document.save` used `Path.write_text`, which truncates the file before it
+writes. A failure partway (a full disk, a network share that went away) left a
+half-written project, and the saved one was gone. Roadmap E2 asked for an
+atomic write and a `.bak`; B7.4 found that a plain `os.replace` would also
+overwrite a file the user had made read-only, which saving has always refused.
+
+### Decision
+
+`figscribe.io.files.write_atomically(path, text)`:
+- the text goes to a hidden temporary file next to the target (same drive, so
+  that `os.replace` is atomic), is flushed and `fsync`ed, and then replaces the
+  target; on any failure the temporary file is removed and the target is as it
+  was;
+- the version being replaced is first copied to `<name>.figscribe.bak`, one
+  generation only; a first save has none;
+- a target that exists and may not be written is refused with the
+  `PermissionError` that `write_text` gave, before anything is written;
+- the mode of the existing file is kept; a new file gets the mode of any new
+  file (the umask applies, which `tempfile.mkstemp` would not do);
+- a folder that takes no new file but a project that may be written (B7.4 ran
+  the window on one) still saves, in place as before and without a backup;
+  a backup that cannot be written does not stop the save;
+- a link to the project stays a link: the real file is replaced;
+- the text is written as UTF-8 with LF on every platform (it was the platform's
+  line end before), so a project reads the same where it is sent.
+
+`*.figscribe.bak` is in `.gitignore`. Autosave and the recovery file of E2 are
+not part of this decision.
+
+### Alternatives considered
+
+**`.bak` kept only after a successful write**: the copy comes before the
+replace on purpose, so that a failed replace leaves both. **Several
+generations of backups**: more files in the user's folder, and the undo history
+and version control are for that. **A backup folder in the user's settings**:
+the user would not find it next to the project.
