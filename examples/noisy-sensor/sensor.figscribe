@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "fccdbce3a861",
+      "format": "csv",
+      "path": "sensor.csv",
+      "sha256": "207cddee46aa613918ea2c0d2589c9f10c2b57a2071f7871c2d7131a7177b774",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "t",
+        "signal"
+      ],
+      "row_count": 3000
+    }
+  ],
+  "figures": [
+    {
+      "id": "54b5f244bc39",
+      "name": "Sensor",
+      "width_mm": 100.0,
+      "height_mm": 62.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "20c660ed1bb6",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Time",
+            "unit": "min",
+            "scale": "linear",
+            "limits": [
+              4.0,
+              49.0
+            ],
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y": {
+            "label": "Signal",
+            "unit": "mV",
+            "scale": "linear",
+            "limits": null,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper right",
+            "position": null,
+            "frame": false,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": true,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": "0.9",
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "725fa0367aec",
+              "label": "every reading",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "line",
+              "x": {
+                "source": "fccdbce3a861",
+                "column": "t"
+              },
+              "y": {
+                "source": "fccdbce3a861",
+                "column": "signal"
+              },
+              "color": "0.75",
+              "linestyle": "-",
+              "linewidth": 0.4,
+              "marker": null,
+              "markersize": 4.0,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.016666666666666666,
+                "formula": null,
+                "from_start": true,
+                "unit": "min"
+              },
+              "y_conversion": null,
+              "x_range": [
+                4.0,
+                49.0
+              ],
+              "reduction": null
+            },
+            {
+              "id": "7961d505f087",
+              "label": "mean of a minute ± standard error",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "fccdbce3a861",
+                "column": "t"
+              },
+              "y": {
+                "source": "fccdbce3a861",
+                "column": "signal"
+              },
+              "xerr": null,
+              "yerr": null,
+              "color": "C0",
+              "linestyle": "none",
+              "linewidth": 1.5,
+              "marker": "o",
+              "markersize": 3.0,
+              "capsize": 0.0,
+              "elinewidth": 0.8,
+              "band": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": {
+                "factor": 0.016666666666666666,
+                "formula": null,
+                "from_start": true,
+                "unit": "min"
+              },
+              "y_conversion": null,
+              "x_range": [
+                4.0,
+                49.0
+              ],
+              "reduction": {
+                "method": "mean",
+                "count": 60,
+                "width": 1.0,
+                "keep_last": true,
+                "replace_left_out": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -42,7 +42,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   and item 4 (files; only the Windows network share and other drive are left
   to the manual checklist). Open: item 5 the GUI at 1024 × 700, 150 % and
   200 % scaling, dark mode, keyboard only; item 6 every bench case through
-  the equivalence test (the project in `examples/` already is).
+  the equivalence test (the projects in `examples/` already are).
 - **An open bug from B7.1**: fit a plot, then narrow its x range to one that
   keeps no row: the figure draws no fit, but the script fits again and stops
   (`curve_fit`: `ydata` must not be empty). The test is
@@ -61,6 +61,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **U11** the settings panel rearranged, element by element, with the user
   (figure, panel, axes, each kind of plot, …). Nothing is built for an
   element before the user has agreed to its arrangement.
+- **U12** finding what the examples use (see below), once the examples are merged.
 
 **Phase 2 — What a scientist needs**
 - **F1** fits (L): the range dragged in the preview (1); the result as text
@@ -940,6 +941,20 @@ saved between runs). *Learned:* a test that passed on one pixel (a grey stretch
 of a line in a small inset) failed when the new ticks hid it; check what a sweep
 sees before a change of defaults.
 
+### U12 Finding the elements the examples use — S, with the user
+
+Asked for by the user (2026-11-04), after opening some of the gallery's
+examples: several elements they use are not easy to find, for instance the
+shaded range, and how a note gets its arrow. Go through the twelve examples,
+list every element and setting each one uses, and for each ask where a new
+user would look for it (the *Insert* menu, the outline's context menu, the
+command palette, the property panel, the search) and whether it is found
+there. Propose the changes, such as menu entries, names, a hint in the empty
+panel or an entry for *Insert > Add* that says what it makes; nothing is built
+before the user has agreed to them, as in U11. Hold the result with a test that
+every example's element kinds are reachable from the *Insert* menu or the
+command palette under a name a person would search for.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
@@ -1778,8 +1793,13 @@ from the example.
 **0.2.0 released** (2026-10-29, PR #93 and #94): several figures, units and a
 range per plot, the Allan deviation, error bands, a search and a command
 palette for settings, editing where it is drawn, and the everyday actions.
-Still open from R4: item 2 (installers), the screenshots of item 3, and
-item 4 (`examples/` holds one project, the Gaussian scan).
+Still open from R4: item 2 (installers) and the screenshots of item 3.
+
+**R4.4 done** (decision 0053): `examples/` holds twelve projects of synthetic,
+fixed-seed data, made by `examples/make.py`, each with a thumbnail, listed in
+`examples/index.json` and offered as tiles on the start page, which copies the
+chosen one into a folder. Every one is in the equivalence test. The series of
+spectra waits for the waterfall of F4.6.
 
 ### R5 The assistant: measure models (carried over from the brief) — M
 

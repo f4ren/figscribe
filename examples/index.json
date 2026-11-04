@@ -1,0 +1,76 @@
+{
+  "examples": [
+    {
+      "folder": "gaussian-scan",
+      "project": "scan.figscribe",
+      "title": "A Gaussian scan",
+      "detail": "A peak with error bars and a Gaussian fit: the place to start."
+    },
+    {
+      "folder": "noisy-sensor",
+      "project": "sensor.figscribe",
+      "title": "A noisy sensor",
+      "detail": "A long series as a thin grey line, and on top its means of a minute."
+    },
+    {
+      "folder": "rc-discharge",
+      "project": "discharge.figscribe",
+      "title": "An RC discharge",
+      "detail": "An exponential fit with a held offset, its residuals and one glitch."
+    },
+    {
+      "folder": "freezing-plateau",
+      "project": "furnace.figscribe",
+      "title": "A freezing plateau",
+      "detail": "Hours and °C from s and K, a fixed point, a plateau and a second axis."
+    },
+    {
+      "folder": "resonance",
+      "project": "resonator.figscribe",
+      "title": "A resonance",
+      "detail": "Amplitude and phase on a shared log axis with a bounded Lorentzian."
+    },
+    {
+      "folder": "diode-iv",
+      "project": "diode.figscribe",
+      "title": "A diode's current",
+      "detail": "Many decades on a symmetric log axis, and a fit with your own expression."
+    },
+    {
+      "folder": "growth-curve",
+      "project": "growth.figscribe",
+      "title": "A growth curve",
+      "detail": "Five replicates, hours shown as days, and a logistic fit."
+    },
+    {
+      "folder": "calibration",
+      "project": "standards.figscribe",
+      "title": "A calibration",
+      "detail": "Errors on both axes, a quadratic fit with residuals and a detection limit."
+    },
+    {
+      "folder": "distribution",
+      "project": "samples.figscribe",
+      "title": "Two distributions",
+      "detail": "Overlaid histograms of the density with a mean and its spread."
+    },
+    {
+      "folder": "clock-stability",
+      "project": "oscillators.figscribe",
+      "title": "Clock stability",
+      "detail": "The Allan deviation of two series, τ in hours from cycles of 2.88 s."
+    },
+    {
+      "folder": "beam-profile",
+      "project": "beam.figscribe",
+      "title": "A beam profile",
+      "detail": "A map on a log color scale with its bar, and a profile with a Gaussian."
+    },
+    {
+      "folder": "paper-figure",
+      "project": "paper.figscribe",
+      "title": "A figure for a paper",
+      "detail": "175 mm, four panels, shared axes, letters, and a single-column copy."
+    }
+  ]
+}

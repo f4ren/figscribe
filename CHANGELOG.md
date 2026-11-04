@@ -5,6 +5,17 @@ release open in every later one.
 
 ## Unreleased
 
+- **A gallery of twelve examples on the start page**, with a picture each: a
+  Gaussian scan, a noisy sensor (the means of a minute over the raw line), an
+  RC discharge, a freezing plateau (°C by a formula, a second axis), a
+  resonance, a diode's current on a symmetric log axis, a growth curve, a
+  calibration, a distribution, the stability of a clock, a beam profile (a color
+  map) and a paper figure. A click asks for a folder and opens a copy of the
+  example there. The data are generated, not measured. On the start page, the recent
+  projects now come before the layouts and the examples, *New to figscribe?*
+  has *Try an example* (scrolls to the gallery) and *How it works* (the README's
+  *Getting started*) next to *Describe it instead*, and the date of a recent
+  project is written in English whatever the system language.
 - **New figures have inward tick marks on all four sides**, as many journals
   want, and the figure's settings are arranged by what they are for: *Format*
   (name, size, PNG resolution, style sheet), *Text* (font size, units in

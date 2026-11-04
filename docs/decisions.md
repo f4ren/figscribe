@@ -2502,3 +2502,62 @@ move or sharing. **A command that sets the paths before saving**: see above.
 anything a relative path from the project does not.
 
 Decision 0007 is not rewritten; this changes its rule "relative when below".
+## 0053 — A gallery of examples made by one script
+
+### Context
+
+`examples/` held one project, the Gaussian scan, which the start page offered
+as "Open the example". A tool for figures is understood by looking at figures:
+the user asked for a broad selection, not tied to their own field, with
+generated data only (real data are not to be shipped), set up to play with the
+settings (the raw readings as a thin grey line and the means on top, say), on
+the start page, so that one sees what can be made. Opus' list of twelve was
+taken as it came.
+
+### Decision
+
+- **Twelve examples**, each a folder in `examples/` with its data, its
+  `.figscribe` project and a `thumbnail.png`: the Gaussian scan, a noisy sensor
+  (reduced points over the raw line), an RC discharge, a freezing plateau
+  (a formula for °C, a second axis), a resonance, a diode's current (symmetric
+  log), a growth curve, a calibration, a distribution, clock stability (Allan
+  deviation), a beam profile (color mesh, `.npz`) and a paper figure (two
+  figures of one project). Each has an own point to make and uses settings a
+  user would otherwise not find.
+- **Data are synthetic with a fixed seed.** `examples/make.py` writes every
+  data file, project and thumbnail except the hand-made Gaussian scan's
+  project, whose thumbnail it makes too. It patches `uuid.uuid4` while it runs,
+  so a rerun gives the same bytes; CSV files are written with `\n` on every
+  platform. A test (`slow`) runs it into a temporary folder and compares with
+  what is committed, fit results only approximately (a library may differ in
+  the last digits).
+- **`examples/index.json`** lists folder, project file, title and one
+  sentence each, in the order of the start page. The gallery
+  (`figscribe.examples`) reads it; nothing else is searched for.
+- **Thumbnails** are PNGs of exactly 520 × 340 pixels (the figure's export
+  fitted and padded with white), under 80 KB each; all twelve folders together
+  stay under 1 MB. A test holds both limits.
+- **Pillow** pads the thumbnails in `examples/make.py`, and so does its test; it
+  is not a new dependency: Matplotlib requires it, and the program itself does
+  not import it.
+- **Packaging:** the wheel carries `examples/` as `figscribe/examples`
+  (`force-include`), so an installed figscribe has the gallery too.
+- **The start page** shows a tile for each, thumbnail, title and sentence. A
+  click asks for a folder and opens a *copy* in it (`<folder>/<name>`), so the
+  bundled files, which may be read-only inside a package, stay as they are and
+  the user's changes land where they can find them. A copy that is there
+  already is opened, not overwritten. Declining the folder opens nothing.
+- **Every example is held by tests:** it loads with no missing reference, draws,
+  its fits have converged, its data paths are relative, and its script
+  reproduces the drawing (`tests/codegen/test_equivalence.py`).
+
+### Alternatives considered
+
+**Real measurements**: the user does not want to ship them, and they are not
+needed to show what the program does. **Generating the data when the tile is
+clicked**: the user could not look at the CSV that the script reads, which is
+half of the point. **Opening the bundled project in place**: it fails in a
+read-only installation and lets *Save* write into the package. **Thumbnails
+drawn at start**: twelve figures of a few hundred points each take seconds the
+start page should not wait for. **A series of spectra**: waits for the waterfall
+of task F4.6.
