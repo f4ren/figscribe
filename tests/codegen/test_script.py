@@ -41,6 +41,25 @@ def test_data_paths_are_relative_to_the_script(project, example: Path) -> None:
     assert 'scan_path = HERE / "../scan.csv"' in script
 
 
+def test_data_paths_follow_a_script_folder_that_is_a_link(
+    project, example: Path, tmp_path: Path
+) -> None:
+    """The script finds its folder with `resolve()`, which follows a link; the
+    path to the data is worked out from the folder it ends up in. (macOS keeps
+    its temporary folders behind a link: /var is /private/var.)"""
+    real = tmp_path / "deep" / "er" / "code"
+    real.mkdir(parents=True)
+    link = tmp_path / "link"
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("no symbolic links here")
+    script = generate(project, base_dir=example.parent, script_dir=link)
+    line = next(x for x in script.splitlines() if x.startswith("scan_path = HERE / "))
+    relative = line.split('"')[1]
+    assert (real / relative).resolve() == (example.parent / "scan.csv").resolve()
+
+
 def test_an_unfitted_fit_is_left_out(project, example: Path) -> None:
     axes = project.figures[0].axes[0]
     axes.artists.append(
