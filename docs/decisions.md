@@ -2865,3 +2865,43 @@ whole zero line (a box and three settings) next to *Visible* and the order.
 result card**: the card is not a form. **Moving the model and start values into
 the panel**: the fit dialog ("Change the fit…") is where they are edited.
 
+## 0062 — The settings of a histogram, an Allan deviation, an image and a color mesh
+
+**Date:** 2026-11-05
+**Status:** proposed, not yet agreed (built while the user was away; reviewed by
+the advisor, Opus).
+
+### Context
+
+Roadmap U11, the last kinds of plot. They had *Data* (up to eight fields, the
+units and the range among them), *Look* with a few settings, *Legend* (one
+field) and *More*, which held the marker size and line width of the Allan
+deviation, and for an image the extent, the first row and the pixel shape. An
+image and a mesh had the box *Color bar* in *Look* **and** a section *Color bar*
+with *Visible* and *Label*.
+
+### Decision
+
+- **Histogram**: *Label and data* (*Legend entry*, y axis, the values, the bins,
+  *Normalize to density*: they say what is counted), *Units and rows* (*x in*,
+  *Use only values*), *Look* (color, style), *More*.
+- **Allan deviation**: *Label and data* (entry, y axis, values, what they are,
+  sample interval, times, which τ), *Units and rows*, *Look* (color, marker,
+  *Marker size*, line style, *Line width*, error bars: pairs together, as in
+  0051), *More*.
+- **Image and color mesh**: *Label and data* (y axis, the data; for the mesh also
+  x and y), *Look* (color map, scale, lowest and highest value, and the box
+  *Color bar* with its settings right under it, as for *Grid* and *Error band*;
+  the label is called *Color bar label*, the check box *Color bar shown*, since
+  neither is the legend's), and for an image the folded *Pixel grid* (extent,
+  first row at, pixel shape); *More* (label, opacity, *Visible*, order).
+- The two kinds of *Color bar* section are one. *Visible* of the color bar stays
+  (it hides the bar and keeps the label); the coverage test (U1) needs every
+  field to be in the panel.
+
+### Alternatives considered
+
+**Leaving the extent and the pixel shape in *More***: three settings that
+change what the picture is, with the opacity. **Dropping the color bar's
+*Visible***: a field of the model would have no place.
+

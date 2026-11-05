@@ -197,5 +197,11 @@ note the platform, the screen scaling and the theme in the pull request.
     the residuals: *Look*, then *Zero line* with its box and, when it is on, its
     color, width and style under it; switch the box off and they grey out.
 
+31. **Histogram, Allan deviation, image and color mesh** (proposed, decision 0062):
+    select each: *Label and data* says what is plotted, *Look* how, for an image
+    and a mesh with the box *Color bar* and, when it is on, *Color bar shown* and
+    *Color bar label* right under it; an image also has the folded *Pixel grid*.
+    Switch the color bar on and off in each; undo.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

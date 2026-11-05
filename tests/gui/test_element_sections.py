@@ -85,6 +85,60 @@ EXPECTED = {
         "Zero line": ["zero_line", "zero_color", "zero_linewidth", "zero_linestyle"],
         "More": ["label", "alpha", "visible", "zorder"],
     },
+    "Histogram": {
+        "Label and data": ["label", "axis", "values", "bins", "density"],
+        "Units and rows": ["x_conversion", "x_range"],
+        "Look": ["color", "histtype"],
+        "More": ["alpha", "visible", "zorder"],
+    },
+    "AllanDeviationPlot": {
+        "Label and data": [
+            "label",
+            "axis",
+            "values",
+            "data_type",
+            "sample_interval",
+            "time",
+            "taus",
+        ],
+        "Units and rows": ["x_conversion", "x_range"],
+        "Look": [
+            "color",
+            "marker",
+            "markersize",
+            "linestyle",
+            "linewidth",
+            "error_bars",
+        ],
+        "More": ["alpha", "visible", "zorder"],
+    },
+    "ImagePlot": {
+        "Label and data": ["axis", "data"],
+        "Look": [
+            "cmap",
+            "norm",
+            "vmin",
+            "vmax",
+            "colorbar",
+            "colorbar.visible",
+            "colorbar.label",
+        ],
+        "Pixel grid": ["extent", "origin", "aspect"],
+        "More": ["label", "alpha", "visible", "zorder"],
+    },
+    "ColorMesh": {
+        "Label and data": ["axis", "c", "x", "y"],
+        "Look": [
+            "cmap",
+            "norm",
+            "vmin",
+            "vmax",
+            "colorbar",
+            "colorbar.visible",
+            "colorbar.label",
+        ],
+        "More": ["label", "alpha", "visible", "zorder"],
+    },
 }
 
 
@@ -95,12 +149,19 @@ def test_the_sections_of_each_kind(qtbot, project_file: Path, name: str) -> None
     assert list(panel.sections) == list(EXPECTED[name])  # in this order
     assert not panel.sections["More"].expanded
     for title in panel.sections:
-        if title != "More":
+        if title not in ("More", "Pixel grid"):
             assert panel.sections[title].expanded, title
+    assert "Color bar" not in panel.sections  # its settings are under its box
 
 
 def test_a_legend_entry_is_called_that_everywhere(qtbot, project_file) -> None:
-    for name in ("ReferenceLine", "ShadedSpan", "FitCurve"):
+    for name in (
+        "ReferenceLine",
+        "ShadedSpan",
+        "FitCurve",
+        "Histogram",
+        "AllanDeviationPlot",
+    ):
         panel, _ = _sections(qtbot, project_file, _case(name))
         caption, _tip = panel._captions[("label",)]
         assert caption.text() == "Legend entry", name
