@@ -1,6 +1,6 @@
 ; Inno Setup script for the Windows installer (decision 0066).
 ; Run by packaging/make_installer.py with /DAppVersion, /DSourceDir, /DIconFile,
-; /DOutputDir and /DOutputName.
+; /DLicenseFile, /DOutputDir and /DOutputName.
 
 #define AppName "figscribe"
 
@@ -24,6 +24,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\figscribe.exe
 ChangesAssociations=yes
+LicenseFile={#LicenseFile}
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion

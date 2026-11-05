@@ -11,7 +11,9 @@ Run it in an environment that has figscribe installed from its wheel (with the
 
 The program is frozen into a folder first (PyInstaller, one directory rather
 than one file: it starts faster, and Qt stays a set of libraries that can be
-replaced), then wrapped in what the system installs from.
+replaced), then wrapped in what the system installs from. The licenses of what
+is inside (`notices.py`) go into the folder, and are beside the program in each
+installer.
 """
 
 from __future__ import annotations
@@ -26,10 +28,14 @@ import sys
 import urllib.request
 from pathlib import Path
 
+import notices
+
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "out"
 FROZEN = OUT / "pyinstaller"
 SPEC = HERE / "figscribe.spec"
+LICENSES = OUT / "licenses"  # what notices.py writes, and the spec reads
+LICENSE_FILES = ("THIRD-PARTY-NOTICES.txt", "LICENSE.txt")
 
 APPIMAGETOOL = (
     "https://github.com/AppImage/appimagetool/releases/download/1.9.1/"
@@ -75,8 +81,20 @@ def run(*command: str | Path, **kwargs) -> None:
     subprocess.run([str(c) for c in command], check=True, **kwargs)
 
 
+def copy_licenses(folder: Path) -> None:
+    """Put the license files beside what an installer installs."""
+    folder.mkdir(parents=True, exist_ok=True)
+    for name in LICENSE_FILES:
+        shutil.copy(LICENSES / name, folder / name)
+
+
 def freeze() -> None:
     shutil.rmtree(FROZEN, ignore_errors=True)
+    shutil.rmtree(LICENSES, ignore_errors=True)
+    notices.write(LICENSES)
+    # In the program's folder (`licenses`) through the spec, before macOS signs
+    # the app: nothing may be added to a signed app afterwards.
+    os.environ["FIGSCRIBE_LICENSES"] = str(LICENSES)
     run(
         sys.executable,
         "-m",
@@ -97,6 +115,7 @@ def make_dmg(target: Path) -> None:
     # Symbolic links kept: an app is a folder with some of them inside.
     shutil.copytree(FROZEN / "figscribe.app", staging / "figscribe.app", symlinks=True)
     (staging / "Applications").symlink_to("/Applications")
+    copy_licenses(staging)  # beside the app, since the app itself is signed
     target.unlink(missing_ok=True)
     run(
         "hdiutil",
@@ -113,12 +132,14 @@ def make_dmg(target: Path) -> None:
 
 
 def make_windows_installer(target: Path) -> None:
+    copy_licenses(FROZEN / "figscribe")
     compiler = shutil.which("iscc") or r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
     run(
         compiler,
         f"/DAppVersion={version()}",
         f"/DSourceDir={FROZEN / 'figscribe'}",
         f"/DIconFile={HERE / 'icons' / 'figscribe.ico'}",
+        f"/DLicenseFile={LICENSES / 'LICENSE.txt'}",
         f"/DOutputDir={target.parent}",
         f"/DOutputName={target.stem}",
         HERE / "figscribe.iss",
@@ -162,6 +183,7 @@ def make_appimage(target: Path) -> None:
     shutil.copytree(
         FROZEN / "figscribe", appdir / "usr" / "lib" / "figscribe", symlinks=True
     )
+    copy_licenses(appdir / "usr" / "share" / "doc" / "figscribe")
     (appdir / "figscribe.desktop").write_text(DESKTOP_FILE)
     shutil.copy(HERE / "icons" / "figscribe.png", appdir / "figscribe.png")
     run_file = appdir / "AppRun"

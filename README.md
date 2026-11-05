@@ -410,4 +410,14 @@ Built with Python, PySide6 (Qt), Matplotlib, NumPy, SciPy and Pydantic.
 
 ## License
 
-MIT, see [LICENSE](https://github.com/f4ren/figscribe/blob/main/LICENSE).
+figscribe is MIT, see [LICENSE](https://github.com/f4ren/figscribe/blob/main/LICENSE).
+
+It uses Qt through PySide6 under the LGPL-3.0, and other free software under
+its own licenses (BSD, MIT, Apache-2.0 and the like). The installers carry
+the license of everything in them in `THIRD-PARTY-NOTICES.txt` and `LICENSE.txt`:
+beside the app in the macOS disk image, in the install folder on Windows (the
+installer also shows the license), in `usr/share/doc/figscribe` inside the
+AppImage, and in the program's `licenses` folder on every system. The Qt
+libraries are separate files in the program's folder, so you can replace them
+with another build of the same version. IBM Plex Sans and Mono are under the
+SIL Open Font License (`OFL.txt` next to them in the package).

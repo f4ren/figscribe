@@ -3130,6 +3130,37 @@ and is written into the person's cache folder), `.figscribe` double-click on
 macOS (the app would have to handle the open-file event), *How to Connect…*
 naming the frozen program's path for MCP instead of `figscribe`.
 
+### Changed (2026-11-05, before the release)
+
+- **The installers carry the licenses of what is in them.** They hand on
+  binaries of other people's software, and BSD, MIT and Apache ask for their
+  notice, the LGPL of Qt for its text, the source and the right to replace the
+  library. `packaging/notices.py` writes `THIRD-PARTY-NOTICES.txt` when the
+  installer is built, from the packages `figscribe[chat,mcp]` needs in that
+  environment (the markers of the system and the extras each requirement asks
+  for) and PyInstaller itself (its bootloader is in every installer), so the
+  list is the one of that installer on that system and is never committed. It
+  reads every license file of a package's metadata, NOTICE files included, and
+  **stops the build** when a package has none. Qt for Python (PySide6,
+  shiboken6) is one entry: its wheels carry no license text, so the LGPL-3.0
+  and the GPL-3.0 it refers to are committed in `packaging/licenses` (from
+  gnu.org), with the version, where the source is, and the note that the
+  libraries are files that may be replaced; Python's `LICENSE.txt` is taken from
+  the interpreter the program is frozen from. The list is not narrowed to what
+  PyInstaller took: it names every package that is required and installed, which
+  may be a few more than are inside.
+- **Where:** in the program's folder as `licenses/` (through the spec, so
+  that the macOS app is signed with it: nothing may be added to a signed app),
+  and visible beside what the person installs: in the disk image next to the
+  app, in the install folder on Windows with the license page of the
+  installer (`LICENSE.txt`, ASCII, since Inno Setup reads a text file without a
+  mark as ANSI), in `usr/share/doc/figscribe` in the AppImage.
+  `smoke.py` fails when they are missing.
+- **Not done:** a menu entry or a line in *About* that points to the notices
+  (the LGPL asks for a notice that Qt is used; the notices file and the README
+  give it, a line in the window would make it prominent). The fonts' license
+  (`OFL.txt`) was already next to them, in the wheel and the installers.
+
 ### Alternatives considered
 
 **Briefcase**: native formats and signing in one tool, but a stricter layout

@@ -1,5 +1,7 @@
 # PyInstaller spec for figscribe, for all three systems (decision 0066).
-# Run through packaging/make_installer.py, which sets the folders.
+# Run through packaging/make_installer.py, which sets the folders and writes the
+# licenses (packaging/notices.py) that go into the program's folder.
+import os
 import sys
 from pathlib import Path
 
@@ -12,8 +14,10 @@ icons = root / "packaging" / "icons"
 
 analysis = Analysis(  # noqa: F821
     [str(root / "packaging" / "launcher.py")],
-    # Fonts, icons and the examples ship inside the package.
-    datas=collect_data_files("figscribe"),
+    # Fonts, icons and the examples ship inside the package; the licenses of
+    # everything in it come with them, in `licenses`.
+    datas=collect_data_files("figscribe")
+    + [(os.environ["FIGSCRIBE_LICENSES"], "licenses")],
     excludes=["tkinter", "pytest"],
 )
 archive = PYZ(analysis.pure)  # noqa: F821
