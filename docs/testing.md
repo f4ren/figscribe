@@ -167,7 +167,7 @@ note the platform, the screen scaling and the theme in the pull request.
     Reference* does. Type "histogram" or "shaded" in Ctrl+K: they are found.
     *Insert*: the entries are in the order of the toolbar buttons; every entry has a picture, also *Add Plot As*, *Add Reference*,
     *Add Panel* and *Duplicate Figure*; there is no *Add Plot…*, but Ctrl+Shift+P
-    (shown behind *Add Plot As*, if your system draws it there) opens the
+    (shown behind *Add Plot As*: as ⇧⌘P on macOS) opens the
     dialog, and Ctrl+K finds "Add Plot…".
 
 26. **Finding by other words**: press Ctrl+K and type *band*, *threshold*,

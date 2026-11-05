@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -84,6 +85,7 @@ from figscribe.gui.palette import (
     KEYWORDS,
     CommandPalette,
     Entry,
+    key_hint,
     menu_entries,
     words_for,
 )
@@ -1541,9 +1543,13 @@ class MainWindow(QMainWindow):
         # entry of the toolbar button's menu.
         self.plot_action = QAction("Add &Plot…", self)
         self.plot_action.triggered.connect(lambda: self.add_plot())
-        self.plot_menu = insert.addMenu(theme.icon("line"), "Add Plot &As")
+        plot_key = QKeySequence("Ctrl+Shift+P")
+        self.plot_menu = insert.addMenu(
+            theme.icon("line"),
+            "Add Plot &As" + key_hint(plot_key, native_menus=sys.platform == "darwin"),
+        )
         plot_entry = self.plot_menu.menuAction()
-        plot_entry.setShortcut(QKeySequence("Ctrl+Shift+P"))
+        plot_entry.setShortcut(plot_key)
         plot_entry.triggered.connect(lambda: self.add_plot())
         self.addAction(plot_entry)  # the key works with the menu bar native
         for name, (_, glyph) in KINDS.items():

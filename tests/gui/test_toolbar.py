@@ -4,6 +4,7 @@ the ones a person looks in."""
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from PySide6.QtWidgets import QToolButton
 
 from figscribe.gui import MainWindow
 from figscribe.gui.app import create_window
-from figscribe.gui.palette import matching, menu_entries
+from figscribe.gui.palette import KEY_GAP, key_hint, matching, menu_entries
 from figscribe.gui.plotdialog import KINDS, PlotDialog
 from figscribe.model import AllanDeviationPlot, Histogram, ImagePlot
 
@@ -188,6 +189,10 @@ def test_the_kinds_are_found_from_the_command_palette(window) -> None:
     assert all("Reference" in e.where for e in shaded)
 
 
+def _name(action) -> str:
+    return action.text().split(KEY_GAP)[0].replace("&", "")
+
+
 def _insert_menu(window: MainWindow):
     action = next(a for a in window.menuBar().actions() if a.text() == "&Insert")
     return action.menu()
@@ -205,7 +210,7 @@ def test_the_insert_menu_has_one_entry_for_plots_and_it_keeps_the_key(
 ) -> None:
     """ "Add Plot As" holds the kinds; the dialog that "Add Plot…" opened is
     still on its key, which is shown behind the submenu."""
-    titles = [a.text().replace("&", "") for a in _insert_menu(window).actions()]
+    titles = [_name(a) for a in _insert_menu(window).actions()]
     assert "Add Plot…" not in titles
     assert "Add Plot As" in titles
     entry = window.plot_menu.menuAction()
@@ -247,11 +252,7 @@ def test_the_reference_comes_before_the_note(window) -> None:
 def test_the_insert_menu_has_the_order_of_the_toolbar(window) -> None:
     """Data, figure, panel; then plot, fit, reference, note. Duplicate Figure
     stays beside Add Figure."""
-    titles = [
-        a.text().replace("&", "")
-        for a in _insert_menu(window).actions()
-        if not a.isSeparator()
-    ]
+    titles = [_name(a) for a in _insert_menu(window).actions() if not a.isSeparator()]
     assert titles == [
         "Import Data…",
         "Add Figure",
@@ -266,3 +267,27 @@ def test_the_insert_menu_has_the_order_of_the_toolbar(window) -> None:
         i for i, a in enumerate(_insert_menu(window).actions()) if a.isSeparator()
     ]
     assert separators == [4]  # between what holds and what goes into a panel
+
+
+def test_a_key_is_written_behind_an_entry_only_where_the_menu_cannot_draw_it() -> None:
+    seq = QKeySequence("Ctrl+Shift+P")
+    assert key_hint(seq, native_menus=False) == ""
+    hint = key_hint(seq, native_menus=True)
+    assert hint.startswith(KEY_GAP) and hint.strip() == seq.toString(
+        QKeySequence.SequenceFormat.NativeText
+    )
+
+
+def test_add_plot_as_shows_its_key_on_macos(window) -> None:
+    """A native macOS menu draws no key behind a submenu, so it is in the
+    title there; elsewhere Qt draws it, and it is not written twice."""
+    title = window.plot_menu.menuAction().text()
+    shown = QKeySequence("Ctrl+Shift+P").toString(
+        QKeySequence.SequenceFormat.NativeText
+    )
+    assert (shown in title) == (sys.platform == "darwin")
+
+
+def test_the_palette_names_the_submenu_without_the_key(window) -> None:
+    kinds = [e for e in matching(window.palette_entries(), "histogram")]
+    assert kinds and all(e.where == "Insert › Add Plot As" for e in kinds)

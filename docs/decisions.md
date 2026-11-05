@@ -2664,9 +2664,12 @@ only, always**: the words are what a new user reads.
 - *Add Plot…* is no longer an entry of *Insert*: *Add Plot As* holds the kinds,
   and Ctrl+Shift+P, shown behind it, opens the dialog as before. The key sits
   on the submenu's own action, so there is one action for it and no ambiguity.
-  The toolbar button's menu and Ctrl+K keep *Add Plot…* by name. Not verified
-  by eye on the native macOS menu bar, where a key next to a submenu may not be
-  drawn; the key itself is tested.
+  The toolbar button's menu and Ctrl+K keep *Add Plot…* by name. A native
+  macOS menu draws no key behind an entry that opens a submenu (the user saw
+  this, 2026-11-05: "one has to guess the key"), so there the key is written
+  into the entry's name (`key_hint`, after an em space that the command palette
+  cuts off); on Windows and Linux Qt draws it itself and it is not written
+  twice.
 
 ## 0056 — The command palette also finds what a thing is known as
 

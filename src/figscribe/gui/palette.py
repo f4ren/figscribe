@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
     QLineEdit,
@@ -39,6 +39,19 @@ class Entry:
     `menu_entries`."""
     keywords: str = ""
     """Other words for it, found by typing but not shown; see `KEYWORDS`."""
+
+
+KEY_GAP = "\u2003"
+"""Between an entry's name and the key written behind it, where a menu cannot
+draw the key itself; `menu_entries` leaves what follows out of the name."""
+
+
+def key_hint(sequence: QKeySequence, native_menus: bool) -> str:
+    """The key to write behind a submenu's name. A native macOS menu draws none
+    behind an entry that opens a submenu; other menus draw it themselves."""
+    if not native_menus or sequence.isEmpty():
+        return ""
+    return KEY_GAP + sequence.toString(QKeySequence.SequenceFormat.NativeText)
 
 
 KEYWORDS = {
@@ -130,7 +143,7 @@ def menu_entries(bar: QMenuBar) -> list[Entry]:
             hold.append(action)
             if action.isSeparator() or not action.isVisible():
                 continue
-            text = action.text().replace("&", "")
+            text = action.text().split(KEY_GAP)[0].replace("&", "")
             submenu = action.menu()
             if submenu is not None:
                 walk(submenu, [*path, text])
@@ -149,7 +162,7 @@ def menu_entries(bar: QMenuBar) -> list[Entry]:
         hold.append(action)
         submenu = action.menu()
         if submenu is not None:
-            walk(submenu, [action.text().replace("&", "")])
+            walk(submenu, [action.text().split(KEY_GAP)[0].replace("&", "")])
     return found
 
 
