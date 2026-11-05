@@ -5,6 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
+- **A note's arrow is made in the figure.** Right-click a note and choose *Add an
+  arrow*; select the note and right-click where the arrow should point:
+  *Point the note's arrow here*. *Remove the note's arrow* takes it away. The
+  numbers in the property panel still work, and their tip says how to do it by
+  clicking.
 - **Finding by what a thing is known as.** *Find Setting or Action* (Ctrl+K)
   now also knows other words: *band*, *region*, *highlight* or *threshold* find
   the shaded range and the reference lines, *arrow* and *callout* the note,

@@ -627,7 +627,8 @@ TIPS = {
     "below.",
     "coords": "Data coordinates, or fractions of the panel from 0 to 1.",
     "arrow_to": "Where an arrow from the note points, in the same coordinates; empty "
-    "for no arrow.",
+    "for no arrow. Easier: right-click the note in the figure, then right-click "
+    "where it should point.",
     "fontsize": "Font size in pt; empty follows the figure.",
     "location": "Where the legend goes, e.g. best, upper right, lower left.",
     "Legend.position": "Where the legend's lower left corner sits, as fractions of the"
