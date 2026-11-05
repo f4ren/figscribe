@@ -211,5 +211,12 @@ note the platform, the screen scaling and the theme in the pull request.
     file. Save: the file is gone. Do the same with an untitled project (import
     some data, wait, kill): the next start offers it.
 
+33. **Fit an Allan deviation** (proposed, decision 0064): add an Allan deviation of
+    a noise series (log axes), right-click it, *Fit…*, choose *Power law*: the
+    fit has b near −0.5 for white frequency noise, the curve is smooth at the
+    short τ, the residuals show under it; *Find outliers* is greyed out with the
+    reason. Narrow the fit range to the short τ: the curve follows. Export the
+    Python script and run it: the same figure.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

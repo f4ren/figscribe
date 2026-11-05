@@ -23,10 +23,12 @@ PREDEFINED: dict[str, tuple[str, list[str]]] = {
         ["a", "x0", "gamma", "c"],
     ),
     "exponential": ("a * exp(-x / tau) + c", ["a", "tau", "c"]),
+    "power": ("a * x**b", ["a", "b"]),
 }
 """Gaussian: height a, width sigma. Lorentzian: height a, half width gamma (HWHM).
 Exponential: decay for tau > 0, growth for tau < 0. Peaks and the exponential
-carry a constant background c, as real measurements almost always do."""
+carry a constant background c, as real measurements almost always do. Power
+law: a * x**b, b = -1/2 for the white frequency noise of an Allan deviation."""
 
 
 def predefined(name: str, degree: int | None) -> tuple[str, list[str]]:
@@ -68,7 +70,18 @@ def _guess(
         return _finite(dict(zip(names, coeffs, strict=True)))
     if name in ("gaussian", "lorentzian"):
         return _finite(_peak(name, x, y))
+    if name == "power":
+        return _finite(_power(x, y))
     return _finite(_exponential(x, y))
+
+
+def _power(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
+    """A straight line through the points on log-log paper."""
+    positive = (x > 0) & (y > 0)
+    if positive.sum() >= 2 and np.ptp(np.log(x[positive])) > 0:
+        b, log_a = np.polyfit(np.log(x[positive]), np.log(y[positive]), 1)
+        return {"a": float(np.exp(log_a)), "b": float(b)}
+    return {"a": 1.0, "b": 1.0}
 
 
 def _peak(name: str, x: np.ndarray, y: np.ndarray) -> dict[str, float]:

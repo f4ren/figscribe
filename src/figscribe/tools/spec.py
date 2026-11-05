@@ -44,13 +44,14 @@ _FIT_FIELDS = {
     "model": {
         "type": "object",
         "description": 'Either {"kind": "predefined", "name": "linear" | '
-        '"polynomial" | "gaussian" | "lorentzian" | "exponential", "degree": n '
+        '"polynomial" | "gaussian" | "lorentzian" | "exponential" | "power", '
+        '"degree": n '
         '(polynomial only)} or {"kind": "expression", "expression": "a*exp(-x/tau)+c", '
         '"parameters": ["a", "tau", "c"]}. Expressions use x, the parameters, pi, '
         "+ - * / ** and exp log log10 sqrt sin cos tan arcsin arccos arctan sinh "
         "cosh tanh abs. Predefined: linear a*x+b; polynomial c0+c1*x+...; gaussian "
         "a*exp(-(x-mu)**2/(2*sigma**2))+c; lorentzian a*gamma**2/((x-x0)**2+"
-        "gamma**2)+c; exponential a*exp(-x/tau)+c.",
+        "gamma**2)+c; exponential a*exp(-x/tau)+c; power a*x**b.",
     },
     "label": {"type": ["string", "null"], "description": "Legend entry"},
     "initial_values": {

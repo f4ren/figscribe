@@ -79,8 +79,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
   (`[decide]`, judged by decision 0036).
-- **F14** fit an Allan deviation (M): a gap the user found on 2026-11-03.
-  **F15** draw a function (M), also from the user; F14 first.
+- **F14** fit an Allan deviation (M): built, proposed (0064); named noise-type
+  models are open. **F15** draw a function (M), from the user.
 
 **Phase 3 — Speed and working faster**
 - **E1** large data: render off the GUI thread (2), thin the preview only
@@ -1568,6 +1568,11 @@ conversions (a decision of their own); a formula in the plot dialog; a
 formula for a color mesh's positions.
 
 ### F14 Fit an Allan deviation — M
+
+**Built (2026-11-05, decision 0064, proposed):** the error bars as weights, the
+fit range in τ, a curve sampled in log τ, residuals, the script, and a
+*Power law* model; named noise-type models are not built. What follows is the
+plan it was built from.
 
 Found by the user (2026-11-03), a gap rather than a regression: an Allan
 deviation cannot be fitted. *Fit…* does not offer it, and `add_fit` says "a

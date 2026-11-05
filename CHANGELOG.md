@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **An Allan deviation can be fitted** (proposed). *Fit…* is offered on it, with
+  the error bars as weights, a fit range in τ, a smooth curve along the log axis
+  and residuals; the generated script fits the same points. A new *Power law*
+  model (a·x^b) fits the slope of white noise, −1/2.
 - **Unsaved work survives a crash.** Every minute figscribe writes the changes
   not yet saved to `<project>.figscribe.autosave` next to the project (for an
   untitled project, to its data folder); the next time the project is opened it

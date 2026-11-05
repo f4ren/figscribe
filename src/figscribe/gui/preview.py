@@ -76,7 +76,7 @@ from figscribe.gui.resize import (
     ratios,
 )
 from figscribe.model import Annotation
-from figscribe.model.validate import FITTABLE
+from figscribe.model.validate import FIT_TARGETS
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
 from figscribe.render.ticks import ticks_that_fit
@@ -906,7 +906,7 @@ class Preview(QWidget):
             "Send to back", lambda: self._push(to_front(project, plot.id, False))
         )
         back.setEnabled(drawn[0] is not plot)
-        if isinstance(plot, FITTABLE):
+        if isinstance(plot, FIT_TARGETS):
             menu.addAction("Fit…", lambda: self.fit_requested.emit(plot.id))
         menu.addAction(
             "Hide", lambda: self._push(SetField(plot.id, ("visible",), False, "Hide"))

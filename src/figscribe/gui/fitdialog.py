@@ -41,11 +41,17 @@ from figscribe.fit import (
     within,
 )
 from figscribe.gui import theme
-from figscribe.gui.names import REDUCED_NO_ROWS, artist_name, with_error
+from figscribe.gui.names import artist_name, no_rows_reason, with_error
 from figscribe.gui.numbers import number
 from figscribe.gui.properties import GREEK
 from figscribe.gui.widgets import label
-from figscribe.model import ErrorbarPlot, ExpressionFit, FitCurve, PredefinedFit
+from figscribe.model import (
+    AllanDeviationPlot,
+    ErrorbarPlot,
+    ExpressionFit,
+    FitCurve,
+    PredefinedFit,
+)
 
 MODELS = [
     ("gaussian", "Gaussian", "A peak with a constant background"),
@@ -53,6 +59,7 @@ MODELS = [
     ("linear", "Straight line", "a * x + b"),
     ("polynomial", "Polynomial", "Of the degree you choose"),
     ("exponential", "Exponential", "Decay or growth with a constant background"),
+    ("power", "Power law", "a * x**b, a straight line on log-log paper"),
     ("expression", "Own formula", "Any expression in x"),
 ]
 
@@ -113,7 +120,7 @@ class FitDialog(QDialog):
         )
         if shown.reduced:
             self.outside.setEnabled(False)
-            self.outside.setToolTip(REDUCED_NO_ROWS)
+            self.outside.setToolTip(no_rows_reason(target))
         self.k = QDoubleSpinBox()
         self.k.setRange(1.0, 10.0)
         self.k.setDecimals(1)
@@ -128,7 +135,7 @@ class FitDialog(QDialog):
         self.find_outliers.clicked.connect(self._find_outliers)
         if shown.reduced:
             self.find_outliers.setEnabled(False)
-            self.find_outliers.setToolTip(REDUCED_NO_ROWS)
+            self.find_outliers.setToolTip(no_rows_reason(target))
         self.outlier_text = label("", "caption")
         self.outlier_text.setWordWrap(True)
         self.leave_outliers_out = QPushButton("Leave them out")
@@ -167,7 +174,11 @@ class FitDialog(QDialog):
         weighting = "unweighted: the plot has no y errors"
         if self.shown.reduced:
             weighting = "unweighted: the median of rows has no error"
-        if self.yerr is not None:
+        if isinstance(self.target, AllanDeviationPlot):
+            weighting = "unweighted: the plot has no error bars"
+            if self.yerr is not None:
+                weighting = "weighted by the error bars of the plot"
+        elif self.yerr is not None:
             column = getattr(self.target, "yerr", None)
             weighting = (
                 "weighted by the standard errors of the groups"
@@ -463,7 +474,10 @@ class FitDialog(QDialog):
             used = in_range(self.x, self.fit_range())
         except FitError:
             used = in_range(self.x, None)
-        left_out = [*self.target.left_out, *(self.pending if pending else [])]
+        left_out = [
+            *getattr(self.target, "left_out", ()),
+            *(self.pending if pending else []),
+        ]
         used &= self.shown.rows_kept(left_out)
         if self.yerr is not None:  # a point without an error is not fitted
             used &= np.isfinite(self.yerr)
@@ -473,7 +487,7 @@ class FitDialog(QDialog):
         """The plot's rows to leave out with this fit; None if unchanged."""
         if not self.pending:
             return None
-        return sorted({*self.target.left_out, *self.pending})
+        return sorted({*getattr(self.target, "left_out", ()), *self.pending})
 
     def left_out_note(self) -> str:
         shown = [row + 1 for row in self.pending]

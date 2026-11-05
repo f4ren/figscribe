@@ -28,7 +28,7 @@ from figscribe.model import (
     Project,
     ResidualPlot,
 )
-from figscribe.model.validate import FITTABLE
+from figscribe.model.validate import FIT_TARGETS, FITTABLE
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
 
@@ -45,14 +45,14 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
     if not isinstance(fit, FitCurve):
         raise FitError(f"{fit_id!r} is not a fit")
     target = _get(project, fit.target)
-    if not isinstance(target, FITTABLE):
+    if not isinstance(target, FIT_TARGETS):
         raise FitError(
             f"the fit's target is a {target.kind!r}, which has no x and y data"
         )
 
     # In the units the plot shows, so that the parameters are read off its axes.
     shown = plot_data(target, data)
-    used = fitted_points(shown, target.left_out, fit.fit_range)
+    used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)
     x, y = shown.x[used], shown.y[used]
     yerr = None if shown.yerr is None else shown.yerr[used]
 
@@ -165,7 +165,7 @@ def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | 
     target = _get(project, fit.target)
     shown = plot_data(target, data)
     x, y = shown.x, shown.y
-    used = fitted_points(shown, target.left_out, fit.fit_range)
+    used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)
     if not used.any():
         return None
     off = y[used] - evaluate(fit.model, fit.result.parameters, x[used])
@@ -243,7 +243,7 @@ def _home(project: Project, target_id: str) -> tuple[Figure, Axes]:
         for axes in figure.axes:
             if any(a.id == target_id for a in axes.artists):
                 target = next(a for a in axes.artists if a.id == target_id)
-                if not isinstance(target, FITTABLE):
+                if not isinstance(target, FIT_TARGETS):
                     raise FitError(f"a {target.kind} plot cannot be fitted")
                 return figure, axes
     raise FitError(f"no plot with id {target_id!r} to fit")

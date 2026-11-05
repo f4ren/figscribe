@@ -1165,6 +1165,54 @@ def test_an_allan_deviation_in_minutes_over_a_range(tmp_path: Path) -> None:
     assert "/ 60" in script
 
 
+@pytest.mark.parametrize(
+    "case",
+    ["plain", "minutes and a range", "fit range", "no error bars", "linear axes"],
+)
+def test_a_fit_of_an_allan_deviation_with_its_residuals(
+    tmp_path: Path, case: str
+) -> None:
+    """F14, decision 0064: the fit runs on the points the plot draws, and the
+    script on the variables that hold them."""
+    from figscribe.model import AllanDeviationPlot, Conversion, ExpressionFit
+
+    rng = np.random.default_rng(5)
+    y = rng.normal(scale=2e-12, size=600)
+    rows = "\n".join(f"{0.5 * i!r},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "clock.csv").write_text(f"t,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    plot = AllanDeviationPlot(values=col["y"], time=col["t"])
+    fit_range = None
+    if case == "minutes and a range":
+        plot.x_conversion = Conversion(factor=1 / 60, unit="min")
+        plot.x_range = (0.0, 4.0)
+    if case == "fit range":
+        fit_range = (1.5, 60.0)
+    if case == "no error bars":
+        plot.error_bars = False
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    axes = Axes(**({} if case == "linear axes" else log), artists=[plot])
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[axes])],
+    )
+    fit = FitCurve(
+        target=plot.id,
+        model=ExpressionFit(expression="a / sqrt(x)", parameters=["a"]),
+        initial_values={"a": 1e-12},
+        fit_range=fit_range,
+    )
+    add_fit(project, fit, residuals=True).apply(project)
+    placed = next(a for a in project.figures[0].axes[0].artists if a.id == fit.id)
+    refit(project, placed.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "curve_fit(" in script and "import figscribe" not in script
+    if case != "linear axes":
+        assert "geomspace" in script  # even along a logarithmic τ axis
+
+
 def test_an_allan_deviation_in_hours_from_cycles_of_2_88_s(tmp_path: Path) -> None:
     # Cycles numbered 93, 94, ... each take 2.88 s; τ is shown in hours by a
     # formula that scales the cycles: 2.88 / 3600 = 0.0008 h per cycle.
