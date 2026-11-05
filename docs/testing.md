@@ -218,5 +218,11 @@ note the platform, the screen scaling and the theme in the pull request.
     reason. Narrow the fit range to the short τ: the curve follows. Export the
     Python script and run it: the same figure.
 
+34. **TIFF, EPS and a transparent background** (proposed, decision 0065): *File >
+    Export Figure…* lists TIFF and EPS. Export both and open them (Preview, an
+    image program, a vector program): the size is right, the TIFF is sharp. Tick
+    *File > Export with a Transparent Background*, export a PNG and put it on a
+    coloured slide: no white box; the item stays ticked after a restart.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

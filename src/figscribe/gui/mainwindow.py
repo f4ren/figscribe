@@ -126,7 +126,15 @@ DATA_FILTER = (
     "Data (*.csv *.tsv *.txt *.dat *.npy *.npz);;Delimited text (*.csv *.tsv "
     "*.txt *.dat);;NumPy (*.npy *.npz);;All files (*)"
 )
-EXPORT_FORMATS = {"PDF": ".pdf", "SVG": ".svg", "PNG": ".png"}
+EXPORT_FORMATS = {
+    "PDF": ".pdf",
+    "SVG": ".svg",
+    "EPS": ".eps",
+    "PNG": ".png",
+    "TIFF": ".tif",
+}
+TYPED_SUFFIXES = {".tiff": "TIFF"}
+"""A suffix typed in the export dialog that names a format by another spelling."""
 EXPORT_FILTER = ";;".join(
     f"{name} (*{suffix})" for name, suffix in EXPORT_FORMATS.items()
 )
@@ -134,7 +142,9 @@ SCRIPT_FILTER = "Python script (*.py)"
 EXPORT_ALL_FORMATS = {
     "PDF": ".pdf",
     "SVG": ".svg",
+    "EPS": ".eps",
     "PNG": ".png",
+    "TIFF": ".tif",
     "Python scripts": ".py",
 }
 """What Export All Figures writes, each figure into a file of its own."""
@@ -547,7 +557,12 @@ class MainWindow(QMainWindow):
         if figure is None:
             return
         try:
-            export(figure, self.document.data, path)
+            export(
+                figure,
+                self.document.data,
+                path,
+                transparent=self.transparent_action.isChecked(),
+            )
         except Exception as exc:
             self.show_error(f"Cannot export to {path}", exc)
 
@@ -585,7 +600,12 @@ class MainWindow(QMainWindow):
                 if suffix == ".py":
                     self.export_script(path, figure)
                 else:
-                    export(figure, self.document.data, path)
+                    export(
+                        figure,
+                        self.document.data,
+                        path,
+                        transparent=self.transparent_action.isChecked(),
+                    )
             except Exception as exc:
                 self.show_error(f"Cannot export {figure.name}", exc)
                 break
@@ -1396,6 +1416,12 @@ class MainWindow(QMainWindow):
         if path:
             self.open_path(path)
 
+    def _remember_transparent(self, on: bool = False) -> None:
+        self._keep_text(
+            "export/transparent",
+            "true" if self.transparent_action.isChecked() else "false",
+        )
+
     def _export_dialog(self) -> None:
         figure = self.document.figure
         if figure is None:
@@ -1419,7 +1445,9 @@ class MainWindow(QMainWindow):
         if not path:
             return
         path = Path(path)
-        by_suffix = {suffix: name for name, suffix in EXPORT_FORMATS.items()}
+        by_suffix = {
+            suffix: name for name, suffix in EXPORT_FORMATS.items()
+        } | TYPED_SUFFIXES
         if path.suffix.lower() in by_suffix:  # what is typed decides
             format_ = by_suffix[path.suffix.lower()]
         else:
@@ -1468,6 +1496,19 @@ class MainWindow(QMainWindow):
             file, "Export &Python Script…", self._script_dialog, "Ctrl+Shift+E"
         )
         self._action(file, "Export A&ll Figures…", self._export_all_dialog)
+        self.transparent_action = self._action(
+            file,
+            "Export with a &Transparent Background",
+            self._remember_transparent,
+        )
+        self.transparent_action.setCheckable(True)
+        self.transparent_action.setChecked(
+            self._text_setting("export/transparent", "false") == "true"
+        )
+        self.transparent_action.setToolTip(
+            "PNG, TIFF and SVG are written without the figure's white background; "
+            "PDF and EPS have none. The generated script is not changed by it."
+        )
         file.addSeparator()
         self._action(file, "&Quit", self.close, QKeySequence.StandardKey.Quit)
 

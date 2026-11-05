@@ -1774,6 +1774,8 @@ other objects, with guide lines; Alt disables snapping.
 TIFF (often required, with LZW compression) and EPS in addition to PDF, SVG
 and PNG; transparent background option; a dpi override at export time
 instead of a model field (see U2). *Export all figures* is done (F8).
+**TIFF, EPS and the transparent background are built** (decision 0065, proposed);
+the dpi override waits for the answer on U2.
 
 ### R4 Release 0.1.0 — M
 

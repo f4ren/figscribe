@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **Export as TIFF and EPS, and with a transparent background** (proposed). *Export
+  Figure…* and *Export All Figures…* offer TIFF (LZW compressed, at the figure's
+  dpi) and EPS; *File > Export with a Transparent Background* leaves out the white
+  background of PNG, TIFF and SVG.
 - **An Allan deviation can be fitted** (proposed). *Fit…* is offered on it, with
   the error bars as weights, a fit range in τ, a smooth curve along the log axis
   and residuals; the generated script fits the same points. A new *Power law*
