@@ -1318,9 +1318,15 @@ def test_a_fit_stays_when_the_range_is_narrowed_to_nothing(
     _assert_same(project, tmp_path)
 
 
-def test_a_fit_stays_when_its_fit_range_keeps_no_row(tmp_path: Path) -> None:
-    """The same with the fit's own range, set after the fit: the script says
-    why it draws no fit, and runs."""
+@pytest.mark.parametrize(
+    "narrowing",
+    ["fit range", "fit range, curve beyond it", "every row left out"],
+)
+def test_a_fit_with_no_point_left_is_not_drawn_and_the_script_says_so(
+    tmp_path: Path, narrowing: str
+) -> None:
+    """Whatever leaves the fit nothing to run on, after it was run: no curve,
+    no residual points, a script that runs and equals the figure."""
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"])
     project.figures = [Figure(dpi=100, axes=[Axes(artists=[data])])]
@@ -1328,7 +1334,11 @@ def test_a_fit_stays_when_its_fit_range_keeps_no_row(tmp_path: Path) -> None:
     add_fit(project, fit, residuals=True).apply(project)
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     fitted = next(a for a in project.figures[0].axes[0].artists if a.id == fit.id)
-    fitted.fit_range = (1e6, 2e6)
+    if narrowing == "every row left out":
+        data.left_out = list(range(len(load_data(project, tmp_path)(ref["t"]))))
+    else:
+        fitted.fit_range = (1e6, 2e6)
+        fitted.extend_curve = narrowing != "fit range"
     script = _assert_same(project, tmp_path)
     assert "no point left to run on" in script
     assert "curve_fit(" not in script

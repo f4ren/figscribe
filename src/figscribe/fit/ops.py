@@ -12,7 +12,7 @@ from figscribe.convert import plot_data
 from figscribe.fit.expression import FitError
 from figscribe.fit.run import (
     evaluate,
-    in_range,
+    fitted_points,
     initial_guess,
     parameter_names,
     run_fit,
@@ -52,7 +52,7 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
 
     # In the units the plot shows, so that the parameters are read off its axes.
     shown = plot_data(target, data)
-    used = in_range(shown.x, fit.fit_range) & shown.rows_kept(target.left_out)
+    used = fitted_points(shown, target.left_out, fit.fit_range)
     x, y = shown.x[used], shown.y[used]
     yerr = None if shown.yerr is None else shown.yerr[used]
 
@@ -165,10 +165,7 @@ def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | 
     target = _get(project, fit.target)
     shown = plot_data(target, data)
     x, y = shown.x, shown.y
-    used = in_range(x, fit.fit_range) & shown.rows_kept(target.left_out)
-    used &= np.isfinite(x) & np.isfinite(y)
-    if shown.yerr is not None:  # a point without an error is not fitted
-        used &= np.isfinite(shown.yerr)
+    used = fitted_points(shown, target.left_out, fit.fit_range)
     if not used.any():
         return None
     off = y[used] - evaluate(fit.model, fit.result.parameters, x[used])

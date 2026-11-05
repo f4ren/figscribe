@@ -2764,16 +2764,26 @@ equivalence test and kept as a strict `xfail` until now.
 
 ### Decision
 
-- `Script._points_to_fit(fit)` counts the points the fit has left, by the
-  rule of `refit` (the plot's points as shown, the fit range, rows not left
-  out, finite values, a finite error). With the data at hand and none left, the
-  fit is not among `self.fits`: no model function, no `curve_fit`, no curve,
-  and the residual panel keeps its zero line. A comment says "has no point left
-  to run on". Without the data (`None`) nothing changes.
-- The renderer draws no residual points when none is fitted, so its
-  limits equal what the script draws; before, it drew an empty `errorbar`.
-- `tests/codegen/test_equivalence.py` runs both ways of narrowing, for a plain and
-  a reduced plot, through the pixel equivalence test.
+- `fit.fitted_points(shown, left_out, fit_range)` is the one rule for the points
+  a fit runs on: in the plot's range and the fit's range, not left out, with a
+  finite x, y and error. `refit`, `residuals`, the renderer's curve and
+  residuals and the script all use it; before, each had its own copy, and they
+  differed (the curve looked only at the plot's range, so a fit range that
+  kept no row still drew it when the curve was to go beyond it).
+- With none left, the renderer draws no curve and no residual points, and the
+  script (`Script._points_to_fit`, when the data is at hand) has no model
+  function, no `curve_fit`, no curve and no residuals, and says in a comment
+  "has no point left to run on". Without the data nothing changes, but every
+  caller of `generate` passes it (the code drawer, the export, the CLI when the
+  files are there, the assistant's tool).
+- The residual panel then holds only its zero line, on limits Matplotlib
+  chooses for an empty panel (0 to 1), so the line lies on the frame: a state
+  to leave, not one to look good. A residual panel that drew an empty
+  `errorbar` had other limits, which a script cannot say without drawing it.
+- `tests/codegen/test_equivalence.py` runs three ways to reach it, through the
+  pixel equivalence test: the plot's range narrowed (plain and reduced), the
+  fit range narrowed with the curve over it and beyond it, and every row left
+  out.
 
 ### Alternatives considered
 

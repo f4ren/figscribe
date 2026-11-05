@@ -22,7 +22,7 @@ import numpy as np
 from figscribe import __version__
 from figscribe.allan import samples
 from figscribe.convert import expression, plot_data, scale_expression
-from figscribe.fit import free_parameters, in_range, numpy_source, parameter_names
+from figscribe.fit import fitted_points, free_parameters, numpy_source, parameter_names
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
 from figscribe.model import (
@@ -1137,11 +1137,7 @@ class _Writer:
             shown = plot_data(target, self.data)
         except (DataError, KeyError, ValueError):
             return None
-        used = in_range(shown.x, fit.fit_range) & shown.rows_kept(target.left_out)
-        used &= np.isfinite(shown.x) & np.isfinite(shown.y)
-        if shown.yerr is not None:
-            used &= np.isfinite(shown.yerr)
-        return int(used.sum())
+        return int(fitted_points(shown, target.left_out, fit.fit_range).sum())
 
     def _finite(self, fit: FitCurve) -> bool | None:
         """Whether all data of the fit is finite; None if unknown."""
