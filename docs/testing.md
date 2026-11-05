@@ -166,5 +166,13 @@ note the platform, the screen scaling and the theme in the pull request.
     *Plot* and *Reference* open their menus alike, with a picture at each entry. *Reference* offers lines and shaded ranges, as *Insert > Add
     Reference* does. Type "histogram" or "shaded" in Ctrl+K: they are found.
 
+26. **Finding by other words**: press Ctrl+K and type *band*, *threshold*,
+    *callout*, *heatmap*, *residuals*, *subplot*, *csv*: the shaded ranges, the
+    lines, *Add Note…*, *Color mesh*, *Add Fit…*, the panels and *Import Data…*
+    come up. Select a plot with error bars and type *downsample*: *Fewer
+    points*. Select a note and type *arrow*: *Arrow to* is the first. Select
+    nothing: the property panel says what to select and that Ctrl+K finds
+    things by name.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

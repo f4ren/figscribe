@@ -5,6 +5,12 @@ release open in every later one.
 
 ## Unreleased
 
+- **Finding by what a thing is known as.** *Find Setting or Action* (Ctrl+K)
+  now also knows other words: *band*, *region*, *highlight* or *threshold* find
+  the shaded range and the reference lines, *arrow* and *callout* the note,
+  *heatmap* the color mesh, *residuals* the fit, *downsample* the setting
+  *Fewer points*, and so on. An entry found by its name comes before one found by
+  another word. The empty property panel says where to look.
 - **The toolbar's adding buttons show what they make.** *Data*, *Figure*,
   *Panel*, *Plot*, *Fit*, *Note* and a new *Reference* each have a picture of
   their own instead of the same plus, in two groups (what holds, and what goes

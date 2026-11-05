@@ -2648,3 +2648,38 @@ the very things U12 wants found.
 **A flat row of eight with words**: 918 px, and hidden below that. **Icons
 only, always**: the words are what a new user reads.
 
+## 0056 — The command palette also finds what a thing is known as
+
+### Context
+
+Measured on the examples (U12): *shade* found the shaded range, but *band*,
+*region*, *highlight*, *interval*, *threshold* and *arrow* found nothing, nor
+did *histogram*, *allan*, *heatmap* or *residuals*: the palette matched only the
+name an entry has in the menu. A new user looks for what they want to draw, not
+for what figscribe calls it.
+
+### Decision
+
+- An `Entry` has `keywords`, other words for it that are searched but not
+  shown. `palette.KEYWORDS` holds them by the entry's text, for the menu actions
+  (kinds of plot, fit, note, lines and ranges, panels, data, figure) and for
+  settings that go by other names (*Fewer points*: downsample, average;
+  *Error band*: ribbon; *Arrow to*: pointer …).
+- The order is: the text starts with the first word, then the words are in the
+  name or where it is found, then only a keyword matches. So *band* gives
+  *Error band* before *Shaded x range*.
+- `tests/gui/test_find_words.py` has, for every kind of element, words to try and the
+  entry that must come up, and fails when an example uses a kind that has no
+  words, so a new element has to be made findable. The window's
+  `palette_entries()` is what the palette and the test both read.
+- The empty property panel says, under what to select, that Ctrl+K (⌘K on a
+  Mac) finds an action or a setting by what it is called or does.
+
+### Alternatives considered
+
+**Renaming the menu entries to the commonest word**: there is no single one
+(*band*, *region* and *range* are all used). **A thesaurus or fuzzy matching**:
+a dependency or a guess for what a short list does. **Only the property
+panel's search**: it knows only the selection, and nothing is selected when
+a person looks for something to add.
+

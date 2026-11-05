@@ -993,9 +993,16 @@ class PropertyPanel(QScrollArea):
             layout.addWidget(self._several_header(several))
         elif obj is None:
             self._shown = None
-            hint = label(
-                "Select a figure, panel, plot or data file to edit it.", "hint"
+            key = QKeySequence("Ctrl+K").toString(
+                QKeySequence.SequenceFormat.NativeText
             )
+            hint = label(
+                "Select a figure, panel, plot or data file to edit it.\n\n"
+                f"{key} finds an action or a setting by what it is called or "
+                "does, e.g. “band”, “arrow” or “histogram”.",
+                "hint",
+            )
+            hint.setWordWrap(True)
             hint.setContentsMargins(16, 16, 16, 16)
             layout.addWidget(hint)
         else:

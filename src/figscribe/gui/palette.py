@@ -2,8 +2,10 @@
 selection, found by typing a few letters of it.
 
 An entry is a line of text, where it is found, and what choosing it does.
-Typed words must all occur in the entry; entries whose text starts with the
-first word come first.
+Typed words must all occur in the entry or in its keywords, the words a person
+might use for it (a "band" for a shaded range); entries whose text starts with
+the first word come first, then those that have the words in their name, then
+those found by a keyword only.
 """
 
 from __future__ import annotations
@@ -35,6 +37,53 @@ class Entry:
     hold: list = field(default_factory=list, repr=False, compare=False)
     """Qt objects `run` depends on, kept so that they stay valid: see
     `menu_entries`."""
+    keywords: str = ""
+    """Other words for it, found by typing but not shown; see `KEYWORDS`."""
+
+
+KEYWORDS = {
+    # menu actions
+    "Import Data…": "csv load open file table npz npy",
+    "Add Figure": "tab page",
+    "Add Plot…": "chart graph curve",
+    "Line": "curve trace line plot",
+    "Points": "scatter markers dots",
+    "Error bars": "errorbar uncertainty yerr sigma",
+    "Histogram": "bins distribution frequency counts",
+    "Allan deviation": "adev stability oscillator noise tau",
+    "Image": "picture matrix pixels imshow 2d",
+    "Color mesh": "heatmap colormap colour map pcolormesh 2d surface",
+    "Add Fit…": "regression residuals least squares model curve fit",
+    "Add Note…": "annotation text label callout arrow pointer comment",
+    "Vertical line": "reference threshold marker guide rule",
+    "Horizontal line": "reference threshold marker guide rule",
+    "Shaded x range": "band region highlight interval window span shade",
+    "Shaded y range": "band region highlight interval window span shade",
+    "Panel to the right": "subplot axes next to",
+    "Panel to the left": "subplot axes next to",
+    "Panel above": "subplot axes",
+    "Panel below": "subplot axes residuals",
+    "Inset": "subplot zoom magnifier inside",
+    # settings
+    "Arrow to": "arrow pointer tip",
+    "Fewer points": "reduce downsample average mean bin thin decimate",
+    "Error band": "ribbon confidence uncertainty fill",
+    "Line style": "dashed dotted solid linestyle",
+    "Grid lines": "gridlines grid",
+    "Right y axis": "secondary second twin axis",
+    "Color map": "colormap cmap viridis palette",
+    "Normalize to density": "density normalise pdf",
+    "Bins (count, or edges)": "histogram binning",
+    "Panel labels": "letters subpanel",
+    "Ticks on all sides": "mirror ticks",
+    "Units in labels": "unit format brackets slash",
+    "Why left out": "outlier exclude omit",
+    "Left-out color": "outlier exclude omit",
+    "Left-out marker": "outlier exclude omit",
+    "Legend entry": "label name legend",
+}
+"""Words to find an entry by besides its text, by its text. A kind of element
+that an example uses is tested to be found (`tests/gui/test_find_words.py`)."""
 
 
 def menu_entries(bar: QMenuBar) -> list[Entry]:
@@ -60,7 +109,15 @@ def menu_entries(bar: QMenuBar) -> list[Entry]:
             if submenu is not None:
                 walk(submenu, [*path, text])
             elif action.isEnabled():
-                found.append(Entry(text, " › ".join(path), action.trigger, hold))
+                found.append(
+                    Entry(
+                        text,
+                        " › ".join(path),
+                        action.trigger,
+                        hold,
+                        KEYWORDS.get(text, ""),
+                    )
+                )
 
     for action in bar.actions():
         hold.append(action)
@@ -75,10 +132,21 @@ def matching(entries: list[Entry], query: str) -> list[Entry]:
     words = query.lower().split()
     if not words:
         return list(entries)
+
+    def named(e: Entry) -> bool:
+        return all(w in f"{e.text} {e.where}".lower() for w in words)
+
+    def rank(e: Entry) -> int:
+        if e.text.lower().startswith(words[0]):
+            return 0
+        return 1 if named(e) else 2
+
     found = [
-        e for e in entries if all(w in f"{e.text} {e.where}".lower() for w in words)
+        e
+        for e in entries
+        if all(w in f"{e.text} {e.where} {e.keywords}".lower() for w in words)
     ]
-    return sorted(found, key=lambda e: not e.text.lower().startswith(words[0]))
+    return sorted(found, key=rank)
 
 
 class CommandPalette(QDialog):
