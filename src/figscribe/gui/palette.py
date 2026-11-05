@@ -86,6 +86,32 @@ KEYWORDS = {
 that an example uses is tested to be found (`tests/gui/test_find_words.py`)."""
 
 
+AXIS_KEYWORDS = {
+    # (section, caption) of the axis form
+    ("Label", "Label"): "title name text xlabel ylabel",
+    ("Label", "Unit"): "units si",
+    ("Label", "Show values in"): "prefix si milli kilo mega micro factor power",
+    ("Label", "Label size (pt)"): "font text",
+    ("Label", "Label distance (pt)"): "labelpad padding spacing gap",
+    ("Scale", "Type"): "log logarithmic symlog symmetric linear scale semilog loglog",
+    ("Scale", "From"): "range limits limit xlim ylim min max bounds extent zoom",
+    ("Scale", "Linear within ±"): "symlog linthresh threshold",
+    ("Scale", "Number size (pt)"): "tick label font numbers",
+    ("Ticks", "Major ticks"): "tick spacing step interval positions locator labels",
+    ("Ticks", "Distance"): "tick spacing step interval",
+    ("Ticks", "Values"): "tick positions locations",
+    ("Ticks", "Tick labels"): "names text categories custom",
+    ("Ticks", "Minor ticks"): "subdivisions between",
+}
+"""The same for the rows of the axis form, whose captions are short ("Type",
+"From") because the section says what they are about."""
+
+
+def words_for(caption: str, section: str) -> str:
+    """The other words for a setting: its own, or those of its caption."""
+    return AXIS_KEYWORDS.get((section, caption)) or KEYWORDS.get(caption, "")
+
+
 def menu_entries(bar: QMenuBar) -> list[Entry]:
     """Every enabled action of the menu bar, with the menus it is in.
 

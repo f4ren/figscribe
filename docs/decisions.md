@@ -2714,3 +2714,40 @@ preview, with its own hit test, cursor and undo; kept for later if the
 right-click is not enough. **A check box in *Add Note…***: asks before the note
 is placed, when the place is not yet known.
 
+## 0058 — The settings of a panel's axes are found without opening the axis
+
+### Context
+
+The last gap of U12: the examples use log and symlog axes, limits and ticks,
+but Ctrl+K found none of them. The axis form's rows are short ("Type",
+"From"), so *log*, *limits* and *ticks* matched nothing, and the form exists
+only while an axis is selected; with the panel or a plot selected, the axes are
+cards (buttons), not rows, so the palette had nothing to list.
+
+### Decision
+
+- `axisform.axis_settings(spec)` lists the (section, caption) of the rows the form
+  shows for an axis, in order, leaving out those that wait for another
+  setting (*Linear within ±* for a symmetric log axis only; *Distance*, *Values*
+  and *Tick labels* for the matching way of setting the ticks).
+  `tests/gui/test_axis_search.py` compares it with the real form for four kinds
+  of axis, so the list cannot drift from the form.
+- With a panel, one of its plots or one of its axes selected,
+  `MainWindow.palette_entries()` adds those settings for each axis of the panel
+  (x, y and, if there, the right y), as "Setting · x axis · Scale"; running
+  one selects the axis and goes to the setting. With an axis selected, its own are
+  the form's rows as before, and only the other axes are added.
+- `palette.AXIS_KEYWORDS` has the other words by (section, caption): *log*,
+  *symlog*, *limits*, *xlim*, *range*, *ticks*, *spacing*, *prefix*, *labelpad* and so on.
+- `PropertyPanel.settings()` no longer lists a row of the axis form that waits for
+  another setting (`AxisForm.waiting`), which `reveal` could not have focused.
+  Rows hidden by the search stay listed: the palette must find a setting the
+  search has hidden.
+
+### Alternatives considered
+
+**Switching to the axis form on a click in the panel's cards only**: leaves
+the palette blind. **Building the axis form off-screen to read its rows**:
+more code to keep a hidden widget tree for a list of nine names. **Offering the
+hidden rows**: they would take the person to a form where the field is not.
+

@@ -5,6 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
+- **The settings of an axis are found with Ctrl+K.** *log*, *symlog*, *limits*,
+  *range*, *ticks*, *prefix* and more find the axis's scale, range, ticks and
+  label, also when only the panel or a plot is selected: choosing one opens that
+  axis on the setting. A setting that waits for another, such as *Linear within ±*
+  on a linear axis, is no longer offered.
 - **A note's arrow is made in the figure.** Right-click a note and choose *Add an
   arrow*; select the note and right-click where the arrow should point:
   *Point the note's arrow here*. *Remove the note's arrow* takes it away. The
