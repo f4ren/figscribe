@@ -2776,6 +2776,11 @@ equivalence test and kept as a strict `xfail` until now.
   "has no point left to run on". Without the data nothing changes, but every
   caller of `generate` passes it (the code drawer, the export, the CLI when the
   files are there, the assistant's tool).
+- The problem list says it too, at the fit: "no point is left to fit, because of
+  the ranges, the rows left out or values that are not finite, so the fit is
+  not drawn" (`validate._nothing_to_fit`, with the data; not for a fit that was
+  not run yet, nor when the data cannot be read or a left-out row is not there,
+  which are said elsewhere).
 - The residual panel then holds only its zero line, on limits Matplotlib
   chooses for an empty panel (0 to 1), so the line lies on the frame: a state
   to leave, not one to look good. A residual panel that drew an empty

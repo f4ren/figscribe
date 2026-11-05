@@ -137,6 +137,10 @@ def validate_references(
                 if data is not None:
                     for why in _not_drawn(artist, axes, data):
                         issues.append(ReferenceIssue(tpath, artist.id, why))
+                    if isinstance(artist, FitCurve):
+                        why = _nothing_to_fit(artist, artists_by_id, data)
+                        if why is not None:
+                            issues.append(ReferenceIssue(tpath, artist.id, why))
 
                 for field, ref in data_refs(artist):
                     if ref not in source_ids:
@@ -389,6 +393,27 @@ def data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
         if isinstance(value, (ColumnRef, ArrayRef)):
             refs.append((name, value.source))
     return refs
+
+
+def _nothing_to_fit(fit: FitCurve, artists: dict, data) -> str | None:
+    """A fit that was run, but has no point left to run on, draws nothing."""
+    from figscribe.convert import plot_data
+    from figscribe.fit import FitError, fitted_points
+    from figscribe.io.errors import DataError
+
+    target = artists.get(fit.target)
+    if fit.result is None or not isinstance(target, FITTABLE):
+        return None
+    try:
+        shown = plot_data(target, data)
+        if fitted_points(shown, target.left_out, fit.fit_range).any():
+            return None
+    except (DataError, FitError, KeyError, ValueError):
+        return None  # said elsewhere: unreadable data, a row that is not there
+    return (
+        "no point is left to fit, because of the ranges, the rows left out or "
+        "values that are not finite, so the fit is not drawn"
+    )
 
 
 def _nothing_in_range(artist, data) -> list[str]:
