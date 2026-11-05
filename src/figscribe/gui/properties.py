@@ -1121,8 +1121,11 @@ class PropertyPanel(QScrollArea):
                 if caption is None or field is None or field.widget() is None:
                     continue
                 text = getattr(caption.widget(), "text", lambda: "")()
-                if text and field.widget().isEnabled():
-                    found.append((text, title, field.widget()))
+                widget = field.widget()
+                if self.axis_form is not None and widget in self.axis_form.waiting:
+                    continue  # a row of the axis form that waits for another
+                if text and widget.isEnabled():
+                    found.append((text, title, widget))
         return found
 
     def _grey_out(self, obj: BaseModel) -> None:

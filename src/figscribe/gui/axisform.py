@@ -64,6 +64,37 @@ TIPS = {
 }
 
 
+def major_mode(spec: AxisSpec) -> str:
+    """How the major ticks are set: "values", "step" or "auto"."""
+    if spec.ticks is not None:
+        return "values"
+    return "step" if spec.major_step is not None else "auto"
+
+
+def axis_settings(spec: AxisSpec) -> list[tuple[str, str]]:
+    """(section, caption) of each row the axis form shows for `spec`, in
+    order, for finding them without the form open."""
+    mode = major_mode(spec)
+    rows = [
+        ("Label", "Label"),
+        ("Label", "Unit"),
+        ("Label", "Show values in"),
+        ("Label", "Label size (pt)"),
+        ("Label", "Label distance (pt)"),
+        ("Scale", "Type"),
+        ("Scale", "From"),
+    ]
+    if spec.scale == "symlog":
+        rows.append(("Scale", "Linear within ±"))
+    rows += [("Scale", "Number size (pt)"), ("Ticks", "Major ticks")]
+    if mode != "auto":
+        rows.append(("Ticks", "Distance" if mode == "step" else "Values"))
+    if mode == "values":
+        rows.append(("Ticks", "Tick labels"))
+    rows.append(("Ticks", "Minor ticks"))
+    return rows
+
+
 class AxisForm:
     """The sections for one axis of a panel, inside the property panel."""
 
@@ -82,6 +113,8 @@ class AxisForm:
         """The range the axis shows right now, in data units."""
         self.spec = AxisSpec()
         self._forms: dict[QWidget, QFormLayout] = {}
+        self.waiting: set[QWidget] = set()
+        """The fields hidden until another setting makes them useful."""
 
         form = panel._section("Label", layout)
         self.label = self._line(form, "Label", "label")
@@ -208,11 +241,7 @@ class AxisForm:
         self._visible(self.linthresh, spec.scale == "symlog")
         _text(self.linthresh, self._shown(spec.symlog_linthresh))
 
-        mode = (
-            "values"
-            if spec.ticks is not None
-            else ("step" if spec.major_step is not None else "auto")
-        )
+        mode = major_mode(spec)
         self.major.setCurrentIndex(self.major.findData(mode))
         self._visible(self.major_value, mode != "auto")
         self._visible(self.tick_labels, mode == "values")
@@ -388,6 +417,7 @@ class AxisForm:
 
     def _visible(self, widget: QWidget, visible: bool) -> None:
         self._forms[widget].setRowVisible(widget, visible)
+        (self.waiting.discard if visible else self.waiting.add)(widget)
 
 
 def plain(text: str) -> str:

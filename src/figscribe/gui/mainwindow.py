@@ -67,17 +67,18 @@ from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import clipboard, markings, reveal, theme
 from figscribe.gui.about import about_text
+from figscribe.gui.axisform import AXIS_TITLES, axis_settings
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.databar import DataBar
-from figscribe.gui.document import Document, axis_id, split_axis
+from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.figures import FigureTabs, move_figure
 from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
-from figscribe.gui.palette import KEYWORDS, CommandPalette, Entry, menu_entries
+from figscribe.gui.palette import CommandPalette, Entry, menu_entries, words_for
 from figscribe.gui.plotdialog import KINDS, NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
@@ -965,11 +966,52 @@ class MainWindow(QMainWindow):
                 caption,
                 f"Setting · {title}",
                 lambda c=caption, t=title: self._reveal_setting(c, t),
-                keywords=KEYWORDS.get(caption, ""),
+                keywords=words_for(caption, title),
             )
             for caption, title, _ in self.properties.settings()
         ]
+        entries += self._axis_entries()
         return entries
+
+    def _axis_entries(self) -> list[Entry]:
+        """The settings of the axes of the selection's panel, whose form is not
+        open: running one selects that axis and goes to the setting."""
+        selected = self.document.selected
+        axis = split_axis(selected)
+        panel = next(
+            (
+                axes
+                for axes in self.document.figure.axes
+                if selected == axes.id
+                or (axis is not None and axis[0] == axes.id)
+                or any(artist.id == selected for artist in axes.artists)
+            ),
+            None,
+        )
+        if panel is None:
+            return []
+        entries = []
+        for field in AXIS_FIELDS:
+            spec = getattr(panel, field)
+            if spec is None or (axis is not None and axis == (panel.id, field)):
+                continue  # not there, or its form is open and has them
+            oid = axis_id(panel.id, field)
+            for section, caption in axis_settings(spec):
+                entries.append(
+                    Entry(
+                        caption,
+                        f"Setting · {AXIS_TITLES[field]} · {section}",
+                        lambda a=oid, c=caption, t=section: self._reveal_axis_setting(
+                            a, c, t
+                        ),
+                        keywords=words_for(caption, section),
+                    )
+                )
+        return entries
+
+    def _reveal_axis_setting(self, axis: str, caption: str, section: str) -> None:
+        self.document.select(axis)
+        self._reveal_setting(caption, section)
 
     def open_palette(self) -> None:
         """Find any menu action or setting of the selection by typing."""

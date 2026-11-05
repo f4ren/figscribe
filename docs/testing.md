@@ -180,5 +180,11 @@ note the platform, the screen scaling and the theme in the pull request.
     note's arrow*. Undo each step. In a figure with two panels, the entry is not
     offered in the other panel.
 
+28. **The axes in Ctrl+K**: select a panel (not an axis), press Ctrl+K and type
+    *log*, *limits*, *ticks*: *Type*, *From* and *Major ticks* come up for the x
+    and the y axis, each with its axis in the line below. Run one: that axis
+    opens on the setting, with the cursor in it. With a plot selected it is the
+    same. On a linear axis *symlog* finds *Type* and not *Linear within ±*.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

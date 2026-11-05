@@ -61,7 +61,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **U11** the settings panel rearranged, element by element, with the user
   (figure, panel, axes, each kind of plot, …). Nothing is built for an
   element before the user has agreed to its arrangement.
-- **U12** finding what the examples use (see below), once the examples are merged.
+- **U12** finding what the examples use (see below): **done**.
 
 **Phase 2 — What a scientist needs**
 - **F1** fits (L): the range dragged in the preview (1); the result as text
@@ -959,10 +959,9 @@ command palette under a name a person would search for.
 (decision 0055, **done**: kind icons, *Reference* and *Plot* menus, icons alone
 in a narrow window). Then search and names (decision 0056, **done**: synonyms
 for the command palette, a hint in the empty property panel, and the test
-above, which fails when an example uses a kind without words). *Open:* the
-settings of an axis (*Scale*: log, symlog, its limits, ticks) are not in the
-palette, since the axis cards are not form rows; the examples use them (log,
-symlog axes). Then the note's arrow by
+above, which fails when an example uses a kind without words). Then the settings of an
+axis (log, symlog, limits, ticks; decision 0058, **done**: found from a
+selected panel or plot too). Then the note's arrow by
 right-clicking the note (decision 0057, **done**: *Add an arrow*, *Point the
 note's arrow here*, *Remove the note's arrow*); dragging the tip is a later
 step if that is not enough. Measured on the examples: *shade*
