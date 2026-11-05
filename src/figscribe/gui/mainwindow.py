@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -12,6 +13,7 @@ from PySide6.QtCore import (
     QSize,
     QStandardPaths,
     Qt,
+    QTimer,
     QUrl,
 )
 from PySide6.QtGui import (
@@ -65,7 +67,7 @@ from figscribe.commands import (
 from figscribe.commands.core import noun, walk
 from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
-from figscribe.gui import clipboard, markings, reveal, theme
+from figscribe.gui import clipboard, markings, recovery, reveal, theme
 from figscribe.gui.about import about_text
 from figscribe.gui.axisform import AXIS_TITLES, axis_settings
 from figscribe.gui.chatpanel import ChatPanel
@@ -174,6 +176,12 @@ class MainWindow(QMainWindow):
         self._copied_style: ArtistBase | None = None
         """A copy of the plot whose style Copy Style took; pasted by Paste Style."""
         """Runs a dialog, True if accepted; replaced in tests."""
+
+        self._wrote_untitled = False
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setInterval(recovery.INTERVAL_MS)
+        self._autosave_timer.timeout.connect(self.autosave)
+        self._autosave_timer.start()
 
         self.preview = Preview(self.document)
         self.start = StartPage()
@@ -365,14 +373,61 @@ class MainWindow(QMainWindow):
         self.set_document(Document(project))
 
     def open_path(self, path: str | Path) -> None:
-        """Open a project file; errors are shown, the current project stays."""
+        """Open a project file; errors are shown, the current project stays.
+        Work that a crash left in a recovery file is offered first."""
         try:
             document = Document.open(path)
+            document = self._recovered(document) or document
         except (OSError, ValueError) as exc:
             self.show_error(f"Cannot open {path}", exc)
             return
         self.set_document(document)
         self._add_recent(document.path)
+
+    def _recovered(self, document: Document) -> Document | None:
+        """The document with the work of a recovery file, if there is one and
+        the user wants it; declining removes the file."""
+        found = recovery.pending(document.path)
+        if found is None:
+            return None
+        when = datetime.fromtimestamp(found.stat().st_mtime).strftime("%H:%M on %d %b")
+        name = document.path.name if document.path else "an untitled project"
+        if not self.ask(
+            "Recover your work?",
+            f"figscribe found unsaved changes to {name} from {when}, left by a "
+            "session that did not end properly. Recover them?",
+        ):
+            recovery.discard(document.path)
+            return None
+        try:
+            kept = Document(recovery.load(found), document.path)
+        except (OSError, ValueError) as exc:
+            self.show_error("Cannot recover the work", exc)
+            return None
+        kept.history.mark_dirty()
+        return kept
+
+    def offer_recovery(self, path: Path | None) -> None:
+        """At the start: offer the work of an untitled project, or of `path`."""
+        if path is not None:
+            return self.open_path(path)
+        document = self._recovered(Document())
+        if document is not None:
+            self.set_document(document)
+
+    def autosave(self) -> None:
+        """Write the unsaved work to its recovery file; nothing if there is none.
+        A folder that takes no file is no error: the work goes on."""
+        document = self.document
+        if document.history.is_clean:
+            if document.path is not None:
+                recovery.discard(document.path)
+            return  # an untitled one may hold work not yet offered: left alone
+        try:
+            recovery.write(document.project, document.path, document.base_dir)
+        except OSError:
+            return
+        self._wrote_untitled = self._wrote_untitled or document.path is None
 
     def choose_example_folder(self) -> Path | None:
         """Where the user wants the example copied to; None if they decline."""
@@ -1271,6 +1326,8 @@ class MainWindow(QMainWindow):
         if self.tool_server.listening:
             self.tool_server.stop()
         self.chat.wait()  # let a running request finish before its thread goes
+        self._autosave_timer.stop()
+        recovery.discard(self.document.path)  # closed on purpose, saved or not
         event.accept()
 
     def _connect(self, document: Document) -> None:
@@ -1287,6 +1344,11 @@ class MainWindow(QMainWindow):
     def _update_state(self) -> None:
         history = self.document.history
         self.setWindowTitle(self.document.title)
+        if history.is_clean and self.document.path is not None:
+            recovery.discard(self.document.path)  # saved: nothing left to recover
+            if self._wrote_untitled:  # an untitled project that was saved since
+                recovery.discard(None)
+                self._wrote_untitled = False
         self.undo_action.setEnabled(history.can_undo)
         self.undo_action.setText(
             f"&Undo {history.undo_text}" if history.can_undo else "&Undo"

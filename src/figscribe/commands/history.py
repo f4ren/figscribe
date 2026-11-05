@@ -75,6 +75,11 @@ class History:
         """Record the current state as saved."""
         self._clean = len(self._undo)
 
+    def mark_dirty(self) -> None:
+        """Record that the project differs from any saved state, though nothing
+        was done in this session: it was recovered."""
+        self._clean = None
+
     @property
     def is_clean(self) -> bool:
         """True when the project equals its last saved state."""

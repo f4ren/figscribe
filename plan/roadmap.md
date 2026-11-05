@@ -86,7 +86,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **E1** large data: render off the GUI thread (2), thin the preview only
   (3), a performance test (4); item 1 is done for zoom and pan only, changes
   from the property panel still render at once.
-- **E2** autosave and recovery after a crash (the atomic save and `.bak` are done). **E3** save a figure as a template. **E4**
+- **E2** is done (atomic save and `.bak`, autosave and recovery; 0054, 0063). **E3** save a figure as a template. **E4**
   fewer steps for the common path (everything except the plot dialog),
   among them a source's file changed
   after all (`[decide]`, a question for the user who asked).
@@ -105,7 +105,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 and 6 need no answer. The user named the order on 2026-11-03: B7.4 and F13 are
 done, then comes U11 (the settings panel arranged element by element); see
 that task. U12 (finding what the examples use) came in between and is done;
-F14 then F15 follow U11, and E2's autosave is the small one to slip in.
+F14 then F15 follow U11; E2 is done.
 
 ---
 
@@ -1657,9 +1657,9 @@ interaction up to about 1e6 points, with downsampling in the preview only.
 
 **Done** (decision 0054): the project is written to a temporary file and
 replaced atomically, the version before stays as `<name>.figscribe.bak`, and a
-read-only file is still refused. **Open:** autosave to a recovery file every
-minute while there are unsaved changes, and an offer to recover it on the next
-start after a crash.
+read-only file is still refused. **Autosave and recovery: done** (decision 0063, proposed): a recovery file
+every minute while there are unsaved changes, offered on the next open after a
+crash.
 
 ### E3 Start from your own figure — S
 
