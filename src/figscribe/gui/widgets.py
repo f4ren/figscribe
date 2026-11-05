@@ -26,13 +26,18 @@ class AdaptiveToolBar(QToolBar):
         self.wordy: list[QToolButton] = []
         self._adapting = False
 
+    def words_width(self) -> int:
+        """The width the bar needs with the words, which it now shows."""
+        self._words(True)
+        self.layout().invalidate()  # the hint of the words, not a kept one
+        return self.layout().sizeHint().width()
+
     def adapt(self) -> None:
         if self._adapting or not self.wordy:
             return
         self._adapting = True
         try:
-            self._words(True)
-            if self.layout().sizeHint().width() > self.width():
+            if self.words_width() > self.width():
                 self._words(False)
         finally:
             self._adapting = False

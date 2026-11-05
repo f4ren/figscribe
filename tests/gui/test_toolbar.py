@@ -62,11 +62,25 @@ def test_every_adding_button_shows_what_it_makes(window) -> None:
         assert picture != _picture(window.home_action.icon()), name
 
 
-def test_a_wide_window_shows_icons_with_words(window) -> None:
-    window.resize(1400, 700)
-    for button in _buttons(window).values():
-        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-    assert not _overflowing(window)
+def _wordy(window: MainWindow) -> set[Qt.ToolButtonStyle]:
+    return {button.toolButtonStyle() for button in window.toolbar.wordy}
+
+
+def test_the_words_go_exactly_when_they_no_longer_fit(window, qtbot) -> None:
+    bar = window.toolbar
+    needed = bar.words_width()
+    assert needed < 1300, "the words take more room than a laptop has"
+    window.resize(needed + 20, 700)
+    qtbot.wait(50)
+    if bar.width() < needed:
+        pytest.skip("the screen is narrower than the toolbar with its words")
+    assert _wordy(window) == {Qt.ToolButtonStyle.ToolButtonTextBesideIcon}
+    window.resize(needed - 20, 700)
+    qtbot.wait(50)
+    assert _wordy(window) == {Qt.ToolButtonStyle.ToolButtonIconOnly}
+    window.resize(needed + 20, 700)
+    qtbot.wait(50)
+    assert _wordy(window) == {Qt.ToolButtonStyle.ToolButtonTextBesideIcon}
 
 
 def test_a_narrow_window_shows_icons_alone_and_loses_none(window, qtbot) -> None:
@@ -76,15 +90,12 @@ def test_a_narrow_window_shows_icons_alone_and_loses_none(window, qtbot) -> None
         assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly, name
         assert button.toolTip(), name  # the words are still there, as a tip
     assert not _overflowing(window)
-    window.resize(1400, 700)
-    qtbot.wait(50)
-    first = next(iter(_buttons(window).values()))
-    assert first.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
 
 
 def test_the_reference_menu_holds_lines_and_ranges(window) -> None:
-    insert = next(a.menu() for a in window.menuBar().actions() if a.text() == "&Insert")
-    titles = [a.text().replace("&", "") for a in insert.actions()]
+    # The action is kept: before PySide6 6.12 its menu is gone with it.
+    action = next(a for a in window.menuBar().actions() if a.text() == "&Insert")
+    titles = [a.text().replace("&", "") for a in action.menu().actions()]
     assert "Add Reference" in titles
     assert not any("Line or Range" in t for t in titles)
     reference = _buttons(window)["Reference"]
