@@ -189,24 +189,24 @@ note the platform, the screen scaling and the theme in the pull request.
     opens on the setting, with the cursor in it. With a plot selected it is the
     same. On a linear axis *symlog* finds *Type* and not *Linear within ±*.
 
-29. **A note, a line and a range** (proposed arrangement, decision 0060): select a
+29. **A note, a line and a range** (decision 0060): select a
     note: *Text* (text, size, colors), *Place* (position, *Position in*, *Arrow
     to*), and the folded *More*. Select a reference line and a shaded range: *Label
     and data* (*Legend entry* first), *Look*, *More*. Nothing is clipped; the
     search (Ctrl+F) still finds *Arrow to*, and Ctrl+K *Position in*.
 
-30. **A fit and its residuals** (proposed, decision 0061): select a fit: *Label and
+30. **A fit and its residuals** (decision 0061): select a fit: *Label and
     data* with the result card right under it, *Look*, the folded *More*. Select
     the residuals: *Look*, then *Zero line* with its box and, when it is on, its
     color, width and style under it; switch the box off and they grey out.
 
-31. **Histogram, Allan deviation, image and color mesh** (proposed, decision 0062):
+31. **Histogram, Allan deviation, image and color mesh** (decision 0062):
     select each: *Label and data* says what is plotted, *Look* how, for an image
     and a mesh with the box *Color bar* and, when it is on, *Color bar shown* and
     *Color bar label* right under it; an image also has the folded *Pixel grid*.
     Switch the color bar on and off in each; undo.
 
-32. **Recovery after a crash** (proposed, decision 0063): open a project, change
+32. **Recovery after a crash** (decision 0063): open a project, change
     something, wait a minute (or until the title shows the star and a minute has
     passed): `<name>.figscribe.autosave` is next to the project. Kill figscribe
     (Force Quit, or `kill -9`), start it and open the project: it asks to
@@ -214,14 +214,14 @@ note the platform, the screen scaling and the theme in the pull request.
     file. Save: the file is gone. Do the same with an untitled project (import
     some data, wait, kill): the next start offers it.
 
-33. **Fit an Allan deviation** (proposed, decision 0064): add an Allan deviation of
+33. **Fit an Allan deviation** (decision 0064): add an Allan deviation of
     a noise series (log axes), right-click it, *Fit…*, choose *Power law*: the
     fit has b near −0.5 for white frequency noise, the curve is smooth at the
     short τ, the residuals show under it; *Find outliers* is greyed out with the
     reason. Narrow the fit range to the short τ: the curve follows. Export the
     Python script and run it: the same figure.
 
-34. **TIFF, EPS and a transparent background** (proposed, decision 0065): *File >
+34. **TIFF, EPS and a transparent background** (decision 0065): *File >
     Export Figure…* lists TIFF and EPS. Export both and open them (Preview, an
     image program, a vector program): the size is right, the TIFF is sharp. Tick
     *File > Export with a Transparent Background*, export a PNG and put it on a

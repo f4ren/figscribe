@@ -2819,9 +2819,10 @@ nothing meanwhile, as for a plot without rows.
 ## 0060 — The settings of a note, a reference line and a shaded range
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed. Built while the user was away (they asked
-for something to look at, to change afterwards). The layouts are the advisor's
-(Opus) proposal; the advisor did not see the built result.
+**Status:** accepted (2026-11-05, after the user had looked at it). Built while
+the user was away (they asked for something to look at, to change afterwards).
+The layouts are the advisor's (Opus) proposal; the advisor did not see the built
+result.
 
 ### Context
 
@@ -2856,8 +2857,9 @@ looks.
 ## 0061 — The settings of a fit and its residuals
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away). The layout
-is the advisor's (Opus) proposal; the advisor did not see the built result.
+**Status:** accepted (2026-11-05, after the user had looked at it). Built while
+the user was away. The layout is the advisor's (Opus) proposal; the advisor did
+not see the built result.
 
 ### Context
 
@@ -2886,10 +2888,11 @@ the panel**: the fit dialog ("Change the fit…") is where they are edited.
 ## 0062 — The settings of a histogram, an Allan deviation, an image and a color mesh
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away). The layout
-is the advisor's (Opus) proposal, which I changed in one place: the color bar's
-*Visible* stays (the coverage test needs every field in the panel), so an image
-shows two boxes, *Color bar* and *Color bar shown*; look at that first.
+**Status:** accepted (2026-11-05, after the user had looked at it; the two boxes
+stay for now, to be looked at in the application). Built while the user was away.
+The layout is the advisor's (Opus) proposal, which I changed in one place: the
+color bar's *Visible* stays (the coverage test needs every field in the panel),
+so an image shows two boxes, *Color bar* and *Color bar shown*.
 
 ### Context
 
@@ -2928,8 +2931,9 @@ change what the picture is, with the opacity. **Dropping the color bar's
 ## 0063 — Unsaved work is written to a recovery file and offered after a crash
 
 **Date:** 2026-11-05
-**Status:** proposed (built while the user was away; the roadmap's E2 asked for it
-and named no choices, so these are mine to be changed).
+**Status:** accepted (2026-11-05, after the user had looked at it). Built while
+the user was away; the roadmap's E2 asked for it and named no choices, so these
+were mine.
 
 ### Context
 
@@ -2970,9 +2974,9 @@ little. **Keeping the undo stack**: not in any file format the program has.
 ## 0064 — An Allan deviation can be fitted
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away). The two
-`[decide]` points of F14 were taken as the roadmap proposed them; the advisor
-(Opus) agreed with using the proposed defaults.
+**Status:** accepted (2026-11-05, after the user had looked at it). Built while
+the user was away. The two `[decide]` points of F14 were taken as the roadmap
+proposed them; the advisor (Opus) agreed with using the proposed defaults.
 
 ### Context
 
@@ -2998,7 +3002,7 @@ of a stability plot add up (σ² = a/τ + b + c·τ).
 - **The curve** is sampled evenly in log τ when the panel's x axis is
   logarithmic (renderer and script: `np.geomspace`), or the kinks of a model
   that is not a straight line there would show.
-- **Weights (proposed, as in the roadmap):** the error bars as absolute sigma,
+- **Weights (as in the roadmap):** the error bars as absolute sigma,
   as for any plot; no error bars, unweighted. A fit in log σ against log τ is
   not offered.
 - **Models:** the *Power law* `a * x**b` is predefined (it is F1.6 too), with a
@@ -3027,7 +3031,8 @@ weighting to explain; the error bars already give about equal relative errors.
 ## 0065 — TIFF and EPS export, and a transparent background
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away).
+**Status:** accepted (2026-11-05, after the user had looked at it). Built while
+the user was away.
 
 ### Context
 
