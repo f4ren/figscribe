@@ -194,3 +194,15 @@ def test_the_untitled_folder_is_asked_when_needed(monkeypatch) -> None:
     """Not when the module is imported, before the application has its name."""
     monkeypatch.setattr(recovery, "UNTITLED_FOLDER", None)
     assert recovery.untitled_folder().name == "recovery"
+
+
+def test_a_project_saved_as_another_leaves_no_recovery_of_the_first(
+    window, tmp_path: Path
+) -> None:
+    first = window.document.path
+    _rename(window, "Changed")
+    window.autosave()
+    assert recovery.recovery_file(first).exists()
+    window._save_to(tmp_path / "copy.figscribe")  # what Save As does
+    assert not recovery.recovery_file(first).exists()
+    assert not recovery.recovery_file(window.document.path).exists()
