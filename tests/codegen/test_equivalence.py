@@ -1213,6 +1213,40 @@ def test_a_fit_of_an_allan_deviation_with_its_residuals(
         assert "geomspace" in script  # even along a logarithmic τ axis
 
 
+def test_an_allan_fit_stays_equal_after_the_error_bars_are_switched_off(
+    tmp_path: Path,
+) -> None:
+    from figscribe.model import AllanDeviationPlot, ExpressionFit
+    from figscribe.units import set_allan_field
+
+    rng = np.random.default_rng(6)
+    y = rng.normal(scale=2e-12, size=600)
+    rows = "\n".join(f"{0.5 * i!r},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "clock.csv").write_text(f"t,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    plot = AllanDeviationPlot(values=col["y"], time=col["t"])
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[Axes(**log, artists=[plot])])],
+    )
+    fit = FitCurve(
+        target=plot.id,
+        model=ExpressionFit(expression="a / sqrt(x)", parameters=["a"]),
+        initial_values={"a": 1e-12},
+    )
+    add_fit(project, fit, residuals=True).apply(project)
+    data = load_data(project, tmp_path)
+    refit(project, fit.id, data).apply(project)
+    set_allan_field(
+        project, plot.id, "error_bars", False, data, "Change error bars"
+    ).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "sigma=" not in script  # unweighted now, as the figure's numbers are
+
+
 def test_an_allan_deviation_in_hours_from_cycles_of_2_88_s(tmp_path: Path) -> None:
     # Cycles numbered 93, 94, ... each take 2.88 s; τ is shown in hours by a
     # formula that scales the cycles: 2.88 / 3600 = 0.0008 h per cycle.

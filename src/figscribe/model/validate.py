@@ -180,8 +180,8 @@ def validate_references(
                         )
                     elif (
                         artist.fit_range is not None
-                        and isinstance(target, FIT_TARGETS)
-                        and target.x_range is not None
+                        and isinstance(target, FITTABLE)  # an Allan range is in time,
+                        and target.x_range is not None  # the fit range in τ
                         and not (
                             target.x_range[0] <= artist.fit_range[0]
                             and artist.fit_range[1] <= target.x_range[1]

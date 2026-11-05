@@ -177,6 +177,20 @@ def test_a_fit_range_beyond_the_plots_range_is_a_problem() -> None:
     assert "reaches beyond the plot's range 3600 to 7200" in problem
 
 
+def test_an_allan_fit_range_is_in_tau_not_in_the_time_of_the_range() -> None:
+    """The range of an Allan deviation is the time since the first sample, the
+    fit range is τ: one is not beyond the other (decision 0064)."""
+    from figscribe.model import AllanDeviationPlot, ExpressionFit
+
+    plot = AllanDeviationPlot(values=col("U"), x_range=(0.0, 4.0))
+    fit = FitCurve(
+        target=plot.id,
+        model=ExpressionFit(expression="a / sqrt(x)", parameters=["a"]),
+        fit_range=(1.0, 10.0),
+    )
+    assert not [p for p in _problems(plot, fit) if "reaches beyond" in p]
+
+
 def test_a_fit_with_no_point_left_is_a_problem() -> None:
     """Its figure draws no curve, so the list says why (decision 0059)."""
     from figscribe.model import FitResult

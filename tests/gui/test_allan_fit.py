@@ -79,3 +79,51 @@ def test_the_fit_shows_in_the_panel_and_the_script(qtbot, document) -> None:
         data=document.data,
     )
     assert "curve_fit(" in script and "geomspace" in script
+
+
+def test_a_setting_that_changes_the_points_fits_again(qtbot, document) -> None:
+    """Error bars, τ values and the rest change what is fitted: the fit follows,
+    as it does for a range and for units, or the figure and the script (which
+    always fits again) would differ."""
+    from figscribe.gui.properties import PropertyPanel
+
+    plot = _plot(document)
+    fit = FitCurve(
+        target=plot.id,
+        model=PredefinedFit(name="power"),
+        initial_values={"a": 1e-12, "b": -0.5},
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(plot.id)
+
+    def result():
+        return next(
+            a for a in document.figure.axes[0].artists if isinstance(a, FitCurve)
+        ).result
+
+    weighted = result()
+    assert weighted.reduced_chi_square is not None
+    panel.editors[("error_bars",)].widget.click()  # as a person does
+    assert not _plot(document).error_bars
+    assert result().reduced_chi_square is None, "still the weighted result"
+    assert result() != weighted
+    document.undo()
+    assert result() == weighted  # one undo step takes both back
+
+
+def test_the_fit_card_names_no_row_of_a_derived_series(qtbot, document) -> None:
+    from figscribe.gui.properties import PropertyPanel
+
+    plot = _plot(document)
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="power"))
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    panel = PropertyPanel(document)
+    qtbot.addWidget(panel)
+    document.select(fit.id)
+    texts = [w.text() for w in panel.findChildren(type(panel._title))]
+    assert any("Largest residual" in t for t in texts)
+    assert not any("(row " in t for t in texts)
