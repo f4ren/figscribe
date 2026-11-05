@@ -2802,8 +2802,8 @@ nothing meanwhile, as for a plot without rows.
 
 **Date:** 2026-11-05
 **Status:** proposed, not yet agreed. Built while the user was away (they asked
-for something to look at, to change afterwards); the advisor (Opus) reviewed the
-layouts before they were built.
+for something to look at, to change afterwards). The layouts are the advisor's
+(Opus) proposal; the advisor did not see the built result.
 
 ### Context
 
@@ -2838,8 +2838,8 @@ looks.
 ## 0061 — The settings of a fit and its residuals
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away; reviewed by
-the advisor, Opus).
+**Status:** proposed, not yet agreed (built while the user was away). The layout
+is the advisor's (Opus) proposal; the advisor did not see the built result.
 
 ### Context
 
@@ -2868,8 +2868,10 @@ the panel**: the fit dialog ("Change the fit…") is where they are edited.
 ## 0062 — The settings of a histogram, an Allan deviation, an image and a color mesh
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away; reviewed by
-the advisor, Opus).
+**Status:** proposed, not yet agreed (built while the user was away). The layout
+is the advisor's (Opus) proposal, which I changed in one place: the color bar's
+*Visible* stays (the coverage test needs every field in the panel), so an image
+shows two boxes, *Color bar* and *Color bar shown*; look at that first.
 
 ### Context
 
