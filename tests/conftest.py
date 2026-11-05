@@ -113,3 +113,14 @@ def _leave_the_clipboard_to_qt():
     clipboard = sys.modules.get("figscribe.gui.clipboard")
     if clipboard is not None:
         clipboard.release()
+
+
+@pytest.fixture(autouse=True)
+def _no_recovery_in_the_users_folder(tmp_path_factory, monkeypatch) -> None:
+    """Tests never read or write the recovery file of an untitled project in the
+    folder of the person running them."""
+    from figscribe.gui import recovery
+
+    monkeypatch.setattr(
+        recovery, "UNTITLED_FOLDER", tmp_path_factory.mktemp("recovery")
+    )

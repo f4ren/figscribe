@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **Unsaved work survives a crash.** Every minute figscribe writes the changes
+  not yet saved to `<project>.figscribe.autosave` next to the project (for an
+  untitled project, to its data folder); the next time the project is opened it
+  offers to recover them. A save or a close removes the file.
 - **Histogram, Allan deviation, image and color mesh have their settings
   arranged** (proposed): *Label and data* says what is plotted, *Look* how; the
   color bar is one box with its settings under it (it was a box and a section),

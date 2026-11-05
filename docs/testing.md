@@ -203,5 +203,13 @@ note the platform, the screen scaling and the theme in the pull request.
     *Color bar label* right under it; an image also has the folded *Pixel grid*.
     Switch the color bar on and off in each; undo.
 
+32. **Recovery after a crash** (proposed, decision 0063): open a project, change
+    something, wait a minute (or until the title shows the star and a minute has
+    passed): `<name>.figscribe.autosave` is next to the project. Kill figscribe
+    (Force Quit, or `kill -9`), start it and open the project: it asks to
+    recover; yes gives the changes with the star in the title, no removes the
+    file. Save: the file is gone. Do the same with an untitled project (import
+    some data, wait, kill): the next start offers it.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

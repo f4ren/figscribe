@@ -2905,3 +2905,45 @@ with *Visible* and *Label*.
 change what the picture is, with the opacity. **Dropping the color bar's
 *Visible***: a field of the model would have no place.
 
+## 0063 — Unsaved work is written to a recovery file and offered after a crash
+
+**Date:** 2026-11-05
+**Status:** proposed (built while the user was away; the roadmap's E2 asked for it
+and named no choices, so these are mine to be changed).
+
+### Context
+
+Saving is atomic since 0054, so a crash during a save loses nothing. A crash
+between two saves still loses everything done since the last one (E2).
+
+### Decision
+
+- Every minute, if the project has unsaved changes, the window writes it to
+  `<project>.figscribe.autosave` next to the project file (a temporary file
+  replaced atomically, so the recovery file is whole too). An untitled project
+  goes to `recovery/untitled.figscribe.autosave` in the program's data folder,
+  its data paths made absolute so it can be opened from anywhere.
+- A save (the window sees the project clean), a close, and a *yes* to "Discard
+the unsaved changes?" (New, Open) remove the file; the user who discards the
+  changes on purpose does not want them back. A folder that
+  takes no file is no error: the work goes on, without the safety net.
+- A file left behind means a session ended without either. Opening that project
+  asks "figscribe found unsaved changes to *name* from *time* … Recover them?":
+  yes opens the recovered work as a project with unsaved changes (undo starts
+  empty), no removes the file. A recovery file older than the project file was
+  left by a session that saved after it and is removed without asking. At the
+  start with no file named, the work of an untitled project is offered.
+- The interval, the suffix and the folder are in `gui/recovery.py` (the folder of an untitled
+  project is asked of the system when needed, not when the module is imported,
+  since the application has no name yet then); the
+  timer is `MainWindow._autosave_timer`, so a test can drive `autosave()`.
+
+### Alternatives considered
+
+**A hidden file (`.name.autosave`)**: it would be found by nobody; a visible one
+tells a person who looks in the folder what happened. **The data folder for every
+project**: the work of a project on a USB stick would be on another computer.
+**A shorter interval or after every change**: the project is a text file of a few
+hundred kB at most, but a write on every drag would be noticed; a minute loses
+little. **Keeping the undo stack**: not in any file format the program has.
+

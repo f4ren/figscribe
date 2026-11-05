@@ -29,6 +29,7 @@ def create_window(argv: Sequence[str], remember: bool = False) -> MainWindow:
         window.open_path(argv[0])
     else:
         window.show_start()
+        window.offer_recovery(None)  # the work of an untitled session that crashed
     return window
 
 
