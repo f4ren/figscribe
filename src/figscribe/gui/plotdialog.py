@@ -71,7 +71,8 @@ class PlotDialog(QDialog):
 
     `targets` are (name, Axes.id) to choose from, `target` the one chosen at
     first; without them the dialog does not ask. `data` draws the preview;
-    without it there is none. `summary` says what the data is.
+    without it there is none. `summary` says what the data is. `kind` is the
+    tile (a key of `KINDS`) to start on, if the data can make it.
     """
 
     def __init__(
@@ -84,6 +85,7 @@ class PlotDialog(QDialog):
         target: str | None = None,
         data: DataProvider | None = None,
         summary: str = "",
+        kind: str | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Add plot")
@@ -153,6 +155,8 @@ class PlotDialog(QDialog):
         self._take_error()
         self._take_label()
         start = "Error bars" if self.yerr.currentData() is not None else "Line"
+        if kind in self.tiles and self.tiles[kind].isEnabled():
+            start = kind
         if not self.tiles[start].isEnabled():
             start = next(n for n, t in self.tiles.items() if t.isEnabled())
         self.tiles[start].setChecked(True)

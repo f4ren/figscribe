@@ -2603,3 +2603,48 @@ replace on purpose, so that a failed replace leaves both. **Several
 generations of backups**: more files in the user's folder, and the undo history
 and version control are for that. **A backup folder in the user's settings**:
 the user would not find it next to the project.
+
+## 0055 — The toolbar's adding buttons show what they make and give way to icons
+
+### Context
+
+*Data*, *Figure*, *Panel*, *Plot* and *Note* in the toolbar all carried the
+same plus, *Fit* the curve that is also the mark of the start page, and a
+reference line or a shaded range could not be added from the toolbar at all.
+The user asked (2026-11-04, U12) for one scheme, with room for the *Function*
+of F15. Measured: the bar already pushed buttons into the » menu below about
+808 px, and two more flat buttons made it 918 px, so a flat row of eight hides
+the very things U12 wants found.
+
+### Decision
+
+- Each adding button carries the glyph of what it makes (the one the outline
+  uses): *Data* the file, *Figure* the frame, *Panel* two frames, *Plot* the
+  line, *Fit* the curve, *Note* the arrow, *Reference* a band beside a dashed
+  line. No plus. The start page's button shows the application's icon, not the
+  curve, so that *Fit* has it for itself.
+- Grouped by level, as the figure is built: *Data*, *Figure*, *Panel* (what
+  holds), a separator, then *Plot*, *Fit*, *Note*, *Reference* (what goes into
+  a panel).
+- *Plot*, *Panel* and *Reference* are alike: a click opens a menu, with the
+  arrow in the same place (a split button, tried first, draws its arrow apart
+  from the others). *Plot*'s menu has *Add Plot…* first (Ctrl+Shift+P as
+  before), then the kinds, which are also *Insert > Add Plot As*; a kind opens
+  the dialog on it when the data can make it, on the usual one when not. The
+  entries of the three menus have pictures too: the side of a new panel, a
+  vertical or horizontal line or range, the kind of plot.
+- *Reference* opens *Insert > Add Reference*: vertical and horizontal line,
+  shaded x and y range, and later F15's *Function…*. The menu used to be
+  called *Add Line or Range*; a name that also covers a theory curve is
+  *Reference*.
+- The words stay beside the icons as long as all of them fit and go, for the
+  buttons that add and for *Assistant* and *Python code*, when the window is
+  too narrow (`AdaptiveToolBar`); every button has a tip. Nothing falls into
+  the » menu at the smallest window.
+
+### Alternatives considered
+
+**One *Add ▾* button**: the discoverability problem again, one click deeper.
+**A flat row of eight with words**: 918 px, and hidden below that. **Icons
+only, always**: the words are what a new user reads.
+

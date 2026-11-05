@@ -9,10 +9,52 @@ from PySide6.QtWidgets import (
     QLayout,
     QLayoutItem,
     QPlainTextEdit,
+    QToolBar,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
+
+
+class AdaptiveToolBar(QToolBar):
+    """A toolbar whose `wordy` buttons show their words beside the icon while
+    all of them fit, and the icon alone when the window is too narrow for
+    that: nothing goes into the » menu where it would be hidden."""
+
+    def __init__(self, title: str, parent=None):
+        super().__init__(title, parent)
+        self.wordy: list[QToolButton] = []
+        self._adapting = False
+
+    def words_width(self) -> int:
+        """The width the bar needs with the words, which it now shows."""
+        self._words(True)
+        self.layout().invalidate()  # the hint of the words, not a kept one
+        return self.layout().sizeHint().width()
+
+    def adapt(self) -> None:
+        if self._adapting or not self.wordy:
+            return
+        self._adapting = True
+        try:
+            if self.words_width() > self.width():
+                self._words(False)
+        finally:
+            self._adapting = False
+
+    def _words(self, on: bool) -> None:
+        style = (
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            if on
+            else Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        for button in self.wordy:
+            if button.toolButtonStyle() != style:
+                button.setToolButtonStyle(style)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().resizeEvent(event)
+        self.adapt()
 
 
 class FlowLayout(QLayout):

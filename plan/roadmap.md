@@ -955,6 +955,16 @@ before the user has agreed to them, as in U11. Hold the result with a test that
 every example's element kinds are reachable from the *Insert* menu or the
 command palette under a name a person would search for.
 
+**Agreed with the user (2026-11-04), in three branches.** The toolbar first
+(decision 0055, **done**: kind icons, *Reference* and *Plot* menus, icons alone
+in a narrow window). Then search and names: synonyms for the command palette
+(band, region, highlight, threshold, arrow, residuals, heatmap …), a hint in
+the empty property panel, and the test above. Then the note's arrow by
+right-clicking the note (*Point arrow here*, *Remove arrow*); dragging the tip
+is a later step if that is not enough. Measured on the examples: *shade*
+finds the shaded range, *band* and *region* do not; the arrow is only a typed
+pair of numbers, and nothing is found for "arrow" when no note is selected.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
@@ -1609,7 +1619,7 @@ Proposed (to be agreed before building):
   a logarithmic axis. The axis limits are not changed by it.
 - The script defines `x` with `np.linspace` or `np.geomspace` and evaluates the
   same expression, as the fit curve does; an equivalence case and a baseline.
-- Reached from *Insert > Add Line or Range* (beside reference lines and
+- Reached from *Insert > Add Reference* (beside reference lines and
   shaded ranges, F4.1) and the context menu of a panel.
 - `[decide]` whether parameters are named values the panel edits (a slider
   would be nice, a field is enough), and whether the function can also be
