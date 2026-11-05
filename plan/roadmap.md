@@ -957,9 +957,12 @@ command palette under a name a person would search for.
 
 **Agreed with the user (2026-11-04), in three branches.** The toolbar first
 (decision 0055, **done**: kind icons, *Reference* and *Plot* menus, icons alone
-in a narrow window). Then search and names: synonyms for the command palette
-(band, region, highlight, threshold, arrow, residuals, heatmap …), a hint in
-the empty property panel, and the test above. Then the note's arrow by
+in a narrow window). Then search and names (decision 0056, **done**: synonyms
+for the command palette, a hint in the empty property panel, and the test
+above, which fails when an example uses a kind without words). *Open:* the
+settings of an axis (*Scale*: log, symlog, its limits, ticks) are not in the
+palette, since the axis cards are not form rows; the examples use them (log,
+symlog axes). Then the note's arrow by
 right-clicking the note (*Point arrow here*, *Remove arrow*); dragging the tip
 is a later step if that is not enough. Measured on the examples: *shade*
 finds the shaded range, *band* and *region* do not; the arrow is only a typed

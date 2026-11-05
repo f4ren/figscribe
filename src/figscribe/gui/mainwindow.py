@@ -77,7 +77,7 @@ from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
-from figscribe.gui.palette import CommandPalette, Entry, menu_entries
+from figscribe.gui.palette import KEYWORDS, CommandPalette, Entry, menu_entries
 from figscribe.gui.plotdialog import KINDS, NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
@@ -952,8 +952,9 @@ class MainWindow(QMainWindow):
         self.properties.search.setFocus(Qt.FocusReason.ShortcutFocusReason)
         self.properties.search.selectAll()
 
-    def open_palette(self) -> None:
-        """Find any menu action or setting of the selection by typing."""
+    def palette_entries(self) -> list[Entry]:
+        """What the command palette finds: every menu action and every setting
+        of the selection, each with the other words it is known by."""
         entries = [
             entry
             for entry in menu_entries(self.menuBar())
@@ -964,10 +965,15 @@ class MainWindow(QMainWindow):
                 caption,
                 f"Setting · {title}",
                 lambda c=caption, t=title: self._reveal_setting(c, t),
+                keywords=KEYWORDS.get(caption, ""),
             )
             for caption, title, _ in self.properties.settings()
         ]
-        palette = CommandPalette(entries, self)
+        return entries
+
+    def open_palette(self) -> None:
+        """Find any menu action or setting of the selection by typing."""
+        palette = CommandPalette(self.palette_entries(), self)
         if self.run_dialog(palette) and palette.chosen is not None:
             palette.chosen.run()
 
