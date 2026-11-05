@@ -3,18 +3,26 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
-## Unreleased
+## 0.3.0 — 2026-11-05
+
+- **Installers for macOS, Windows and Linux.** Each release carries a disk image
+  for Apple silicon Macs, an installer for Windows and an AppImage for Linux, so
+  figscribe runs without Python or `pip`. They are not signed: macOS asks once to
+  confirm opening the app (right-click, *Open*), and Windows SmartScreen shows
+  "More info", then "Run anyway". The AppImage needs `libxcb-cursor0`. Intel Macs,
+  ARM Linux and `.deb`/Flatpak are not built; `pip install` works everywhere
+  (decision 0066).
 
 - **Fixed: a script written into a folder behind a link could not find its
   data.** The script works out its folder with every link followed, but the
   path to the data was worked out from the folder as it was named, so on macOS
   (where `/tmp` and the temporary folders are links) it was off by a level.
 
-- **Export as TIFF and EPS, and with a transparent background** (proposed). *Export
+- **Export as TIFF and EPS, and with a transparent background.** *Export
   Figure…* and *Export All Figures…* offer TIFF (LZW compressed, at the figure's
   dpi) and EPS; *File > Export with a Transparent Background* leaves out the white
   background of PNG, TIFF and SVG.
-- **An Allan deviation can be fitted** (proposed). *Fit…* is offered on it, with
+- **An Allan deviation can be fitted.** *Fit…* is offered on it, with
   the error bars as weights, a fit range in τ, a smooth curve along the log axis
   and residuals; the generated script fits the same points. A new *Power law*
   model (a·x^b) fits the slope of white noise, −1/2.
@@ -23,15 +31,15 @@ release open in every later one.
   untitled project, to its data folder); the next time the project is opened it
   offers to recover them. A save or a close removes the file.
 - **Histogram, Allan deviation, image and color mesh have their settings
-  arranged** (proposed): *Label and data* says what is plotted, *Look* how; the
+  arranged: *Label and data* says what is plotted, *Look* how; the
   color bar is one box with its settings under it (it was a box and a section),
   and an image's extent, first row and pixel shape are in the folded *Pixel grid*.
-- **A fit and its residuals have their settings arranged** (proposed): the fit's
+- **A fit and its residuals have their settings arranged: the fit's
   result card sits under *Label and data*, *Look* has how the curve is drawn,
   and the residuals' zero line is a section of its own, a box with its settings
   under it.
 - **A note, a reference line and a shaded range have their settings in sections
-  by what they are for** (proposed, to be looked at): a note has *Text* and
+  by what they are for: a note has *Text* and
   *Place* (with *Position in*, which its position is read in), lines and ranges
   *Label and data* with *Legend entry* first, then *Look*.
 - **Fixed: the script of a fit whose range keeps no row.** After narrowing the

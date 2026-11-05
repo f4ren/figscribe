@@ -20,7 +20,7 @@ asking what was meant.
 - About 1,700 tests run in about two and a half minutes in parallel; CI is green on
   Linux, Windows and macOS with Python 3.11 and 3.13, and a further job runs
   the fast tests at the oldest allowed versions (decision 0044). Decisions
-  0001 to 0059 are in [`docs/decisions.md`](../docs/decisions.md).
+  0001 to 0066 are in [`docs/decisions.md`](../docs/decisions.md).
 - 0.1.0 (2026-10-26) and 0.2.0 (2026-10-29) are released, on PyPI; `main` is
   at 0.2.0 (PR #94). What `develop` has gained since is under "Unreleased"
   in the [changelog](../CHANGELOG.md).
