@@ -1401,11 +1401,14 @@ class MainWindow(QMainWindow):
             self._save_state.setText("Saved" if path is not None else "Not saved yet")
 
     def _save_to(self, path: Path | None) -> bool:
+        before = self.document.path
         try:
             self.document.save(path)
         except OSError as exc:
             self.show_error("Cannot save the project", exc)
             return False
+        if before is not None and before != self.document.path:
+            recovery.discard(before)  # saved as another file: its work is there
         self._add_recent(self.document.path)
         return True
 
