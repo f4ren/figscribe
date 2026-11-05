@@ -185,6 +185,9 @@ def test_work_kept_on_a_no_stays_recoverable(window) -> None:
     window.new_project()  # the user decides not to discard
     assert kept.exists()
     assert window.document.figure.name == "Changed"
+    # The window is closed with the test; refusing again would keep it open, on
+    # screen, for the tests that follow.
+    window.ask = lambda title, question: True
 
 
 def test_the_untitled_folder_is_asked_when_needed(monkeypatch) -> None:
