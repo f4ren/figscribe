@@ -56,7 +56,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   Done: the figure, a panel, the axis form, line, points and error bars.
   Proposed, built while the user was away (decisions 0060 to 0062): the note,
   reference lines and ranges, the fit and its residuals, histogram, Allan
-  deviation, image and color mesh. Open: the data files (left as they are). Nothing is built for an
+  deviation, image and color mesh. Open: the data files (left as they are), and the user's look at all of it. Nothing is built for an
   element before the user has agreed to its arrangement.
 - **U12** finding what the examples use (see below): **done**.
 

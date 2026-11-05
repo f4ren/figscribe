@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **Histogram, Allan deviation, image and color mesh have their settings
+  arranged** (proposed): *Label and data* says what is plotted, *Look* how; the
+  color bar is one box with its settings under it (it was a box and a section),
+  and an image's extent, first row and pixel shape are in the folded *Pixel grid*.
 - **A fit and its residuals have their settings arranged** (proposed): the fit's
   result card sits under *Label and data*, *Look* has how the curve is drawn,
   and the residuals' zero line is a section of its own, a box with its settings

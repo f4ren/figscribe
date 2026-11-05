@@ -953,9 +953,11 @@ def test_both_conversion_rows_say_whether_they_are_of_x_or_y(
     assert {"y: Start at 0", "y: Factor", "y: Unit"} <= set(captions)
 
 
-def test_other_kinds_of_plot_keep_their_sections_until_their_turn(
+def test_histograms_and_allan_deviations_have_their_sections(
     panel: PropertyPanel, document
 ) -> None:
+    """Decision 0062 (proposed): what is plotted, then how; the plot's own
+    sections, not the old *Data* and *Legend*."""
     from figscribe.commands import InsertItem
     from figscribe.model import AllanDeviationPlot, Histogram
 
@@ -967,5 +969,5 @@ def test_other_kinds_of_plot_keep_their_sections_until_their_turn(
     for plot in (histogram, allan):
         document.select(plot.id)
         titles = list(panel.sections)
-        assert "Data" in titles and "Look" in titles
-        assert "Label and data" not in titles and "Units and rows" not in titles
+        assert titles[:3] == ["Label and data", "Units and rows", "Look"]
+        assert "Data" not in titles and "Legend" not in titles
