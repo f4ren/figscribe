@@ -3006,3 +3006,42 @@ weighting to explain; the error bars already give about equal relative errors.
 **Named noise-type models** (white, flicker, random walk): easy to add to
 `PREDEFINED` once the user says which ones they mean.
 
+## 0065 — TIFF and EPS export, and a transparent background
+
+**Date:** 2026-11-05
+**Status:** proposed, not yet agreed (built while the user was away).
+
+### Context
+
+Roadmap R3: journals ask for TIFF with LZW compression and often for EPS, and a
+figure on a slide wants no white box. The *dpi override at export* of R3 needs a
+decision about U2 (a model field or not) and is not built.
+
+### Decision
+
+- `export` writes `.tif`/`.tiff` (Pillow, LZW, at the figure's dpi) and `.eps` as
+  well as PDF, SVG and PNG; each is byte-stable (no timestamps). Matplotlib puts
+  the time of the export, to the second, and the file's name into an EPS header
+  and has no setting for either, so the EPS is written to memory, its
+  `%%CreationDate` line is dropped (the DSC allows that) and its title goes with
+  the file name; the file is then the same wherever and whenever it is saved. The
+  first version of this test passed on a machine where both exports fell in one
+  second and failed on Windows CI, where they did not.
+  *Export Figure…* and *Export All Figures…* offer them; `.tiff` typed is taken
+  as TIFF.
+- A TIFF is RGB, without an alpha channel (journals' checkers reject one), unless
+  the background is transparent; it is written through Pillow from the rendered PNG.
+- `export(..., transparent=True)` leaves out the figure's and the panels'
+  backgrounds (PNG, TIFF, SVG; PDF and EPS have none). The window has it as a
+  checked item in *File* (*Export with a Transparent Background*), remembered
+  between runs, for the dialog and *Export All*. It is not a model field, so
+  the generated script is not changed by it (it says nothing about the
+  background); the clipboard is not either.
+
+### Alternatives considered
+
+**A check box in the export dialog**: the native file dialog takes none without
+giving up the native look. **A field `transparent` on the figure**: it would
+travel with the project and the script could say it; worth doing if the user
+wants the script to match.
+

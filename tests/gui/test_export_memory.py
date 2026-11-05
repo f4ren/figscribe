@@ -168,3 +168,55 @@ def test_export_all_offers_the_last_format_and_folder(
     assert Path(asked.directories[-1]) == elsewhere
     items, current = asked.item_asked[-1]
     assert items[current] == "PNG"
+
+
+# --- TIFF, EPS and a transparent background (R3, decision 0065) -------------------
+
+
+def test_tiff_and_eps_are_offered_and_written(
+    qtbot, example: Path, asked: Asked, tmp_path: Path
+) -> None:
+    win = _window(qtbot, example, None)
+    asked.answer = ("", "")
+    win._export_dialog()
+    filters = asked.save[-1][2]
+    assert "TIFF (*.tif)" in filters and "EPS (*.eps)" in filters
+    for name, chosen in (("fig.tif", "TIFF (*.tif)"), ("fig.eps", "EPS (*.eps)")):
+        asked.answer = (str(tmp_path / name), chosen)
+        win._export_dialog()
+        assert (tmp_path / name).stat().st_size > 0
+
+
+def test_a_typed_tiff_suffix_is_taken_as_it_is(
+    qtbot, example: Path, asked: Asked, tmp_path: Path
+) -> None:
+    win = _window(qtbot, example, None)
+    asked.answer = (str(tmp_path / "fig.tiff"), "PDF (*.pdf)")
+    win._export_dialog()
+    assert (tmp_path / "fig.tiff").is_file()
+    assert not (tmp_path / "fig.tiff.pdf").exists()
+    assert win._text_setting("export/format") == "TIFF"
+
+
+def test_the_transparent_background_is_a_switch_that_is_kept(
+    qtbot, example: Path, asked: Asked, tmp_path: Path, ini: str
+) -> None:
+    from PIL import Image
+
+    first = _window(qtbot, example, _settings(ini))
+    assert not first.transparent_action.isChecked()
+    asked.answer = (str(tmp_path / "solid.png"), "PNG (*.png)")
+    first._export_dialog()
+    first.transparent_action.trigger()
+    asked.answer = (str(tmp_path / "clear.png"), "PNG (*.png)")
+    first._export_dialog()
+    assert Image.open(tmp_path / "solid.png").convert("RGBA").getpixel((1, 1))[3] == 255
+    assert Image.open(tmp_path / "clear.png").convert("RGBA").getpixel((1, 1))[3] == 0
+
+    second = _window(qtbot, example, _settings(ini))
+    assert second.transparent_action.isChecked()  # kept between runs
+    folder = tmp_path / "all"
+    folder.mkdir()
+    second.export_all(folder, ".png")
+    (made,) = folder.glob("*.png")
+    assert Image.open(made).convert("RGBA").getpixel((1, 1))[3] == 0

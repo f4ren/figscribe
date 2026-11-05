@@ -93,8 +93,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 4 — M7: polish and release**
 - **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
-  snapping and alignment guides. **R3** TIFF and EPS, a transparent
-  background, a dpi at export. **R4** installers (`[decide]`: PyInstaller or
+  snapping and alignment guides. **R3** the dpi at export (TIFF, EPS and the
+  transparent background are built, 0065). **R4** installers (`[decide]`: PyInstaller or
   Briefcase, an Apple developer account), screenshots in the README, a
   gallery in `examples/`. **R5** measure models with `figscribe bench`.
   **R7** follow-up: wait out a rate limit in the chat.
@@ -1774,6 +1774,8 @@ other objects, with guide lines; Alt disables snapping.
 TIFF (often required, with LZW compression) and EPS in addition to PDF, SVG
 and PNG; transparent background option; a dpi override at export time
 instead of a model field (see U2). *Export all figures* is done (F8).
+**TIFF, EPS and the transparent background are built** (decision 0065, proposed);
+the dpi override waits for the answer on U2.
 
 ### R4 Release 0.1.0 — M
 

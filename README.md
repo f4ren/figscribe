@@ -180,7 +180,8 @@ script.
   Matplotlib and Qt, for a bug report.
 
 **Export**
-- PDF, SVG and PNG at the exact size; *File > Export All Figures…* writes
+- PDF, SVG, EPS, PNG and TIFF (LZW compressed, as journals ask) at the exact size,
+  PNG, TIFF and SVG also with a transparent background; *File > Export All Figures…* writes
   every figure of the project at once.
 - A standalone Python script (see below).
 - The project itself as a readable JSON file (`.figscribe`).

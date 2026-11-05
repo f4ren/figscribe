@@ -1,4 +1,5 @@
-"""Export a rendered figure to PNG, PDF or SVG at its exact physical size."""
+"""Export a rendered figure to PDF, SVG, EPS, PNG or TIFF at its exact physical
+size."""
 
 from __future__ import annotations
 
@@ -16,28 +17,43 @@ _METADATA = {
     ".png": {"Software": None},
     ".pdf": {"Creator": None, "Producer": None, "CreationDate": None},
     ".svg": {"Creator": None, "Date": None},
+    ".eps": {"Creator": None},
+    ".tif": None,
+    ".tiff": None,
 }
+FORMATS = {".tif": "tiff", ".tiff": "tiff"}
+"""The name Matplotlib knows a suffix by, where it is not the suffix itself."""
+TIFF = {"compression": "tiff_lzw"}
+"""Journals ask for TIFF with LZW compression, which loses nothing."""
 
 
-def export(figure: Figure, data: DataProvider, path: str | Path) -> None:
+def export(
+    figure: Figure, data: DataProvider, path: str | Path, transparent: bool = False
+) -> None:
     """Render `figure` and write it to `path`; the suffix picks the format.
+    With `transparent`, the figure's and the panels' backgrounds are left out
+    (PNG, TIFF, SVG; PDF and EPS have none to begin with).
 
     Never uses bbox_inches="tight", which would crop the figure away from the
     size the user asked for.
     """
     path = Path(path)
-    _save(figure, data, path, path.suffix.lower())
+    _save(figure, data, path, path.suffix.lower(), transparent)
 
 
-def export_bytes(figure: Figure, data: DataProvider, suffix: str) -> bytes:
-    """The file `export` would write for `suffix` (".png", ".pdf" or ".svg"),
+def export_bytes(
+    figure: Figure, data: DataProvider, suffix: str, transparent: bool = False
+) -> bytes:
+    """The file `export` would write for `suffix` (".png", ".pdf", ".svg" …),
     as bytes: what goes to the clipboard."""
     target = io.BytesIO()
-    _save(figure, data, target, suffix.lower())
+    _save(figure, data, target, suffix.lower(), transparent)
     return target.getvalue()
 
 
-def _save(figure: Figure, data: DataProvider, target, suffix: str) -> None:
+def _save(
+    figure: Figure, data: DataProvider, target, suffix: str, transparent: bool = False
+) -> None:
     if suffix not in _METADATA:
         raise ValueError(
             f"cannot export to {suffix!r}; supported are {', '.join(_METADATA)}"
@@ -47,9 +63,51 @@ def _save(figure: Figure, data: DataProvider, target, suffix: str) -> None:
     # A fixed salt makes the SVG element ids deterministic.
     rc = {"svg.hashsalt": "figscribe"} if suffix == ".svg" else {}
     with style_context(figure), matplotlib.rc_context(rc):
+        if FORMATS.get(suffix) == "tiff":
+            _save_tiff(fig, figure, target, transparent)
+            return
+        if suffix == ".eps":
+            _save_eps(fig, figure, target, transparent)
+            return
+        extra = {"metadata": _METADATA[suffix]} if _METADATA[suffix] else {}
         fig.savefig(
             target,
-            format=suffix[1:],
+            format=FORMATS.get(suffix, suffix[1:]),
             dpi=figure.dpi,
-            metadata=_METADATA[suffix],
+            transparent=transparent,
+            **extra,
         )
+
+
+def _save_eps(fig, figure: Figure, target, transparent: bool) -> None:
+    """EPS without the time of the export, which Matplotlib writes to the
+    second and gives no way to leave out. Written to memory first, which also
+    keeps the file's name out of the title: the file is the same wherever it
+    is saved."""
+    buffer = io.BytesIO()
+    fig.savefig(
+        buffer,
+        format="eps",
+        dpi=figure.dpi,
+        transparent=transparent,
+        metadata=_METADATA[".eps"],
+    )
+    lines = buffer.getvalue().splitlines(keepends=True)
+    kept = b"".join(line for line in lines if not line.startswith(b"%%CreationDate:"))
+    if isinstance(target, io.BytesIO):
+        target.write(kept)
+    else:
+        Path(target).write_bytes(kept)
+
+
+def _save_tiff(fig, figure: Figure, target, transparent: bool) -> None:
+    """TIFF through Pillow: RGB, as journals' checkers want it, unless the
+    background is to be transparent, when it keeps its alpha channel."""
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", dpi=figure.dpi, transparent=transparent)
+    buffer.seek(0)
+    image = Image.open(buffer)
+    image = image.convert("RGBA" if transparent else "RGB")
+    image.save(target, format="TIFF", dpi=(figure.dpi, figure.dpi), **TIFF)
