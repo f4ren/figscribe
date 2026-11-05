@@ -166,7 +166,9 @@ exec "$HERE/usr/lib/figscribe/figscribe" "$@"
 
 
 def download_appimagetool() -> Path:
-    tool = OUT / "appimagetool.AppImage"
+    # Not in `out` itself: the workflow collects its `*.AppImage` as the installer.
+    tool = OUT / "tools" / "appimagetool.AppImage"
+    tool.parent.mkdir(exist_ok=True)
     if not tool.exists():
         urllib.request.urlretrieve(APPIMAGETOOL, tool)
     digest = hashlib.sha256(tool.read_bytes()).hexdigest()

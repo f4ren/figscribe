@@ -3,6 +3,12 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
+## Unreleased
+
+- Fixed: the first release of the installers (0.3.0) carried a fifth file, the
+  tool that builds the AppImage, next to the three installers. It is removed from
+  that release and no longer kept where the workflow collects installers.
+
 ## 0.3.0 — 2026-11-05
 
 - **Installers for macOS, Windows and Linux.** Each release carries a disk image
