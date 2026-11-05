@@ -5,6 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
+- **Fixed: a script written into a folder behind a link could not find its
+  data.** The script works out its folder with every link followed, but the
+  path to the data was worked out from the folder as it was named, so on macOS
+  (where `/tmp` and the temporary folders are links) it was off by a level.
+
 - **Export as TIFF and EPS, and with a transparent background** (proposed). *Export
   Figure…* and *Export All Figures…* offer TIFF (LZW compressed, at the figure's
   dpi) and EPS; *File > Export with a Transparent Background* leaves out the white

@@ -1928,8 +1928,13 @@ def _index(source: CsvSource, column: str | int) -> int:
 
 
 def _relative(path: Path, script_dir: Path) -> str:
+    # The script finds its folder with resolve(), which follows links, so the
+    # path is worked out from there: from the folder as it is named, a script
+    # in a linked folder (macOS: /var is /private/var) misses its data.
     try:
-        return Path(os.path.relpath(path, script_dir)).as_posix()
+        # The file keeps its own name: a file that is itself a link stays one.
+        data = os.path.join(os.path.realpath(path.parent), path.name)
+        return Path(os.path.relpath(data, os.path.realpath(script_dir))).as_posix()
     except ValueError:  # another drive on Windows
         return str(path)
 
