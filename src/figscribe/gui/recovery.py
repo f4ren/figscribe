@@ -20,22 +20,24 @@ from figscribe.model import Project, dumps, loads
 
 INTERVAL_MS = 60_000
 SUFFIX = ".autosave"
-UNTITLED_FOLDER = (
-    Path(
-        QStandardPaths.writableLocation(
-            QStandardPaths.StandardLocation.AppLocalDataLocation
-        )
-        or Path.home() / ".figscribe"
+UNTITLED_FOLDER: Path | None = None
+"""Where an untitled project's recovery file goes; None asks the system when it
+is needed, after the application's name is set. Tests point it elsewhere."""
+
+
+def untitled_folder() -> Path:
+    if UNTITLED_FOLDER is not None:
+        return UNTITLED_FOLDER
+    base = QStandardPaths.writableLocation(
+        QStandardPaths.StandardLocation.AppLocalDataLocation
     )
-    / "recovery"
-)
-"""Where an untitled project's recovery file goes; tests point it elsewhere."""
+    return Path(base or Path.home() / ".figscribe") / "recovery"
 
 
 def recovery_file(path: Path | None) -> Path:
     """The recovery file of the project saved at `path`, or of an untitled one."""
     if path is None:
-        return UNTITLED_FOLDER / f"untitled.figscribe{SUFFIX}"
+        return untitled_folder() / f"untitled.figscribe{SUFFIX}"
     return path.with_name(path.name + SUFFIX)
 
 

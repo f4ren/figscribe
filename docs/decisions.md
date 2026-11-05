@@ -2923,8 +2923,9 @@ between two saves still loses everything done since the last one (E2).
   replaced atomically, so the recovery file is whole too). An untitled project
   goes to `recovery/untitled.figscribe.autosave` in the program's data folder,
   its data paths made absolute so it can be opened from anywhere.
-- A save (the window sees the project clean), and a close, remove the file; the
-  user who discards the changes on purpose does not want them back. A folder that
+- A save (the window sees the project clean), a close, and a *yes* to "Discard
+the unsaved changes?" (New, Open) remove the file; the user who discards the
+  changes on purpose does not want them back. A folder that
   takes no file is no error: the work goes on, without the safety net.
 - A file left behind means a session ended without either. Opening that project
   asks "figscribe found unsaved changes to *name* from *time* … Recover them?":
@@ -2932,7 +2933,9 @@ between two saves still loses everything done since the last one (E2).
   empty), no removes the file. A recovery file older than the project file was
   left by a session that saved after it and is removed without asking. At the
   start with no file named, the work of an untitled project is offered.
-- The interval, the suffix and the folder are in `gui/recovery.py`; the
+- The interval, the suffix and the folder are in `gui/recovery.py` (the folder of an untitled
+  project is asked of the system when needed, not when the module is imported,
+  since the application has no name yet then); the
   timer is `MainWindow._autosave_timer`, so a test can drive `autosave()`.
 
 ### Alternatives considered

@@ -639,7 +639,10 @@ class MainWindow(QMainWindow):
         """True when the current project may be replaced or closed."""
         if self.document.history.is_clean:
             return True
-        return self.ask("Unsaved changes", "Discard the unsaved changes?")
+        if not self.ask("Unsaved changes", "Discard the unsaved changes?"):
+            return False
+        recovery.discard(self.document.path)  # discarded on purpose: not to come back
+        return True
 
     # --- insert actions -----------------------------------------------------
 
