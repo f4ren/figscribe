@@ -5,7 +5,7 @@ left off. The brief stays the vision; this file is the work list. It is written
 so that a coding session can take the next open task and finish it without
 asking what was meant.
 
-**State as of 2026-11-01** (branch `develop`, commit `51c9e74`):
+**State as of 2026-11-05** (branch `develop`):
 
 - M1 to M6 of the brief are done: model, renderer, code generator with the
   pixel equivalence test, GUI with import, property panel, outline, undo/redo,
@@ -17,10 +17,10 @@ asking what was meant.
   reference lines, a search and a command palette for settings, and
   settings that grey out when they do nothing.
 - M7 is open: style templates, snapping and alignment guides, installers.
-- About 1,400 tests run in about two minutes in parallel; CI is green on
+- About 1,700 tests run in about two and a half minutes in parallel; CI is green on
   Linux, Windows and macOS with Python 3.11 and 3.13, and a further job runs
   the fast tests at the oldest allowed versions (decision 0044). Decisions
-  0001 to 0045 are in [`docs/decisions.md`](../docs/decisions.md).
+  0001 to 0059 are in [`docs/decisions.md`](../docs/decisions.md).
 - 0.1.0 (2026-10-26) and 0.2.0 (2026-10-29) are released, on PyPI; `main` is
   at 0.2.0 (PR #94). What `develop` has gained since is under "Unreleased"
   in the [changelog](../CHANGELOG.md).
@@ -30,7 +30,7 @@ reproduction is given so a session can turn it into a failing test first.
 
 ---
 
-## What is open (2026-11-01)
+## What is open (2026-11-05)
 
 A map of the tasks below that are not finished; the tasks hold the detail.
 `[decide]` needs the user's answer first (rule 2). A task that is not named
@@ -40,26 +40,22 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **B7**, the bug hunt, repeated before every release. Done: item 1 (the
   edge-data matrix), item 2 (undo stress), item 3 (fits that fail politely)
   and item 4 (files; only the Windows network share and other drive are left
-  to the manual checklist). Open: item 5 the GUI at 1024 × 700, 150 % and
+  to the manual checklist); the fit whose range was narrowed to no row is
+  fixed (2026-11-05, decision 0059). Open: item 5 the GUI at 1024 × 700, 150 % and
   200 % scaling, dark mode, keyboard only; item 6 every bench case through
   the equivalence test (the projects in `examples/` already are).
-- **An open bug from B7.1**: fit a plot, then narrow its x range to one that
-  keeps no row: the figure draws no fit, but the script fits again and stops
-  (`curve_fit`: `ydata` must not be empty). The test is
-  `test_a_fit_stays_when_the_range_is_narrowed_to_nothing` (`xfail`, strict:
-  it says when it is fixed). The script's fit block and its residuals need a
-  check for rows, as the statistics of a reduced plot have since the fix of
-  the same range.
 - **B8**: about twenty dialog tests still set widgets instead of clicking
   them, and the preview's zoom, pan and legend drag lack mouse-event tests.
   Follow-ups: ratios that no longer match the grid; a lower bound for font
   sizes and the figure size; marking columns of another length.
 
-**Phase 1 — The settings** (U1 to U5 and U7 to U10 are done)
+**Phase 1 — The settings** (U1 to U5, U7 to U10 and U12 are done)
 - **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
   bump).
-- **U11** the settings panel rearranged, element by element, with the user
-  (figure, panel, axes, each kind of plot, …). Nothing is built for an
+- **U11** the settings panel rearranged, element by element, with the user.
+  Done: the figure, a panel, the axis form, line, points and error bars.
+  Open: histogram, Allan deviation, image and color mesh, the fit and its
+  residuals, the note, reference lines and ranges, the data files. Nothing is built for an
   element before the user has agreed to its arrangement.
 - **U12** finding what the examples use (see below): **done**.
 
@@ -89,9 +85,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **E1** large data: render off the GUI thread (2), thin the preview only
   (3), a performance test (4); item 1 is done for zoom and pan only, changes
   from the property panel still render at once.
-- **E2** autosave and `.bak`. **E3** save a figure as a template. **E4**
+- **E2** autosave and recovery after a crash (the atomic save and `.bak` are done). **E3** save a figure as a template. **E4**
   fewer steps for the common path (everything except the plot dialog),
-  among them *Export* remembering its format and a source's file changed
+  among them a source's file changed
   after all (`[decide]`, a question for the user who asked).
 
 **Phase 4 — M7: polish and release**
@@ -107,7 +103,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Where to start** (rule 1): the first open task is B7, and its open items 5
 and 6 need no answer. The user named the order on 2026-11-03: B7.4 and F13 are
 done, then comes U11 (the settings panel arranged element by element); see
-that task.
+that task. U12 (finding what the examples use) came in between and is done;
+F14 then F15 follow U11, and E2's autosave is the small one to slip in.
 
 ---
 
@@ -1493,8 +1490,7 @@ would have raised a false "row N is left out" for a group. Residuals now
 leave out points without an error, as the fit does. *Follow-ups, only if
 asked:* an error band from derived errors (a band still needs the plot's y
 error column); a weighted mean; reduction for the Allan deviation and
-histograms; a script of a reduced plot whose range keeps no row stops with an
-error (the problem list says so before).
+histograms.
 
 ### F13 A linear formula for a plot's units — S to M
 
