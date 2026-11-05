@@ -2798,3 +2798,40 @@ as a person wrote it, for a case the generator already knows. **Refusing the
 range**: the user may narrow it on the way to another one; the figure shows
 nothing meanwhile, as for a plot without rows.
 
+## 0060 — The settings of a note, a reference line and a shaded range
+
+**Date:** 2026-11-05
+**Status:** proposed, not yet agreed. Built while the user was away (they asked
+for something to look at, to change afterwards); the advisor (Opus) reviewed the
+layouts before they were built.
+
+### Context
+
+Roadmap U11, the next elements. A note had *Data* (only the y axis), *Look*
+(text, colors, position, arrow, size) and a *More* with the coordinate system,
+which its position depends on. A reference line and a shaded range had *Data*,
+*Look*, *Legend* (one field) and *More*. The rules of 0048 and 0051 say: no
+section of one field, a name that says what is in it, what it is before how it
+looks.
+
+### Decision
+
+- **Note**: *Text* (text, font size, color, background), *Place* (position,
+  *Position in*, *Arrow to*, y axis), and the folded *More* (label, opacity,
+  *Visible*, drawing order). *Position in* is no longer in *More*: the position
+  is read in it.
+- **Reference line**: *Label and data* (*Legend entry*, direction, at, y axis),
+  *Look* (color, line style, line width), *More* (opacity, *Visible*, order).
+- **Shaded range**: *Label and data* (*Legend entry*, direction, from, to, y
+  axis), *Look* (color, opacity), *More* with only *Visible* and the order: two
+  fields, kept so that *More* is the same everywhere.
+- The label of a note stays in *More*: no legend shows a note, but the outline
+  names it after the label.
+- The code: `ELEMENT_SECTIONS` by kind, beside `PLOT_SECTIONS`; `BASIC` lists the
+  fields in order. `tests/gui/test_element_sections.py` holds the layouts.
+
+### Alternatives considered
+
+**Keeping *Legend* for the label**: a section of one field (0051).
+**Hiding a note's label**: it names the note in the outline.
+

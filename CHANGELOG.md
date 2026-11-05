@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **A note, a reference line and a shaded range have their settings in sections
+  by what they are for** (proposed, to be looked at): a note has *Text* and
+  *Place* (with *Position in*, which its position is read in), lines and ranges
+  *Label and data* with *Legend entry* first, then *Look*.
 - **Fixed: the script of a fit whose range keeps no row.** After narrowing the
   range of a fitted plot (or of the fit) to one without a point, the exported
   script stopped with "`ydata` must not be empty". It now draws no fit, as the
