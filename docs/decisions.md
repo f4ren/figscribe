@@ -2991,6 +2991,14 @@ of a stability plot add up (σ² = a/τ + b + c·τ).
   the Allan deviation section when a fit reads them, and that section now comes
   before the fits.
 
+- **Known gaps:** *Points outside the range like left out* does nothing for an
+  Allan target; the fit dialog greys it out, the property panel does not (a rule
+  of `effect.py` that never lifts would not pass `test_without_effect`, which
+  wants the change to show once its condition is met). Named noise-type models
+  are not built. The points are computed in the renderer, in the problem list and
+  for each fit in the script generator; the code drawer regenerates on every
+  change, so a very long series with every τ is slow (E1).
+
 ### Alternatives considered
 
 **Fitting in log σ against log τ** (every decade counts alike): a second
