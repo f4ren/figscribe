@@ -34,12 +34,39 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 **Alpha.** The features below are implemented and tested on Linux, Windows
 and macOS with Python 3.11 and 3.13. Behaviour may still change; project files
 of a release keep opening in later ones. Still to come: style templates,
-snapping and alignment guides, installers that need no Python, and more
+snapping and alignment guides, signed installers, and more
 plot types, axis formats and fit models (see the
 [roadmap](https://github.com/f4ren/figscribe/blob/main/plan/roadmap.md)). What changed in each release is in the
 [changelog](https://github.com/f4ren/figscribe/blob/main/CHANGELOG.md).
 
 ## Installation
+
+### Installers (no Python needed)
+
+From version 0.3.0 each [release](https://github.com/f4ren/figscribe/releases)
+has an installer for each system, with the assistant and MCP parts included:
+
+| System | File | Notes |
+|---|---|---|
+| macOS (Apple silicon) | `figscribe-VERSION-macos-arm64.dmg` | Open it and drag figscribe to Applications. Intel Macs: use pipx, below. |
+| Windows 10/11 | `figscribe-VERSION-windows-x64-setup.exe` | Installs for you alone; no administrator needed. |
+| Linux (x86-64) | `figscribe-VERSION-linux-x86_64.AppImage` | `chmod +x` it and run it. Needs `libxcb-cursor0` (Debian, Ubuntu) or `xcb-util-cursor` (Fedora), which most desktops have. |
+
+The installers are **not signed** yet, so the system asks you once:
+
+- **macOS:** *"figscribe cannot be opened because the developer cannot be
+  verified"*. Right-click figscribe in Applications, choose *Open*, and confirm.
+  If macOS says the app is damaged, run `xattr -cr /Applications/figscribe.app`
+  once.
+- **Windows:** SmartScreen shows *"Windows protected your PC"*. Choose *More
+  info*, then *Run anyway*.
+
+The first start takes several seconds longer: Matplotlib builds its font cache.
+`figscribe script` and `figscribe mcp` are in the same program: on macOS
+`/Applications/figscribe.app/Contents/MacOS/figscribe`, on Windows
+`figscribe-cli.exe` in the install folder.
+
+### With Python
 
 figscribe needs Python 3.11 or newer. The simplest way is
 [pipx](https://pipx.pypa.io) or [uv](https://docs.astral.sh/uv/), which give
@@ -356,7 +383,7 @@ Design decisions and their reasons are recorded in
 Planned beyond what exists: HDF5 import, several files as one series,
 number formats and inverted axes, a second x axis on top, more fit models and
 a confidence band, step plots and bar charts, style templates for journals,
-snapping and alignment guides, autosave, installers.
+snapping and alignment guides, signed installers.
 
 Deliberately out of scope: spreadsheet-style data editing, a statistics
 suite, a scripting language of its own, and reading generated or other
