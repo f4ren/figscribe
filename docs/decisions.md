@@ -3024,6 +3024,8 @@ decision about U2 (a model field or not) and is not built.
   file's name in its title, so two exports under one name are identical).
   *Export Figure…* and *Export All Figures…* offer them; `.tiff` typed is taken
   as TIFF.
+- A TIFF is RGB, without an alpha channel (journals' checkers reject one), unless
+  the background is transparent; it is written through Pillow from the rendered PNG.
 - `export(..., transparent=True)` leaves out the figure's and the panels'
   backgrounds (PNG, TIFF, SVG; PDF and EPS have none). The window has it as a
   checked item in *File* (*Export with a Transparent Background*), remembered

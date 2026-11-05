@@ -163,3 +163,13 @@ def test_an_unknown_format_names_the_supported_ones(figure, data, tmp_path) -> N
     with pytest.raises(ValueError) as error:
         export(figure, data, tmp_path / "f.bmp")
     assert ".tif" in str(error.value) and ".eps" in str(error.value)
+
+
+def test_a_tiff_has_no_alpha_channel_unless_it_is_transparent(
+    figure, data, tmp_path: Path
+) -> None:
+    """Journals' checkers reject TIFF with an alpha channel."""
+    export(figure, data, tmp_path / "solid.tif")
+    export(figure, data, tmp_path / "clear.tif", transparent=True)
+    assert Image.open(tmp_path / "solid.tif").mode == "RGB"
+    assert Image.open(tmp_path / "clear.tif").mode == "RGBA"

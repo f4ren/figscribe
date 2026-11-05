@@ -63,9 +63,10 @@ def _save(
     # A fixed salt makes the SVG element ids deterministic.
     rc = {"svg.hashsalt": "figscribe"} if suffix == ".svg" else {}
     with style_context(figure), matplotlib.rc_context(rc):
-        extra = {"metadata": _METADATA[suffix]} if _METADATA[suffix] else {}
         if FORMATS.get(suffix) == "tiff":
-            extra["pil_kwargs"] = TIFF
+            _save_tiff(fig, figure, target, transparent)
+            return
+        extra = {"metadata": _METADATA[suffix]} if _METADATA[suffix] else {}
         fig.savefig(
             target,
             format=FORMATS.get(suffix, suffix[1:]),
@@ -73,3 +74,16 @@ def _save(
             transparent=transparent,
             **extra,
         )
+
+
+def _save_tiff(fig, figure: Figure, target, transparent: bool) -> None:
+    """TIFF through Pillow: RGB, as journals' checkers want it, unless the
+    background is to be transparent, when it keeps its alpha channel."""
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", dpi=figure.dpi, transparent=transparent)
+    buffer.seek(0)
+    image = Image.open(buffer)
+    image = image.convert("RGBA" if transparent else "RGB")
+    image.save(target, format="TIFF", dpi=(figure.dpi, figure.dpi), **TIFF)
