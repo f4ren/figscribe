@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import shutil
-import sys
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -82,10 +81,8 @@ from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
 from figscribe.gui.palette import (
-    KEYWORDS,
     CommandPalette,
     Entry,
-    key_hint,
     menu_entries,
     words_for,
 )
@@ -1027,14 +1024,6 @@ class MainWindow(QMainWindow):
             for entry in menu_entries(self.menuBar())
             if entry.run != self.palette_action.trigger
         ]
-        entries.append(  # not in the menu bar: its key is on "Add Plot As"
-            Entry(
-                "Add Plot…",
-                "Insert",
-                self.plot_action.trigger,
-                keywords=KEYWORDS["Add Plot…"],
-            )
-        )
         entries += [
             Entry(
                 caption,
@@ -1538,20 +1527,10 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
             self.panel_actions[side] = action
         insert.addSeparator()
-        # The kinds are the menu's plot entries; "Add Plot…", the dialog that
-        # starts on the first kind, is the key shown behind them and the first
-        # entry of the toolbar button's menu.
-        self.plot_action = QAction("Add &Plot…", self)
-        self.plot_action.triggered.connect(lambda: self.add_plot())
-        plot_key = QKeySequence("Ctrl+Shift+P")
-        self.plot_menu = insert.addMenu(
-            theme.icon("line"),
-            "Add Plot &As" + key_hint(plot_key, native_menus=sys.platform == "darwin"),
+        self.plot_action = self._action(
+            insert, "Add &Plot…", lambda: self.add_plot(), "Ctrl+Shift+P"
         )
-        plot_entry = self.plot_menu.menuAction()
-        plot_entry.setShortcut(plot_key)
-        plot_entry.triggered.connect(lambda: self.add_plot())
-        self.addAction(plot_entry)  # the key works with the menu bar native
+        self.plot_menu = insert.addMenu(theme.icon("line"), "Add Plot &As")
         for name, (_, glyph) in KINDS.items():
             action = self.plot_menu.addAction(theme.icon(glyph), name)
             action.triggered.connect(lambda _=False, n=name: self.add_plot(n))

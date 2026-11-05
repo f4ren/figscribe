@@ -2658,18 +2658,13 @@ only, always**: the words are what a new user reads.
   was. A *duplicate* picture (two sheets) is new.
 - *Insert* lists its entries in the order of the toolbar: *Import Data*, *Add
   Figure* (with *Duplicate Figure* beside it), *Add Panel*, a separator, *Add
-  Plot As*, *Add Fit*, *Add Reference*, *Add Note*.
+  Plot…*, *Add Plot As*, *Add Fit*, *Add Reference*, *Add Note*.
 - Every entry of *Insert* has a picture, the submenus (*Add Plot As*, *Add
   Reference*, *Add Panel*) and *Duplicate Figure* too.
-- *Add Plot…* is no longer an entry of *Insert*: *Add Plot As* holds the kinds,
-  and Ctrl+Shift+P, shown behind it, opens the dialog as before. The key sits
-  on the submenu's own action, so there is one action for it and no ambiguity.
-  The toolbar button's menu and Ctrl+K keep *Add Plot…* by name. A native
-  macOS menu draws no key behind an entry that opens a submenu (the user saw
-  this, 2026-11-05: "one has to guess the key"), so there the key is written
-  into the entry's name (`key_hint`, after an em space that the command palette
-  cuts off); on Windows and Linux Qt draws it itself and it is not written
-  twice.
+- *Add Plot…* stays an entry of its own with Ctrl+Shift+P. Tried and dropped
+  (the user, 2026-11-05): leaving it out and putting the key on the *Add Plot
+  As* submenu. A native macOS menu draws no key behind a submenu, so the key
+  had to be written into the entry's name, which the user did not like.
 
 ## 0056 — The command palette also finds what a thing is known as
 
