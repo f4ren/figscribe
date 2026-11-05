@@ -3,6 +3,11 @@
 What changed in each release of figscribe. Project files written by a
 release open in every later one.
 
+## Unreleased
+
+- *Help > About figscribe* says which licenses figscribe is under: MIT, Qt (through
+  PySide6) under the LGPL-3.0, and where the licenses of the rest are.
+
 ## 0.3.0 — 2026-11-05
 
 - **Installers for macOS, Windows and Linux.** Each release carries a disk image

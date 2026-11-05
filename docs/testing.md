@@ -82,8 +82,9 @@ note the platform, the screen scaling and the theme in the pull request.
     outline, right-click a data file and choose *Show in Finder* (Explorer,
     file manager): it opens with the file selected, also when the path has
     spaces and non-ASCII letters.
-13. **About**: *Help > About figscribe* shows the version. On macOS the
-    entry is in the *Help* menu, not in the application menu.
+13. **About**: *Help > About figscribe* shows the version and says that Qt is
+    used under the LGPL-3.0. On macOS the entry is in the *Help* menu, not in
+    the application menu.
 14. **Where am I**: select an axis in the figure and in the outline; the
     path above the settings leads back to its panel and the figure. With a
     right y axis and a long label, the outline rows stay readable.
