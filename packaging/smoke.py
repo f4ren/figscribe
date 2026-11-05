@@ -7,6 +7,8 @@ Run after `make_installer.py`, with the Python that has figscribe installed: it
 runs the script the frozen program writes. Three things are tried: it says its
 version, it writes a script from a bundled example that a normal Python runs and
 that draws the figure, and its window starts (here without a screen) and stays up.
+The licenses of what is inside have to be in the program's folder and beside the
+installer's contents too.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from make_installer import frozen_program, version
+from make_installer import FROZEN, OUT, frozen_program, version
 
 REPO = Path(__file__).resolve().parents[1]
 EXAMPLE = REPO / "examples" / "beam-profile" / "beam.figscribe"
@@ -29,6 +31,34 @@ WINDOW_SECONDS = 15
 def fail(message: str) -> int:
     print(f"FAILED: {message}", file=sys.stderr)
     return 1
+
+
+def license_problem(system: str) -> str | None:
+    """What is wrong with the license files of the frozen program, if anything:
+    they are in its folder (put there before macOS signs the app) and where the
+    installer of the system keeps them."""
+    wrapper = {
+        "Darwin": OUT / "dmg",
+        "Windows": FROZEN / "figscribe",
+        "Linux": OUT / "figscribe.AppDir" / "usr" / "share" / "doc" / "figscribe",
+    }[system]
+    inside = [p.parent for p in FROZEN.rglob("THIRD-PARTY-NOTICES.txt")]
+    if not any(folder.name == "licenses" for folder in inside):
+        return f"no licenses folder in {FROZEN}"
+    for folder in [*inside, wrapper]:
+        notices = folder / "THIRD-PARTY-NOTICES.txt"
+        if not notices.is_file() or not (folder / "LICENSE.txt").is_file():
+            return f"the license files are missing in {folder}"
+        text = notices.read_text(encoding="utf-8")
+        for word in (
+            "PySide6",
+            "GNU LESSER GENERAL PUBLIC LICENSE",
+            "numpy",
+            "matplotlib",
+        ):
+            if word not in text:
+                return f"{notices} does not mention {word}"
+    return None
 
 
 def main(argv: list[str]) -> int:
@@ -46,6 +76,11 @@ def main(argv: list[str]) -> int:
     if said.stdout.strip() != f"figscribe {version()}":
         return fail(f"--version said {said.stdout!r} {said.stderr!r}")
     print("version ok", flush=True)
+
+    problem = license_problem(system)
+    if problem:
+        return fail(problem)
+    print("licenses ok", flush=True)
 
     # Resolved: macOS keeps temporary folders behind a link, and a script's
     # data path is worked out from the folder as it is named.

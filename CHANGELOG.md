@@ -12,6 +12,13 @@ release open in every later one.
   "More info", then "Run anyway". The AppImage needs `libxcb-cursor0`. Intel Macs,
   ARM Linux and `.deb`/Flatpak are not built; `pip install` works everywhere
   (decision 0066).
+- **The installers carry the licenses of what is in them.** A
+  `THIRD-PARTY-NOTICES.txt` lists the packages in each installer, with their
+  license texts, the LGPL for Qt with where its source is, and Python's license;
+  `LICENSE.txt` is figscribe's own. They are in the program's `licenses` folder,
+  beside the app in the macOS disk image, in the install folder on Windows (whose
+  installer shows the license first) and in the AppImage. An installer is not
+  built when a package it contains has no license file.
 
 - **Fixed: a script written into a folder behind a link could not find its
   data.** The script works out its folder with every link followed, but the
