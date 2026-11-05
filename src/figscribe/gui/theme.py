@@ -372,7 +372,11 @@ _ICONS = {
     'stroke="{c}" stroke-width="1.3" stroke-linecap="round"/>',
     "axis_y": '<path d="M4 1.5 V14.5 M4 4 H8 M4 8 H8 M4 12 H8" '
     'stroke="{c}" stroke-width="1.3" stroke-linecap="round"/>',
-    "annotation": '<path d="M2 13 L7 8 M7 8 H14" stroke="{c}" stroke-width="1.5" '
+    "annotation": '<path d="M3.5 3.5 H12.5 M8 3.5 V13" stroke="{c}" '
+    'stroke-width="1.8" fill="none" stroke-linecap="round"/>',
+    "duplicate": '<rect x="2" y="5" width="8" height="9" rx="1.2" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><path d="M6 3 V2.5 A1 1 0 0 1 7 1.5 H13 '
+    'A1 1 0 0 1 14 2.5 V10 A1 1 0 0 1 13 11 H12" stroke="{c}" stroke-width="1.3" '
     'fill="none" stroke-linecap="round"/>',
     "histogram": '<path d="M2 14 V9 H5 V5 H8 V7 H11 V10 H14 V14 Z" fill="{c}"/>',
     "refline": '<path d="M8 1.5 V14.5" stroke="{c}" stroke-width="1.6" '

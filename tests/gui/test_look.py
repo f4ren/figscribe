@@ -366,5 +366,5 @@ def test_the_toolbar_adds_things_in_the_order_of_a_figure(window: MainWindow) ->
     bar = window.toolbar
     shown = [bar.widgetForAction(a) for a in bar.actions()]
     texts = [w.text() for w in shown if isinstance(w, QToolButton) and w.text()]
-    names = ("Data", "Panel", "Plot", "Fit", "Note", "Reference")
+    names = ("Data", "Panel", "Plot", "Fit", "Reference", "Note")
     assert [t for t in texts if t in names] == list(names)

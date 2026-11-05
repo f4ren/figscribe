@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QToolButton
 
 from figscribe.gui import MainWindow
@@ -16,7 +18,7 @@ from figscribe.gui.palette import matching, menu_entries
 from figscribe.gui.plotdialog import KINDS, PlotDialog
 from figscribe.model import AllanDeviationPlot, Histogram, ImagePlot
 
-ADDING = ["Data", "Figure", "Panel", "Plot", "Fit", "Note", "Reference"]
+ADDING = ["Data", "Figure", "Panel", "Plot", "Fit", "Reference", "Note"]
 
 
 @pytest.fixture
@@ -184,3 +186,59 @@ def test_the_kinds_are_found_from_the_command_palette(window) -> None:
     shaded = matching(entries, "shaded")
     assert {e.text for e in shaded} >= {"Shaded x range", "Shaded y range"}
     assert all("Reference" in e.where for e in shaded)
+
+
+def _insert_menu(window: MainWindow):
+    action = next(a for a in window.menuBar().actions() if a.text() == "&Insert")
+    return action.menu()
+
+
+def test_every_entry_of_the_insert_menu_has_a_picture(window) -> None:
+    """The submenus and Duplicate too, not only the entries that run."""
+    for action in _insert_menu(window).actions():
+        if not action.isSeparator():
+            assert not _picture(action.icon()).isNull(), action.text()
+
+
+def test_the_insert_menu_has_one_entry_for_plots_and_it_keeps_the_key(
+    window,
+) -> None:
+    """ "Add Plot As" holds the kinds; the dialog that "Add Plot…" opened is
+    still on its key, which is shown behind the submenu."""
+    titles = [a.text().replace("&", "") for a in _insert_menu(window).actions()]
+    assert "Add Plot…" not in titles
+    assert "Add Plot As" in titles
+    entry = window.plot_menu.menuAction()
+    assert entry.shortcut() == QKeySequence("Ctrl+Shift+P")
+
+
+def test_the_key_of_add_plot_opens_the_plot_dialog(window) -> None:
+    seen = {}
+
+    def look(dialog: PlotDialog) -> bool:
+        seen["opened"] = True
+        return False
+
+    window.run_dialog = look
+    window.activateWindow()
+    QTest.keyClick(
+        window,
+        Qt.Key.Key_P,
+        Qt.KeyboardModifier.ControlModifier | (Qt.KeyboardModifier.ShiftModifier),
+    )
+    assert seen.get("opened")
+
+
+def test_add_plot_is_still_found_from_the_command_palette(window) -> None:
+    found = [
+        e for e in matching(window.palette_entries(), "chart") if e.text == "Add Plot…"
+    ]
+    assert len(found) == 1
+    seen = {}
+    window.run_dialog = lambda dialog: seen.setdefault("opened", True) and False
+    found[0].run()
+    assert seen.get("opened")
+
+
+def test_the_reference_comes_before_the_note(window) -> None:
+    assert list(_buttons(window))[-2:] == ["Reference", "Note"]

@@ -2648,6 +2648,23 @@ the very things U12 wants found.
 **A flat row of eight with words**: 918 px, and hidden below that. **Icons
 only, always**: the words are what a new user reads.
 
+### Changed (2026-11-05, at the user's request)
+
+- *Reference* comes before *Note* in the toolbar: a reference is set up with
+  the plot, a note is the last thing put on. (The decision above names the old
+  order.)
+- The note's picture is a T, the way text is marked in other editors, in the
+  toolbar and in the outline; the arrow was a line with nothing to say what it
+  was. A *duplicate* picture (two sheets) is new.
+- Every entry of *Insert* has a picture, the submenus (*Add Plot As*, *Add
+  Reference*, *Add Panel*) and *Duplicate Figure* too.
+- *Add Plot…* is no longer an entry of *Insert*: *Add Plot As* holds the kinds,
+  and Ctrl+Shift+P, shown behind it, opens the dialog as before. The key sits
+  on the submenu's own action, so there is one action for it and no ambiguity.
+  The toolbar button's menu and Ctrl+K keep *Add Plot…* by name. Not verified
+  by eye on the native macOS menu bar, where a key next to a submenu may not be
+  drawn; the key itself is tested.
+
 ## 0056 — The command palette also finds what a thing is known as
 
 ### Context

@@ -160,6 +160,11 @@ release open in every later one.
   all panels.
 - *Help > About figscribe* shows the version of figscribe and of Python,
   Matplotlib and Qt, for bug reports. On macOS it stays under *Help*.
+- **The Insert menu has pictures all the way down.** *Add Plot As*, *Add
+  Reference*, *Add Panel* and *Duplicate Figure* have one now. *Add Plot…* is
+  gone from the menu; its key, Ctrl+Shift+P, is shown behind *Add Plot As* and
+  still opens the dialog. In the toolbar *Reference* comes before *Note*, and the
+  note's picture is a T.
 
 ## 0.2.0 — 2026-10-29
 
