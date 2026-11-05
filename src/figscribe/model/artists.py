@@ -378,7 +378,9 @@ class ColorMesh(ArtistBase):
 
 class PredefinedFit(StrictModel):
     kind: Literal["predefined"] = "predefined"
-    name: Literal["linear", "polynomial", "gaussian", "lorentzian", "exponential"]
+    name: Literal[
+        "linear", "polynomial", "gaussian", "lorentzian", "exponential", "power"
+    ]
     """The function fitted; a polynomial also needs its degree."""
     degree: int | None = Field(None, ge=1)
     """Only for "polynomial"."""

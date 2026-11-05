@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from figscribe.model import ColumnRef, Conversion
+from figscribe.model import AllanDeviationPlot, ColumnRef, Conversion
 
 WHOLE = 1e-9
 """How close 1 / factor must come to a whole number to be divided by:
@@ -176,6 +176,8 @@ def plot_data(plot, data: Callable[[ColumnRef], np.ndarray]) -> PlotData:
     """The plot's columns converted to the units it shows them in, every row
     of the file, and which rows its x range keeps; with a reduction, its
     reduced points."""
+    if isinstance(plot, AllanDeviationPlot):
+        return _allan_data(plot, data)
     x = convert(data(plot.x), plot.x_conversion)
     xerr = getattr(plot, "xerr", None)
     yerr = getattr(plot, "yerr", None)
@@ -191,3 +193,24 @@ def plot_data(plot, data: Callable[[ColumnRef], np.ndarray]) -> PlotData:
     from figscribe.reduce import reduced
 
     return reduced(plot, shown)
+
+
+def _allan_data(plot, data) -> PlotData:
+    """The points of an Allan deviation, as the plot draws them: τ, σ_y(τ) and
+    its error. They are derived, so, as for a reduced plot, no row of the file
+    is left out or out of range any more (decision 0064)."""
+    from figscribe.allan import allan_points
+
+    points = allan_points(plot, data)
+    if points is None:  # a series with gaps draws nothing, so nothing is fitted
+        empty = np.empty(0)
+        return PlotData(empty, empty, None, None, np.zeros(0, dtype=bool), True)
+    tau, sigma, error = points
+    return PlotData(
+        x=tau,
+        y=sigma,
+        xerr=None,
+        yerr=error,
+        used=np.ones(tau.shape, dtype=bool),
+        reduced=True,
+    )

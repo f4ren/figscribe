@@ -2802,8 +2802,8 @@ nothing meanwhile, as for a plot without rows.
 
 **Date:** 2026-11-05
 **Status:** proposed, not yet agreed. Built while the user was away (they asked
-for something to look at, to change afterwards); the advisor (Opus) reviewed the
-layouts before they were built.
+for something to look at, to change afterwards). The layouts are the advisor's
+(Opus) proposal; the advisor did not see the built result.
 
 ### Context
 
@@ -2838,8 +2838,8 @@ looks.
 ## 0061 — The settings of a fit and its residuals
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away; reviewed by
-the advisor, Opus).
+**Status:** proposed, not yet agreed (built while the user was away). The layout
+is the advisor's (Opus) proposal; the advisor did not see the built result.
 
 ### Context
 
@@ -2868,8 +2868,10 @@ the panel**: the fit dialog ("Change the fit…") is where they are edited.
 ## 0062 — The settings of a histogram, an Allan deviation, an image and a color mesh
 
 **Date:** 2026-11-05
-**Status:** proposed, not yet agreed (built while the user was away; reviewed by
-the advisor, Opus).
+**Status:** proposed, not yet agreed (built while the user was away). The layout
+is the advisor's (Opus) proposal, which I changed in one place: the color bar's
+*Visible* stays (the coverage test needs every field in the panel), so an image
+shows two boxes, *Color bar* and *Color bar shown*; look at that first.
 
 ### Context
 
@@ -2946,4 +2948,61 @@ project**: the work of a project on a USB stick would be on another computer.
 **A shorter interval or after every change**: the project is a text file of a few
 hundred kB at most, but a write on every drag would be noticed; a minute loses
 little. **Keeping the undo stack**: not in any file format the program has.
+
+## 0064 — An Allan deviation can be fitted
+
+**Date:** 2026-11-05
+**Status:** proposed, not yet agreed (built while the user was away). The two
+`[decide]` points of F14 were taken as the roadmap proposed them; the advisor
+(Opus) agreed with using the proposed defaults.
+
+### Context
+
+Roadmap F14 (found by the user, 2026-11-03): *Fit…* did not offer an Allan
+deviation, and `add_fit` said "a allan plot cannot be fitted". White frequency
+noise is a straight line of slope −1/2 on the log-log plot, and the noise types
+of a stability plot add up (σ² = a/τ + b + c·τ).
+
+### Decision
+
+- **One place for the points** (as 0045 did for a reduced plot):
+  `allan.allan_points` gives τ (in the shown unit), σ_y(τ) and the error
+  σ/√(N − 2m), and the renderer, `plot_data`, the fit dialog, `refit`, the
+  residuals and the script all use them. `plot_data` of an Allan deviation is a
+  `PlotData` with `reduced=True`, so no row is left out or out of range (the
+  plot's range is applied to the series before τ is computed); a series with
+  gaps, which is not drawn, has no points and nothing to fit.
+- **`FIT_TARGETS`** (the plots of points and the Allan deviation) is what a fit
+  may target; `FITTABLE` stays what has rows to leave out. The dialog says why
+  no row can be left out ("each point is computed from the whole series").
+- **The fit range** is in τ as shown and stays, so the long τ, which rest on
+  few samples, can be left out.
+- **The curve** is sampled evenly in log τ when the panel's x axis is
+  logarithmic (renderer and script: `np.geomspace`), or the kinks of a model
+  that is not a straight line there would show.
+- **Weights (proposed, as in the roadmap):** the error bars as absolute sigma,
+  as for any plot; no error bars, unweighted. A fit in log σ against log τ is
+  not offered.
+- **Models:** the *Power law* `a * x**b` is predefined (it is F1.6 too), with a
+  start value from a straight line on log-log paper; the noise terms are typed
+  as an expression (`sqrt(a**2 / x + b**2 + c**2 * x)` works, the fit language
+  has `sqrt`).
+- **The script** defines τ (`tau`) and the error (`adev_err`) as variables in
+  the Allan deviation section when a fit reads them, and that section now comes
+  before the fits.
+
+- **Known gaps:** *Points outside the range like left out* does nothing for an
+  Allan target; the fit dialog greys it out, the property panel does not (a rule
+  of `effect.py` that never lifts would not pass `test_without_effect`, which
+  wants the change to show once its condition is met). Named noise-type models
+  are not built. The points are computed in the renderer, in the problem list and
+  for each fit in the script generator; the code drawer regenerates on every
+  change, so a very long series with every τ is slow (E1).
+
+### Alternatives considered
+
+**Fitting in log σ against log τ** (every decade counts alike): a second
+weighting to explain; the error bars already give about equal relative errors.
+**Named noise-type models** (white, flicker, random walk): easy to add to
+`PREDEFINED` once the user says which ones they mean.
 

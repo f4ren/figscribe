@@ -41,7 +41,11 @@ from figscribe.model.project import Project
 from figscribe.model.styles import style_problems
 
 FITTABLE = (LinePlot, ScatterPlot, ErrorbarPlot)
-"""Artist types a FitCurve can target: the ones with x and y columns."""
+"""Plots of points with x and y columns: those whose rows can be left out."""
+
+FIT_TARGETS = (*FITTABLE, AllanDeviationPlot)
+"""Artist types a FitCurve can target: the plots of points, and the Allan
+deviation, whose points are derived (decision 0064)."""
 
 
 @dataclass(frozen=True)
@@ -176,8 +180,8 @@ def validate_references(
                         )
                     elif (
                         artist.fit_range is not None
-                        and isinstance(target, FITTABLE)
-                        and target.x_range is not None
+                        and isinstance(target, FITTABLE)  # an Allan range is in time,
+                        and target.x_range is not None  # the fit range in τ
                         and not (
                             target.x_range[0] <= artist.fit_range[0]
                             and artist.fit_range[1] <= target.x_range[1]
@@ -194,7 +198,7 @@ def validate_references(
                                 "the points within both are fitted",
                             )
                         )
-                    elif not isinstance(target, FITTABLE):
+                    elif not isinstance(target, FIT_TARGETS):
                         issues.append(
                             ReferenceIssue(
                                 f"{tpath}.target",
@@ -402,11 +406,11 @@ def _nothing_to_fit(fit: FitCurve, artists: dict, data) -> str | None:
     from figscribe.io.errors import DataError
 
     target = artists.get(fit.target)
-    if fit.result is None or not isinstance(target, FITTABLE):
+    if fit.result is None or not isinstance(target, FIT_TARGETS):
         return None
     try:
         shown = plot_data(target, data)
-        if fitted_points(shown, target.left_out, fit.fit_range).any():
+        if fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range).any():
             return None
     except (DataError, FitError, KeyError, ValueError):
         return None  # said elsewhere: unreadable data, a row that is not there

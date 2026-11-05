@@ -102,6 +102,22 @@ def set_range(
     return _with_fits_again(project, plot_id, text, steps, data)
 
 
+ALLAN_POINTS = ("values", "data_type", "sample_interval", "time", "taus", "error_bars")
+"""What an Allan deviation's points and error bars are computed from: changing
+one changes what a fit of it runs on."""
+
+
+def set_allan_field(
+    project: Project, plot_id: str, name: str, value, data: DataProvider, text: str
+) -> Macro:
+    """Set `name` of an Allan deviation and fit each fit of it again, as one
+    step (decision 0064). A FitError, changing nothing, if a fit then fails."""
+    _plot(project, plot_id)
+    return _with_fits_again(
+        project, plot_id, text, [SetField(plot_id, (name,), value)], data
+    )
+
+
 def _mapping(plot, axis: str, old, new, data):
     """Functions taking a value, and a width such as a tick step, from the old
     shown units to the new."""

@@ -21,7 +21,7 @@ from matplotlib.ticker import (
     NullFormatter,
 )
 
-from figscribe.convert import convert, plot_data, scale, within
+from figscribe.convert import convert, plot_data, within
 from figscribe.io.errors import DataError
 from figscribe.model import (
     AllanDeviationPlot,
@@ -45,7 +45,7 @@ from figscribe.model import (
     ShadedSpan,
 )
 from figscribe.model.artists import LIKE_THE_PLOT
-from figscribe.model.validate import FITTABLE, unequal_columns
+from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
 from figscribe.render.labels import axis_label, panel_label_options, panel_labels
 from figscribe.render.layout import (
     creation_order,
@@ -656,20 +656,17 @@ def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:
 
     A series with gaps is not drawn; validate_references says why.
     """
-    from figscribe.allan import averaging_factors, overlapping_adev, phase_of, samples
+    from figscribe.allan import allan_points
 
     try:
-        values, tau0 = samples(artist, data)
+        points = allan_points(artist, data)
     except DataError as exc:
         raise DataError(f"{artist.label or 'the Allan deviation'}: {exc}") from None
-    if not np.all(np.isfinite(values)):
+    if points is None:
         return
-    phase = phase_of(values, artist.data_type, tau0)
-    m = averaging_factors(phase.size, artist.taus)
-    adev = overlapping_adev(phase, tau0, m)
-    yerr = adev / np.sqrt(phase.size - 2 * m) if artist.error_bars else None
+    tau, adev, yerr = points
     container = ax.errorbar(
-        scale(m * tau0, artist.x_conversion),
+        tau,
         adev,
         yerr=yerr,
         color=artist.color,
@@ -709,11 +706,11 @@ def _draw_fit(
     all the data; nothing before a fit."""
     from figscribe.fit import evaluate, fitted_points
 
-    target = _referenced(artists, fit.target, FITTABLE, "fit")
+    target = _referenced(artists, fit.target, FIT_TARGETS, "fit")
     if fit.result is None:
         return
     shown = plot_data(target, data)
-    if not fitted_points(shown, target.left_out, fit.fit_range).any():
+    if not fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range).any():
         return  # the fit has no point to run on, and the script no fit
     x = shown.x[np.isfinite(shown.x) & shown.used]
     if x.size == 0:
@@ -723,7 +720,8 @@ def _draw_fit(
         low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
         if not low < high:
             return
-    xs = np.linspace(low, high, CURVE_POINTS)
+    log = isinstance(target, AllanDeviationPlot) and ax.get_xscale() == "log"
+    xs = (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
     ys = evaluate(fit.model, fit.result.parameters, xs)
     ax.plot(
         xs,
@@ -747,7 +745,7 @@ def _draw_residuals(
     from figscribe.fit import evaluate, fitted_points
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
-    target = _referenced(artists, fit.target, FITTABLE, "fit")
+    target = _referenced(artists, fit.target, FIT_TARGETS, "fit")
     if residuals.zero_line:
         ax.axhline(
             0.0,
@@ -760,7 +758,7 @@ def _draw_residuals(
         return
     shown = plot_data(target, data)
     x, y, yerr = shown.x, shown.y, shown.yerr
-    used = fitted_points(shown, target.left_out, fit.fit_range)
+    used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)
     if not used.any():
         return  # no point is fitted; the script draws nothing either
     if not used.all():

@@ -201,14 +201,16 @@ class _Writer:
         """{plot id: name of the mask of its rows that are not left out}."""
         self._retired: set[str] = set()
         """Names the section "Fewer points" defines or uses up."""
+        self.allan: dict[str, dict[str, str]] = {}  # named below, once data is known
         self.reduced_from: dict[str, dict[str, str]] = {}
         """{plot id: {field: variable}} of the columns a reduction reads."""
         self.reduced = self._name_reduced()
         """{plot id: {field: variable}} of the reduced points of each plot with
         a reduction: x, y, and the errors it has."""
-        self.fits = self._name_fits()
         self.allan = self._name_allan()
-        """{Allan deviation plot id: names of its τ0, phase, m and σ}."""
+        """{Allan deviation plot id: names of its τ0, phase, m and σ, and, for one
+        that is fitted, of its τ and its errors}."""
+        self.fits = self._name_fits()
         self.axes_names = self._name_axes()
         self.axis_specs = self._ticks_that_fit()
 
@@ -346,6 +348,8 @@ class _Writer:
 
     def shown(self, plot, field: str) -> str:
         """The variable of the plot's column `field` as the plot shows it."""
+        if plot.id in self.allan:  # an Allan deviation: its τ and σ
+            return self.allan[plot.id]["tau" if field == "x" else "adev"]
         return self.units.get((plot.id, field)) or self.column(getattr(plot, field))
 
     def _name_reduced(self) -> dict[str, dict[str, str]]:
@@ -446,6 +450,7 @@ class _Writer:
         taken = self._taken() | {"overlapping_adev"}
         found: dict[str, dict[str, str]] = {}
         plots = [a for a in self.artists.values() if isinstance(a, AllanDeviationPlot)]
+        fitted = {a.target for a in self.artists.values() if isinstance(a, FitCurve)}
         for number, plot in enumerate(plots, start=1):
             if self.data is not None:
                 try:
@@ -458,6 +463,8 @@ class _Writer:
             bases = ("tau0", "phase", "m", "adev")
             if plot.x_range is not None:
                 bases += ("since", "samples")
+            if plot.id in fitted:  # a fit reads the points as variables
+                bases += ("tau",) + (("adev_err",) if plot.error_bars else ())
             for base in bases:
                 name = base if number == 1 else f"{base}_{number}"
                 while name in taken:
@@ -502,9 +509,9 @@ class _Writer:
         self._units()
         self._left_out()
         self._reduce()
+        self._allan_deviations()
         self._fit_models()
         self._fits()
-        self._allan_deviations()
         self._figure()
         self.section("Save")
         self.emit(f"fig.savefig(HERE / {_str(output)})")
@@ -1028,6 +1035,14 @@ class _Writer:
             if plot.taus != "all":
                 self.emit(f"{m} = {m}[{m} <= ({phase}.size - 1) // 2]")
             self.emit(f"{adev} = overlapping_adev({phase}, {tau0}, {m})")
+            if "tau" in names:
+                taus = f"{m} * {tau0}"
+                if plot.x_conversion:
+                    taus = scale_expression(taus, plot.x_conversion)
+                self.emit(f"{names['tau']} = {taus}")
+                if "adev_err" in names:
+                    err = names["adev_err"]
+                    self.emit(f"{err} = {adev} / np.sqrt({phase}.size - 2 * {m})")
 
     def _allan_plot(self, ax: str, plot, common: dict[str, str]) -> None:
         if plot.id not in self.allan:
@@ -1040,7 +1055,9 @@ class _Writer:
         tau0, phase, m, adev = (names[n] for n in ("tau0", "phase", "m", "adev"))
         kwargs = {}
         if plot.error_bars:
-            kwargs["yerr"] = f"{adev} / np.sqrt({phase}.size - 2 * {m})"
+            kwargs["yerr"] = names.get(
+                "adev_err", f"{adev} / np.sqrt({phase}.size - 2 * {m})"
+            )
         kwargs |= _some(color=plot.color)
         kwargs |= {
             "marker": _str(plot.marker or "none"),
@@ -1048,9 +1065,11 @@ class _Writer:
             "linestyle": _str(plot.linestyle),
             "linewidth": _num(plot.linewidth),
         }
-        taus = f"{m} * {tau0}"
-        if plot.x_conversion:
-            taus = scale_expression(taus, plot.x_conversion)
+        taus = names.get("tau")
+        if taus is None:
+            taus = f"{m} * {tau0}"
+            if plot.x_conversion:
+                taus = scale_expression(taus, plot.x_conversion)
         self.call(f"{ax}.errorbar", taus, adev, **kwargs, **common)
 
     def _fits(self) -> None:
@@ -1137,10 +1156,14 @@ class _Writer:
             shown = plot_data(target, self.data)
         except (DataError, KeyError, ValueError):
             return None
-        return int(fitted_points(shown, target.left_out, fit.fit_range).sum())
+        return int(
+            fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range).sum()
+        )
 
     def _finite(self, fit: FitCurve) -> bool | None:
         """Whether all data of the fit is finite; None if unknown."""
+        if fit.target in self.allan:  # a derived series without a gap is finite
+            return True
         if fit.target in self.reduced:  # means are finite; an error may be missing
             return None if self._yerr(self.artists[fit.target]) else True
         if self.data is None:
@@ -1568,6 +1591,8 @@ class _Writer:
 
     def _yerr(self, target) -> str | None:
         """The variable of the y errors a fit to `target` is weighted by."""
+        if target.id in self.allan:
+            return self.allan[target.id].get("adev_err")
         if target.id in self.reduced:
             return self.reduced[target.id].get("yerr")
         if isinstance(target, ErrorbarPlot) and target.yerr is not None:
@@ -1663,7 +1688,11 @@ class _Writer:
             # Over the fit range, where there is data.
             low = f"max({fit.fit_range[0]!r}, {low})"
             high = f"min({fit.fit_range[1]!r}, {high})"
-        self.emit(f"{xs} = np.linspace({low}, {high}, {CURVE_POINTS})")
+        space = "linspace"
+        if isinstance(target, AllanDeviationPlot):  # even in log τ on a log axis
+            panel = next(a for a in self.figure.axes if fit in a.artists)
+            space = "geomspace" if panel.x.scale == "log" else "linspace"
+        self.emit(f"{xs} = np.{space}({low}, {high}, {CURVE_POINTS})")
         kwargs = _some(color=fit.color) | {
             "linestyle": _str(fit.linestyle),
             "linewidth": _num(fit.linewidth),

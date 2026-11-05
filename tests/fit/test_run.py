@@ -59,6 +59,11 @@ CASES = [
         np.linspace(0, 6, 80),
     ),
     (
+        PredefinedFit(name="power"),
+        {"a": 3.0, "b": -0.5},  # 1/sqrt(x): the white noise of an Allan deviation
+        np.geomspace(1, 1000, 60),
+    ),
+    (
         ExpressionFit(expression="a * sin(w * x) + b", parameters=["a", "w", "b"]),
         {"a": 1.5, "w": 1.0, "b": 0.2},
         np.linspace(0, 12, 100),
@@ -89,6 +94,7 @@ def test_recovers_known_parameters(model, true, x) -> None:
         (PredefinedFit(name="gaussian"), ["a", "mu", "sigma", "c"]),
         (PredefinedFit(name="lorentzian"), ["a", "x0", "gamma", "c"]),
         (PredefinedFit(name="exponential"), ["a", "tau", "c"]),
+        (PredefinedFit(name="power"), ["a", "b"]),
         (ExpressionFit(expression="k * x", parameters=["k"]), ["k"]),
     ],
 )

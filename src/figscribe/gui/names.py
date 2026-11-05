@@ -283,3 +283,16 @@ REDUCED_NO_ROWS = (
     "rows, not a row. Switch the reduction off first."
 )
 """Why rows cannot be left out, or outliers found, on a reduced plot."""
+
+DERIVED_NO_ROWS = (
+    "Does nothing for an Allan deviation: each point is computed from the whole "
+    "series, not read from a row, so there is no row to leave out."
+)
+"""The same for an Allan deviation, whose points are derived."""
+
+
+def no_rows_reason(plot) -> str:
+    """Why no row of `plot` can be left out, for a plot that has none."""
+    from figscribe.model import AllanDeviationPlot
+
+    return DERIVED_NO_ROWS if isinstance(plot, AllanDeviationPlot) else REDUCED_NO_ROWS

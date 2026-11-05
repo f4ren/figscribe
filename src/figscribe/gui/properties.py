@@ -91,7 +91,13 @@ from figscribe.model import (
 from figscribe.model.styles import style_problem
 from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
-from figscribe.units import CONVERTIBLE, set_conversion, set_range
+from figscribe.units import (
+    ALLAN_POINTS,
+    CONVERTIBLE,
+    set_allan_field,
+    set_conversion,
+    set_range,
+)
 
 SKIPPED = {
     "id": "an identity, never edited",
@@ -1388,6 +1394,19 @@ class PropertyPanel(QScrollArea):
             return set_conversion(self.document.project, obj.id, axis, conversion, data)
         if path == ("x_range",) and isinstance(obj, CONVERTIBLE):
             return set_range(self.document.project, obj.id, value, self.document.data)
+        if (
+            len(path) == 1
+            and path[0] in ALLAN_POINTS
+            and isinstance(obj, AllanDeviationPlot)
+        ):  # a fit of it runs on other points now
+            return set_allan_field(
+                self.document.project,
+                obj.id,
+                path[0],
+                value,
+                self.document.data,
+                f"Change {field_name(path[0]).lower()}",
+            )
         if len(path) == 1 and path[0] in reading_options(obj):
             return read_differently(
                 self.document.project, obj.id, path[0], value, self.document.base_dir
@@ -1725,7 +1744,7 @@ class PropertyPanel(QScrollArea):
         grid = QGridLayout(card)
         grid.setContentsMargins(12, 10, 12, 10)
         grid.setHorizontalSpacing(16)
-        lines = _result_lines(fit, self._residuals(fit))
+        lines = _result_lines(fit, self._residuals(fit), self._derived(fit))
         if not lines:
             grid.addWidget(label("Not fitted yet.", "hint"), 0, 0)
         for row, (name, value) in enumerate(lines):
@@ -1758,6 +1777,14 @@ class PropertyPanel(QScrollArea):
         outer.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return holder
 
+    def _derived(self, fit: FitCurve) -> bool:
+        """Whether the fit's points are computed, not rows of a file."""
+        try:
+            target = find(self.document.project, fit.target)
+        except CommandError:
+            return False
+        return isinstance(target, AllanDeviationPlot)
+
     def _residuals(self, fit: FitCurve):
         try:
             return residuals(self.document.project, fit.id, self.document.data)
@@ -1773,7 +1800,10 @@ class PropertyPanel(QScrollArea):
         )
         head = f"{fit.label}: " if fit.label else ""
         lines = [f"{head}{name} to {artist_name(target)}"]
-        lines += [f"{n} = {v}" for n, v in _result_lines(fit, self._residuals(fit))]
+        lines += [
+            f"{n} = {v}"
+            for n, v in _result_lines(fit, self._residuals(fit), self._derived(fit))
+        ]
         from PySide6.QtWidgets import QApplication
 
         QApplication.clipboard().setText("\n".join(lines) + "\n")
@@ -2584,9 +2614,12 @@ class MarkerList(ChoiceEditor):
 CHOICES["left_out_linestyle"] = [("Like the plot", LIKE_THE_PLOT), *LINESTYLES]
 
 
-def _result_lines(fit: FitCurve, found) -> list[tuple[str, str]]:
-    """(name, value) of a fit's result as the card shows and copies it."""
+def _result_lines(fit: FitCurve, found, derived: bool = False) -> list[tuple[str, str]]:
+    """(name, value) of a fit's result as the card shows and copies it. The
+    row of the largest residual is named unless the points are derived (an
+    Allan deviation's), which have no row of the file."""
     result = fit.result
+    where = "" if derived or found is None else f" (row {found.row + 1})"
     if result is None:
         return []
     lines = []
@@ -2599,7 +2632,7 @@ def _result_lines(fit: FitCurve, found) -> list[tuple[str, str]]:
         lines += [
             ("Points fitted", f"{found.used} of {found.total}"),
             ("Residual RMS", f"{found.rms:.3g}"),
-            ("Largest residual", f"{found.largest:.3g} (row {found.row + 1})"),
+            ("Largest residual", f"{found.largest:.3g}{where}"),
         ]
     return lines
 

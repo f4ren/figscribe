@@ -105,7 +105,7 @@ from figscribe.model import (
     ImagePlot,
     ResidualPlot,
 )
-from figscribe.model.validate import FITTABLE
+from figscribe.model.validate import FIT_TARGETS
 from figscribe.render import export, export_bytes
 from figscribe.templates import template
 
@@ -931,9 +931,9 @@ class MainWindow(QMainWindow):
         selected = next((a for a in plots if a.id == self.document.selected), None)
         if isinstance(selected, FitCurve):
             selected = next((a for a in plots if a.id == selected.target), None)
-        if isinstance(selected, FITTABLE):
+        if isinstance(selected, FIT_TARGETS):
             return selected
-        fittable = [a for a in plots if isinstance(a, FITTABLE)]
+        fittable = [a for a in plots if isinstance(a, FIT_TARGETS)]
         return fittable[0] if len(fittable) == 1 else None
 
     def add_figure(self) -> None:

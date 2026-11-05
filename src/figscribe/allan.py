@@ -92,6 +92,20 @@ def samples(plot: AllanDeviationPlot, data) -> tuple[np.ndarray, float]:
     return values, tau0
 
 
+def allan_points(plot: AllanDeviationPlot, data):
+    """(τ in the shown unit, σ_y(τ), its error or None) as the plot draws them;
+    None for a series with gaps, which is not drawn. The one place for the
+    points, so that the drawing, a fit and its residuals agree."""
+    values, tau0 = samples(plot, data)
+    if not np.all(np.isfinite(values)):
+        return None
+    phase = phase_of(values, plot.data_type, tau0)
+    m = averaging_factors(phase.size, plot.taus)
+    adev = overlapping_adev(phase, tau0, m)
+    error = adev / np.sqrt(phase.size - 2 * m) if plot.error_bars else None
+    return scale(m * tau0, plot.x_conversion), adev, error
+
+
 def allan_axes() -> dict[str, AxisSpec]:
     """The axes an Allan deviation is read on: log-log, τ against σ_y(τ)."""
     return {
