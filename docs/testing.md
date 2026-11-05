@@ -192,5 +192,10 @@ note the platform, the screen scaling and the theme in the pull request.
     and data* (*Legend entry* first), *Look*, *More*. Nothing is clipped; the
     search (Ctrl+F) still finds *Arrow to*, and Ctrl+K *Position in*.
 
+30. **A fit and its residuals** (proposed, decision 0061): select a fit: *Label and
+    data* with the result card right under it, *Look*, the folded *More*. Select
+    the residuals: *Look*, then *Zero line* with its box and, when it is on, its
+    color, width and style under it; switch the box off and they grey out.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

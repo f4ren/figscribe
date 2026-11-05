@@ -2835,3 +2835,33 @@ looks.
 **Keeping *Legend* for the label**: a section of one field (0051).
 **Hiding a note's label**: it names the note in the outline.
 
+## 0061 — The settings of a fit and its residuals
+
+**Date:** 2026-11-05
+**Status:** proposed, not yet agreed (built while the user was away; reviewed by
+the advisor, Opus).
+
+### Context
+
+Roadmap U11. A fit had *Data* (the y axis and what it is fitted to, with the
+result card under it), *Look*, *Legend* (one field) and *More*, where the
+setting that draws the points outside the fit range like left-out ones was
+hidden with the opacity. Residuals had *Data*, *Look* and a *More* with the
+whole zero line (a box and three settings) next to *Visible* and the order.
+
+### Decision
+
+- **Fit**: *Label and data* (*Legend entry*, *Fitted to*, y axis), with the
+  result card right under it, *Look* (color, line style, line width, *Curve
+  over all the data*, *Points outside the range like left out*: both say how
+  the fit is drawn), *More* (opacity, *Visible*, order).
+- **Residuals**: *Label and data* (*Fitted to*, y axis), *Look* (color, marker,
+  size, line style, line width), *Zero line* (the box and, right under it, its
+  color, width and style), *More* (label, opacity, *Visible*, order).
+
+### Alternatives considered
+
+**The zero line in *Look***: four fields of another thing. **A section for the
+result card**: the card is not a form. **Moving the model and start values into
+the panel**: the fit dialog ("Change the fit…") is where they are edited.
+

@@ -68,6 +68,23 @@ EXPECTED = {
         "Look": ["color", "alpha"],
         "More": ["visible", "zorder"],
     },
+    "FitCurve": {
+        "Label and data": ["label", "axis"],
+        "Look": [
+            "color",
+            "linestyle",
+            "linewidth",
+            "extend_curve",
+            "outside_as_left_out",
+        ],
+        "More": ["alpha", "visible", "zorder"],
+    },
+    "ResidualPlot": {
+        "Label and data": ["axis"],
+        "Look": ["color", "marker", "markersize", "linestyle", "linewidth"],
+        "Zero line": ["zero_line", "zero_color", "zero_linewidth", "zero_linestyle"],
+        "More": ["label", "alpha", "visible", "zorder"],
+    },
 }
 
 
@@ -83,7 +100,17 @@ def test_the_sections_of_each_kind(qtbot, project_file: Path, name: str) -> None
 
 
 def test_a_legend_entry_is_called_that_everywhere(qtbot, project_file) -> None:
-    for name in ("ReferenceLine", "ShadedSpan"):
+    for name in ("ReferenceLine", "ShadedSpan", "FitCurve"):
         panel, _ = _sections(qtbot, project_file, _case(name))
         caption, _tip = panel._captions[("label",)]
         assert caption.text() == "Legend entry", name
+
+
+def test_the_result_of_a_fit_sits_under_its_first_section(qtbot, project_file) -> None:
+    from figscribe.model import FitCurve
+
+    panel, _ = _sections(qtbot, project_file, FitCurve)
+    layout = panel.widget().layout()
+    items = [layout.itemAt(i).widget() for i in range(layout.count())]
+    first = items.index(panel.sections["Label and data"])
+    assert items[first + 1] is not panel.sections["Look"]  # the card, between

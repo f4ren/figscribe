@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **A fit and its residuals have their settings arranged** (proposed): the fit's
+  result card sits under *Label and data*, *Look* has how the curve is drawn,
+  and the residuals' zero line is a section of its own, a box with its settings
+  under it.
 - **A note, a reference line and a shaded range have their settings in sections
   by what they are for** (proposed, to be looked at): a note has *Text* and
   *Place* (with *Position in*, which its position is read in), lines and ranges
