@@ -19,6 +19,8 @@ release open in every later one.
   beside the app in the macOS disk image, in the install folder on Windows (whose
   installer shows the license first) and in the AppImage. An installer is not
   built when a package it contains has no license file.
+- *Help > About figscribe* says which licenses figscribe is under: MIT, Qt (through
+  PySide6) under the LGPL-3.0, and where the licenses of the rest are.
 
 - **Fixed: a script written into a folder behind a link could not find its
   data.** The script works out its folder with every link followed, but the
