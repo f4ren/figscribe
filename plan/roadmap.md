@@ -5,21 +5,107 @@ left off. The brief stays the vision; this file is the work list. It is written
 so that a coding session can take the next open task and finish it without
 asking what was meant.
 
-**State as of 2026-10-23** (branch `develop`, commit `9063d71`):
+**State as of 2026-11-05** (branch `develop`):
 
 - M1 to M6 of the brief are done: model, renderer, code generator with the
   pixel equivalence test, GUI with import, property panel, outline, undo/redo,
   zoom/pan, panels and insets, right y axis, histograms, notes, 2-D data, fits
   with residuals. Beyond the brief: the built-in assistant (Claude, ChatGPT,
-  local models), the MCP server and `figscribe bench`.
-- M7 is open: style templates, snapping and alignment guides, packaging.
-- About 650 tests run in about 25 s; CI is green on Linux, Windows and macOS
-  with Python 3.11 and 3.13. Decisions 0001 to 0026 are in
-  [`docs/decisions.md`](../docs/decisions.md).
-- 0.1.0 is released (2026-10-26, R4): `main` at PR #78, on PyPI.
+  Gemini, local models), the MCP server and `figscribe bench`; since the
+  first version of this plan also several figures in one project, units and
+  a range per plot, fewer points drawn, the Allan deviation, error bands,
+  reference lines, a search and a command palette for settings, and
+  settings that grey out when they do nothing.
+- M7 is open: style templates, snapping and alignment guides, installers.
+- About 1,700 tests run in about two and a half minutes in parallel; CI is green on
+  Linux, Windows and macOS with Python 3.11 and 3.13, and a further job runs
+  the fast tests at the oldest allowed versions (decision 0044). Decisions
+  0001 to 0066 are in [`docs/decisions.md`](../docs/decisions.md).
+- 0.1.0 (2026-10-26) and 0.2.0 (2026-10-29) are released, on PyPI; `main` is
+  at 0.2.0 (PR #94). What `develop` has gained since is under "Unreleased"
+  in the [changelog](../CHANGELOG.md).
 
 The findings below marked **(verified)** were reproduced on 2026-10-23; the
 reproduction is given so a session can turn it into a failing test first.
+
+---
+
+## What is open (2026-11-05)
+
+A map of the tasks below that are not finished; the tasks hold the detail.
+`[decide]` needs the user's answer first (rule 2). A task that is not named
+here is done; its follow-ups ("only if asked") stay in its text.
+
+**Phase 0 — Bugs and robustness** (B1 to B6 are done)
+- **B7**, the bug hunt, repeated before every release. Done: item 1 (the
+  edge-data matrix), item 2 (undo stress), item 3 (fits that fail politely)
+  and item 4 (files; only the Windows network share and other drive are left
+  to the manual checklist); the fit whose range was narrowed to no row is
+  fixed (2026-11-05, decision 0059). Open: item 5 the GUI at 1024 × 700, 150 % and
+  200 % scaling, dark mode, keyboard only; item 6 every bench case through
+  the equivalence test (the projects in `examples/` already are).
+- **B8**: about twenty dialog tests still set widgets instead of clicking
+  them, and the preview's zoom, pan and legend drag lack mouse-event tests.
+  Follow-ups: ratios that no longer match the grid; a lower bound for font
+  sizes and the figure size; marking columns of another length.
+
+**Phase 1 — The settings** (U1 to U5, U7 to U10 and U12 are done)
+- **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
+  bump).
+- **U11** the settings panel rearranged, element by element, with the user.
+  Done: the figure, a panel, the axis form, line, points and error bars.
+  Proposed, built while the user was away (decisions 0060 to 0062): the note,
+  reference lines and ranges, the fit and its residuals, histogram, Allan
+  deviation, image and color mesh. Open: the data files (left as they are), and the user's look at all of it. Nothing is built for an
+  element before the user has agreed to its arrangement.
+- **U12** finding what the examples use (see below): **done**.
+
+**Phase 2 — What a scientist needs**
+- **F1** fits (L): the range dragged in the preview (1); the result as text
+  in the figure (3); CSV and a LaTeX row (4); a confidence band (5); more
+  models, such as sine, power law, logistic, Voigt, two peaks (6); weighting
+  by none, y errors or Poisson (7); x errors (8, `[decide]`); the curve
+  drawn beyond the data (9).
+- **F4** plot types (M each): hollow markers, error bar colour and caps, an
+  error bar on every n-th point (3); step plot (4); points coloured by a
+  third column (5); waterfall (6); contours (7); bar chart (8).
+- **F5** axes: number format and the decimal comma (1); inverted axes (2);
+  a second x axis on top that converts (3); hiding and offsetting spines
+  (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
+  **broken axes (6, wanted for a measurement at a fixed point,
+  `[decide]`)**; minor grid lines of their own, thinner than the major ones
+  (10).
+- **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
+  check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
+  data cursor (S). **F10** smoothing, peak finding, baseline and normalising
+  (`[decide]`, judged by decision 0036).
+- **F14** fit an Allan deviation (M): built, proposed (0064); named noise-type
+  models are open. **F15** draw a function (M), from the user.
+
+**Phase 3 — Speed and working faster**
+- **E1** large data: render off the GUI thread (2), thin the preview only
+  (3), a performance test (4); item 1 is done for zoom and pan only, changes
+  from the property panel still render at once.
+- **E2** is done (atomic save and `.bak`, autosave and recovery; 0054, 0063). **E3** save a figure as a template. **E4**
+  fewer steps for the common path (everything except the plot dialog),
+  among them a source's file changed
+  after all (`[decide]`, a question for the user who asked).
+
+**Phase 4 — M7: polish and release**
+- **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
+  snapping and alignment guides. **R3** the dpi at export (TIFF, EPS and the
+  transparent background are built, 0065). **R4** installers (PyInstaller, decision 0066: macOS built and
+  tried here, Windows and Linux left to the CI of its pull request), screenshots
+  in the README, a gallery in `examples/`. **R5** measure models with `figscribe bench`.
+  **R7** follow-up: wait out a rate limit in the chat.
+
+**Phase 5** is later and optional.
+
+**Where to start** (rule 1): the first open task is B7, and its open items 5
+and 6 need no answer. The user named the order on 2026-11-03: B7.4 and F13 are
+done, then comes U11 (the settings panel arranged element by element); see
+that task. U12 (finding what the examples use) came in between and is done;
+F14 then F15 follow U11; E2 is done.
 
 ---
 
@@ -30,9 +116,11 @@ reproduction is given so a session can turn it into a failing test first.
 2. **Tasks marked `[decide]` need the user's answer first.** Ask the question
    in the task, record the answer in `docs/decisions.md`, then implement. Do not
    guess; the working agreement in the brief says to ask.
-3. **One task, one branch, one pull request** into `develop`. Branch from
-   `develop`, name the branch after the task (`b1-tick-limit`). CI must be green
-   on all three platforms before merging.
+3. **One theme, one branch, one pull request** into `develop`: a large task
+   alone, or a few small related ones (at most four or five) with one commit
+   each, so the checks run once for them. Branch from `develop`, name the
+   branch after the task or theme (`b1-tick-limit`, `ui-navigation`). CI must
+   be green on all three platforms before merging.
 4. **Test first.** For a bug, the first commit is a failing test that
    reproduces it. Every model change gets a roundtrip test, every new command an
    undo test, every rendered feature an image baseline and a codegen
@@ -42,7 +130,8 @@ reproduction is given so a session can turn it into a failing test first.
    (with a plain name in `gui/names.py` and a tooltip) and the assistant tools
    (`tools/spec.py`). Task U1 turns this into a test.
 6. **Record decisions** that are not obvious from the code in
-   `docs/decisions.md` (context, decision, alternatives), numbered on from 0026.
+   `docs/decisions.md` (context, decision, alternatives), numbered on from the
+   last one.
 7. **Update this file in the same pull request**: tick the task, add what was
    learned, add follow-up tasks you discovered.
 8. Everything in the repository is written in English, commit messages
@@ -63,12 +152,9 @@ reproduction is given so a session can turn it into a failing test first.
     `gh pr list`), and open a draft pull request as soon as the branch is
     pushed, so the next session sees it.
 
-**Pulled forward** at the user's request (2026-10-25): F1.2 (held
-parameters and bounds) now, since it touches nothing U2 changes; F8 (several
-figures) right after U2 is merged and before U3 and U4, because it turns
-"the first figure" into "the current one" in eight modules, and the GUI work
-of U3 and U4 would otherwise be built on the old assumption. Nobody starts U3
-or U4 while F8 is open.
+**Pulled forward** at the user's request (2026-10-25), both done: F1.2 (held
+parameters and bounds), and F8 (several figures) before U3 and U4, because it
+turned "the first figure" into "the current one" in eight modules.
 
 Sizes: **S** is up to half a day, **M** a day or two, **L** more; split an L
 into pull requests that each leave `develop` working.
@@ -243,13 +329,85 @@ they find.
    panels, fit), then undo all: the project equals the start; redo all: equals
    the end. `[decide]` whether to add `hypothesis` as a dev dependency for this
    and for model roundtrips with generated projects.
+   **Done** (2026-11-03, decision 0046; the user chose `hypothesis`):
+   `tests/commands/test_undo_stress.py`, a state machine over the project of
+   `tests/gui/everything.py` that drives `History` without Qt. Its rules are
+   the primitives and the program's operations (remove, duplicate, add panel
+   or figure, paste style, bring to front, same range, fit, refit, leave rows
+   out, units, range), with undo, redo and save between them; the fields to
+   set are found from the model, bad values included. After each step it
+   checks that the project saves and loads to the same text, ids are unique,
+   no panel is outside its grid, fits still have their plot, a refused step
+   changed nothing, and each undo and redo reaches the state recorded when
+   the step was made; at the end, undo all gives the start and redo all the
+   end. It is the "model roundtrip with generated projects" too. Checked by
+   breaking `RemoveItem.revert` on purpose: it fails at once, with a
+   sequence of two or three steps. 1,000 sequences were clean; a
+   run of 3,000 found one bug, and 3,000 more were clean once it was fixed.
+   *Add panel* (and *Duplicate* on a panel) in a grid whose column widths or
+   row heights did not match its columns or rows stopped with an
+   `IndexError` or, with too many values, made the mismatch worse without a
+   word. Such ratios come from changing the number of columns or rows while
+   ratios are set (the open follow-up of B8.2), from a loaded file or from
+   the assistant's `set_field`; the panel's own editor always offers one
+   field per column. It is refused now, with the reason, in the dialog the
+   GUI already shows for a refused panel (`commands/ops._insert_line`; a
+   test in `test_panels.py`). *Learned:* the undo itself held up: every
+   command and operation went back to the state it came from. The model
+   still accepts such ratios, and the stress test would find other places
+   that assume they fit; *Add fit with residuals* has its own row insertion
+   that does not check them and silently keeps the mismatch (it does not
+   crash). Run the test with more sequences before each release
+   (`FIGSCRIBE_STRESS_EXAMPLES`, see `docs/testing.md`).
 3. **Fits that should fail politely**: fewer points than parameters, all NaN,
    exponential on negative data, start values that overflow. Each gives a
    message in the fit dialog, never a traceback.
+   **Done** (2026-11-01): the four named cases already gave a message or a
+   result; a probe of every model on awkward data (all NaN, one or two
+   points, constant x or y, 1e-300 and 1e300, zero errors, infinities) and a
+   fuzz of expression fits with bounds found three more things, all fixed.
+   The start-value guess (`models.guess`, documented as never raising) raised
+   `LinAlgError` for values near the limits of floating point, in a slot of
+   the dialog, which left the start fields of the old model. A bounded fit
+   whose model turned non-finite at a value it tried (`sqrt(a*x+b)`) leaked
+   scipy's `ValueError` ("array must not contain infs or NaNs") past
+   `run_fit`; it is a `FitError` now, so the assistant's tools and the
+   dialog say it in words. And a result whose uncertainties cannot be
+   estimated (the covariance is singular: a product of two parameters, a
+   constant x, data an exponential cannot follow) was shown as bare numbers;
+   the dialog now says which uncertainties are missing and why. *Learned:*
+   the covariance check was already there; only the telling was missing.
+   *Follow-up, only if asked:* the same note on the panel's result card and
+   in "Copy the result", which still show a parameter without its
+   uncertainty and say nothing.
 4. **Files**: paths with spaces and non-ASCII characters (verified fine for
    the code generator), network paths on Windows, read-only directories, a data
    file deleted while the project is open, a project file saved by a newer
    figscribe.
+   **Done** (2026-11-03), as far as it can be from one machine. Probed: every
+   menu action and every entry of the outline's menus, in a window whose data
+   files were deleted and in one whose folder was read-only (12 runs, none
+   ended in a bug message; kept out of the suite, it takes two minutes on
+   four cores); the data provider on an unreadable file, a directory, an empty
+   file, binary garbage, a symlink and a dangling one (all a `DataError`
+   naming the file); `figscribe script` on a project that is a directory, empty,
+   half-written, missing or of a newer version (all a message); a folder named
+   `Mäß Daten ü` with a script named `Größe 1.py`, which ran. Found and fixed:
+   `figscribe script` showed a traceback when its output could not be written
+   (a folder that is not there, a path below a file, a read-only one); it
+   says `figscribe: cannot write …` and exits with 1 now. Kept as tests:
+   those cases that work the same on every platform (no `chmod` where it would
+   not bind: Windows, root), the window saving and exporting into a folder
+   that is not there and exporting with the data gone, the unusual folder
+   names, the fallback to a whole path for a file on another drive
+   (`os.path.relpath` raises `ValueError` there) and `stored_path`. A data file
+   on a Windows network share or another drive is a step of the manual
+   checklist (16), as it cannot be tried here. *Learned:* the program was
+   better prepared than the list assumed; the one bug was in the command line,
+   which the window's tests never reach. *Follow-ups, only if asked:* the
+   window's *Export Script* stops when a data file is missing, while
+   `figscribe script` writes the script without it; a script whose data file
+   is missing ends with Python's `FileNotFoundError`, naming the path.
 5. **GUI**: small window (1024 × 700), high-DPI scaling 150 % and 200 %, dark
    mode on all three platforms, keyboard-only use of the import dialog, fit
    dialog and property panel.
@@ -418,6 +576,62 @@ the project. It found:
 *Done when:* items 1 to 5 above have failing tests and fixes; the field test
 and the action test run in CI; `docs/testing.md` exists; how-to rule 10 holds.
 
+### B9 Data paths that follow the project file (verified) — S to M
+
+Raised by a lab user (2026-11-04): "the absolute path is used; one relative
+to the figscribe file would be better". Looked at the same day, with a bug
+on top:
+
+- **Save As loses the data** (verified): open a project with its data next to
+  it (the example), *Save As…* into another folder. `Document.save` writes
+  the project as it is and takes the new folder as the base, so the relative
+  path `scan.csv` points at nothing there: `data_states()` says "missing"
+  for every source. A project copied by hand works only if its data goes
+  with it, but *Save As* offers a copy without it.
+- **A file outside the project folder is stored by its whole path**:
+  `io/files.stored_path` is relative only when the file lies *below* the
+  project folder (`Path.relative_to`), so data in a neighbouring folder
+  (`../daten/x.csv`) or a parent is absolute. Such a project does not
+  survive being moved or shared, and the script it writes (which computes its
+  own relative path, `_relative`) is better off than the project.
+- **Imported before the first save**: a project with no file has no folder,
+  so `ImportDialog` and `import_numpy` store the absolute path
+  (`str(path.resolve())`), and saving does not turn it relative, even when the
+  data lies right next to the new file.
+
+*Do* (test first; each of the three has a failing test):
+1. **`stored_path` writes `..`** where the file is not below the folder:
+   `os.path.relpath` with forward slashes, and the absolute path only where
+   there is no relative one (another drive, a network share: `ValueError`,
+   the same fallback as `codegen/script._relative`). Decision 0007 says
+   "relative when below"; record the change.
+2. **Saving re-bases the paths.** At *Save As* into another folder, and the
+   first save of a project, each source's path is rewritten to be right
+   from the new folder (relative where it can be, else absolute), so the
+   data is found there. `[decide]` whether this is one undo step before the
+   save (`SetField` on each source's `path`, which `PROTECTED_SOURCE_FIELDS`
+   keeps from the assistant but not from the program) or happens silently
+   when the file is written; proposed: the commands, so that the project the
+   window shows is the one that was saved and the "saved" mark stays true.
+3. **A hand-made copy** of a folder keeps working, as it does now.
+4. Tests: *Save As* into a sibling and a child folder, the first save after an
+   import, a file in a neighbouring folder, and the other-drive fallback
+   (monkeypatched, as in B7.4); an old project with an absolute path still
+   opens; a roundtrip; the checklist step for a project moved to another
+   folder.
+
+**Done** (2026-11-05, decision 0052; no schema bump, the paths are text):
+`stored_path` writes `..` and is absolute only on another drive; `rebase_path`
+and `Document.save` write the paths for the folder the project is saved to, so
+*Save As* keeps the data found and an import before the first save becomes
+relative. Chosen against the proposed commands (the user agreed, 2026-11-04): a path is
+where a file lies seen from the project, not an edit, and as an undo step it would
+point the data back at the old folder after a save. A path through the root of the
+file system (another volume, another drive) stays absolute. *Learned:* the one thing it costs is that undoing
+the removal of a data file after a *Save As* elsewhere restores its old path, and
+*Locate file…* repairs it. `resolve_path` now returns a path without the dots, so
+messages name the file plainly.
+
 ---
 
 ## Phase 1 — The settings: complete, tidy, easy to find
@@ -565,6 +779,193 @@ edited. *Not checked by a test:* what other programs take from the clipboard
 and how Explorer reads `/select,` with a path that has spaces (manual
 checklist, step 12).
 
+### U7 The version under Help — S
+
+Asked for by the user (2026-10-29). There is no *Help* menu yet. Add one as
+the last menu with *About figscribe*, a `QMessageBox.about` that names the
+versions a bug report needs: figscribe (`figscribe.__version__`), Python,
+Matplotlib, PySide6/Qt, the platform, and the link to the repository. Also
+`app.setApplicationVersion(__version__)` in `gui/app.py`.
+- On macOS, Qt moves an action whose text starts with "About" into the
+  application menu and leaves *Help* empty. The user asked for it under
+  *Help*, so the action gets `QAction.MenuRole.NoRole`.
+- The action sweep (`tests/gui/test_every_action.py`) replaces
+  `QMessageBox.about`, or the modal box would hang the offscreen test.
+- Tests: the text names each version; *Help* is the last menu and has the
+  entry; the menu role; triggering it shows the version.
+
+**Done** (2026-10-29): `gui/about.py` builds the text; *Help > About
+figscribe* is the last menu, with the menu role `NoRole` so macOS leaves it
+there; `app.set_application_identity` sets the application's name and
+version. The action sweep lists *Help* among the menus and stubs
+`QMessageBox.about`, which would block offscreen. *Not checked by a test:*
+that macOS really leaves the entry in *Help* (manual checklist, step 13).
+
+### U8 A background behind a note — S
+
+Asked for by the user (2026-10-29): over a grid, a note is hard to read.
+Proposed: `Annotation.background: Color | None` (None by default, so saved
+files stay as they are), offered as a color with "none" and white first.
+The renderer and the script pass `bbox=dict(boxstyle="round,pad=0.2",
+facecolor=..., edgecolor="none")` to `annotate`. The whole chain for the
+field, a roundtrip test, an image baseline with a grid, an equivalence case.
+*Later, if asked:* a frame around the note; the same for panel labels drawn
+inside the corner (F3).
+
+**Done** (2026-10-29; no schema bump, the default draws no box):
+`Annotation.background`, a color shown in the panel after *Color*, with white
+first among the swatches; empty means none. The box has rounded corners and
+no frame, in the renderer and in the script. Also named in `model/styles.py`
+(`KINDS`) and the panel's color fields, as every color field must be.
+*Follow-ups, only if asked:* a frame around the note; the same for panel
+labels drawn inside the corner (F3). A lab user asked for it again on
+2026-11-04 ("text fields with a white background, because of the grid
+lines"); it is done.
+
+### U9 Where am I: a path in the panel, and the axes in the outline — M
+
+Asked for by the user (2026-10-29): from *X axis* or *Y axis* there is no
+way back, other than clicking something else.
+- **A path** instead of the kicker of the property panel's header
+  ("X AXIS · PANEL A"): *Figure › Panel A › X axis*, each part a link that
+  selects it (`document.select`); for a plot *Figure › Panel A › the plot*,
+  for a fit also its plot; for an inset its parent panel. With several
+  figures the first part is the figure's name.
+- **The axes in the outline**: under each panel's heading, before its
+  plots, a row for the x axis, the y axis and, if there is one, the right y
+  axis, with `axis_summary` in the second column ("Time (s), 0–10"). The
+  row selects the axis id that the preview's click on an axis already uses
+  (`panel/x`), and the outline follows when the axis is chosen in the
+  preview. Right-click: *Same x range in all panels* for that axis.
+- Tests the way a person uses it (B8): click each part of the path; click
+  an axis row and see the axis form; select an axis in the preview and see
+  its row selected. The existing outline tests that count rows change.
+- *Later, if asked:* fold a panel in the outline when there are many.
+
+**Done** (2026-10-29; no model field changed): `gui/path.py` gives the path
+of any object or axis, *Figure › Panel › item*, as the user put it (an inset
+is reached through its host panel); the property panel shows it in place of
+the kicker whenever it has more than one part, and its parts are flat
+buttons. The outline has a row for the x and the y axis of every panel and
+for the right y axis when there is one, with the axis's label and unit and
+its summary as tooltip; the axis chosen in the figure selects its row. A
+right-click on an x or y row offers the same range for all panels (not for
+insets or the right y axis). Unlike the sketch above, a fit has no extra
+part for its plot. *Learned:* `Document` already took axis ids, selecting
+one in another figure brings that figure up; the preview's click and the
+outline row use the same id. *Follow-ups, only if asked:* folding panels;
+the path in the preview's status line.
+
+### U10 The residuals' line width and zero line — S
+
+Asked for by the user (2026-10-29): the residuals made with a fit have no
+line width. `ResidualPlot` has color, marker, marker size and line style,
+but no `linewidth`, and the dashed zero line is fixed in the renderer
+(grey, 0.8 pt, `--`).
+- `ResidualPlot.linewidth: float | None` (None follows the style), for the
+  joining line and the error bars.
+- Proposed with it: the zero line's color, width and style, or none
+  (`zero_line: bool = True`, `zero_color`, `zero_linewidth`,
+  `zero_linestyle`, defaults as drawn now, so saved files stay as they are).
+- The whole chain for each field and the U1 test; the fit dialog stays as
+  it is, the panel of the residual plot shows the new fields.
+
+**Done** (2026-10-29; no schema bump, the defaults draw what was drawn):
+`ResidualPlot.linewidth` (None follows the style) and `zero_line`,
+`zero_color`, `zero_linewidth`, `zero_linestyle`, through the renderer, the
+script, the panel (the width is among the first settings, the zero line
+under *More*), the assistant's `set_field` and an image baseline
+`residuals`. Two rules in `gui/effect.py`: the zero line's settings do
+nothing while it is off, and the width does nothing while no line is joined
+and the data has no y errors. *Learned:* a new color or line style field is
+named in `model/styles.py` (`KINDS`), or a typed "2" is taken by the model
+and breaks the drawing; the every-field test found it. *Not done:* the fit
+dialog still offers no look for the residuals it adds; the panel does.
+
+### U11 The settings panel rearranged, element by element — M
+
+Asked for by the user (2026-11-03): go through the settings panel once more
+and change the arrangement, for each kind of element on its own and talked
+through with the user: the figure, a panel, an axis, each kind of plot, a
+fit, a note, and so on.
+
+How to work on it:
+- One element at a time. For each, show the user how the panel looks now
+  (the sections, the order of the fields, what is under *More*), propose
+  another arrangement, and only build what the user has agreed to. Several
+  small elements may share a branch, a large one has its own.
+- It changes `SECTIONS`, `SECTION_NAMES` and the basic settings in
+  `gui/properties.py`, not the model; the field coverage, the every-field
+  and the search tests must stay green, and the manual checklist
+  (`docs/testing.md`) is gone through for each element, since this is what
+  is seen.
+- Record what was agreed for each element in `docs/decisions.md` (the next
+  free number, one entry for the work or one per element), so that the next
+  session does not undo it.
+
+**The figure: done** (2026-11-04, decision 0048). *Format* (name, size, PNG
+resolution, style sheet), *Text* (font size, units in labels, line up axis
+labels, panel labels with their letters under the box), *Ticks and frame* (the
+two tick settings in view), *Widths and lengths* and *Panel layout* (both
+folded); no *More* where one field would be in it. New figures start with
+inward ticks on all sides; saved files keep what they have. **The sections stay
+a column** (the user, on pictures and the advisor's opinion); tabs may be looked
+at again after some days of use. **Rules for every element** (the advisor's, in
+0048): a section name says what is in it without repeating the header; no
+section of one or two fields and no *More* unless several rare settings are in
+it; short nouns; the same word means the same everywhere; a folded section's
+name says whether to open it; a caption makes sense on its own, since the search
+shows rows alone; the groups in one order everywhere (what it is, what it shows,
+how it looks, the rare). **The panel: done** (2026-11-05, decision 0049): *Title and axes* (the title first,
+then the cards of the axes, the box for a right y axis with its card right after
+it), *Grid* (the box with its settings under it), *Legend*, and the folded
+*Place in layout* (an inset: *Place in panel*); no *More*; the legend's captions
+*Columns of entries* and *Position (dragged)*. **The axis form: done** (2026-11-05, decision 0050): *Label* (with *Label size* and
+*Label distance*), *Scale* (type, from … to, the linear zone, *Number size*) and
+*Ticks* (major with *Distance* or *Values*, tick labels, minor), no *Text size*.
+*Fixed on the way:* a section folded on an axis came back open, because the form
+was built under the kind of the object before it. **Line, points and error bars: done**
+(2026-11-05, decision 0051): *Label and data* (*Legend entry*), *Units and rows*
+(with *Fewer points* under its box, the conversion rows saying *x:* or *y:*),
+*Look* (marker size and line width with their marker and line), *Error bars*
+(cap, width, the band under its box), the folded *Left-out points* and *More*
+(opacity, visible, drawing order). *Still to do, one element at a time:* the
+other kinds of plot (histogram, Allan deviation, image, color mesh), the fit and
+residuals, the note, reference lines and ranges, the data files. *Also:* a thin line under every section (the stylesheet had always asked for
+one, but a plain `QWidget` paints no border without `WA_StyledBackground`, so it
+never showed) and every section folds with a click, the rare ones starting
+folded, kept per kind of object while the program runs (the user's wishes; not
+saved between runs). *Learned:* a test that passed on one pixel (a grey stretch
+of a line in a small inset) failed when the new ticks hid it; check what a sweep
+sees before a change of defaults.
+
+### U12 Finding the elements the examples use — S, with the user
+
+Asked for by the user (2026-11-04), after opening some of the gallery's
+examples: several elements they use are not easy to find, for instance the
+shaded range, and how a note gets its arrow. Go through the twelve examples,
+list every element and setting each one uses, and for each ask where a new
+user would look for it (the *Insert* menu, the outline's context menu, the
+command palette, the property panel, the search) and whether it is found
+there. Propose the changes, such as menu entries, names, a hint in the empty
+panel or an entry for *Insert > Add* that says what it makes; nothing is built
+before the user has agreed to them, as in U11. Hold the result with a test that
+every example's element kinds are reachable from the *Insert* menu or the
+command palette under a name a person would search for.
+
+**Agreed with the user (2026-11-04), in three branches.** The toolbar first
+(decision 0055, **done**: kind icons, *Reference* and *Plot* menus, icons alone
+in a narrow window). Then search and names (decision 0056, **done**: synonyms
+for the command palette, a hint in the empty property panel, and the test
+above, which fails when an example uses a kind without words). Then the settings of an
+axis (log, symlog, limits, ticks; decision 0058, **done**: found from a
+selected panel or plot too). Then the note's arrow by
+right-clicking the note (decision 0057, **done**: *Add an arrow*, *Point the
+note's arrow here*, *Remove the note's arrow*); dragging the tip is a later
+step if that is not enough. Measured on the examples: *shade*
+finds the shaded range, *band* and *region* do not; the arrow is only a typed
+pair of numbers, and nothing is found for "arrow" when no note is selected.
+
 ---
 
 ## Phase 2 — What a scientist needs to analyse and publish
@@ -613,6 +1014,18 @@ covariance detected). Missing:
 7. **Weighting** choice: none, y errors (today's default), Poisson (√y).
 8. `[decide]` **x errors**: orthogonal distance regression via `scipy.odr`
    when x errors exist, or document that they are ignored.
+9. **The curve beyond the data.** Asked for by a lab user (2026-11-04): draw
+   the fit over a larger range than the points, to extrapolate to a value
+   not measured yet. Today `_draw_fit` draws over the fit range, or with
+   `extend_curve` over all the data, never beyond. Proposed:
+   `FitCurve.curve_range: tuple[float, float] | None` (None as now; no schema
+   bump), typed in the fit dialog and in the panel as *Draw the curve from …
+   to …*, in the unit the plot shows. `[decide]` whether a typed range is
+   enough or "to the axis limits" is wanted as well. On a logarithmic axis
+   the curve is sampled evenly in log x; the script makes the same
+   `np.linspace` or `np.geomspace`; an equivalence case and a baseline; the
+   assistant's `fit` tool and `set_field`; a range that does not reach the
+   data is a problem in the list. Leave `extend_curve` as it is.
 
 ### F2 Leave points out, reproducibly — M
 
@@ -780,7 +1193,21 @@ In order of demand:
    expression, like the right y axis.
 4. **Frame**: hide the top/right spines; offset spines.
 5. `[decide]` **Date and time** axes for logged data.
-6. `[later]` Broken axes.
+6. **Broken axes.** No longer later: asked for by a lab user (2026-11-04),
+   who will add a measurement at the zinc point to a diagram after a break
+   in an axis. `[decide]` before building; this is an L. Matplotlib has no
+   broken axis, so it is drawn as two or more axes side by side (or one
+   above the other) that share the other axis, with a gap and the usual
+   slanted break marks, the widths following the lengths of the ranges. To
+   settle with the user: one break or several; x only, or y too; how the
+   ranges are given (`AxisSpec.breaks`, a list of (from, to)); what a plot,
+   a fit, a note, a reference line, a shaded range and an inset do at a
+   break (each is drawn in every part it reaches); the legend; shared axes,
+   residual panels and colour bars next to it; the problem list; and the
+   script, which must draw the same with the parts written out as a person
+   would (`fig.add_subplot`, `sharey`, break marks). The model field and the
+   assistant's tools come with it, and the property panel and the axis form
+   (rows for each range).
 7. `[decide]` **Which side an axis is on.** Matplotlib has four cases, and
    figscribe covers two:
 
@@ -820,6 +1247,56 @@ In order of demand:
    outline, as in Matplotlib. Per panel, beside the grid color:
    `grid_linewidth` and `grid_linestyle` (solid, dashed, dotted,
    dash-dotted; "none" is not offered, it would be no grid).
+9. **Axis labels in line across panels, and their distance.** Asked for
+   by the user (2026-10-29). Today a y label sits as far left as the tick
+   numbers of its panel are wide, so in a column of panels the labels
+   stagger. Decided with the user:
+   - **Aligned automatically**: `Figure.align_labels: bool`, a switch in
+     the figure's *Style* section; the renderer and the script call
+     `fig.align_labels()` (x labels in a row, y labels in a column).
+   - **A distance per axis in pt**: `AxisSpec.labelpad: float | None`
+     (None follows the style), so the right y axis has it too; the script
+     writes `labelpad=` on `set_xlabel`/`set_ylabel`. A field "Label
+     distance" in the axis form.
+   - Not wanted for now: dragging a label in the preview.
+   - Only grid panels are aligned: no insets, no twin axes; panels that
+     span several cells and residual panels need a look. Check that
+     `align_labels` and the constrained layout agree, with a render test
+     that compares label positions, and a figure with an inset and a right
+     y axis.
+   - The whole chain for each field (renderer, code generator, panel,
+     `names.py`, `tools/spec.py`, `everything.py`), a roundtrip test, an
+     image baseline and an equivalence case.
+   - **On by default**, also for files saved before (decided with the user,
+     2026-10-29): no schema bump and no migration, but a saved multi-panel
+     figure looks different once opened. Update the image baselines and
+     look at them, and say so in the CHANGELOG. Record it in a decision.
+
+   **Done** (2026-10-29, decision 0043): `Figure.align_labels` (on; a switch
+   in the figure's *Style*, greyed while there is one panel) and
+   `AxisSpec.labelpad` (*Distance (pt)* in the axis form, at least 0). The
+   renderer and the script line up the same axes: grid panels and their right
+   y axes, never insets or colour bars, and without the constrained layout
+   not a panel with a colour bar (`aligned_axes`); the script writes plain
+   `fig.align_labels()` when that is every axes of the figure and a list
+   otherwise. Only the `two_panels` baseline changed, looked at. *Learned:*
+   without the constrained layout a colour bar splits its panel's grid cell,
+   and the alignment then took the panel for one in the first column and
+   pulled its label out of the figure; a test with the bar in the second
+   column found it. *Not done:* a distance cannot be greyed without a label
+   (the axis form has no such mechanism, the tooltip says it needs one).
+
+10. **Minor grid lines of their own.** Asked for by a lab user (2026-11-04):
+    thinner than the major lines, set apart. Today one width, style and color
+    serve both (`ax.grid(True, which=…, **style)`). Proposed per panel, beside
+    the grid's own settings: `grid_minor_linewidth`, `grid_minor_linestyle` and
+    `grid_minor_color`, each empty meaning "as the major grid" so that saved
+    files are drawn as before (no schema bump); the renderer and the script
+    make a second `grid(which="minor")` call when any is set; greyed out
+    while the grid shows only major lines (a B8.4 rule); the whole chain of rule
+    5 and an image baseline with both kinds of lines. `[decide]` whether the
+    minor lines should be thinner by default (say half) when *Grid lines at*
+    is "both", instead of equal.
 
 ### F6 Several files as one series — M
 
@@ -949,6 +1426,210 @@ apart.
 the range in the preview; a row range; converted positions of a color
 mesh; date axes (F5.5) for timestamps instead of hours since the start.
 
+### F12 Fewer points drawn: averaged or thinned — M
+
+Asked for by the user (2026-10-29): show long measurements with fewer
+points, averaged or thinned. This is not E1.3, which thins the preview alone
+for speed; here the figure, the export and the script all show the reduced
+data, and the data file stays untouched. An analysis by decision 0036, so it
+gets a decision of its own before code (F10).
+
+Decided with the user:
+- **Four ways**, per plot: the **mean of every n rows**, the **median of
+  every n rows**, **every n-th row**, and the **mean over x intervals** of a
+  given width (for unevenly sampled data), the width in shown x, as
+  `x_range` is.
+- **Errors**: an averaged point gets the standard error as its error bar
+  (std / √n, ddof = 1); error bars already there are propagated (√Σσ² / n).
+- **Fits and residuals** use the reduced points, and the derived errors
+  count as **absolute** (`absolute_sigma=True`): they are uncertainties
+  estimated from the data, so the parameters' uncertainties follow from
+  them and χ²ᵣ keeps its meaning.
+- **Which plots**: error bar plots, with the derived errors drawn, line
+  plots, for when the errors do not matter (a line is reduced the same way
+  but draws no error), and points plots, reduced the same way as lines
+  (answered 2026-11-01).
+- **The median gets no error bar**, and the panel says so (1.2533 · std /
+  √n is a poor estimate just where the median is chosen, with outliers).
+- **A group of one row** has no scatter: it keeps its existing error, else
+  it has none, and a fit gets neither NaN nor zero as its sigma.
+- **An incomplete last group** (1003 rows, n = 10): a choice per plot,
+  *keep it* (averaged over the rows it has, with a larger error) or *drop
+  it*. Proposed default: keep it.
+- **Left-out rows** (F2) still mean rows of the file and are taken out
+  before the reduction. The groups stay where they are in the file (rows 1
+  to 10, 11 to 20, …), so a group with a left-out row is averaged over one
+  row fewer, with n − 1 in its error, and the groups after it do not shift.
+  As an option per plot, a left-out row can instead be **replaced by the
+  mean of the kept rows before and after it** (at the start or end of the
+  data the one neighbour), so its group keeps n values. The mean is taken
+  over all n values, but the error counts only the measured rows (n minus
+  the replaced ones, in ddof = 1 and in √n), or the invented value would
+  make the point look more certain than it is (answered 2026-11-01).
+- **Clicking a reduced plot**: a drawn point is a group, not a row. On a
+  reduced plot the preview's "Leave out row …" and the fit dialog's "Find
+  outliers" are disabled, and say why (a B8.4 rule); left-out rows already
+  there still count and are removed before the reduction as above, but are
+  not drawn grey while the plot is reduced (answered 2026-11-01).
+
+**Done** (2026-11-01; decision 0045; no schema bump, a file without
+`reduction` is drawn as before): `Reduction` (`method` mean, median, every or
+interval; `count`, `width`, `keep_last`, `replace_left_out`) on line, points
+and error bar plots, calculated in `figscribe/reduce.py` and reached through
+`plot_data` by the renderer, the fits, the residuals, the fit dialog and the
+code generator, whose section "Fewer points" makes the same
+`binned_statistic` calls (the equivalence tests hold them to it). The panel
+has *Fewer points* under *Data* and a section for its settings; five rules in
+`gui/effect.py` grey what does nothing, "Leave out row …" and "Find
+outliers" are disabled on a reduced plot with the reason, and the assistant's
+`set_field` takes `reduction`. A point without an error (a group of one row
+and no error column) is not fitted, as the user chose; "Points fitted" says
+so. An image baseline `reduced`. *Learned:* every user of `plot_data` indexed
+its arrays by row of the file; `PlotData.rows_kept` is now the one place that
+says which points a fit may use (all of them when reduced), or a left-out row
+would have raised a false "row N is left out" for a group. Residuals now
+leave out points without an error, as the fit does. *Follow-ups, only if
+asked:* an error band from derived errors (a band still needs the plot's y
+error column); a weighted mean; reduction for the Allan deviation and
+histograms.
+
+### F13 A linear formula for a plot's units — S to M
+
+Asked for by the user (2026-11-03): "another factor" in a plot's units is a
+multiplier only; dividing, adding and subtracting are wanted too, so a
+formula field instead. Does it break the concept of decision 0041? Not while
+the formula stays **linear** in x (`a·x + b`), and that is the limit:
+
+- Errors are only scaled, never shifted, and a plot's axis, limits, ticks,
+  marks, notes, ranges and fit ranges are remapped when the conversion
+  changes (`units.py`); all of that is an affine map and stays one. A
+  formula such as `log(x)` or `1/x` would need the derivative for the error
+  bars, the inverse for the axis and the marks, a rule for a reversed order
+  and for values at or below zero: a column formula, which the brief excludes
+  and decision 0036 admits only as a standard figure of a field. 1/T for an
+  Arrhenius plot would be a decision of its own, later.
+
+Decided with the user (2026-11-03):
+- **Order**: the start is subtracted first (`from_start`), the formula is
+  applied to what is left, as the factor is today.
+- **What is stored is the text**, e.g. `x / 7.5 - 273.15`, so that the
+  script reads as typed (`/ 7.5` rather than `* 0.1333…`). Its factor and
+  offset are found when the plot is drawn, with the fit language of
+  `fit/expression.py` (x and numbers, no parameters), and the formula is
+  refused in words unless it is linear in x, finite and not constant.
+- **Model**: `Conversion` gets the formula beside `factor` (a file without it
+  is drawn as before, so no schema bump); say in the decision whether the
+  formula replaces the factor or stands beside it.
+- **Where it acts**: errors scale by the absolute factor and are not
+  shifted, everything that follows a conversion (axis, marks, ranges, fits)
+  goes through the factor and the offset; a negative factor reverses the
+  order of the values, which the range and the axis must cope with, or the
+  formula is refused.
+- **Script**: one line per converted column, with the formula as typed and a
+  comment, in the same place as today's conversion; an equivalence case.
+- **The whole chain** of rule 5, the panel (a "Formula" entry next to
+  "another factor", with a tooltip and examples), the assistant's
+  `set_field`, `everything.py`, the edge-data matrix and a decision.
+
+**Done** (2026-11-03; decision 0047; no schema bump, a file without
+`formula` is drawn as before): `Conversion.formula` beside `factor`, which is
+ignored with a formula. The model refuses a formula unless it is `a·x + b`
+with `a > 0`, found from the syntax tree (`fit.expression.affine`) so that
+`x * x / x` or `abs(x)` are refused outright. The Allan deviation takes a
+formula that scales τ but does not shift it (an offset could move τ to zero on
+its log axis), so cycles of 2.88 s shown in hours are `x * 2.88 / 3600`.
+`convert.py`
+evaluates the text itself and keeps slope and offset (`linear`) for the
+errors and for `units._mapping`, which now remaps through an offset as well;
+the script writes the formula, in Python's spacing and number forms
+(`x*1e3` becomes `t * 1000.0`), with `x` replaced by the column
+(`T - 273.15`, `(t - np.nanmin(t)) / 7.5`), the errors as `dT / 7.5` when
+the slope is one over a short decimal. The panel has "a formula" beside
+"another factor", starting as what the plot does now. Tests: the analysis
+(accepted and refused formulas), the arithmetic bit for bit against the
+script, the axis, marks, ranges and fits following, three equivalence cases
+(x and y with a band, a fit and a range; a histogram; two formulas on one
+column), the panel, the assistant, the roundtrip and an old file; the
+`everything.py` scatter plot has a formula on y so that the sweeps and the
+undo stress reach it; a case in the edge-data matrix, a formula that takes
+values below zero on a log axis. No image baseline: the drawing is that of
+0041 (`converted`) and only the numbers change, held to the script bit for
+bit. *Learned:* the problem list for values at or below zero on a log axis
+read the raw column, so a formula with an offset lost points without a word;
+it judges the values as shown now (also a factor with *Start at 0*, whose
+smallest value becomes 0); a change to the formula alone on an Allan
+deviation gets past the plot's own check, so the problem list says that a
+shifting formula is not used (the user's point: not a blanket refusal, only
+the offset); the second sweep failure was the texts it
+types ("2" is a constant, refused), so `TYPED` gets a formula that rises;
+and a formula conversion must never be taken for a unit of the list because
+its slope is 1/60. *Follow-ups, only if asked:* 1/T and other non-linear
+conversions (a decision of their own); a formula in the plot dialog; a
+formula for a color mesh's positions.
+
+### F14 Fit an Allan deviation — M
+
+**Built (2026-11-05, decision 0064, proposed):** the error bars as weights, the
+fit range in τ, a curve sampled in log τ, residuals, the script, and a
+*Power law* model; named noise-type models are not built. What follows is the
+plan it was built from.
+
+Found by the user (2026-11-03), a gap rather than a regression: an Allan
+deviation cannot be fitted. *Fit…* does not offer it, and `add_fit` says "a
+allan plot cannot be fitted" (`FITTABLE` holds line, points and error bars).
+Wanted: fit 1/√τ, the slope of white frequency noise, and the other noise
+types that make up a stability plot (σ² = a/τ + b + c·τ …).
+
+What is needed, in the way of decision 0045 (reduction):
+- **One place for the points.** The points to fit are the points drawn: τ as
+  the plot shows it (after its conversion or formula), σ_y, and the error
+  bars σ/√(N − 2m) when they are on. They are computed in `figscribe/allan.py`
+  and reached through `plot_data` as a `PlotData` (x = τ, y = σ, yerr), so that
+  the renderer, `refit`, `residuals`, the fit dialog and the code generator
+  all use the same ones. The script has them as variables already (the
+  τ and σ it draws); the fit section names those.
+- **Which plots**: `FITTABLE` gains the Allan deviation. Leaving rows out and
+  finding outliers stay off for it (they would cut the series, F4.9), as for a
+  reduced plot (a B8.4 rule with the reason); the fit range, in τ as shown,
+  stays, since the longest τ rest on few samples and are rightly left out.
+- **The curve** is sampled evenly in log τ when the axis is logarithmic, or the
+  kinks of a model that is not a straight line there would show.
+- **Expressions already work** for `a / sqrt(x)`, `sqrt(a**2 / x + b**2 + c**2
+  * x)` and so on (the fit language has `sqrt`); the dialog's model list has
+  none for this.
+- `[decide]` **Weights**: the error bars as absolute sigma (they are an estimate,
+  so χ²ᵣ means little, but the weights are about right: about the same
+  relative error each), or a fit in log σ against log τ (every decade counts
+  alike, the usual way to fit a power law), or unweighted. Proposed: the error
+  bars, as for any plot, and the fit range to leave out the long τ.
+- `[decide]` **Predefined models**: *power law* a·τ^b (also F1.6) and
+  perhaps a few of the standard noise terms, so that nobody has to type them.
+- The whole chain of rule 5: a fit of an Allan deviation in the script (an
+  equivalence case, with a range and a conversion), residuals, the panel, the
+  assistant's `fit` tool and the problem list.
+
+### F15 Draw a function — M
+
+Suggested by the user (2026-11-03), with F14: draw a function without data.
+On an Allan plot a line of slope −1/2 is the usual guide for white noise; in
+any figure it is a theory curve to compare with the data. A fit curve is
+already such a curve, but it needs data and a fit.
+
+Proposed (to be agreed before building):
+- A new artist `FunctionPlot`: an expression in x with the fit language of
+  `fit/expression.py` (so `1e-11 / sqrt(x)` or `a * exp(-x / tau)`), its own
+  constants given as numbers (named, as the parameters of a fit are, or typed
+  in the formula), a color, line width and style, a label for the legend.
+- Drawn over the panel's range, or over a range of its own; evenly in log x on
+  a logarithmic axis. The axis limits are not changed by it.
+- The script defines `x` with `np.linspace` or `np.geomspace` and evaluates the
+  same expression, as the fit curve does; an equivalence case and a baseline.
+- Reached from *Insert > Add Reference* (beside reference lines and
+  shaded ranges, F4.1) and the context menu of a panel.
+- `[decide]` whether parameters are named values the panel edits (a slider
+  would be nice, a field is enough), and whether the function can also be
+  fitted to a plot (which is what *Fit…* does), or stays a drawing.
+
 ---
 
 ## Phase 3 — Speed and working faster
@@ -979,9 +1660,11 @@ interaction up to about 1e6 points, with downsampling in the preview only.
 
 ### E2 Never lose work — S
 
-Autosave to a recovery file every minute while there are unsaved changes;
-offer recovery on the next start after a crash. Keep the last saved version as
-`.bak` when saving.
+**Done** (decision 0054): the project is written to a temporary file and
+replaced atomically, the version before stays as `<name>.figscribe.bak`, and a
+read-only file is still refused. **Autosave and recovery: done** (decision 0063, proposed): a recovery file
+every minute while there are unsaved changes, offered on the next open after a
+crash.
 
 ### E3 Start from your own figure — S
 
@@ -989,12 +1672,43 @@ offer recovery on the next start after a crash. Keep the last saved version as
 the data, offered on the start page next to the built-in layouts. Applying a
 template to an existing figure is one undo step.
 
+**A default file of one's own** (the user, 2026-11-04): a `figscribe` JSON in
+the user's settings folder, in which one's own settings are kept and which new
+figures and projects start from, instead of the program's. Fits here: it is a
+template that is used without choosing. Proposed: *File > Save Look as
+Default* writes the shown figure's settings (size, fonts, ticks, frame, grid
+and unit format, the panel's grid and legend look; no data, no plots) to
+`defaults.figscribe` in the settings folder; the start page, *New* and *Add
+Figure* take it; *Reset to the program's defaults* removes it. `[decide]`
+which settings count (the figure only, or a panel's grid and axis look too),
+and whether a project with another look is left alone when it is opened (it
+is: the file has what it has). The program's own defaults stay as decision
+0048 has them.
+
 ### E4 Fewer steps for the common path — S each
 
 - The import dialog's proposed plot can be accepted with Enter, and *Fit…*
   is offered right after for error bar data.
 - After *Add fit*, offer *Show result in figure* and *Add residuals*.
 - Remember per file type the last import options and column choice.
+- **Export remembers its format and folder** (done): *Export Figure…* and
+  *Export All Figures…* open in the last folder used (the project's, when it
+  has gone or there is none yet) with the last format chosen, kept in
+  `QSettings` between runs; the file name is the figure's, as the script
+  export suggests it, and a name typed without a suffix gets the one of the
+  chosen format. A suffix typed decides the format that is remembered.
+- **A source's file changed after all** (`[decide]`, unclear). The same user
+  "wanted to change the name of the .csv in the template and did not manage"
+  (the absolute path of B9 may be what got in the way: ask).
+  Today the file of a source can only be taken again when it is missing
+  (*Locate file…*) or changed (*Use the new version*), and the panel shows
+  the path read-only. Ask the user what was meant: use another file for the
+  plots of the example or a project (the data replaced), or change a name
+  that is shown (the file name is in the column lists, `scan.csv: t`, and in
+  the script's comments). Proposed for the first: *Use Another File…* on a
+  source in the outline: choose a file, read it with the source's options,
+  keep the plots whose columns it has and list those it does not (B2's
+  machinery, `io/refresh.py`); one undo step.
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,
@@ -1011,6 +1725,29 @@ template to an existing figure is one undo step.
   Cancel the default. *Follow-up:* the import dialog's "Choose columns
   myself…" opens this dialog after the import, a second step; it could be
   part of the import dialog instead.
+
+### E5 Versions that are tested, and a lighter CI — S
+
+Asked for by the user (2026-10-29): the checks take long for small changes,
+and `pyproject.toml`'s floors had never been installed.
+
+**Done** (2026-10-29, decision 0044): floors `matplotlib>=3.10`,
+`numpy>=2.0`, `scipy>=1.13`, `PySide6>=6.7`; a CI job `minimum-versions`
+(lowest allowed versions, the fast tests without the image baselines, not a
+required check); pip cache; older runs of a pull request cancelled; a
+pull request that only changes `plan/`, `docs/` or Markdown skips the
+install and the tests (the required jobs still report).
+
+**Found on the way** (2026-10-30): the GUI tests failed on PySide6 6.7 to
+6.11 and passed on 6.12. Not the tests alone: before 6.12 the Python wrapper
+of a menu goes invalid once the wrapper of the action that holds it is gone,
+and running an entry of a submenu from the command palette (Ctrl+K) raised
+"Internal C++ object already deleted". Fixed in `gui/palette.menu_entries`
+(it keeps every menu and action it visits) and in the tests that took a
+submenu from a temporary action; `minimum-versions` now runs the GUI tests
+too, and they pass on 6.7.0 (also the slow ones) and 6.11.0. *Open:* NumPy
+1.26 could be supported again by reading decimal-comma files without
+`converters` bytes; not wanted for now.
 
 ---
 
@@ -1035,8 +1772,10 @@ other objects, with guide lines; Alt disables snapping.
 ### R3 Export for every journal — S
 
 TIFF (often required, with LZW compression) and EPS in addition to PDF, SVG
-and PNG; transparent background option; *Export all figures*; a dpi override
-at export time instead of a model field (see U2).
+and PNG; transparent background option; a dpi override at export time
+instead of a model field (see U2). *Export all figures* is done (F8).
+**TIFF, EPS and the transparent background are built** (decision 0065, proposed);
+the dpi override waits for the answer on U2.
 
 ### R4 Release 0.1.0 — M
 
@@ -1064,6 +1803,17 @@ of a release must open in later ones (rule 9 above).
 release `v0.1.0` ran `release.yml`, and `pip install "figscribe[chat]"` from
 PyPI into a fresh environment starts the window and writes a working script
 from the example.
+
+**0.2.0 released** (2026-10-29, PR #93 and #94): several figures, units and a
+range per plot, the Allan deviation, error bands, a search and a command
+palette for settings, editing where it is drawn, and the everyday actions.
+Still open from R4: item 2 (installers) and the screenshots of item 3.
+
+**R4.4 done** (decision 0053): `examples/` holds twelve projects of synthetic,
+fixed-seed data, made by `examples/make.py`, each with a thumbnail, listed in
+`examples/index.json` and offered as tiles on the start page, which copies the
+chosen one into a folder. Every one is in the equivalence test. The series of
+spectra waits for the waterfall of F4.6.
 
 ### R5 The assistant: measure models (carried over from the brief) — M
 
@@ -1121,7 +1871,6 @@ request halfway. `figscribe bench` could then run on a free tier too.
 - `[decide]` A German user interface (Qt translations); number formats
   follow the figure setting from F5 regardless.
 - Global fits sharing parameters across several data sets.
-- Broken axes.
 
 ---
 
@@ -1132,13 +1881,16 @@ answer in `docs/decisions.md` when the task is started.
 
 | Task | Question |
 |---|---|
-| B7.2 | Add `hypothesis` as a dev dependency for property-based tests? |
 | U6 | Gaps between panels in mm: new model fields in mm (schema bump), converted by the renderer and the code generator? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
+| F5.6 | Broken axes: one break or several, x and y, how ranges are given, what happens to fits, notes, lines and the legend at a break? |
+| F5.10 | Minor grid lines: thinner by default when both kinds are shown? |
+| F1.9 | The curve beyond the data: a typed range, or also "to the axis limits"? |
+| E4 | A source's file: what did the user mean by changing the name of the .csv in the template? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
-| R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
+| R4.2 | answered 2026-11-05: PyInstaller, no signing for now, dmg (arm64) + Windows installer + AppImage (0066) |
 | Phase 5 | German user interface? |

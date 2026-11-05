@@ -63,15 +63,11 @@ def test_the_panel_form_opens_an_axis(panel, document) -> None:
     document.select(axes.id)
     panel.axis_links["y"].click()
     assert document.selected == axis_id(axes.id, "y")
-    assert panel._kicker.text().startswith("Y AXIS · ")
+    # The path above the settings says where the axis is; no kicker repeats it.
+    assert panel.path_texts() == [document.figure.name, "Panel A", "Y axis"]
+    assert panel._kicker.isHidden()
     assert panel._title.text() == "U (V) · linear · automatic range"
-    assert list(panel.sections) == [
-        "Label",
-        "Range",
-        "Major ticks",
-        "Minor ticks",
-        "Text size",
-    ]
+    assert list(panel.sections) == ["Label", "Scale", "Ticks"]
 
 
 def test_the_range_shows_what_is_drawn_and_is_entered_in_the_shown_unit(
@@ -222,4 +218,95 @@ def test_clicking_the_numbers_of_an_axis_selects_it(window, document) -> None:
     document.select(axis_id(_axes(document).id, "x"))
     assert preview.selection_rect() is not None
     assert not window.delete_action.isEnabled()  # an axis is not deleted
-    assert window.outline.currentItem().text(0).lower().startswith("panel")
+    # The axis has a row of its own, under its panel's heading.
+    assert window.outline.currentItem().text(0).startswith("X axis")
+
+
+# --- the distance of the label (F5.9) ------------------------------------------
+
+
+def test_the_label_distance_is_typed_in_the_label_section(panel, document) -> None:
+    axes = _axes(document)
+    document.select(axis_id(axes.id, "y"))
+    edit = panel.axis_form.labelpad
+    assert edit.placeholderText() == "default"
+    _enter(edit, "12")
+    assert axes.y.labelpad == 12.0
+    document.undo()
+    assert axes.y.labelpad is None
+    _enter(edit, "-3")  # not a distance: refused, nothing changes, and it is said
+    assert axes.y.labelpad is None and panel.error
+    _enter(edit, "")
+    assert axes.y.labelpad is None
+
+
+def test_the_distance_of_the_right_axis_is_its_own(panel, document) -> None:
+    from figscribe.model import AxisSpec
+
+    axes = _axes(document)
+    document.push(SetField(axes.id, ("y_right",), AxisSpec(label="dU")))
+    document.select(axis_id(axes.id, "y_right"))
+    _enter(panel.axis_form.labelpad, "9")
+    assert axes.y_right.labelpad == 9.0 and axes.y.labelpad is None
+
+
+def _captions(panel, section: str) -> list[str]:
+    from PySide6.QtWidgets import QLabel
+
+    return [
+        label.text()
+        for label in panel.sections[section].body.findChildren(QLabel)
+        if label.objectName() == "caption" and label.text() and not label.isHidden()
+    ]
+
+
+def test_the_axis_form_is_arranged_by_what_the_settings_are_for(
+    panel, document
+) -> None:
+    document.select(axis_id(_axes(document).id, "x"))
+    assert all(section.expanded for section in panel.sections.values())
+    assert _captions(panel, "Label") == [
+        "Label",
+        "Unit",
+        "Show values in",
+        "Label size (pt)",
+        "Label distance (pt)",
+    ]
+    # The size of the numbers is with the scale, the placement of the ticks is
+    # all that Ticks holds.
+    assert _captions(panel, "Scale") == ["Type", "From", "Number size (pt)"]
+    assert _captions(panel, "Ticks") == ["Major ticks", "Minor ticks"]
+
+
+def test_the_row_under_the_major_ticks_says_what_it_takes(panel, document) -> None:
+    document.select(axis_id(_axes(document).id, "y"))
+    form = panel.axis_form
+    assert form.major_value.isHidden()
+    form.major.setCurrentIndex(form.major.findData("step"))
+    form.major.activated.emit(form.major.currentIndex())
+    assert form.major_caption.text() == "Distance"
+    assert "Distance" in _captions(panel, "Ticks")
+    form.major.setCurrentIndex(form.major.findData("values"))
+    form.major.activated.emit(form.major.currentIndex())
+    assert form.major_caption.text() == "Values"
+    assert _captions(panel, "Ticks") == [
+        "Major ticks",
+        "Values",
+        "Tick labels",
+        "Minor ticks",
+    ]
+
+
+def test_the_linear_zone_of_a_symmetric_log_axis_is_in_the_scale(
+    panel, document
+) -> None:
+    document.select(axis_id(_axes(document).id, "x"))
+    form = panel.axis_form
+    form.scale.setCurrentIndex(form.scale.findData("symlog"))
+    form.scale.activated.emit(form.scale.currentIndex())
+    assert _captions(panel, "Scale") == [
+        "Type",
+        "From",
+        "Linear within ±",
+        "Number size (pt)",
+    ]

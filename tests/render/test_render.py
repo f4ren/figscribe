@@ -9,6 +9,8 @@ from __future__ import annotations
 import io
 import time
 
+import matplotlib
+import matplotlib.colors
 import numpy as np
 import pytest
 from matplotlib.collections import PathCollection
@@ -289,6 +291,29 @@ def test_an_annotation_with_and_without_arrow(data) -> None:
     assert first.arrow_patch is None
     assert second.xy == (5.0, 1.0) and second.xyann == (2.0, 0.5)
     assert second.arrow_patch is not None and second.get_gid() == arrow.id
+
+
+def test_a_note_has_no_box_unless_it_has_a_background(data) -> None:
+    plain = Annotation(text="peak", position=(0.1, 0.9), coords="axes")
+    boxed = Annotation(
+        text="peak", position=(0.5, 0.5), coords="axes", background="white"
+    )
+    ax = render(Figure(axes=[Axes(artists=[plain, boxed])]), data).axes[0]
+    first, second = ax.texts
+    assert first.get_bbox_patch() is None
+    patch = second.get_bbox_patch()
+    assert patch is not None
+    assert matplotlib.colors.same_color(patch.get_facecolor(), "white")
+    assert patch.get_edgecolor()[3] == 0.0  # no frame
+
+
+def test_a_note_with_an_arrow_can_have_a_background(data) -> None:
+    note = Annotation(
+        text="here", position=(2.0, 0.5), arrow_to=(5.0, 1.0), background="yellow"
+    )
+    (text,) = render(Figure(axes=[Axes(artists=[note])]), data).axes[0].texts
+    assert text.arrow_patch is not None
+    assert matplotlib.colors.same_color(text.get_bbox_patch().get_facecolor(), "yellow")
 
 
 def test_a_right_y_axis_takes_its_plots(data, ref) -> None:

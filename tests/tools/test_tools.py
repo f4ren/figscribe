@@ -135,6 +135,65 @@ def test_set_field_is_strict(tools, workspace) -> None:
     assert workspace.project.figures[0].dpi == 150.0
 
 
+def test_the_assistant_sets_the_residuals_line_width_and_zero_line(
+    tools, workspace
+) -> None:
+    from figscribe.fit import add_fit
+    from figscribe.model import FitCurve, PredefinedFit
+
+    project = workspace.project
+    data = project.figures[0].axes[0].artists[0]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    residuals = project.figures[0].axes[1].artists[0]
+    for field, value in [
+        ("linewidth", 2.0),
+        ("zero_line", False),
+        ("zero_linewidth", 1.5),
+        ("zero_linestyle", ":"),
+        ("zero_color", "tab:red"),
+    ]:
+        tools.call(
+            "set_field", {"object_id": residuals.id, "path": [field], "value": value}
+        )
+        assert getattr(residuals, field) == value
+    with pytest.raises(ToolError, match="greater than 0"):
+        tools.call(
+            "set_field",
+            {"object_id": residuals.id, "path": ["linewidth"], "value": 0},
+        )
+
+
+def test_the_assistant_gives_a_note_a_background(tools, workspace) -> None:
+    from figscribe.model import Annotation
+
+    axes = workspace.project.figures[0].axes[0]
+    note = Annotation(text="peak", position=(1.0, 2.0))
+    axes.artists.append(note)
+    tools.call(
+        "set_field", {"object_id": note.id, "path": ["background"], "value": "white"}
+    )
+    assert axes.artists[-1].background == "white"
+    with pytest.raises(ToolError, match="not a color"):
+        tools.call(
+            "set_field", {"object_id": note.id, "path": ["background"], "value": "wh"}
+        )
+
+
+def test_the_assistant_aligns_labels_and_sets_a_distance(tools, workspace) -> None:
+    figure, axes, *_ = _ids(workspace)
+    tools.call(
+        "set_field", {"object_id": figure, "path": ["align_labels"], "value": False}
+    )
+    assert workspace.project.figures[0].align_labels is False
+    tools.call("set_field", {"object_id": axes, "path": ["y", "labelpad"], "value": 6})
+    assert workspace.project.figures[0].axes[0].y.labelpad == 6.0
+    with pytest.raises(ToolError, match="greater than or equal to 0"):
+        tools.call(
+            "set_field", {"object_id": axes, "path": ["y", "labelpad"], "value": -1}
+        )
+
+
 def test_the_assistant_letters_the_panels(tools, workspace) -> None:
     figure, *_ = _ids(workspace)
     schema = tools.call("get_schema", {})
@@ -174,6 +233,30 @@ def test_the_assistant_shades_the_errors_as_a_band(tools, workspace) -> None:
             "set_field",
             {"object_id": plot, "path": ["band", "color"], "value": "nonsense"},
         )
+
+
+def test_the_assistant_draws_fewer_points(tools, workspace) -> None:
+    _, _, plot, _ = _ids(workspace)
+    schema = json.dumps(tools.call("get_schema", {}))
+    assert "Draw fewer points" in schema
+    tools.call("set_field", {"object_id": plot, "path": ["reduction"], "value": {}})
+    tools.call(
+        "set_field", {"object_id": plot, "path": ["reduction", "count"], "value": 4}
+    )
+    tools.call(
+        "set_field",
+        {"object_id": plot, "path": ["reduction", "method"], "value": "median"},
+    )
+    reduction = workspace.project.figures[0].axes[0].artists[0].reduction
+    assert (reduction.method, reduction.count) == ("median", 4)
+    assert "binned_statistic" in tools.call("get_python_script", {})["script"]
+    with pytest.raises(ToolError, match="count"):
+        tools.call(
+            "set_field",
+            {"object_id": plot, "path": ["reduction", "count"], "value": 1},
+        )
+    tools.call("set_field", {"object_id": plot, "path": ["reduction"], "value": None})
+    assert workspace.project.figures[0].axes[0].artists[0].reduction is None
 
 
 def test_a_tick_step_that_would_freeze_the_figure_is_refused(tools, workspace) -> None:
@@ -781,3 +864,27 @@ def test_units_and_a_range_keep_the_axis_and_fits_in_step(tools, workspace) -> N
         tools.call(
             "set_field", {"object_id": artist, "path": ["x_range"], "value": [2, 1]}
         )
+
+
+def test_a_formula_for_the_units_is_set_and_refused_in_words(tools, workspace) -> None:
+    _, _, artist, _ = _ids(workspace)
+    result = tools.call(
+        "set_field",
+        {
+            "object_id": artist,
+            "path": ["y_conversion"],
+            "value": {"formula": "x * 1000 + 5", "unit": "mV"},
+        },
+    )
+    assert result["undo_step"] == "Show y in mV"
+    assert find(workspace.project, artist).y_conversion.formula == "x * 1000 + 5"
+    with pytest.raises(ToolError, match="not linear"):
+        tools.call(
+            "set_field",
+            {
+                "object_id": artist,
+                "path": ["y_conversion", "formula"],
+                "value": "log(x)",
+            },
+        )
+    assert find(workspace.project, artist).y_conversion.formula == "x * 1000 + 5"

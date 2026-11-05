@@ -45,6 +45,82 @@ def test_roundtrip_restores_concrete_artist_types(project: Project) -> None:
     assert [type(a) for a in axes[1].artists] == [ResidualPlot]
 
 
+def test_roundtrip_keeps_the_look_of_the_residuals(project: Project) -> None:
+    residuals = project.figures[0].axes[1].artists[0]
+    residuals.linewidth = 2.0
+    residuals.zero_line = False
+    residuals.zero_color = "tab:red"
+    residuals.zero_linewidth = 1.5
+    residuals.zero_linestyle = ":"
+    back = loads(dumps(project)).figures[0].axes[1].artists[0]
+    assert back == residuals
+
+
+def test_residuals_saved_before_the_look_was_settable_are_drawn_as_before(
+    project: Project,
+) -> None:
+    import json
+
+    document = json.loads(dumps(project))
+    residuals = document["figures"][0]["axes"][1]["artists"][0]
+    for name in (
+        "linewidth",
+        "zero_line",
+        "zero_color",
+        "zero_linewidth",
+        "zero_linestyle",
+    ):
+        residuals.pop(name, None)
+    back = loads(json.dumps(document)).figures[0].axes[1].artists[0]
+    assert back.linewidth is None
+    assert (back.zero_line, back.zero_color) == (True, "0.6")
+    assert (back.zero_linewidth, back.zero_linestyle) == (0.8, "--")
+
+
+def test_a_note_background_is_kept_and_unset_in_older_files(
+    project: Project,
+) -> None:
+    import json
+
+    from figscribe.model import Annotation
+
+    note = Annotation(text="peak", position=(1.0, 2.0), background="white")
+    project.figures[0].axes[0].artists.append(note)
+    back = loads(dumps(project)).figures[0].axes[0].artists[-1]
+    assert back.background == "white"
+    document = json.loads(dumps(project))
+    del document["figures"][0]["axes"][0]["artists"][-1]["background"]
+    older = loads(json.dumps(document)).figures[0].axes[0].artists[-1]
+    assert older.background is None
+
+
+def test_the_alignment_and_the_label_distance_are_kept_and_on_in_older_files(
+    project: Project,
+) -> None:
+    import json
+
+    figure = project.figures[0]
+    figure.align_labels = False
+    figure.axes[0].y.labelpad = 7.5
+    back = loads(dumps(project)).figures[0]
+    assert back.align_labels is False and back.axes[0].y.labelpad == 7.5
+    document = json.loads(dumps(project))
+    del document["figures"][0]["align_labels"]
+    del document["figures"][0]["axes"][0]["y"]["labelpad"]
+    older = loads(json.dumps(document)).figures[0]
+    assert older.align_labels is True  # as decided: also for saved files
+    assert older.axes[0].y.labelpad is None
+
+
+def test_a_negative_label_distance_is_refused() -> None:
+    from pydantic import ValidationError
+
+    from figscribe.model import AxisSpec
+
+    with pytest.raises(ValidationError):
+        AxisSpec(labelpad=-1.0)
+
+
 def test_roundtrip_keeps_nested_unions(project: Project) -> None:
     fit = loads(dumps(project)).figures[0].axes[0].artists[1]
     assert isinstance(fit, FitCurve)
@@ -251,3 +327,41 @@ def test_a_file_without_bands_still_reads() -> None:
     text = Path(__file__).parents[1] / "examples/gaussian-scan/scan.figscribe"
     plot = loads(text.read_text(encoding="utf-8")).figures[0].axes[0].artists[0]
     assert plot.band is None
+
+
+def test_a_conversion_with_a_formula_survives_saving_and_an_old_one_loads() -> None:
+    from figscribe.model import ColumnRef, Conversion, LinePlot
+
+    plot = LinePlot(
+        x=ColumnRef(source="s", column="t"),
+        y=ColumnRef(source="s", column="U"),
+        y_conversion=Conversion(formula="(x - 32) / 1.8", from_start=True, unit="°C"),
+    )
+    back = LinePlot.model_validate_json(plot.model_dump_json())
+    assert back == plot and back.y_conversion.formula == "(x - 32) / 1.8"
+    # A file from before the formula: a factor, no formula.
+    old = Conversion.model_validate({"factor": 0.5, "from_start": False, "unit": None})
+    assert old.formula is None and old.factor == 0.5
+    with pytest.raises(ValueError, match="not linear"):
+        Conversion.model_validate({"formula": "x ** 2"})
+
+
+def test_an_allan_deviation_takes_a_scaling_formula_but_no_shift() -> None:
+    from figscribe.model import AllanDeviationPlot, ColumnRef, Conversion
+
+    values = ColumnRef(source="s", column="y")
+    scaled = Conversion(formula="x * 2.88 / 3600", unit="h")
+    assert AllanDeviationPlot(values=values, x_conversion=scaled).x_conversion == scaled
+    with pytest.raises(ValueError, match="duration"):
+        AllanDeviationPlot(values=values, x_conversion=Conversion(formula="x + 1"))
+
+
+def test_a_new_figure_has_inward_ticks_on_all_sides_and_a_saved_one_keeps_its_own() -> (
+    None
+):
+    from figscribe.model import Figure, Project, dumps, loads
+
+    assert Figure().tick_direction == "in" and Figure().ticks_all_sides
+    old = Figure(tick_direction=None, ticks_all_sides=False)  # as 0.2.0 wrote them
+    back = loads(dumps(Project(figures=[old]))).figures[0]
+    assert back.tick_direction is None and not back.ticks_all_sides

@@ -18,6 +18,15 @@ the GUI as a whole and need no upkeep when something is added:
   the rule holds, a change of the field leaves the figure as it was; once
   the setting it waits for is made, the same change shows. A new rule needs
   a case there, or the test fails.
+- **`tests/commands/test_undo_stress.py`** (B7.2, decision 0046) applies
+  random sequences of the program's commands and operations to the same
+  project, without Qt, with undo, redo and save in between, and checks that
+  every step can be undone and redone to the state it was made from and that
+  a refused step changes nothing. It is not `slow`: 40 sequences take a few
+  seconds, and on CI they are the same each time. Before a release run it
+  with more: `FIGSCRIBE_STRESS_EXAMPLES=2000 python -m pytest
+  tests/commands/test_undo_stress.py`. A failure comes with the shortest
+  sequence that shows it; turn that into an ordinary test before fixing it.
 - **`tests/gui/test_every_action.py`** triggers every menu action of the main
   window and every entry of the outline's context menus. Dialogs are answered
   in the test; no action may end in an error that figscribe calls a bug.
@@ -40,7 +49,7 @@ changes what is seen. Use a real mouse or trackpad, on the platform at hand;
 note the platform, the screen scaling and the theme in the pull request.
 
 1. **Start**: open figscribe without a project. The start page shows; open
-   `examples/gaussian-scan/scan.figscribe` from it. The Dock or taskbar
+   the *A Gaussian scan* tile from its gallery and choose a folder: a copy opens. The Dock or taskbar
    shows figscribe's icon, not Python's.
 2. **Look**: the preview equals an exported PDF of the same figure, by eye.
    Labels are not cut off; the property panel has no clipped text. Every
@@ -73,6 +82,150 @@ note the platform, the screen scaling and the theme in the pull request.
     outline, right-click a data file and choose *Show in Finder* (Explorer,
     file manager): it opens with the file selected, also when the path has
     spaces and non-ASCII letters.
+13. **About**: *Help > About figscribe* shows the version. On macOS the
+    entry is in the *Help* menu, not in the application menu.
+14. **Where am I**: select an axis in the figure and in the outline; the
+    path above the settings leads back to its panel and the figure. With a
+    right y axis and a long label, the outline rows stay readable.
+15. **Fewer points**: on a plot of a few hundred rows switch on *Fewer
+    points* and try each of the four ways; the preview follows at once, error
+    bars show the standard error, and a right-click on a point says why no
+    row can be left out. Fit it, export the script and run it: the same
+    figure.
+
+16. **Files on a network share and on another drive** (Windows; B7.4 could
+    not try it): import a data file that lies on a network share, then one on
+    another drive than the project. Save, close and open the project again,
+    and export the script and run it: the figure is the same, and the script
+    names the file by its whole path. Also *Save As* into another folder than the
+    data's and open the copy: the data is still found.
+
+17. **A formula for the units**: on a plot choose *x in* ▸ *a formula* and
+    type `x / 60 - 273.15` with the unit `°C`; the axis, its numbers, a
+    reference line and a fit follow at once, error bars keep their size, and
+    `log(x)` is refused with the reason. Export the script and run it: the
+    same figure, with the formula written as typed.
+
+18. **The figure's settings**: select the figure. *Format*, *Text*, *Ticks and
+    frame* and the folded *Widths and lengths* and *Panel layout* come in that
+    order, without scrolling on a screen of 1080 pixels; a new project has
+    inward ticks on all four sides; switching *Panel labels* on shows its
+    letters under the box; the search (Ctrl+F) finds *Tick length* and opens
+    *Widths and lengths*. Every title folds its section with a click and
+    keeps that while another object is selected.
+
+19. **The panel's settings**: select a panel, then an inset. *Title and axes*
+    (the title, the cards of the axes, the box for a right y axis), *Grid*,
+    *Legend* and the folded *Place in layout* (an inset: *Place in panel*) come
+    in that order. Tick *Right y axis*: its card appears right after the box and
+    nothing crashes; untick it. Switch *Grid lines* off: its settings grey out.
+
+20. **The axis form**: click an axis card of a panel. *Label*, *Scale* and
+    *Ticks* are open, in that order, and fit a screen of 1080 pixels. Choose
+    *every …* for the major ticks: the row below says *Distance*; choose *at these
+    values*: it says *Values* and *Tick labels* appears. Choose a symmetric log
+    type: *Linear within ±* appears. Fold *Scale*, select the figure and the axis
+    again: it stays folded.
+
+21. **A plot's settings**: select error bars, a line and points in turn. The
+    sections come as *Label and data*, *Units and rows*, *Look* (an error bar
+    plot also *Error bars*), the folded *Left-out points* and *More*. Tick *Error
+    band*: its color and opacity appear right under the box; tick *Fewer points*:
+    its settings appear under it. Turn on both conversions: the rows say *x:* and
+    *y:*. The panel may need a scroll on a small screen; fold what you do not use
+    and select another plot of the same kind: it stays folded.
+
+22. **The gallery**: on the start page *Recent* (when there are recent projects)
+    comes right under the drop zone, then the layouts, then the twelve example
+    tiles, which show their pictures, titles and two lines of text in three
+    columns, with nothing cut off, at the smallest window too (the page
+    scrolls). *Try an example* scrolls to the gallery and *How it works* opens the
+    README at *Getting started* in the browser. Open three of the examples (a
+    plot with fits, the color map, the paper figure with two tabs): each opens a
+    copy in the folder chosen, looks like its picture, and a second click on the
+    same tile opens the copy again, with your changes. Cancel the folder dialog:
+    nothing opens.
+
+23. **Saving**: save a project twice with a change between: next to it a
+    `.figscribe.bak` holds the version before the last save. Make the project
+    read-only in the file manager and press Ctrl+S: the window says it cannot
+    write the file, and nothing changes. Save onto a network share or a USB
+    stick and pull it out during the save, if you can: the saved file is whole.
+
+24. **Export remembers**: *Export Figure…* to PNG in another folder, then open
+    it again: that folder and PNG are offered, with the figure's name. Close
+    figscribe, start it again: still so. Type a name without a suffix: the
+    format's suffix is added. *Export All Figures…* offers the folder and format
+    of the last time.
+
+25. **The toolbar**: the buttons *Data*, *Figure*, *Panel*, *Plot*, *Fit*,
+    *Reference* and *Note* (a T) each have a different picture, with their words beside
+    them in a wide window. Make the window as narrow as it goes: the words go,
+    the pictures stay, every button has a tip and nothing is behind the »
+    menu. Click *Plot* and choose *Histogram*: the dialog opens on it; *Panel*,
+    *Plot* and *Reference* open their menus alike, with a picture at each entry. *Reference* offers lines and shaded ranges, as *Insert > Add
+    Reference* does. Type "histogram" or "shaded" in Ctrl+K: they are found.
+    *Insert*: the entries are in the order of the toolbar buttons; every entry
+    has a picture, also *Add Plot As*, *Add Reference*, *Add Panel* and
+    *Duplicate Figure*; *Add Plot…* has Ctrl+Shift+P behind it.
+
+26. **Finding by other words**: press Ctrl+K and type *band*, *threshold*,
+    *callout*, *heatmap*, *residuals*, *subplot*, *csv*: the shaded ranges, the
+    lines, *Add Note…*, *Color mesh*, *Add Fit…*, the panels and *Import Data…*
+    come up. Select a plot with error bars and type *downsample*: *Fewer
+    points*. Select a note and type *arrow*: *Arrow to* is the first. Select
+    nothing: the property panel says what to select and that Ctrl+K finds
+    things by name.
+
+27. **A note's arrow**: add a note, right-click it: *Add an arrow* gives it a
+    short arrow. Right-click somewhere else in the same panel: *Point the note's
+    arrow here*, and the tip is there. Right-click the note again: *Remove the
+    note's arrow*. Undo each step. In a figure with two panels, the entry is not
+    offered in the other panel.
+
+28. **The axes in Ctrl+K**: select a panel (not an axis), press Ctrl+K and type
+    *log*, *limits*, *ticks*: *Type*, *From* and *Major ticks* come up for the x
+    and the y axis, each with its axis in the line below. Run one: that axis
+    opens on the setting, with the cursor in it. With a plot selected it is the
+    same. On a linear axis *symlog* finds *Type* and not *Linear within ±*.
+
+29. **A note, a line and a range** (decision 0060): select a
+    note: *Text* (text, size, colors), *Place* (position, *Position in*, *Arrow
+    to*), and the folded *More*. Select a reference line and a shaded range: *Label
+    and data* (*Legend entry* first), *Look*, *More*. Nothing is clipped; the
+    search (Ctrl+F) still finds *Arrow to*, and Ctrl+K *Position in*.
+
+30. **A fit and its residuals** (decision 0061): select a fit: *Label and
+    data* with the result card right under it, *Look*, the folded *More*. Select
+    the residuals: *Look*, then *Zero line* with its box and, when it is on, its
+    color, width and style under it; switch the box off and they grey out.
+
+31. **Histogram, Allan deviation, image and color mesh** (decision 0062):
+    select each: *Label and data* says what is plotted, *Look* how, for an image
+    and a mesh with the box *Color bar* and, when it is on, *Color bar shown* and
+    *Color bar label* right under it; an image also has the folded *Pixel grid*.
+    Switch the color bar on and off in each; undo.
+
+32. **Recovery after a crash** (decision 0063): open a project, change
+    something, wait a minute (or until the title shows the star and a minute has
+    passed): `<name>.figscribe.autosave` is next to the project. Kill figscribe
+    (Force Quit, or `kill -9`), start it and open the project: it asks to
+    recover; yes gives the changes with the star in the title, no removes the
+    file. Save: the file is gone. Do the same with an untitled project (import
+    some data, wait, kill): the next start offers it.
+
+33. **Fit an Allan deviation** (decision 0064): add an Allan deviation of
+    a noise series (log axes), right-click it, *Fit…*, choose *Power law*: the
+    fit has b near −0.5 for white frequency noise, the curve is smooth at the
+    short τ, the residuals show under it; *Find outliers* is greyed out with the
+    reason. Narrow the fit range to the short τ: the curve follows. Export the
+    Python script and run it: the same figure.
+
+34. **TIFF, EPS and a transparent background** (decision 0065): *File >
+    Export Figure…* lists TIFF and EPS. Export both and open them (Preview, an
+    image program, a vector program): the size is right, the TIFF is sharp. Tick
+    *File > Export with a Transparent Background*, export a PNG and put it on a
+    coloured slide: no white box; the item stays ticked after a restart.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

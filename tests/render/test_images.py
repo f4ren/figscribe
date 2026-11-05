@@ -18,17 +18,23 @@ import pytest
 from matplotlib.testing.compare import compare_images
 
 from figscribe.model import (
+    Annotation,
     Axes,
     AxisSpec,
     Conversion,
     ErrorBand,
     ErrorbarPlot,
     Figure,
+    FitCurve,
+    FitResult,
     GridLayout,
     Legend,
     LinePlot,
     PanelLabels,
+    PredefinedFit,
+    Reduction,
     ReferenceLine,
+    ResidualPlot,
     ScatterPlot,
     ShadedSpan,
 )
@@ -43,6 +49,33 @@ TOLERANCE = 0.5
 Matplotlib's wheels bundle their own FreeType, so text renders the same on
 every platform; the small tolerance absorbs antialiasing differences only.
 """
+
+
+def _residuals_figure(ref) -> Figure:
+    """A fit with its residuals below, drawn thick and with a red zero line."""
+    data = ErrorbarPlot(x=ref("t"), y=ref("U"), yerr=ref("dU"), linestyle="none")
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="linear"),
+        result=FitResult(parameters={"a": 0.05, "b": 0.0}, uncertainties={}),
+    )
+    residuals = ResidualPlot(
+        target=fit.id,
+        color="tab:blue",
+        linestyle="-",
+        linewidth=2.5,
+        zero_color="tab:red",
+        zero_linewidth=1.5,
+        zero_linestyle="-",
+    )
+    return Figure(
+        dpi=100.0,
+        layout=GridLayout(rows=2),
+        axes=[
+            Axes(x=AxisSpec(label="$t$", unit="s"), artists=[data, fit]),
+            Axes(row=1, y=AxisSpec(label="Residual"), artists=[residuals]),
+        ],
+    )
 
 
 def _figures(ref) -> dict[str, Figure]:
@@ -186,6 +219,72 @@ def _figures(ref) -> dict[str, Figure]:
                 )
             ],
         ),
+        "residuals": _residuals_figure(ref),
+        "reduced": Figure(
+            dpi=100.0,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(
+                    **labelled,
+                    artists=[
+                        LinePlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            linestyle="none",
+                            marker=".",
+                            color="0.7",
+                        ),
+                        ErrorbarPlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            left_out=[10],
+                            reduction=Reduction(count=4),
+                        ),
+                    ],
+                ),
+                Axes(
+                    col=1,
+                    **labelled,
+                    artists=[
+                        LinePlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            marker="o",
+                            reduction=Reduction(method="median", count=3),
+                        ),
+                        ScatterPlot(
+                            x=ref("t"),
+                            y=ref("U"),
+                            color="tab:orange",
+                            reduction=Reduction(method="interval", width=1.5),
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        "note_background": Figure(
+            dpi=100.0,
+            axes=[
+                Axes(
+                    **labelled,
+                    grid=True,
+                    artists=[
+                        LinePlot(x=ref("t"), y=ref("U")),
+                        Annotation(
+                            text="peak",
+                            position=(0.45, 0.8),
+                            coords="axes",
+                            background="white",
+                        ),
+                        Annotation(
+                            text="no background",
+                            position=(0.45, 0.2),
+                            coords="axes",
+                        ),
+                    ],
+                )
+            ],
+        ),
     }
 
 
@@ -200,6 +299,9 @@ def _figures(ref) -> dict[str, Figure]:
         "reference_lines",
         "error_band",
         "converted",
+        "residuals",
+        "reduced",
+        "note_background",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

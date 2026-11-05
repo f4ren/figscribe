@@ -59,6 +59,11 @@ CASES = [
         np.linspace(0, 6, 80),
     ),
     (
+        PredefinedFit(name="power"),
+        {"a": 3.0, "b": -0.5},  # 1/sqrt(x): the white noise of an Allan deviation
+        np.geomspace(1, 1000, 60),
+    ),
+    (
         ExpressionFit(expression="a * sin(w * x) + b", parameters=["a", "w", "b"]),
         {"a": 1.5, "w": 1.0, "b": 0.2},
         np.linspace(0, 12, 100),
@@ -89,6 +94,7 @@ def test_recovers_known_parameters(model, true, x) -> None:
         (PredefinedFit(name="gaussian"), ["a", "mu", "sigma", "c"]),
         (PredefinedFit(name="lorentzian"), ["a", "x0", "gamma", "c"]),
         (PredefinedFit(name="exponential"), ["a", "tau", "c"]),
+        (PredefinedFit(name="power"), ["a", "b"]),
         (ExpressionFit(expression="k * x", parameters=["k"]), ["k"]),
     ],
 )
@@ -330,3 +336,67 @@ def test_without_outliers_none_are_found() -> None:
     y = 2.0 * x + 1.0
     found = outliers(model, {"a": 1.0, "b": 0.0}, x, y + 0.01 * np.sin(x), yerr)
     assert not found.any()
+
+
+# --- fits that fail politely (B7.3) ------------------------------------------------
+
+
+def test_a_model_that_turns_non_finite_while_fitting_is_a_fit_error() -> None:
+    # sqrt of a negative number once the bounded fit moves a: finite at the start
+    model = ExpressionFit(expression="sqrt(a*x+b)", parameters=["a", "b"])
+    x = np.linspace(-2, 2, 12)
+    with pytest.raises(FitError, match="not finite") as raised:
+        run_fit(model, {"a": 0.5, "b": 1.1}, x, np.zeros(12), bounds={"a": (-1e3, 1e3)})
+    assert "array must not contain" not in str(raised.value).lower()
+
+
+@pytest.mark.parametrize("scale", [1e-300, 1e-200, 1e300])
+@pytest.mark.parametrize(
+    "model",
+    [
+        PredefinedFit(name="linear"),
+        PredefinedFit(name="polynomial", degree=3),
+        PredefinedFit(name="gaussian"),
+        PredefinedFit(name="lorentzian"),
+        PredefinedFit(name="exponential"),
+    ],
+    ids=lambda model: model.name,
+)
+def test_start_values_are_guessed_for_values_at_the_limits_of_floating_point(
+    model, scale: float
+) -> None:
+    x = np.linspace(0.0, 1.0, 21) * scale
+    y = (1.0 + np.sin(np.arange(21.0))) * scale
+    guess = initial_guess(model, x, y)
+    assert set(guess) == set(parameter_names(model))
+    assert all(math.isfinite(value) for value in guess.values())
+
+
+def _shown(x, y, yerr=None, used=None):
+    from figscribe.convert import PlotData
+
+    x = np.asarray(x, dtype=float)
+    return PlotData(
+        x=x,
+        y=np.asarray(y, dtype=float),
+        xerr=None,
+        yerr=None if yerr is None else np.asarray(yerr, dtype=float),
+        used=np.ones(len(x), dtype=bool) if used is None else np.asarray(used),
+    )
+
+
+def test_the_fitted_points_are_in_range_kept_and_finite() -> None:
+    """The one rule that the fit, its curve, its residuals and the script share."""
+    from figscribe.fit import fitted_points
+
+    shown = _shown(
+        [1, 2, 3, 4, 5, 6],
+        [1, 2, np.nan, 4, 5, 6],
+        yerr=[1, 1, 1, np.inf, 1, 1],
+        used=[True, True, True, True, True, False],
+    )
+    assert fitted_points(shown, [], None).tolist() == [1, 1, 0, 0, 1, 0]
+    assert fitted_points(shown, [0], None).tolist() == [0, 1, 0, 0, 1, 0]
+    assert fitted_points(shown, [], (2, 4)).tolist() == [0, 1, 0, 0, 0, 0]
+    assert not fitted_points(shown, [], (10, 20)).any()
+    assert not fitted_points(_shown([1, 2], [1, 2]), [0, 1], None).any()

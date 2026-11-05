@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
 )
 
 from figscribe.commands import CommandError, Macro, SetField, find
+from figscribe.convert import linear, scaled
 from figscribe.fit import FitError, refit, residuals
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
@@ -65,6 +66,7 @@ from figscribe.gui.names import (
     with_error,
 )
 from figscribe.gui.numbers import number, numbers, whole
+from figscribe.gui.path import path_to
 from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
 from figscribe.io.refresh import read_differently, reading_options
@@ -84,11 +86,18 @@ from figscribe.model import (
     PanelLabels,
     PredefinedFit,
     Project,
+    Reduction,
 )
 from figscribe.model.styles import style_problem
 from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
-from figscribe.units import CONVERTIBLE, set_conversion, set_range
+from figscribe.units import (
+    ALLAN_POINTS,
+    CONVERTIBLE,
+    set_allan_field,
+    set_conversion,
+    set_range,
+)
 
 SKIPPED = {
     "id": "an identity, never edited",
@@ -136,7 +145,14 @@ EDITED_ELSEWHERE: dict[type[BaseModel], str] = {
 """Model classes whose fields the generated forms never show, and where they
 are edited instead."""
 
-COLOR_FIELDS = {"color", "edgecolor", "grid_color", "left_out_color"}
+COLOR_FIELDS = {
+    "color",
+    "edgecolor",
+    "grid_color",
+    "left_out_color",
+    "zero_color",
+    "background",
+}
 
 Path = tuple[str, ...]
 
@@ -156,6 +172,7 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "colorbar": Colorbar,
     "panel_labels": PanelLabels,
     "band": ErrorBand,
+    "reduction": Reduction,
 }
 """Optional nested models switched on and off with a check box; when on, their
 fields get a section of their own."""
@@ -210,6 +227,7 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 
 SECTIONS = {
+    "reduction": "Data",
     "x_conversion": "Data",
     "y_conversion": "Data",
     "x_range": "Data",
@@ -225,29 +243,30 @@ SECTIONS = {
     "bins": "Data",
     "c": "Data",
     "target": "Data",
-    "name": "Size",
-    "width_mm": "Size",
-    "height_mm": "Size",
-    "dpi": "Export",
-    "unit_format": "Style",
-    "stylesheet": "Style",
-    "title": "Panel",
-    "title_size": "Panel",
-    "grid": "Panel",
-    "grid_axis": "Panel",
-    "grid_which": "Panel",
-    "grid_color": "Panel",
-    "grid_linewidth": "Panel",
-    "grid_linestyle": "Panel",
-    "font_size": "Style",
-    "tick_direction": "Style",
-    "ticks_all_sides": "Style",
-    "frame_width": "Style",
-    "tick_width": "Style",
-    "tick_length": "Style",
-    "minor_tick_width": "Style",
-    "minor_tick_length": "Style",
-    "panel_labels": "Style",
+    "name": "Format",
+    "width_mm": "Format",
+    "height_mm": "Format",
+    "dpi": "Format",
+    "unit_format": "Text",
+    "stylesheet": "Format",
+    "title": "Title and axes",
+    "title_size": "Title and axes",
+    "grid": "Grid",
+    "grid_axis": "Grid",
+    "grid_which": "Grid",
+    "grid_color": "Grid",
+    "grid_linewidth": "Grid",
+    "grid_linestyle": "Grid",
+    "font_size": "Text",
+    "tick_direction": "Ticks and frame",
+    "ticks_all_sides": "Ticks and frame",
+    "align_labels": "Text",
+    "frame_width": "Widths and lengths",
+    "tick_width": "Widths and lengths",
+    "tick_length": "Widths and lengths",
+    "minor_tick_width": "Widths and lengths",
+    "minor_tick_length": "Widths and lengths",
+    "panel_labels": "Text",
     "path": "File",
     "sha256": "File",
     "label": "Legend",
@@ -258,12 +277,12 @@ SECTIONS = {
     "at": "Data",
     "start": "Data",
     "end": "Data",
-    "y_right": "Panel",
+    "y_right": "Title and axes",
     "data": "Data",
-    "row": "Position",
-    "col": "Position",
-    "rowspan": "Position",
-    "colspan": "Position",
+    "row": "Place in layout",
+    "col": "Place in layout",
+    "rowspan": "Place in layout",
+    "colspan": "Place in layout",
 }
 """Where a top-level field is shown; the rest goes to "Look" for plots and
 "Reading" for data files. Nested models get a section of their own."""
@@ -271,6 +290,7 @@ SECTIONS = {
 LOOK = [
     "text",
     "color",
+    "background",
     "edgecolor",
     "marker",
     "markersize",
@@ -289,58 +309,251 @@ SECTION_NAMES = {
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
     "band": "Error band",
+    "reduction": "Fewer points",
+    "layout": "Panel layout",
+    "inset": "Place in panel",
 }
 """Titles of nested models' sections, where they differ from the field's name."""
 LABEL_WIDTH = 116
 
 ORDER = [
     "Data",
-    "Size",
-    "Panel",
-    "Axes",
-    "Position",
+    "Format",
+    "Text",
+    "Ticks and frame",
+    "Widths and lengths",
+    "Title and axes",
+    "Label and data",
+    "Units and rows",
     "File",
     "Reading",
     "Look",
+    "Pixel grid",
+    "Place",
+    "Error bars",
+    "Zero line",
+    "Left-out points",
     "Style",
+    "Grid",
     "Legend",
+    "Place in layout",
+    "Place in panel",
     "Export",
 ]
 BASIC = {
-    "LinePlot": ("color", "marker", "linestyle", "linewidth", "label"),
-    "ScatterPlot": ("color", "marker", "size", "edgecolor", "label"),
-    "ErrorbarPlot": ("color", "marker", "linestyle", "capsize", "label"),
-    "Histogram": ("color", "histtype", "density", "label"),
-    "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
-    "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
-    "ResidualPlot": ("color", "marker", "markersize", "linestyle"),
-    "Annotation": ("text", "color", "fontsize", "position", "arrow_to"),
-    "ReferenceLine": ("color", "linestyle", "linewidth", "label"),
-    "ShadedSpan": ("color", "alpha", "label"),
-    "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
-    "ColorMesh": ("cmap", "norm", "vmin", "vmax", "colorbar"),
-    "Figure": ("name", "width_mm", "height_mm", "font_size", "panel_labels"),
-    "Axes": ("title", "grid", "y_right"),
+    "LinePlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_linestyle",
+        "left_out_note",
+    ),
+    "ScatterPlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "edgecolor",
+        "marker",
+        "size",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_note",
+    ),
+    "ErrorbarPlot": (
+        "label",
+        "axis",
+        "x",
+        "y",
+        "xerr",
+        "yerr",
+        "x_conversion",
+        "y_conversion",
+        "x_range",
+        "reduction",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "capsize",
+        "elinewidth",
+        "band",
+        "left_out_color",
+        "left_out_marker",
+        "left_out_linestyle",
+        "left_out_note",
+    ),
+    "Histogram": (
+        "label",
+        "axis",
+        "values",
+        "bins",
+        "density",
+        "x_conversion",
+        "x_range",
+        "color",
+        "histtype",
+    ),
+    "AllanDeviationPlot": (
+        "label",
+        "axis",
+        "values",
+        "data_type",
+        "sample_interval",
+        "time",
+        "taus",
+        "x_conversion",
+        "x_range",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "error_bars",
+    ),
+    "FitCurve": (
+        "label",
+        "target",
+        "axis",
+        "color",
+        "linestyle",
+        "linewidth",
+        "extend_curve",
+        "outside_as_left_out",
+    ),
+    "ResidualPlot": (
+        "target",
+        "axis",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "zero_line",
+        "zero_color",
+        "zero_linewidth",
+        "zero_linestyle",
+    ),
+    "Annotation": (
+        "text",
+        "fontsize",
+        "color",
+        "background",
+        "position",
+        "coords",
+        "arrow_to",
+        "axis",
+    ),
+    "ReferenceLine": (
+        "label",
+        "orientation",
+        "at",
+        "axis",
+        "color",
+        "linestyle",
+        "linewidth",
+    ),
+    "ShadedSpan": (
+        "label",
+        "orientation",
+        "start",
+        "end",
+        "axis",
+        "color",
+        "alpha",
+    ),
+    "ImagePlot": (
+        "axis",
+        "data",
+        "cmap",
+        "norm",
+        "vmin",
+        "vmax",
+        "colorbar",
+        "extent",
+        "origin",
+        "aspect",
+    ),
+    "ColorMesh": ("axis", "c", "x", "y", "cmap", "norm", "vmin", "vmax", "colorbar"),
+    "Figure": (
+        "name",
+        "width_mm",
+        "height_mm",
+        "dpi",
+        "stylesheet",
+        "font_size",
+        "unit_format",
+        "align_labels",
+        "panel_labels",
+        "tick_direction",
+        "ticks_all_sides",
+        "frame_width",
+        "tick_width",
+        "tick_length",
+        "minor_tick_width",
+        "minor_tick_length",
+    ),
+    "Axes": (
+        "title",
+        "title_size",
+        "y_right",
+        "grid",
+        "grid_axis",
+        "grid_which",
+        "grid_color",
+        "grid_linewidth",
+        "grid_linestyle",
+    ),
 }
 """The settings shown at first, per kind of object, apart from its data and
 position: the most asked for, in the assistant's benchmark and otherwise.
 The rest is under "More", folded, and found by the search."""
-WHOLE = {"Data", "File", "Reading", "Position", "Axes", "Export", "More"}
+WHOLE = {"Data", "File", "Reading", "Place in layout", "Title and axes", "More"}
 """Sections shown whole: what is plotted and where, not how it looks; and
 the PNG resolution, kept apart from the size (decision 0006)."""
 
-COLLAPSED = {"More", "Layout"}
-"""Sections that start folded: rarely needed, but always there."""
+COLLAPSED = {
+    "More",
+    "Panel layout",
+    "Widths and lengths",
+    "Place in layout",
+    "Place in panel",
+    "Left-out points",
+    "Pixel grid",
+}
+"""Sections that start folded: rarely needed, but always there. Every section
+folds with a click on its title, and stays as the user left it."""
 
 PLACEHOLDERS = {
     "band.color": "the plot's",
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
     "label": "not in the legend",
+    "formula": "x / 60 - 273.15",
+    "background": "none",
     "color": "automatic",
     "edgecolor": "automatic",
     "grid_color": "automatic",
     "grid_linewidth": "default",
+    "linewidth": "default",
     "frame_width": "default",
     "tick_width": "default",
     "tick_length": "default",
@@ -397,6 +610,9 @@ TIPS = {
     "stylesheet": "A Matplotlib style sheet the figure starts from.",
     "font_size": "Base font size; labels, numbers and legend scale with it.",
     "tick_direction": "Whether tick marks point into the plot, out of it, or both.",
+    "align_labels": "Put the axis labels of panels in one column or row on one "
+    "line, whatever the width of their numbers. Insets and color bars are left "
+    "out.",
     "ticks_all_sides": "Tick marks also on the top and right edge of every "
     "panel; the numbers stay at the bottom and left.",
     "frame_width": "Line width of the frame around every panel; empty keeps "
@@ -440,6 +656,8 @@ TIPS = {
     "color": "A name such as blue or tab:orange, or a code such as #1f77b4; empty "
     "takes the next color of the cycle.",
     "Annotation.color": "Color of the text and the arrow; empty follows the style.",
+    "background": "Fill behind the note, for reading it over a grid or a plot; "
+    "empty draws none.",
     "ReferenceLine.color": "A name such as gray or tab:orange, or a code such as "
     "#1f77b4.",
     "ShadedSpan.color": "A name such as gray or tab:orange, or a code such as "
@@ -457,6 +675,13 @@ TIPS = {
     "linewidth": "Line width in pt.",
     "ErrorbarPlot.linewidth": "Width of the line joining the points in pt; the "
     "error bars have their own width.",
+    "ResidualPlot.linewidth": "Width in pt of the line joining the points and of "
+    "the error bars; empty keeps the style's.",
+    "zero_line": "Draw the line at zero that the residuals scatter around.",
+    "zero_color": "Color of the zero line, e.g. gray or #999999.",
+    "zero_linewidth": "Width of the zero line in pt.",
+    "zero_linestyle": "How the zero line is drawn: solid, dashed, dash-dotted or "
+    "dotted.",
     "marker": "The symbol drawn at each data point.",
     "markersize": "Size of the markers in pt.",
     "size": "Size of the markers in pt.",
@@ -495,7 +720,8 @@ TIPS = {
     "below.",
     "coords": "Data coordinates, or fractions of the panel from 0 to 1.",
     "arrow_to": "Where an arrow from the note points, in the same coordinates; empty "
-    "for no arrow.",
+    "for no arrow. Easier: right-click the note in the figure, then right-click "
+    "where it should point.",
     "fontsize": "Font size in pt; empty follows the figure.",
     "location": "Where the legend goes, e.g. best, upper right, lower left.",
     "Legend.position": "Where the legend's lower left corner sits, as fractions of the"
@@ -506,6 +732,21 @@ TIPS = {
     "PanelLabels.style": "How the letters are written.",
     "band": "Shade the y errors as a band around the line instead of drawing bars, "
     "for dense data; x errors stay bars.",
+    "reduction": "Draw fewer points: groups of rows averaged or thinned. The data "
+    "file stays as it is; the figure, the export and the script show the reduced "
+    "points, and fits use them.",
+    "Reduction.method": "The mean or the median of every n rows, every n-th row as "
+    "it is, or the mean over intervals of x (for unevenly sampled data). An "
+    "averaged point gets the standard error as its error bar, or, with y errors, "
+    "their propagation; the median gets none.",
+    "Reduction.count": "How many rows of the file make a group: rows 1 to n, "
+    "n + 1 to 2n and so on, whichever rows are left out.",
+    "Reduction.width": "Width of an interval of x, in the unit shown.",
+    "Reduction.keep_last": "Keep the last group when it has fewer rows than the "
+    "others (averaged over those it has, with a larger error), or drop it.",
+    "Reduction.replace_left_out": "Replace a row left out by the mean of the rows "
+    "kept before and after it, so that its group keeps its number of values. "
+    "The error counts only the measured rows.",
     "ErrorBand.color": "Color of the band; empty takes the plot's.",
     "ErrorBand.alpha": "Opacity of the band, 1 opaque, 0 invisible; times the "
     "plot's own.",
@@ -540,12 +781,12 @@ TIPS = {
     "dataset": "Where the data lies inside the HDF5 file, e.g. /run3/voltage.",
     "array": "Which array of the .npz archive to plot.",
     "x_conversion": "Show x in another unit: min, h or days for times measured in s, "
-    "ms, or another factor. The axis, the plot's range, its fits and the lines and "
-    "notes on the axis follow.",
-    "y_conversion": "Show y in another unit, e.g. mV with another factor of 1000. The "
-    "axis, the fits and the lines and notes on the axis follow.",
+    "ms, another factor, or a formula such as x / 60 - 273.15. The axis, the "
+    "plot's range, its fits and the lines and notes on the axis follow.",
+    "y_conversion": "Show y in another unit, e.g. mV with another factor of 1000, "
+    "or a formula. The axis, the fits and the lines and notes on the axis follow.",
     "Histogram.x_conversion": "Count the values in another unit: min, h or days "
-    "for times in s, ms, or another factor.",
+    "for times in s, ms, another factor, or a formula.",
     "AllanDeviationPlot.x_conversion": "Show τ in another unit: min, h or days, ms, "
     "or another factor.",
     "from_start": "Count from the smallest value, so that the values start at 0: "
@@ -553,6 +794,10 @@ TIPS = {
     "factor": "What each value is multiplied by, e.g. 1000 for V in mV or 0.001 for "
     "mV in V.",
     "Conversion.unit": "The unit of the shown values; the axis takes it.",
+    "formula": "What the value (after Start at 0) is turned into, written with x "
+    "and numbers: + - * / and brackets, e.g. x / 60 - 273.15 for K in °C or "
+    "(x - 32) / 1.8 for °F. It must rise with x, so no log(x), 1/x or x ** 2. "
+    "Errors are scaled by its slope and not shifted.",
     "x_range": "Use only the rows with x from … to …, in the unit shown; the others "
     "are not drawn, fitted or counted. Both empty use every row.",
     "Histogram.x_range": "Count only the values from … to …, in the unit shown; the "
@@ -589,8 +834,24 @@ UNITS = [
 ]
 """The units a plot's values are most often shown in: times measured in s."""
 OTHER_FACTOR = "another factor"
+FORMULA = "a formula"
 
 CAPTIONS = {
+    ("PanelLabels", "fontsize"): "Letter size (pt)",
+    ("LinePlot", "label"): "Legend entry",
+    ("ScatterPlot", "label"): "Legend entry",
+    ("ErrorbarPlot", "label"): "Legend entry",
+    ("ReferenceLine", "label"): "Legend entry",
+    ("ShadedSpan", "label"): "Legend entry",
+    ("FitCurve", "label"): "Legend entry",
+    ("Histogram", "label"): "Legend entry",
+    ("AllanDeviationPlot", "label"): "Legend entry",
+    ("Colorbar", "label"): "Color bar label",
+    ("Colorbar", "visible"): "Color bar shown",
+    ("ErrorBand", "color"): "Band color",
+    ("ErrorBand", "alpha"): "Band opacity",
+    ("Legend", "ncols"): "Columns of entries",
+    ("Legend", "position"): "Position (dragged)",
     ("Histogram", "x_range"): "Use only values",
     ("AllanDeviationPlot", "x_range"): "Use only times",
 }
@@ -630,6 +891,170 @@ def _common(objs: list[BaseModel], path: Path) -> Any:
 def _set_on_all(objs: list[BaseModel], path: Path, value: Any) -> Macro:
     steps = [SetField(obj.id, path, value) for obj in objs if _get(obj, path) != value]
     return Macro(f"Change {len(objs)} plots", steps)
+
+
+AXES_TITLE = "Title and axes"
+"""The panel's first section: its title, then its axes with the box for a right
+y axis."""
+
+PLOT_KINDS = ("LinePlot", "ScatterPlot", "ErrorbarPlot")
+"""The kinds of plot whose settings follow `PLOT_SECTIONS` (decision 0051)."""
+
+PLOT_SECTIONS = {
+    "label": "Label and data",
+    "axis": "Label and data",
+    "x": "Label and data",
+    "y": "Label and data",
+    "xerr": "Label and data",
+    "yerr": "Label and data",
+    "x_conversion": "Units and rows",
+    "y_conversion": "Units and rows",
+    "x_range": "Units and rows",
+    "reduction": "Units and rows",
+    "color": "Look",
+    "edgecolor": "Look",
+    "marker": "Look",
+    "markersize": "Look",
+    "size": "Look",
+    "linestyle": "Look",
+    "linewidth": "Look",
+    "capsize": "Error bars",
+    "elinewidth": "Error bars",
+    "band": "Error bars",
+    "left_out_color": "Left-out points",
+    "left_out_marker": "Left-out points",
+    "left_out_linestyle": "Left-out points",
+    "left_out_note": "Left-out points",
+}
+"""Where the settings of a line, points or error bar plot are shown. Other
+kinds of plot keep `SECTIONS` until their turn."""
+
+
+ELEMENT_SECTIONS = {
+    "Annotation": {
+        "text": "Text",
+        "fontsize": "Text",
+        "color": "Text",
+        "background": "Text",
+        "position": "Place",
+        "coords": "Place",
+        "arrow_to": "Place",
+        "axis": "Place",
+    },
+    "ReferenceLine": {
+        "label": "Label and data",
+        "orientation": "Label and data",
+        "at": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+    },
+    "ShadedSpan": {
+        "label": "Label and data",
+        "orientation": "Label and data",
+        "start": "Label and data",
+        "end": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "alpha": "Look",
+    },
+    "FitCurve": {
+        "label": "Label and data",
+        "target": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+        "extend_curve": "Look",
+        "outside_as_left_out": "Look",
+    },
+    "Histogram": {
+        "label": "Label and data",
+        "axis": "Label and data",
+        "values": "Label and data",
+        "bins": "Label and data",
+        "density": "Label and data",
+        "x_conversion": "Units and rows",
+        "x_range": "Units and rows",
+        "color": "Look",
+        "histtype": "Look",
+    },
+    "AllanDeviationPlot": {
+        "label": "Label and data",
+        "axis": "Label and data",
+        "values": "Label and data",
+        "data_type": "Label and data",
+        "sample_interval": "Label and data",
+        "time": "Label and data",
+        "taus": "Label and data",
+        "x_conversion": "Units and rows",
+        "x_range": "Units and rows",
+        "color": "Look",
+        "marker": "Look",
+        "markersize": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+        "error_bars": "Look",
+    },
+    "ImagePlot": {
+        "axis": "Label and data",
+        "data": "Label and data",
+        "cmap": "Look",
+        "norm": "Look",
+        "vmin": "Look",
+        "vmax": "Look",
+        "colorbar": "Look",
+        "extent": "Pixel grid",
+        "origin": "Pixel grid",
+        "aspect": "Pixel grid",
+    },
+    "ColorMesh": {
+        "axis": "Label and data",
+        "c": "Label and data",
+        "x": "Label and data",
+        "y": "Label and data",
+        "cmap": "Look",
+        "norm": "Look",
+        "vmin": "Look",
+        "vmax": "Look",
+        "colorbar": "Look",
+    },
+    "ResidualPlot": {
+        "target": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "marker": "Look",
+        "markersize": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+        "zero_line": "Zero line",
+        "zero_color": "Zero line",
+        "zero_linewidth": "Zero line",
+        "zero_linestyle": "Zero line",
+    },
+}
+"""Where the settings of the other kinds of element that have been arranged are
+shown (decisions 0060 to 0062, proposed), by kind; the rest keeps `SECTIONS`."""
+
+
+def section_of(obj: BaseModel, name: str, fallback: str) -> str:
+    """The section a field of `obj` is shown in."""
+    kind = type(obj).__name__
+    if kind in PLOT_KINDS and name in PLOT_SECTIONS:
+        return PLOT_SECTIONS[name]
+    if name in ELEMENT_SECTIONS.get(kind, {}):
+        return ELEMENT_SECTIONS[kind][name]
+    return SECTIONS.get(name, fallback)
+
+
+IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS, *ELEMENT_SECTIONS}
+"""Kinds of object whose settings are shown in the order of `BASIC`, not of the
+model, so that what belongs together is next to each other."""
+
+INLINE = {"panel_labels", "band", "reduction", "colorbar"}
+"""Optional parts whose settings follow their check box in its own section
+instead of having a section of their own."""
 
 
 def _basic_first(groups: dict[str, list[str]], basic: tuple[str, ...] | None):
@@ -713,11 +1138,16 @@ class PropertyPanel(QScrollArea):
         self._shown: tuple | None = None
         self._fit_result = None
         self.axis_form: AxisForm | None = None
+        self._path: QWidget | None = None
+        self._path_parts: list[tuple[str, str | None]] = []
         self.axis_range: Callable[[str], tuple[float, float] | None] = lambda _: None
         """The range an axis shows right now; the window asks the preview."""
         self.edit_fit: Callable[[str], None] = lambda fit_id: None
         """Opens the fit dialog on a fit that is there; the window does."""
-        self._folded = {title: True for title in COLLAPSED}
+        self._folded: dict[tuple[str, str], bool] = {}
+        """Whether the user left a section folded, by kind of object and title;
+        until then it starts as `COLLAPSED` says. Kept while the program runs."""
+        self._kind = ""
         self.search = QLineEdit()
         """Filters the fields by name and tooltip; the window puts it above
         the panel, where it stays when the form is built anew."""
@@ -754,7 +1184,7 @@ class PropertyPanel(QScrollArea):
         for title, section in self.sections.items():
             # What the search opened is not what the user unfolded.
             if isinstance(section.header, QToolButton) and not self._searched:
-                self._folded[title] = not section.expanded
+                self._folded[self._kind, title] = not section.expanded
         self.editors = {}
         self._captions: dict[Path, tuple[QLabel, str | None]] = {}
         self.sections = {}
@@ -766,6 +1196,7 @@ class PropertyPanel(QScrollArea):
         layout.setSpacing(0)
 
         self.axis_form = None
+        self._path, self._path_parts = None, []
         axis = split_axis(self.document.selected)
         obj = self._selected_object()
         several = self._several()
@@ -774,9 +1205,16 @@ class PropertyPanel(QScrollArea):
             layout.addWidget(self._several_header(several))
         elif obj is None:
             self._shown = None
-            hint = label(
-                "Select a figure, panel, plot or data file to edit it.", "hint"
+            key = QKeySequence("Ctrl+K").toString(
+                QKeySequence.SequenceFormat.NativeText
             )
+            hint = label(
+                "Select a figure, panel, plot or data file to edit it.\n\n"
+                f"{key} finds an action or a setting by what it is called or "
+                "does, e.g. “band”, “arrow” or “histogram”.",
+                "hint",
+            )
+            hint.setWordWrap(True)
             hint.setContentsMargins(16, 16, 16, 16)
             layout.addWidget(hint)
         else:
@@ -790,6 +1228,7 @@ class PropertyPanel(QScrollArea):
             self._fill_several(several, layout)
         elif axis is not None and obj is not None:
             oid = self.document.selected
+            self._kind = "Axis"  # the key of what is folded
             self.axis_form = AxisForm(
                 self, axis[0], axis[1], layout, lambda: self.axis_range(oid)
             )
@@ -893,8 +1332,11 @@ class PropertyPanel(QScrollArea):
                 if caption is None or field is None or field.widget() is None:
                     continue
                 text = getattr(caption.widget(), "text", lambda: "")()
-                if text and field.widget().isEnabled():
-                    found.append((text, title, field.widget()))
+                widget = field.widget()
+                if self.axis_form is not None and widget in self.axis_form.waiting:
+                    continue  # a row of the axis form that waits for another
+                if text and widget.isEnabled():
+                    found.append((text, title, widget))
         return found
 
     def _grey_out(self, obj: BaseModel) -> None:
@@ -943,13 +1385,28 @@ class PropertyPanel(QScrollArea):
                 try:
                     conversion = Conversion.model_validate({**current, path[1]: value})
                 except ValidationError as exc:
-                    reason = "; ".join(e["msg"] for e in exc.errors())
+                    reason = "; ".join(
+                        e["msg"].removeprefix("Value error, ") for e in exc.errors()
+                    )
                     raise CommandError(f"{field_name(path[1])}: {reason}") from None
             data = self.document.data
             axis = path[0][0]
             return set_conversion(self.document.project, obj.id, axis, conversion, data)
         if path == ("x_range",) and isinstance(obj, CONVERTIBLE):
             return set_range(self.document.project, obj.id, value, self.document.data)
+        if (
+            len(path) == 1
+            and path[0] in ALLAN_POINTS
+            and isinstance(obj, AllanDeviationPlot)
+        ):  # a fit of it runs on other points now
+            return set_allan_field(
+                self.document.project,
+                obj.id,
+                path[0],
+                value,
+                self.document.data,
+                f"Change {field_name(path[0]).lower()}",
+            )
         if len(path) == 1 and path[0] in reading_options(obj):
             return read_differently(
                 self.document.project, obj.id, path[0], value, self.document.base_dir
@@ -960,6 +1417,10 @@ class PropertyPanel(QScrollArea):
                     "Letter the panels", [SetField(obj.id, path, PanelLabels())]
                 )
             return Macro("Remove the panel labels", [SetField(obj.id, path, None)])
+        if path == ("reduction",):
+            if value:
+                return Macro("Draw fewer points", [SetField(obj.id, path, Reduction())])
+            return Macro("Draw every row", [SetField(obj.id, path, None)])
         if path == ("band",):
             if value:
                 return Macro("Shade the errors", [SetField(obj.id, path, ErrorBand())])
@@ -1027,6 +1488,7 @@ class PropertyPanel(QScrollArea):
     def _fill_several(self, objs: list[BaseModel], layout: QVBoxLayout) -> None:
         """The settings the plots share, each showing their value if they
         agree; a change sets it on all of them, as one undo step."""
+        self._kind = "Several"
         form = self._section("Together", layout)
         for name in SHARED:
             spec = _shared_spec(objs, name)
@@ -1058,25 +1520,70 @@ class PropertyPanel(QScrollArea):
         column = QVBoxLayout(box)
         column.setContentsMargins(16, 16, 16, 14)
         column.setSpacing(2)
+        self._path = QWidget()
+        self._path_row = QHBoxLayout(self._path)
+        self._path_row.setContentsMargins(0, 0, 0, 4)
+        self._path_row.setSpacing(2)
         self._kicker = label("", "panelKicker")
         self._title = label("", "panelTitle")
+        column.addWidget(self._path)
         column.addWidget(self._kicker)
         column.addWidget(self._title)
         self._update_header(obj)
         return box
 
+    def path_buttons(self) -> list[QPushButton]:
+        """The parts of the path above the settings that lead somewhere."""
+        return self._path.findChildren(QPushButton) if self._path else []
+
+    def path_texts(self) -> list[str]:
+        """The path above the settings, left to right, the end included."""
+        return [part for part, _ in self._path_parts]
+
+    def _show_path(self) -> None:
+        """Fill the path row: each part before the last a button that selects
+        what it names, the last one plain."""
+        while self._path_row.count():
+            item = self._path_row.takeAt(0)
+            if item.widget() is not None:
+                item.widget().hide()
+                item.widget().deleteLater()
+        several = len(self.document.selection) > 1
+        parts = [] if several else path_to(self.document, self.document.selected or "")
+        self._path_parts = parts
+        self._path.setVisible(len(parts) > 1)
+        self._kicker.setVisible(len(parts) <= 1)  # the path ends in what it says
+        for index, (text, oid) in enumerate(parts):
+            if index:
+                arrow = label("›", "hint")
+                arrow.setContentsMargins(3, 0, 3, 0)
+                self._path_row.addWidget(arrow)
+            if oid is None:
+                here = label(text, "hint")
+                here.setContentsMargins(2, 0, 0, 0)
+                self._path_row.addWidget(here)
+                continue
+            button = QPushButton(text)
+            button.setObjectName("crumb")
+            button.setFlat(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(f"Go to {text}")
+            button.clicked.connect(lambda _=False, o=oid: self.document.select(o))
+            self._path_row.addWidget(button)
+        self._path_row.addStretch(1)
+
     def _update_header(self, obj: BaseModel) -> None:
+        self._show_path()
         axis = split_axis(self.document.selected)
         if axis is not None:
-            axes = find(self.document.project, axis[0])
-            panel = _describe(axes, self.document)[1]
-            kicker, title = f"{AXIS_TITLES[axis[1]]} · {panel}", axis_summary(obj)
+            kicker, title = AXIS_TITLES[axis[1]], axis_summary(obj)
         else:
             kicker, title = _describe(obj, self.document)
         self._kicker.setText(kicker.upper())
         self._title.setText(title)
 
     def _fill(self, obj: BaseModel, layout: QVBoxLayout) -> None:
+        self._kind = type(obj).__name__
         fallback = "Reading" if hasattr(obj, "format") else "Look"
         groups: dict[str, list[str]] = {}
         nested: list[str] = []
@@ -1094,7 +1601,7 @@ class PropertyPanel(QScrollArea):
                 and not (isinstance(obj, Axes) and name in AXIS_FIELDS)
             ):
                 nested.append(name)
-            if inset and SECTIONS.get(name) == "Position":
+            if inset and SECTIONS.get(name) == "Place in layout":
                 continue  # an inset is placed by its bounds, not in the grid
             if isinstance(obj, Axes) and name in ("x", "y"):
                 continue  # each axis has its own form, linked from "Axes"
@@ -1104,34 +1611,48 @@ class PropertyPanel(QScrollArea):
                 continue
             if spec is None and name not in READ_ONLY:
                 continue
-            groups.setdefault(SECTIONS.get(name, fallback), []).append(name)
+            groups.setdefault(section_of(obj, name, fallback), []).append(name)
         if "Look" in groups:
             groups["Look"].sort(key=lambda n: LOOK.index(n) if n in LOOK else 99)
         _basic_first(groups, BASIC.get(type(obj).__name__))
-        titles = {_section_name(n): n for n in nested}
+        if type(obj).__name__ in IN_THE_ORDER_OF_BASIC:
+            basic = BASIC[type(obj).__name__]
+            for title in groups:
+                if title != "More":
+                    groups[title].sort(key=basic.index)
+        titles = {_section_name(n): n for n in nested if n not in INLINE}
         if isinstance(obj, Axes):
-            groups.setdefault("Axes", [])
-        order = [t for t in ORDER if t in groups]
-        order += [t for t in titles if t not in groups]
+            groups.setdefault(AXES_TITLE, [])
+        order = [t for t in ORDER if t in groups or t in titles]
+        order += [t for t in titles if t not in order]
         order += [t for t in groups if t not in order]
         for title in order:
             form = self._section(title, layout)
-            for name in groups.get(title, []):
+            rows = groups.get(title, [])
+            if title == AXES_TITLE and isinstance(obj, Axes):
+                # The title, then the axes, the box for a right y axis with its
+                # own card right after it.
+                for name in [n for n in rows if n != "y_right"]:
+                    self._row(form, obj, (name,))
+                self._axis_links(form, obj, ("x", "y"))
+                for name in [n for n in rows if n == "y_right"]:
+                    self._row(form, obj, (name,))
+                self._axis_links(form, obj, ("y_right",))
+                rows = []
+            for name in rows:
                 self._row(form, obj, (name,))
+                if name in INLINE and getattr(obj, name) is not None:
+                    self._nested(form, getattr(obj, name), (name,))
             if title in titles:
                 name = titles[title]
                 self._nested(form, getattr(obj, name), (name,))
-            if title == "Axes":
-                self._axis_links(form, obj)
-            if title == "Data" and isinstance(obj, FitCurve):
+            if title == "Label and data" and isinstance(obj, FitCurve):
                 layout.addWidget(self._fit_card(obj))
         self._fit_result = getattr(obj, "result", None)
 
     def _section(self, title: str, layout: QVBoxLayout) -> QFormLayout:
-        collapsible = title in COLLAPSED
-        section = Section(
-            title, collapsible, expanded=not self._folded.get(title, False)
-        )
+        folded = self._folded.get((self._kind, title), title in COLLAPSED)
+        section = Section(title, True, expanded=not folded)
         self.sections[title] = section
         form = QFormLayout(section.body)
         form.setContentsMargins(0, 0, 0, 0)
@@ -1172,6 +1693,9 @@ class PropertyPanel(QScrollArea):
         editor.show(value)
         self.editors[path] = editor
         text = CAPTIONS.get((type(obj).__name__, name))
+        if len(path) == 2 and path[0] in CONVERSIONS:
+            # Under "x in" and "y in" both can be on: say which one a row is of.
+            text = f"{path[0][0]}: {field_name(name)}"
         caption = _caption(text) if text else _form_label(name)
         tip = tip_for(type(obj), name)
         self._captions[path] = (caption, tip)
@@ -1183,13 +1707,19 @@ class PropertyPanel(QScrollArea):
             # τ of an Allan deviation starts at τ0 whatever: nothing to start.
             if not isinstance(obj, AllanDeviationPlot):
                 self._row(form, value, (*path, "from_start"))
-            if _unit_of_the_list(value) is None:
+            kind = _kind_of_conversion(value)
+            if kind == FORMULA:
+                self._row(form, value, (*path, "formula"))
+                self._row(form, value, (*path, "unit"))
+            elif kind == OTHER_FACTOR:
                 self._row(form, value, (*path, "factor"))
                 self._row(form, value, (*path, "unit"))
 
-    def _axis_links(self, form: QFormLayout, axes: Axes) -> None:
+    def _axis_links(
+        self, form: QFormLayout, axes: Axes, fields: tuple[str, ...] = AXIS_FIELDS
+    ) -> None:
         """One line per axis; clicking it opens the axis's own form."""
-        for field in AXIS_FIELDS:
+        for field in fields:
             spec = getattr(axes, field)
             if spec is None:
                 continue
@@ -1214,7 +1744,7 @@ class PropertyPanel(QScrollArea):
         grid = QGridLayout(card)
         grid.setContentsMargins(12, 10, 12, 10)
         grid.setHorizontalSpacing(16)
-        lines = _result_lines(fit, self._residuals(fit))
+        lines = _result_lines(fit, self._residuals(fit), self._derived(fit))
         if not lines:
             grid.addWidget(label("Not fitted yet.", "hint"), 0, 0)
         for row, (name, value) in enumerate(lines):
@@ -1247,6 +1777,14 @@ class PropertyPanel(QScrollArea):
         outer.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return holder
 
+    def _derived(self, fit: FitCurve) -> bool:
+        """Whether the fit's points are computed, not rows of a file."""
+        try:
+            target = find(self.document.project, fit.target)
+        except CommandError:
+            return False
+        return isinstance(target, AllanDeviationPlot)
+
     def _residuals(self, fit: FitCurve):
         try:
             return residuals(self.document.project, fit.id, self.document.data)
@@ -1262,7 +1800,10 @@ class PropertyPanel(QScrollArea):
         )
         head = f"{fit.label}: " if fit.label else ""
         lines = [f"{head}{name} to {artist_name(target)}"]
-        lines += [f"{n} = {v}" for n, v in _result_lines(fit, self._residuals(fit))]
+        lines += [
+            f"{n} = {v}"
+            for n, v in _result_lines(fit, self._residuals(fit), self._derived(fit))
+        ]
         from PySide6.QtWidgets import QApplication
 
         QApplication.clipboard().setText("\n".join(lines) + "\n")
@@ -1453,7 +1994,14 @@ CHOICES = {
         ("both", "both"),
     ],
 }
+CHOICES["method"] = [
+    ("mean of n rows", "mean"),
+    ("median of n rows", "median"),
+    ("every n-th row", "every"),
+    ("mean over x intervals", "interval"),
+]
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
+CHOICES["zero_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
 CHOICES["taus"] = [
     ("octaves: 1, 2, 4, 8 …", "octave"),
@@ -1525,7 +2073,9 @@ class ColorEditor(TextEditor):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(6)
         cycle = [(f"C{i}", c) for i, c in enumerate(_cycle(panel)[:10])]
-        self.swatches = self._swatches([*cycle, ("black", "black")])
+        # A fill behind a note is most often white, so it comes first.
+        white = [("white", "white")] if path[-1] == "background" else []
+        self.swatches = self._swatches([*white, *cycle, ("black", "black")])
         self.button = QToolButton()
         self.button.setObjectName("choice")
         self.button.setIcon(theme.icon("plus", theme.MUTED))
@@ -1681,7 +2231,7 @@ def _ratios(values: list[float | None]) -> list[float] | None:
 
 class ConversionEditor(Editor):
     """The unit a plot's x or y is shown in: as in the file, one of the
-    common units, or another factor, which is then typed below."""
+    common units, another factor or a formula, which is then typed below."""
 
     def __init__(self, spec, path, panel):
         super().__init__(spec, path, panel)
@@ -1690,6 +2240,7 @@ class ConversionEditor(Editor):
             *((text, (factor, unit)) for text, factor, unit in UNITS),
             (OTHER_FACTOR, OTHER_FACTOR),
         ]
+        self.choices.append((FORMULA, FORMULA))
         self.widget = QComboBox()
         for text, _ in self.choices:
             self.widget.addItem(text)
@@ -1700,9 +2251,9 @@ class ConversionEditor(Editor):
         if value is None:
             index = 0
         else:
-            listed = _unit_of_the_list(value)
             texts = [text for text, _ in self.choices]
-            index = texts.index(listed) if listed else len(texts) - 1
+            shown = _kind_of_conversion(value)
+            index = texts.index(shown)
         self.widget.blockSignals(True)
         self.widget.setCurrentIndex(index)
         self.widget.blockSignals(False)
@@ -1714,22 +2265,42 @@ class ConversionEditor(Editor):
         if choice is None:
             self.commit(None)
         elif choice == OTHER_FACTOR:
-            if current is not None and _unit_of_the_list(current) is None:
+            if current is not None and _kind_of_conversion(current) == OTHER_FACTOR:
                 return  # already another factor
-            factor = current.factor if current is not None else 1.0
-            # The factor stays as it was; the unit is typed with the new one.
-            self.commit(Conversion(factor=factor, from_start=start))
+            factor = linear(current)[0]
+            # The factor stays as it was (a formula's slope); the unit is typed
+            # with the new one, or stays when it came with a formula.
+            unit = current.unit if current is not None and current.formula else None
+            self.commit(Conversion(factor=factor, from_start=start, unit=unit))
+        elif choice == FORMULA:
+            if current is not None and current.formula is not None:
+                return  # already a formula
+            # What the plot does now, written as a formula to change.
+            text = scaled("x", current.factor) if current is not None else "x"
+            unit = current.unit if current is not None else None
+            self.commit(Conversion(formula=text, from_start=start, unit=unit))
         else:
             factor, unit = choice
             self.commit(Conversion(factor=factor, from_start=start, unit=unit))
 
 
 def _unit_of_the_list(conversion: Conversion) -> str | None:
-    """The entry of UNITS a conversion is, by factor and unit; None if none."""
+    """The entry of UNITS a conversion is, by factor and unit; None if none.
+    A formula is never one, whatever its slope."""
+    if conversion.formula is not None:
+        return None
     for text, factor, unit in UNITS:
         if conversion.unit == unit and math.isclose(conversion.factor, factor):
             return text
     return None
+
+
+def _kind_of_conversion(conversion: Conversion) -> str:
+    """The entry of the choice a conversion is: a unit of the list, a formula or
+    another factor."""
+    if conversion.formula is not None:
+        return FORMULA
+    return _unit_of_the_list(conversion) or OTHER_FACTOR
 
 
 def _range_ends(values: list[float | None]) -> tuple[float, float] | None:
@@ -1926,14 +2497,20 @@ def _shape(obj: BaseModel) -> tuple:
     """What decides the form's layout: the object, and its optional parts."""
     parts = tuple(
         getattr(obj, name, None) is None
-        for name in ("y_right", "colorbar", "panel_labels", "band", "inset", "result")
+        for name in (
+            "y_right",
+            "colorbar",
+            "panel_labels",
+            "band",
+            "reduction",
+            "inset",
+            "result",
+        )
     )
     layout = getattr(obj, "layout", None)
     grid = (layout.rows, layout.cols) if layout is not None else None
     units = tuple(
-        "none"
-        if (c := getattr(obj, name, None)) is None
-        else _unit_of_the_list(c) or OTHER_FACTOR
+        "none" if (c := getattr(obj, name, None)) is None else _kind_of_conversion(c)
         for name in CONVERSIONS
     )
     return (obj.id, type(obj), parts, grid, units)
@@ -2037,9 +2614,12 @@ class MarkerList(ChoiceEditor):
 CHOICES["left_out_linestyle"] = [("Like the plot", LIKE_THE_PLOT), *LINESTYLES]
 
 
-def _result_lines(fit: FitCurve, found) -> list[tuple[str, str]]:
-    """(name, value) of a fit's result as the card shows and copies it."""
+def _result_lines(fit: FitCurve, found, derived: bool = False) -> list[tuple[str, str]]:
+    """(name, value) of a fit's result as the card shows and copies it. The
+    row of the largest residual is named unless the points are derived (an
+    Allan deviation's), which have no row of the file."""
     result = fit.result
+    where = "" if derived or found is None else f" (row {found.row + 1})"
     if result is None:
         return []
     lines = []
@@ -2052,7 +2632,7 @@ def _result_lines(fit: FitCurve, found) -> list[tuple[str, str]]:
         lines += [
             ("Points fitted", f"{found.used} of {found.total}"),
             ("Residual RMS", f"{found.rms:.3g}"),
-            ("Largest residual", f"{found.largest:.3g} (row {found.row + 1})"),
+            ("Largest residual", f"{found.largest:.3g}{where}"),
         ]
     return lines
 

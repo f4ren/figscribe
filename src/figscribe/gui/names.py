@@ -35,6 +35,7 @@ FIELD_NAMES = {
     "axis": "y axis",
     "color": "Color",
     "edgecolor": "Edge color",
+    "background": "Background",
     "linestyle": "Line style",
     "linewidth": "Line width (pt)",
     "marker": "Marker",
@@ -79,6 +80,10 @@ FIELD_NAMES = {
     "grid_color": "Grid color",
     "grid_linewidth": "Grid line width (pt)",
     "grid_linestyle": "Grid line style",
+    "zero_line": "Zero line",
+    "zero_color": "Zero line color",
+    "zero_linewidth": "Zero line width (pt)",
+    "zero_linestyle": "Zero line style",
     "layout": "Layout",
     "rows": "Rows",
     "cols": "Columns",
@@ -86,6 +91,8 @@ FIELD_NAMES = {
     "y_right": "Right y axis",
     "tick_direction": "Tick marks point",
     "ticks_all_sides": "Ticks on all sides",
+    "align_labels": "Line up axis labels",
+    "labelpad": "Label distance (pt)",
     "frame_width": "Frame width (pt)",
     "tick_width": "Tick width (pt)",
     "tick_length": "Tick length (pt)",
@@ -121,6 +128,12 @@ FIELD_NAMES = {
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
     "band": "Error band",
+    "reduction": "Fewer points",
+    "method": "Draw",
+    "count": "Rows per group (n)",
+    "width": "Interval width (x)",
+    "keep_last": "Keep the last, shorter group",
+    "replace_left_out": "Replace rows left out",
     "orientation": "Direction",
     "at": "At",
     "start": "From",
@@ -136,6 +149,7 @@ FIELD_NAMES = {
     "y_conversion": "y in",
     "from_start": "Start at 0",
     "factor": "Factor",
+    "formula": "Formula",
     "x_range": "Use only x",
     "delimiter": "Separator",
     "decimal": "Decimal mark",
@@ -262,3 +276,23 @@ def with_error(value: float, error: float | None) -> str:
     if digits > 8 or abs(value) >= 1e6 or (value != 0 and abs(value) < 1e-4):
         return f"{value:.3e} ± {error:.2e}"
     return f"{value:.{digits}f} ± {error:.{digits}f}"
+
+
+REDUCED_NO_ROWS = (
+    "Does nothing while the plot draws fewer points: a point is then a group of "
+    "rows, not a row. Switch the reduction off first."
+)
+"""Why rows cannot be left out, or outliers found, on a reduced plot."""
+
+DERIVED_NO_ROWS = (
+    "Does nothing for an Allan deviation: each point is computed from the whole "
+    "series, not read from a row, so there is no row to leave out."
+)
+"""The same for an Allan deviation, whose points are derived."""
+
+
+def no_rows_reason(plot) -> str:
+    """Why no row of `plot` can be left out, for a plot that has none."""
+    from figscribe.model import AllanDeviationPlot
+
+    return DERIVED_NO_ROWS if isinstance(plot, AllanDeviationPlot) else REDUCED_NO_ROWS

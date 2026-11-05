@@ -216,14 +216,26 @@ def panel(qtbot, document: Document) -> PropertyPanel:
 
 def test_fields_are_grouped_in_sections(panel: PropertyPanel, document) -> None:
     document.select(document.figure.axes[0].artists[0].id)
-    assert list(panel.sections) == ["Data", "Look", "Legend", "More"]
+    assert list(panel.sections) == [
+        "Label and data",
+        "Units and rows",
+        "Look",
+        "Error bars",
+        "Left-out points",
+        "More",
+    ]
     assert not panel.sections["Look"].body.isHidden()
     assert panel.sections["More"].body.isHidden()
     assert panel._kicker.text() == "ERROR BAR PLOT"
     assert panel._title.text() == "measurement"
 
     document.select(document.figure.axes[0].id)
-    assert list(panel.sections)[:4] == ["Panel", "Axes", "Position", "Legend"]
+    assert list(panel.sections) == [
+        "Title and axes",
+        "Grid",
+        "Legend",
+        "Place in layout",
+    ]
 
 
 def test_an_opened_section_stays_open(panel: PropertyPanel, document) -> None:
@@ -350,9 +362,9 @@ def test_check_boxes_can_be_seen() -> None:
 
 
 def test_the_toolbar_adds_things_in_the_order_of_a_figure(window: MainWindow) -> None:
-    """Data first, then what holds what: panel, plot, fit, note."""
+    """Data first, then what holds what: panel, plot, fit, note, reference."""
     bar = window.toolbar
     shown = [bar.widgetForAction(a) for a in bar.actions()]
     texts = [w.text() for w in shown if isinstance(w, QToolButton) and w.text()]
-    adding = [t for t in texts if t in ("Data", "Panel", "Plot", "Fit", "Note")]
-    assert adding == ["Data", "Panel", "Plot", "Fit", "Note"]
+    names = ("Data", "Panel", "Plot", "Fit", "Reference", "Note")
+    assert [t for t in texts if t in names] == list(names)

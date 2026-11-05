@@ -64,7 +64,7 @@ from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.inplace import Editable, open_editor
 from figscribe.gui.markings import ENTRIES, add, marking
-from figscribe.gui.names import artist_name, size_text
+from figscribe.gui.names import REDUCED_NO_ROWS, artist_name, size_text
 from figscribe.gui.resize import (
     HANDLE,
     Corner,
@@ -75,7 +75,8 @@ from figscribe.gui.resize import (
     grabbed,
     ratios,
 )
-from figscribe.model.validate import FITTABLE
+from figscribe.model import Annotation
+from figscribe.model.validate import FIT_TARGETS
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
 from figscribe.render.ticks import ticks_that_fit
@@ -763,20 +764,27 @@ class Preview(QWidget):
         in a panel, add a reference line or a shaded range there."""
         menu = QMenu(self)
         self._plot_entries(menu, point)
+        self._arrow_entries(menu, point)
         found = self.point_at(point)
         if found is not None:
             plot_id, row = found
-            left_out = list(find(self.document.project, plot_id).left_out)
-            if row in left_out:
-                text, rows = (
-                    f"Take row {row + 1} back in",
-                    [r for r in left_out if r != row],
-                )
-            else:
-                text, rows = f"Leave out row {row + 1}", [*left_out, row]
+            plot = find(self.document.project, plot_id)
             if menu.actions():
                 menu.addSeparator()
-            menu.addAction(text, lambda: self._leave_out(plot_id, rows))
+            if plot.reduction is not None:  # a point is a group of rows
+                entry = menu.addAction("Leave out a row")
+                entry.setEnabled(False)
+                entry.setToolTip(REDUCED_NO_ROWS)
+            else:
+                left_out = list(plot.left_out)
+                if row in left_out:
+                    text, rows = (
+                        f"Take row {row + 1} back in",
+                        [r for r in left_out if r != row],
+                    )
+                else:
+                    text, rows = f"Leave out row {row + 1}", [*left_out, row]
+                menu.addAction(text, lambda: self._leave_out(plot_id, rows))
         ax = self.axes_at(point)
         if ax is not None:
             if menu.actions():
@@ -784,6 +792,89 @@ class Preview(QWidget):
             self._marking_entries(menu, ax, point)
             self._range_entries(menu, ax)
         return menu if menu.actions() else None
+
+    def _arrow_entries(self, menu: QMenu, point: QPointF) -> None:
+        """The arrow of a note: on the note itself add or remove it; elsewhere
+        in the note's panel, with the note selected, point it at the spot."""
+        here = self._note_at(point)
+        if here is not None:
+            note_id = here.get_gid()
+        else:
+            note_id = self.document.selected
+        try:
+            note = find(self.document.project, note_id) if note_id else None
+        except CommandError:
+            return
+        if not isinstance(note, Annotation):
+            return
+        ax = next(
+            (
+                ax
+                for ax in _all_axes(self._figure)
+                for t in ax.texts
+                if t.get_gid() == note.id
+            ),
+            None,
+        )
+        if ax is None:
+            return
+        entries = []
+        if here is not None:
+            if note.arrow_to is None:
+                entries.append(("Add an arrow", lambda: self._add_arrow(note, ax)))
+        elif self.axes_at(point) is ax:
+            display = self._to_display(point)
+            entries.append(
+                (
+                    "Point the note's arrow here",
+                    lambda: self._point_arrow(note, ax, display),
+                )
+            )
+        if note.arrow_to is not None:
+            entries.append(
+                (
+                    "Remove the note's arrow",
+                    lambda: self.document.push(
+                        SetField(
+                            note.id, ("arrow_to",), None, "Remove the note's arrow"
+                        )
+                    ),
+                )
+            )
+        if entries and menu.actions():
+            menu.addSeparator()
+        for text, run in entries:
+            menu.addAction(text, run)
+
+    def _tip_coordinates(self, note, ax, display: tuple[float, float]):
+        """A spot in display pixels as the note's own coordinates."""
+        transform = ax.transAxes if note.coords == "axes" else ax.transData
+        x, y = transform.inverted().transform(display)
+        return (float(f"{x:.5g}"), float(f"{y:.5g}"))
+
+    def _point_arrow(self, note, ax, display: tuple[float, float]) -> None:
+        tip = self._tip_coordinates(note, ax, display)
+        self.document.push(
+            SetField(note.id, ("arrow_to",), tip, "Point the note's arrow")
+        )
+        self.document.select(note.id)
+
+    def _add_arrow(self, note, ax) -> None:
+        """Give the note an arrow that points a little toward the middle of
+        its panel, to be pointed anew by a right-click where it belongs."""
+        transform = ax.transAxes if note.coords == "axes" else ax.transData
+        sx, sy = transform.transform(note.position)
+        mx, my = ax.transAxes.transform((0.5, 0.5))
+        length = 60 * self.devicePixelRatioF()
+        dx, dy = mx - sx, my - sy
+        size = (dx * dx + dy * dy) ** 0.5
+        if size < length:  # the note is in the middle: point it down
+            tip = (sx, sy - length)
+        else:
+            tip = (sx + dx / size * length, sy + dy / size * length)
+        tip = self._tip_coordinates(note, ax, tip)
+        self.document.push(SetField(note.id, ("arrow_to",), tip, "Add an arrow"))
+        self.document.select(note.id)
 
     def _plot_entries(self, menu: QMenu, point: QPointF) -> None:
         """What can be done with the plot at `point`, if there is one."""
@@ -815,7 +906,7 @@ class Preview(QWidget):
             "Send to back", lambda: self._push(to_front(project, plot.id, False))
         )
         back.setEnabled(drawn[0] is not plot)
-        if isinstance(plot, FITTABLE):
+        if isinstance(plot, FIT_TARGETS):
             menu.addAction("Fit…", lambda: self.fit_requested.emit(plot.id))
         menu.addAction(
             "Hide", lambda: self._push(SetField(plot.id, ("visible",), False, "Hide"))

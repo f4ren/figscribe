@@ -38,6 +38,9 @@ class AxisSpec(StrictModel):
     """Font size of the axis label in pt; None follows the figure."""
     tick_size: float | None = Field(None, gt=0.0)
     """Font size of the tick labels in pt; None follows the figure."""
+    labelpad: float | None = Field(None, ge=0.0)
+    """Distance of the label from the numbers in pt; None follows the style.
+    Where labels are aligned, a panel's own distance moves its label alone."""
     symlog_linthresh: float | None = Field(None, gt=0.0)
     """Only for scale "symlog"."""
     prefix: Literal["p", "n", "µ", "m", "k", "M", "G", "T"] | None = None

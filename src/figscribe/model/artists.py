@@ -39,17 +39,57 @@ Range = Annotated[tuple[float, float], AfterValidator(_lower_below_upper)]
 class Conversion(StrictModel):
     """Values shown in another unit, and counted from the start if asked:
     shown = (value − start) × factor, where the start is the column's
-    smallest value with `from_start`, else 0 (decision 0041). Errors are
-    scaled by the factor, never shifted."""
+    smallest value with `from_start`, else 0 (decision 0041). With a
+    `formula`, shown = formula(value − start) instead (decision 0047). Errors
+    are scaled by the factor or the formula's slope, never shifted."""
 
-    factor: float = Field(gt=0.0)
-    """What every value is multiplied by, e.g. 1/3600 to show s in h."""
+    factor: float = Field(1.0, gt=0.0)
+    """What every value is multiplied by, e.g. 1/3600 to show s in h. Not used
+    while there is a formula."""
+    formula: str | None = None
+    """What the value is turned into, written in x and numbers, linear in x
+    with a positive slope: ``x / 60 - 273.15``. None multiplies by `factor`."""
     from_start: bool = False
     """Count from the column's smallest value, so that the values start at 0:
     hours since the start of a measurement rather than since 1970."""
     unit: str | None = None
     """The unit of the shown values, e.g. "h"; the axis takes it. None leaves
     the axis' unit as it is."""
+
+    @field_validator("formula")
+    @classmethod
+    def _formula_is_linear(cls, formula: str | None) -> str | None:
+        if formula is None:
+            return None
+        from figscribe.fit.expression import ExpressionError, affine
+
+        try:
+            affine(formula)
+        except ExpressionError as exc:
+            raise ValueError(str(exc)) from None
+        return formula
+
+
+class Reduction(StrictModel):
+    """Fewer points drawn: groups of rows averaged or thinned (decision 0045).
+    The data file stays as it is; the figure, the export and the script show
+    the reduced points, and fits use them."""
+
+    method: Literal["mean", "median", "every", "interval"] = "mean"
+    """"mean" or "median" of every `count` rows, "every" `count`-th row as it
+    is, or the "interval" mean over x intervals of `width`."""
+    count: int = Field(10, ge=2)
+    """Rows per group, counted in the file: rows 1 to 10, 11 to 20, ... for
+    10. Not used by "interval"."""
+    width: float = Field(1.0, gt=0.0)
+    """Width of an x interval in the x the plot shows; only for "interval"."""
+    keep_last: bool = True
+    """Keep the incomplete last group (averaged over the rows it has, with a
+    larger error) rather than drop it; not used by "every" and "interval"."""
+    replace_left_out: bool = False
+    """Replace a row left out by the mean of the kept rows before and after
+    it, so that its group keeps its number of values, instead of removing it.
+    The error counts only the measured rows."""
 
 
 class ArtistBase(Identified):
@@ -103,6 +143,9 @@ class LinePlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    reduction: Reduction | None = None
+    """Draw fewer points: groups of rows averaged or thinned; None draws every
+    row. Fits use the reduced points."""
 
 
 class ScatterPlot(ArtistBase):
@@ -138,6 +181,9 @@ class ScatterPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    reduction: Reduction | None = None
+    """Draw fewer points: groups of rows averaged or thinned; None draws every
+    row. Fits use the reduced points."""
 
 
 class ErrorBand(StrictModel):
@@ -200,6 +246,9 @@ class ErrorbarPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    reduction: Reduction | None = None
+    """Draw fewer points: groups of rows averaged or thinned; None draws every
+    row. Fits use the reduced points."""
 
 
 class Histogram(ArtistBase):
@@ -257,10 +306,25 @@ class AllanDeviationPlot(ArtistBase):
     """Line width in pt."""
     x_conversion: Conversion | None = None
     """τ in another unit, e.g. h; only the factor counts here, τ starts at τ0
-    whatever `from_start` says. None shows τ in s."""
+    whatever `from_start` says. A formula may scale τ (``x * 2.88 / 3600``) but
+    not shift it, which could move τ to zero on a logarithmic axis. None shows
+    τ in s."""
     x_range: Range | None = None
     """(lower, upper) of the time since the first sample, in τ's shown unit:
     only the samples within it are used, τ0 stays; None uses every sample."""
+
+    @field_validator("x_conversion")
+    @classmethod
+    def _no_shift(cls, conversion: Conversion | None) -> Conversion | None:
+        if conversion is not None and conversion.formula is not None:
+            from figscribe.fit.expression import affine
+
+            if affine(conversion.formula)[1] != 0:
+                raise ValueError(
+                    "τ is a duration: the formula may scale it, but not add or "
+                    "subtract a number, which could move it to zero"
+                )
+        return conversion
 
 
 class Colorbar(StrictModel):
@@ -314,7 +378,9 @@ class ColorMesh(ArtistBase):
 
 class PredefinedFit(StrictModel):
     kind: Literal["predefined"] = "predefined"
-    name: Literal["linear", "polynomial", "gaussian", "lorentzian", "exponential"]
+    name: Literal[
+        "linear", "polynomial", "gaussian", "lorentzian", "exponential", "power"
+    ]
     """The function fitted; a polynomial also needs its degree."""
     degree: int | None = Field(None, ge=1)
     """Only for "polynomial"."""
@@ -412,6 +478,17 @@ class ResidualPlot(ArtistBase):
     """Marker size in pt."""
     linestyle: str = "none"
     """"none" draws only the points; "-" also joins them."""
+    linewidth: float | None = Field(None, gt=0.0)
+    """Width in pt of the joining line and of the error bars; None follows the
+    style."""
+    zero_line: bool = True
+    """Whether the dashed line at zero is drawn."""
+    zero_color: Color = "0.6"
+    """Color of the zero line."""
+    zero_linewidth: float = Field(0.8, gt=0.0)
+    """Width of the zero line in pt."""
+    zero_linestyle: str = "--"
+    """"-", "--", "-." or ":"."""
 
 
 class Annotation(ArtistBase):
@@ -428,6 +505,9 @@ class Annotation(ArtistBase):
     """Font size in pt; None follows the figure."""
     color: Color | None = None
     """Color of the text and the arrow; None follows the style."""
+    background: Color | None = None
+    """Fill behind the text, so it reads over a grid or a plot; None draws
+    none."""
 
 
 class ReferenceLine(ArtistBase):

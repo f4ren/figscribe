@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -37,12 +39,12 @@ def test_csv_source_records_hash_and_columns(tmp_path: Path) -> None:
     assert source.columns == ["t", "U", "dU"]
 
 
-def test_csv_source_outside_base_dir_keeps_an_absolute_path(tmp_path: Path) -> None:
+def test_csv_source_outside_base_dir_is_relative_with_dots(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     write(data_dir / "scan.csv", "t\n0\n")
     source = csv_source(data_dir / "scan.csv", base_dir=tmp_path / "project")
-    assert Path(source.path).is_absolute()
+    assert source.path == "../data/scan.csv"
 
 
 def _load(tmp_path: Path, source: CsvSource, column: str | int) -> np.ndarray:
@@ -218,3 +220,125 @@ def test_a_file_without_rows_of_data_says_so(tmp_path: Path) -> None:
     source = csv_source(tmp_path / "s.csv", base_dir=tmp_path)
     with pytest.raises(DataError, match="s.csv has no rows of data"):
         _load(tmp_path, source, "y")
+
+
+# --- files that are not what they were (B7.4) -------------------------------------
+
+
+def _damage_by_chmod(path: Path) -> None:
+    path.chmod(0)
+
+
+def _damage_by_directory(path: Path) -> None:
+    path.unlink()
+    path.mkdir()
+
+
+def _damage_by_emptying(path: Path) -> None:
+    path.write_bytes(b"")
+
+
+def _damage_by_garbage(path: Path) -> None:
+    path.write_bytes(bytes(range(256)) * 20)
+
+
+def _damage_by_dangling_link(path: Path) -> None:
+    path.unlink()
+    path.symlink_to(path.parent / "nowhere.csv")
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        pytest.param(
+            _damage_by_chmod,
+            marks=pytest.mark.skipif(
+                sys.platform == "win32"
+                or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                reason="a file cannot be made unreadable here",
+            ),
+        ),
+        pytest.param(
+            _damage_by_directory,
+            marks=pytest.mark.skipif(
+                sys.platform == "win32", reason="differs on Windows"
+            ),
+        ),
+        _damage_by_emptying,
+        _damage_by_garbage,
+        pytest.param(
+            _damage_by_dangling_link,
+            marks=pytest.mark.skipif(sys.platform == "win32", reason="needs rights"),
+        ),
+    ],
+    ids=lambda f: f.__name__.removeprefix("_damage_by_"),
+)
+def test_a_file_that_cannot_be_read_as_imported_is_a_data_error(
+    tmp_path: Path, damage
+) -> None:
+    path = write(tmp_path / "s.csv", "t,U\n0,1\n1,2\n")
+    source = csv_source(path, base_dir=tmp_path)
+    damage(path)
+    try:
+        with pytest.raises(DataError, match="s.csv"):
+            _load(tmp_path, source, "U")
+    finally:
+        if path.exists() and not path.is_dir():
+            path.chmod(0o644)  # or pytest cannot remove the folder
+
+
+def test_a_file_outside_the_project_folder_is_stored_relative_with_dots(
+    tmp_path: Path,
+) -> None:
+    from figscribe.io.files import resolve_path, stored_path
+
+    project = tmp_path / "project"
+    inside = project / "data" / "a.csv"
+    neighbour = tmp_path / "elsewhere" / "b.csv"
+    parent = tmp_path / "c.csv"
+    assert stored_path(inside, project) == "data/a.csv"
+    assert stored_path(neighbour, project) == "../elsewhere/b.csv"
+    assert stored_path(parent, project) == "../c.csv"
+    for file in (inside, neighbour, parent):
+        assert resolve_path(stored_path(file, project), project) == Path(
+            os.path.abspath(file)
+        )
+
+
+def test_a_file_that_shares_only_the_root_with_the_project_is_stored_whole() -> None:
+    from figscribe.io.files import stored_path
+
+    # Another volume: a relative path would run through the root and would not
+    # survive the project being moved, where the whole path would.
+    far = os.path.abspath("/Volumes/USB/a.csv")
+    assert stored_path(Path(far), Path(os.path.abspath("/Users/me/proj"))) == far
+    near = os.path.abspath("/Users/me/data/a.csv")
+    assert stored_path(Path(near), Path(os.path.abspath("/Users/me/proj"))) == (
+        "../data/a.csv"
+    )
+
+
+def test_a_file_on_another_drive_is_stored_by_its_whole_path(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from figscribe.io.files import resolve_path, stored_path
+
+    def other_drive(path, start):
+        raise ValueError("path is on mount 'D:', start on mount 'C:'")
+
+    monkeypatch.setattr(os.path, "relpath", other_drive)
+    far = tmp_path / "elsewhere" / "b.csv"
+    assert stored_path(far, tmp_path / "project") == str(far)
+    assert resolve_path(str(far), tmp_path / "project") == far
+
+
+def test_a_stored_path_is_moved_to_where_the_project_is_saved(tmp_path: Path) -> None:
+    from figscribe.io.files import rebase_path
+
+    old, new = tmp_path / "a", tmp_path / "b"
+    assert rebase_path("scan.csv", old, new) == "../a/scan.csv"  # the data stays
+    assert rebase_path("../data/x.csv", old, new) == "../data/x.csv"
+    assert rebase_path("data/x.csv", old, old / "sub") == "../data/x.csv"
+    absolute = str(tmp_path / "data" / "x.csv")
+    assert rebase_path(absolute, old, new) == "../data/x.csv"  # now it can be relative
+    assert rebase_path("scan.csv", old, old) == "scan.csv"  # nothing moved

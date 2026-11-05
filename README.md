@@ -34,11 +34,39 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 **Alpha.** The features below are implemented and tested on Linux, Windows
 and macOS with Python 3.11 and 3.13. Behaviour may still change; project files
 of a release keep opening in later ones. Still to come: style templates,
-snapping and alignment guides, and installers that need no Python (see the
+snapping and alignment guides, signed installers, and more
+plot types, axis formats and fit models (see the
 [roadmap](https://github.com/f4ren/figscribe/blob/main/plan/roadmap.md)). What changed in each release is in the
 [changelog](https://github.com/f4ren/figscribe/blob/main/CHANGELOG.md).
 
 ## Installation
+
+### Installers (no Python needed)
+
+From version 0.3.0 each [release](https://github.com/f4ren/figscribe/releases)
+has an installer for each system, with the assistant and MCP parts included:
+
+| System | File | Notes |
+|---|---|---|
+| macOS (Apple silicon) | `figscribe-VERSION-macos-arm64.dmg` | Open it and drag figscribe to Applications. Intel Macs: use pipx, below. |
+| Windows 10/11 | `figscribe-VERSION-windows-x64-setup.exe` | Installs for you alone; no administrator needed. |
+| Linux (x86-64) | `figscribe-VERSION-linux-x86_64.AppImage` | `chmod +x` it and run it. Needs `libxcb-cursor0` (Debian, Ubuntu) or `xcb-util-cursor` (Fedora), which most desktops have. |
+
+The installers are **not signed** yet, so the system asks you once:
+
+- **macOS:** *"figscribe cannot be opened because the developer cannot be
+  verified"*. Right-click figscribe in Applications, choose *Open*, and confirm.
+  If macOS says the app is damaged, run `xattr -cr /Applications/figscribe.app`
+  once.
+- **Windows:** SmartScreen shows *"Windows protected your PC"*. Choose *More
+  info*, then *Run anyway*.
+
+The first start takes several seconds longer: Matplotlib builds its font cache.
+`figscribe script` and `figscribe mcp` are in the same program: on macOS
+`/Applications/figscribe.app/Contents/MacOS/figscribe`, on Windows
+`figscribe-cli.exe` in the install folder.
+
+### With Python
 
 figscribe needs Python 3.11 or newer. The simplest way is
 [pipx](https://pipx.pypa.io) or [uv](https://docs.astral.sh/uv/), which give
@@ -51,7 +79,9 @@ figscribe
 ```
 
 `pip install figscribe` in a virtual environment works as well. With Qt,
-Matplotlib and SciPy the installation takes about 1.5 GB.
+Matplotlib and SciPy the installation takes about 1.5 GB. The oldest versions
+of the libraries that are tested are NumPy 2.0, SciPy 1.13, Matplotlib 3.10
+and PySide6 6.7.
 
 Optional parts:
 
@@ -67,7 +97,7 @@ To add an extra later, install again with `--force`. To update:
 
 ## Getting started
 
-Start `figscribe`. The start page offers three ways in:
+Start `figscribe`. The start page offers four ways in:
 
 - **Open a data file** (CSV, `.npy`, `.npz`). The import dialog detects
   delimiter, decimal comma, header and unit rows, shows a preview and suggests
@@ -75,7 +105,10 @@ Start `figscribe`. The start page offers three ways in:
 - **Pick a layout**: single column (85 × 60 mm), double column
   (175 × 70 mm), data with fit and residuals, two panels side by side, or a
   16:9 slide.
-- **Open the example**, a Gaussian scan with error bars.
+- **Open an example** from the gallery: a Gaussian scan, a noisy sensor
+  with its means over the raw line, an RC discharge with fit and residuals,
+  a resonance, a color map and more, twelve in all. Each is a copy in a
+  folder you choose, with its data, ready to change.
 
 Then click anything in the figure or in the contents list to select it, and
 change it in the property panel on the right. *Insert* adds data, plots,
@@ -99,13 +132,16 @@ script.
 **Plots**
 - Line, scatter, error bars, histograms, images and color meshes with color
   bars (linear or logarithmic), notes of one or several lines with or
-  without an arrow, reference lines and shaded ranges.
+  without an arrow (optionally on a background, so they read over a grid),
+  reference lines and shaded ranges.
+- Error bars as a shaded band around the line, for dense data.
 - The Allan deviation of a time series (fractional frequency or phase), on
   log-log axes, for the stability of clocks, lasers and sensors.
 - Curve fits: linear, polynomial, Gaussian, Lorentzian, exponential, or your
   own expression such as `a*exp(-x/tau)+c`. Error bars weight the fit; the
   result shows each parameter with its 1σ uncertainty, the reduced χ² and
-  the residuals, and can be copied. Residuals go into their own panel below.
+  the residuals, and can be copied. Residuals go into their own panel below,
+  with a line width and a zero line of their own to style.
 - Fit only a range of x; hold a parameter at its start value or keep it
   within bounds; change a fit that is already there.
 - Leave points out by right-clicking them, or let the fit dialog find
@@ -113,8 +149,15 @@ script.
   is: the points are drawn apart, in light grey or a color and marker of
   your choice, and the script leaves out the same rows, with the reason.
 - Show a plot's values in other units, e.g. seconds as hours since the
-  start of the measurement or volts as mV, and draw it from part of its data
-  only. The axis, its marks and the fits follow in the same step.
+  start of the measurement or volts as mV, or by a formula such as
+  `x / 60 - 273.15`, and draw it from part of its data only. The axis, its
+  marks and the fits follow in the same step.
+- Draw fewer points than the file has: the mean or median of every *n* rows,
+  every *n*-th row, or the mean over intervals of x for unevenly sampled
+  data. An averaged point gets its standard error as error bar (propagated
+  when the plot has errors of its own), fits use the reduced points, and the
+  script does the same arithmetic. Rows left out are removed before
+  averaging, or replaced by the mean of their neighbours.
 
 **Layout and style**
 - Several figures in one project, as tabs above the figure: add one with
@@ -126,6 +169,8 @@ script.
   marks inward or outward and on all four sides, grid, LaTeX in labels
   (`$\Delta U$`), units in labels as `U (V)`, `U / V` or `U [V]`.
 - Panel letters, (a), (b), … in the style a journal asks for.
+- Axis labels lined up across panels, so that in a column of panels the y
+  labels stand on one line, and a distance for each axis' label.
 - Line widths of the frame, the tick marks and the grid, tick lengths, and
   a dashed or dotted grid.
 - Values shown with an SI prefix: frequencies in Hz drawn as `0 … 225` with
@@ -137,6 +182,13 @@ script.
   label in plain terms: *major ticks every 50*, *4 minor ticks between
   them*; with values shown in kHz you type the range in kHz too. Hovering
   over a field explains it.
+- Find a setting by typing (Ctrl+F), or any menu action or setting with
+  the command palette (Ctrl+K). The settings used most come first, the rest
+  are under *More*. A setting that does nothing in the current state is
+  greyed out, and its tooltip says why.
+- Above the settings a path such as *Figure › Panel A › X axis* shows where
+  you are, each part a link back; the axes are rows in the outline, under
+  their panel.
 - Colors come from the figure's color cycle, the colors used lately, or
   *Same as…* another plot; a plot's context menu brings it to the front or
   sends it to the back.
@@ -151,9 +203,12 @@ script.
   to style it like another, bring it to the front, fit or hide it.
 - The **Python code** drawer under the figure shows the generated script,
   live, as you edit.
+- *Help > About figscribe* names the versions of figscribe, Python,
+  Matplotlib and Qt, for a bug report.
 
 **Export**
-- PDF, SVG and PNG at the exact size; *File > Export All Figures…* writes
+- PDF, SVG, EPS, PNG and TIFF (LZW compressed, as journals ask) at the exact size,
+  PNG, TIFF and SVG also with a transparent background; *File > Export All Figures…* writes
   every figure of the project at once.
 - A standalone Python script (see below).
 - The project itself as a readable JSON file (`.figscribe`).
@@ -161,10 +216,10 @@ script.
 ## The generated code
 
 *File > Export Python Script…* (or `figscribe script PROJECT.figscribe -o
-plot.py`) writes a script that needs only NumPy, Matplotlib and, for fits,
-SciPy. It is written the way a person would write it: no figscribe helpers,
-named variables, comments where they help. From the example project's script
-(shortened):
+plot.py`) writes a script that needs only NumPy, Matplotlib and, for fits and
+for fewer points drawn, SciPy. It is written the way a person would write it:
+no figscribe helpers, named variables, comments where they help. From the
+example project's script (shortened):
 
 ```python
 scan_path = HERE / "scan.csv"
@@ -186,8 +241,9 @@ fig.savefig(HERE / "scan.pdf")
 ```
 
 Fits are redone in the script with `scipy.optimize.curve_fit` from the same
-start values. A test runs the generated scripts and compares their PNG pixel
-by pixel with figscribe's own export.
+start values, and averaged points with `scipy.stats.binned_statistic`. A test
+runs the generated scripts and compares their PNG pixel by pixel with
+figscribe's own export.
 
 ## AI assistants
 
@@ -324,8 +380,10 @@ Design decisions and their reasons are recorded in
 
 ## Scope
 
-Planned beyond what exists: HDF5 import, style templates for journals,
-snapping and alignment guides, installers.
+Planned beyond what exists: HDF5 import, several files as one series,
+number formats and inverted axes, a second x axis on top, more fit models and
+a confidence band, step plots and bar charts, style templates for journals,
+snapping and alignment guides, signed installers.
 
 Deliberately out of scope: spreadsheet-style data editing, a statistics
 suite, a scripting language of its own, and reading generated or other
@@ -352,4 +410,14 @@ Built with Python, PySide6 (Qt), Matplotlib, NumPy, SciPy and Pydantic.
 
 ## License
 
-MIT, see [LICENSE](https://github.com/f4ren/figscribe/blob/main/LICENSE).
+figscribe is MIT, see [LICENSE](https://github.com/f4ren/figscribe/blob/main/LICENSE).
+
+It uses Qt through PySide6 under the LGPL-3.0, and other free software under
+its own licenses (BSD, MIT, Apache-2.0 and the like). The installers carry
+the license of everything in them in `THIRD-PARTY-NOTICES.txt` and `LICENSE.txt`:
+beside the app in the macOS disk image, in the install folder on Windows (the
+installer also shows the license), in `usr/share/doc/figscribe` inside the
+AppImage, and in the program's `licenses` folder on every system. The Qt
+libraries are separate files in the program's folder, so you can replace them
+with another build of the same version. IBM Plex Sans and Mono are under the
+SIL Open Font License (`OFL.txt` next to them in the package).

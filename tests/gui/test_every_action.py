@@ -53,6 +53,7 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(QMessageBox, "warning", message)
     monkeypatch.setattr(QMessageBox, "information", message)
+    monkeypatch.setattr(QMessageBox, "about", message)
     monkeypatch.setattr(
         QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
     )
@@ -91,7 +92,7 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
     return make, shown
 
 
-MENUS = ["File", "Edit", "Insert", "View", "Assistant"]
+MENUS = ["File", "Edit", "Insert", "View", "Assistant", "Help"]
 """The menu bar; one test per menu, so that they run side by side."""
 
 PANELS = range(5)
@@ -112,13 +113,29 @@ def _actions(window: MainWindow, menu: str) -> list[QAction]:
     raise LookupError(menu)
 
 
+HELD: list = []
+"""Every menu and action `_in_menu` has seen. PySide6 before 6.12 makes the
+wrapper of a menu invalid, and with it those of its actions, once the wrapper
+of the action that holds the menu is gone, which the recursion below would
+let happen before an action is triggered."""
+
+
+@pytest.fixture(autouse=True)
+def _release_held():
+    yield
+    HELD.clear()
+
+
 def _in_menu(menu) -> list[QAction]:
+    HELD.append(menu)
     actions = []
     for action in menu.actions():
+        HELD.append(action)
         if action.isSeparator():
             continue
-        if action.menu() is not None:
-            actions += _in_menu(action.menu())
+        submenu = action.menu()
+        if submenu is not None:
+            actions += _in_menu(submenu)
         else:
             actions.append(action)
     return actions

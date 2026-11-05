@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from figscribe.commands import History
+from figscribe.convert import plot_data
 from figscribe.fit import FitError, refit
 from figscribe.model import (
     Annotation,
@@ -176,6 +177,49 @@ def test_a_fit_range_beyond_the_plots_range_is_a_problem() -> None:
     assert "reaches beyond the plot's range 3600 to 7200" in problem
 
 
+def test_an_allan_fit_range_is_in_tau_not_in_the_time_of_the_range() -> None:
+    """The range of an Allan deviation is the time since the first sample, the
+    fit range is τ: one is not beyond the other (decision 0064)."""
+    from figscribe.model import AllanDeviationPlot, ExpressionFit
+
+    plot = AllanDeviationPlot(values=col("U"), x_range=(0.0, 4.0))
+    fit = FitCurve(
+        target=plot.id,
+        model=ExpressionFit(expression="a / sqrt(x)", parameters=["a"]),
+        fit_range=(1.0, 10.0),
+    )
+    assert not [p for p in _problems(plot, fit) if "reaches beyond" in p]
+
+
+def test_a_fit_with_no_point_left_is_a_problem() -> None:
+    """Its figure draws no curve, so the list says why (decision 0059)."""
+    from figscribe.model import FitResult
+
+    result = FitResult(
+        parameters={"a": 1.0, "b": 0.0}, uncertainties={"a": 0.1, "b": 0.1}
+    )
+    model = PredefinedFit(name="linear")
+
+    def left(*changes) -> list[str]:
+        plot = LinePlot(x=col("t"), y=col("U"))
+        fit = FitCurve(target=plot.id, model=model, result=result)
+        for name, value in changes:
+            setattr(plot if name == "left_out" else fit, name, value)
+        return [p for p in _problems(plot, fit) if "no point is left" in p]
+
+    (problem,) = left(("fit_range", (1e6, 2e6)))
+    assert "fit is not drawn" in problem
+    assert left(("left_out", list(range(41))))  # every row
+    assert not left()
+    assert not left(("fit_range", (2000.0, 5000.0)))
+    assert not left(("left_out", [0, 1, 2]))
+    # rows that the data does not have are another problem, said elsewhere
+    assert not left(("left_out", [100]))
+    plot = LinePlot(x=col("t"), y=col("U"))
+    not_run = FitCurve(target=plot.id, model=model, fit_range=(1e6, 2e6))
+    assert not [p for p in _problems(plot, not_run) if "no point is left" in p]
+
+
 def test_a_range_with_nothing_in_it_is_a_problem() -> None:
     from figscribe.model import Histogram
 
@@ -198,3 +242,65 @@ def test_an_allan_deviation_needs_an_unbroken_range() -> None:
     assert any("needs an unbroken series" in p for p in _problems(late))
     nothing = AllanDeviationPlot(values=col("gap"), time=col("t"), x_range=(9e9, 1e10))
     assert any("no sample lies within" in p for p in _problems(nothing))
+
+
+# --- a formula for the units (F13, decision 0047) ---------------------------------
+
+KELVIN_TO_CELSIUS = Conversion(formula="x - 273.15", unit="°C")
+
+
+def test_a_formula_moves_the_axis_and_everything_on_it_by_its_offset() -> None:
+    project = _project()
+    before = dumps(project)
+    history = History(project)
+    plot = _parts(project)[1][0]
+    history.push(set_conversion(project, plot.id, "x", KELVIN_TO_CELSIUS, data))
+
+    axes, (plot, fit, line, span, note) = _parts(project)
+    assert history.undo_text == "Show x in °C"
+    assert plot.x_conversion == KELVIN_TO_CELSIUS
+    assert plot.x_range == pytest.approx((3600 - 273.15, 12000 - 273.15))
+    assert fit.fit_range == pytest.approx((4000 - 273.15, 11000 - 273.15))
+    assert axes.x.unit == "°C"
+    assert axes.x.limits == pytest.approx((1000 - 273.15, 15400 - 273.15))
+    assert axes.x.major_step == pytest.approx(3600.0)  # a width is not shifted
+    assert line.at == pytest.approx(8200 - 273.15)
+    assert (span.start, span.end) == pytest.approx((4600 - 273.15, 8200 - 273.15))
+    assert note.position == pytest.approx((8200 - 273.15, 1.0))
+
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_changing_from_one_formula_to_another_maps_through_the_raw_values() -> None:
+    project = _project()
+    history = History(project)
+    plot = _parts(project)[1][0]
+    history.push(set_conversion(project, plot.id, "x", KELVIN_TO_CELSIUS, data))
+    history.push(
+        set_conversion(
+            project, plot.id, "x", Conversion(formula="(x - 32) / 1.8"), data
+        )
+    )
+    axes, (plot, fit, line, *_) = _parts(project)
+    assert axes.x.limits == pytest.approx(((1000 - 32) / 1.8, (15400 - 32) / 1.8))
+    assert axes.x.major_step == pytest.approx(3600 / 1.8)
+    assert line.at == pytest.approx((8200 - 32) / 1.8)
+
+    history.push(set_conversion(project, plot.id, "x", None, data))
+    axes, (plot, *_) = _parts(project)
+    assert axes.x.limits == pytest.approx((1000.0, 15400.0))
+    assert plot.x_range == pytest.approx((3600.0, 12000.0))
+
+
+def test_a_formula_on_y_scales_the_errors_but_does_not_shift_them() -> None:
+    project = _project()
+    plot = _parts(project)[1][0]
+    History(project).push(
+        set_conversion(
+            project, plot.id, "y", Conversion(formula="x * 1000 + 5", unit="mV"), data
+        )
+    )
+    shown = plot_data(_parts(project)[1][0], data)
+    assert np.allclose(shown.y, COLUMNS["U"] * 1000 + 5)
+    assert np.allclose(shown.yerr, 50.0)  # 0.05 V

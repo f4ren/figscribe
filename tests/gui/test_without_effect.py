@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
+from figscribe.fit import add_fit
 from figscribe.gui import Document
 from figscribe.gui.effect import RULES, without_effect
 from figscribe.gui.properties import PropertyPanel
@@ -32,12 +33,15 @@ from figscribe.model import (
     Figure,
     FitCurve,
     FitResult,
+    GridLayout,
     ImagePlot,
     Legend,
     LinePlot,
     PredefinedFit,
     Project,
+    Reduction,
     ReferenceLine,
+    ResidualPlot,
     validate_references,
 )
 from figscribe.render.figure import render
@@ -79,7 +83,9 @@ def _fit(**fields) -> tuple[LinePlot, FitCurve]:
 
 Case = tuple[Callable[[], tuple[Axes, object]], object, tuple, object]
 """Makes (the panel, the object) with the field doing nothing; a new value
-for the field; the setting that makes it count, and its value."""
+for the field; the setting that makes it count, and its value. That setting may
+be a function of the panel and the object instead, for one the object cannot
+reach."""
 
 
 def _panel(**fields) -> Case:
@@ -109,9 +115,49 @@ def _fitted(**fields):
     return make
 
 
+def _fitted_to_fewer_points():
+    data, fit = _fit(fit_range=(2.0, 6.0))
+    data.reduction = Reduction(count=3)
+    return Axes(artists=[data, fit]), fit
+
+
+def _draw_every_row(axes: Axes, fit: FitCurve) -> None:
+    axes.artists[0].reduction = None
+
+
+def _residuals(data_fields=None, **fields):
+    """Data, its fit and the residuals in one panel."""
+
+    def make():
+        data, fit = _fit()
+        for name, value in (data_fields or {}).items():
+            setattr(data, name, value)
+        residuals = ResidualPlot(target=fit.id, **fields)
+        return Axes(artists=[data, fit, residuals]), residuals
+
+    return make
+
+
+def _one_panel_of_two_cells() -> tuple[Figure, Figure]:
+    """A figure with a grid of two rows and only the first filled."""
+    figure = Figure(
+        dpi=72,
+        layout=GridLayout(rows=2),
+        axes=[Axes(y=AxisSpec(label="U", limits=(0.0, 1.0)), artists=[_line()])],
+    )
+    return figure, figure
+
+
+SECOND_PANEL = [
+    Axes(y=AxisSpec(label="U", limits=(0.0, 1.0)), artists=[_line()]),
+    Axes(row=1, y=AxisSpec(label="U", limits=(0.0, 5000.0)), artists=[_line()]),
+]
+"""A second panel whose numbers are wider, so lining up the labels shows."""
+
 RIGHT = {"y_right": AxisSpec(limits=(-10.0, 10.0))}
 
-CASES: dict[tuple[str, tuple], Case] = {
+# A key is the class and the path, and, for a second reason, a word more.
+CASES: dict[tuple, Case] = {
     ("Axes", ("grid_axis",)): (_panel(), "x", ("grid",), True),
     ("Axes", ("grid_which",)): (_panel(), "both", ("grid",), True),
     ("Axes", ("grid_color",)): (_panel(), "red", ("grid",), True),
@@ -197,6 +243,36 @@ CASES: dict[tuple[str, tuple], Case] = {
         ("time",),
         None,
     ),
+    ("ResidualPlot", ("zero_color",)): (
+        _residuals(zero_line=False),
+        "red",
+        ("zero_line",),
+        True,
+    ),
+    ("ResidualPlot", ("zero_linewidth",)): (
+        _residuals(zero_line=False),
+        3.0,
+        ("zero_line",),
+        True,
+    ),
+    ("ResidualPlot", ("zero_linestyle",)): (
+        _residuals(zero_line=False),
+        ":",
+        ("zero_line",),
+        True,
+    ),
+    ("ResidualPlot", ("linewidth",)): (
+        _residuals(),
+        4.0,
+        ("linestyle",),
+        "-",
+    ),
+    ("Figure", ("align_labels",)): (
+        _one_panel_of_two_cells,
+        False,
+        ("axes",),
+        SECOND_PANEL,
+    ),
     ("FitCurve", ("extend_curve",)): (
         _fitted(),
         True,
@@ -209,6 +285,49 @@ CASES: dict[tuple[str, tuple], Case] = {
         ("fit_range",),
         (2.0, 6.0),
     ),
+    ("FitCurve", ("outside_as_left_out",), "reduced"): (
+        _fitted_to_fewer_points,
+        True,
+        _draw_every_row,
+        None,
+    ),
+    **{
+        ("LinePlot", (name,), "reduced"): (
+            _alone(lambda: _line(marker="o", left_out=[3, 4], reduction=Reduction())),
+            value,
+            ("reduction",),
+            None,
+        )
+        for name, value in (
+            ("left_out_color", "red"),
+            ("left_out_marker", "x"),
+            ("left_out_linestyle", ":"),
+        )
+    },
+    ("LinePlot", ("reduction", "count")): (
+        _alone(lambda: _line(reduction=Reduction(method="interval", width=1.0))),
+        3,
+        ("reduction", "method"),
+        "mean",
+    ),
+    ("LinePlot", ("reduction", "width")): (
+        _alone(lambda: _line(reduction=Reduction(count=3))),
+        2.0,
+        ("reduction", "method"),
+        "interval",
+    ),
+    ("LinePlot", ("reduction", "keep_last")): (
+        _alone(lambda: _line(reduction=Reduction(method="every", count=4))),
+        False,
+        ("reduction", "method"),
+        "mean",
+    ),
+    ("LinePlot", ("reduction", "replace_left_out")): (
+        _alone(lambda: _line(reduction=Reduction(count=4))),
+        True,
+        ("left_out",),
+        [3],
+    ),
 }
 
 
@@ -218,14 +337,22 @@ def _set(obj, path: tuple, value) -> None:
     setattr(obj, path[-1], value)
 
 
-def _drawn(axes: Axes) -> str:
-    figure = render(Figure(dpi=72, axes=[axes]), _data)
+def _figure(shown: Axes | Figure) -> Figure:
+    # Plain ticks, as the rules were judged: with inward ticks on all sides a
+    # line on the second layer meets a tick mark at the frame, and one pixel there
+    # tells which layer it is on.
+    plain = {"tick_direction": None, "ticks_all_sides": False}
+    return shown if isinstance(shown, Figure) else Figure(dpi=72, axes=[shown], **plain)
+
+
+def _drawn(axes: Axes | Figure) -> str:
+    figure = render(_figure(axes), _data)
     FigureCanvasAgg(figure).draw()
     return hashlib.sha1(bytes(figure.canvas.buffer_rgba())).hexdigest()
 
 
-def _project(axes: Axes) -> Project:
-    return Project(figures=[Figure(axes=[axes])])
+def _project(axes: Axes | Figure) -> Project:
+    return Project(figures=[_figure(axes)])
 
 
 def test_every_rule_is_checked_here() -> None:
@@ -242,13 +369,17 @@ def test_every_rule_is_checked_here() -> None:
         for cls in rule.owners
         for path in rule.paths
     }
-    assert set(CASES) <= ruled
+    assert {key[:2] for key in CASES} <= ruled
 
 
-@pytest.mark.parametrize("key", CASES, ids=lambda k: f"{k[0]}.{'.'.join(k[1])}")
+def _name(key: tuple) -> str:
+    return ".".join([key[0], *key[1], *key[2:]])
+
+
+@pytest.mark.parametrize("key", CASES, ids=_name)
 def test_a_rule_is_true_to_the_figure(key) -> None:
     make, value, (switch, on) = CASES[key][0], CASES[key][1], CASES[key][2:]
-    _, path = key
+    path = key[1]
 
     axes, obj = make()
     reason = without_effect(obj, path, _project(axes))
@@ -258,7 +389,10 @@ def test_a_rule_is_true_to_the_figure(key) -> None:
     assert _drawn(axes) == before, "the rule says it does nothing, but it does"
 
     axes, obj = make()
-    _set(obj, switch, on)
+    if callable(switch):
+        switch(axes, obj)
+    else:
+        _set(obj, switch, on)
     assert without_effect(obj, path, _project(axes)) is None
     before = _drawn(axes)
     _set(obj, path, value)
@@ -305,6 +439,36 @@ def test_the_line_width_counts_once_there_is_a_line(panel, document) -> None:
     assert panel.editors[("linewidth",)].widget.isEnabled()
 
 
+def test_the_residuals_line_width_counts_with_error_bars() -> None:
+    data = _bars()
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="linear"),
+        result=FitResult(parameters={"a": 0.1, "b": -0.3}, uncertainties={}),
+    )
+    residuals = ResidualPlot(target=fit.id)
+    axes = Axes(artists=[data, fit, residuals])
+    assert residuals.linestyle == "none"
+    assert without_effect(residuals, ("linewidth",), _project(axes)) is None
+    before = _drawn(axes)
+    residuals.linewidth = 4.0
+    assert _drawn(axes) != before
+
+
+def test_the_zero_line_settings_are_greyed_while_it_is_off(panel, document) -> None:
+    data = next(a for a in document.figure.axes[0].artists if a.kind == "errorbar")
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    document.push(add_fit(document.project, fit, residuals=True))
+    residuals = document.figure.axes[1].artists[0]
+    document.select(residuals.id)
+    assert panel.editors[("zero_linewidth",)].widget.isEnabled()
+    panel.editors[("zero_line",)].widget.click()
+    assert not residuals.zero_line
+    widget = panel.editors[("zero_linewidth",)].widget
+    assert not widget.isEnabled()
+    assert widget.toolTip().startswith("Does nothing while the zero line is off")
+
+
 # --- what the problem list says ---------------------------------------------
 
 
@@ -321,3 +485,23 @@ def test_grid_lines_at_minor_ticks_without_minor_ticks_are_reported() -> None:
     axes.y.minor_ticks = True
     issues = [str(issue) for issue in validate_references(_project(axes))]
     assert not any("minor ticks" in issue for issue in issues), issues
+
+
+def test_aligning_labels_is_greyed_for_one_panel_and_counts_for_two(
+    panel, document
+) -> None:
+    from figscribe.commands import add_panel
+
+    figure = document.figure
+    document.select(figure.id)
+    toggle = panel.editors[("align_labels",)].widget
+    assert not toggle.isEnabled()
+    assert toggle.toolTip().startswith(
+        "Does nothing while the figure has fewer than two panels"
+    )
+    document.push(add_panel(document.project, figure.axes[0].id, "below")[0])
+    assert panel.editors[("align_labels",)].widget.isEnabled()
+    panel.editors[("align_labels",)].widget.click()
+    assert document.figure.align_labels is False
+    document.undo()
+    assert document.figure.align_labels is True

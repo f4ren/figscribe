@@ -76,12 +76,15 @@ class Figure(Identified):
     font_size: float | None = Field(None, gt=0.0)
     """Base font size in pt; labels, ticks and legend scale with it. None
     keeps Matplotlib's (or the style sheet's)."""
-    tick_direction: Literal["in", "out", "inout"] | None = None
+    tick_direction: Literal["in", "out", "inout"] | None = "in"
     """Which way the tick marks point, in every panel; None keeps Matplotlib's
-    (or the style sheet's), which is "out"."""
-    ticks_all_sides: bool = False
+    (or the style sheet's), which is "out". A new figure points them in, as
+    most physics journals have them (decision 0048); a file keeps what it was
+    saved with."""
+    ticks_all_sides: bool = True
     """Tick marks also on the top and right edge of every panel, as many
-    physics journals have them; the numbers stay bottom and left."""
+    physics journals have them; the numbers stay bottom and left. On for a new
+    figure; a file keeps what it was saved with."""
     frame_width: float | None = Field(None, gt=0.0)
     """Line width of the frame around every panel in pt; None keeps
     Matplotlib's (or the style sheet's), which is 0.8."""
@@ -93,6 +96,10 @@ class Figure(Identified):
     """Line width of the minor tick marks in pt; None keeps Matplotlib's, 0.6."""
     minor_tick_length: float | None = Field(None, gt=0.0)
     """Length of the minor tick marks in pt; None keeps Matplotlib's, 2."""
+    align_labels: bool = True
+    """Axis labels of panels in one column (y) or one row (x) stand on one
+    line, whatever the width of their numbers. Insets and colour bars are
+    left out; a figure of one panel looks the same either way."""
     panel_labels: PanelLabels | None = None
     """Letters on the panels, as journals ask for; None draws none."""
     layout: GridLayout = Field(default_factory=GridLayout)

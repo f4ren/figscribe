@@ -82,7 +82,16 @@ def _assert_same(project: Project, folder: Path, figure: Figure | None = None) -
     return script
 
 
-@pytest.mark.parametrize("path", EXAMPLES, ids=lambda p: p.parent.name)
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(
+            p, marks=[] if p.parent.name == "gaussian-scan" else pytest.mark.slow
+        )
+        for p in EXAMPLES
+    ],
+    ids=lambda p: p.parent.name,
+)
 def test_examples(path: Path, tmp_path: Path) -> None:
     folder = tmp_path / path.parent.name
     shutil.copytree(path.parent, folder)
@@ -128,6 +137,183 @@ def test_fit_and_residuals(tmp_path: Path) -> None:
     script = _assert_same(project, tmp_path)
     assert "curve_fit(" in script and "sharex=ax_a" in script
     assert 'ax_a.tick_params(axis="x"' in script
+
+
+def test_residuals_with_a_line_width_and_a_styled_zero_line(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    residuals = project.figures[0].axes[1].artists[0]
+    residuals.linestyle = "-"
+    residuals.linewidth = 2.5
+    residuals.zero_color = "tab:red"
+    residuals.zero_linewidth = 1.5
+    residuals.zero_linestyle = ":"
+    script = _assert_same(project, tmp_path)
+    assert "linewidth=2.5" in script and 'color="tab:red"' in script
+
+
+def test_residuals_without_a_zero_line(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    project.figures[0].axes[1].artists[0].zero_line = False
+    script = _assert_same(project, tmp_path)
+    assert "axhline" not in script
+
+
+def test_notes_with_a_background_over_a_grid(tmp_path: Path) -> None:
+    from figscribe.model import Annotation
+
+    project, ref = _scan(tmp_path)
+    panel = Axes(
+        grid=True,
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"]),
+            Annotation(
+                text="on white",
+                position=(0.4, 0.5),
+                coords="axes",
+                background="white",
+            ),
+            Annotation(
+                text=r"$\mu$ here",
+                position=(7.0, 0.8),
+                arrow_to=(5.0, 1.0),
+                color="C1",
+                background="#ffeeaa",
+            ),
+        ],
+    )
+    project.figures = [Figure(dpi=100, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert script.count("bbox=") == 2 and 'facecolor="white"' in script
+
+
+def _stacked_panels(ref, **figure_fields) -> Figure:
+    """Two panels in a column whose tick numbers differ in width."""
+    return Figure(
+        dpi=100,
+        layout=GridLayout(rows=2),
+        axes=[
+            Axes(
+                y=AxisSpec(label="short", limits=(0.0, 1.0)),
+                artists=[LinePlot(x=ref["t"], y=ref["U"])],
+            ),
+            Axes(
+                row=1,
+                x=AxisSpec(label="$t$", unit="s"),
+                y=AxisSpec(label="long", limits=(0.0, 5000.0)),
+                artists=[LinePlot(x=ref["t"], y=ref["U"])],
+            ),
+        ],
+        **figure_fields,
+    )
+
+
+def test_the_labels_of_the_panels_are_aligned(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    project.figures = [_stacked_panels(ref)]
+    script = _assert_same(project, tmp_path)
+    assert "fig.align_labels()" in script
+
+
+def test_labels_that_are_not_aligned_leave_no_call(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    project.figures = [_stacked_panels(ref, align_labels=False)]
+    assert "align_labels" not in _assert_same(project, tmp_path)
+
+
+def test_one_panel_has_nothing_to_align(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.axes.pop()
+    figure.layout = GridLayout()
+    project.figures = [figure]
+    assert "align_labels" not in _assert_same(project, tmp_path)
+
+
+def test_panels_with_right_axes_an_inset_and_a_colour_bar_name_what_they_align(
+    tmp_path: Path,
+) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ImagePlot, Inset
+
+    np.save(tmp_path / "frame.npy", np.arange(60.0).reshape(6, 10))
+    frame = numpy_source(tmp_path / "frame.npy", tmp_path)
+    project, ref = _scan(tmp_path)
+    project.sources.append(frame)
+    figure = _stacked_panels(ref)
+    figure.axes[0].y_right = AxisSpec(label="right", limits=(0.0, 1.0))
+    figure.axes[1].artists = [
+        ImagePlot(data=ArrayRef(source=frame.id), colorbar=Colorbar(label="counts"))
+    ]
+    figure.axes.append(
+        Axes(
+            inset=Inset(parent=figure.axes[0].id, bounds=(0.6, 0.6, 0.3, 0.3)),
+            artists=[LinePlot(x=ref["t"], y=ref["U"])],
+        )
+    )
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    # Not the colour bar's axes and not the inset: just the panels and the
+    # right y axis of the first.
+    assert "fig.align_labels([ax_a, ax_a_right, ax_b])" in script
+
+
+def test_without_the_constrained_layout_a_colour_bar_panel_is_not_aligned(
+    tmp_path: Path,
+) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ImagePlot
+
+    np.save(tmp_path / "frame.npy", np.arange(60.0).reshape(6, 10))
+    frame = numpy_source(tmp_path / "frame.npy", tmp_path)
+    project, ref = _scan(tmp_path)
+    project.sources.append(frame)
+    figure = _stacked_panels(ref)
+    figure.axes[1].row, figure.axes[1].col = 0, 1
+    figure.axes[0].y.label = "U"
+    figure.axes[1].y.label = "U"
+    figure.axes[1].artists = [
+        ImagePlot(data=ArrayRef(source=frame.id), colorbar=Colorbar(label="counts"))
+    ]
+    figure.axes.append(
+        Axes(
+            row=1,
+            y=AxisSpec(label="U", limits=(0.0, 5000.0)),
+            artists=[LinePlot(x=ref["t"], y=ref["U"])],
+        )
+    )
+    figure.layout = GridLayout(rows=2, cols=2, constrained_layout=False)
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    assert "fig.align_labels([ax_a, ax_c])" in script
+
+
+def test_a_label_distance(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.axes[0].y.labelpad = 12.0
+    figure.axes[1].x.labelpad = 0.0
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    assert 'set_ylabel("short", labelpad=12)' in script
+    assert "labelpad=0" in script
+
+
+def test_a_label_distance_without_a_label_leaves_no_trace(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.axes[0].x.labelpad = 12.0  # there is no x label here
+    project.figures = [figure]
+    assert "labelpad" not in _assert_same(project, tmp_path)
 
 
 def test_a_fit_with_a_fixed_and_a_bounded_parameter(tmp_path: Path) -> None:
@@ -977,3 +1163,348 @@ def test_an_allan_deviation_in_minutes_over_a_range(tmp_path: Path) -> None:
     )
     script = _assert_same(project, tmp_path)
     assert "/ 60" in script
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["plain", "minutes and a range", "fit range", "no error bars", "linear axes"],
+)
+def test_a_fit_of_an_allan_deviation_with_its_residuals(
+    tmp_path: Path, case: str
+) -> None:
+    """F14, decision 0064: the fit runs on the points the plot draws, and the
+    script on the variables that hold them."""
+    from figscribe.model import AllanDeviationPlot, Conversion, ExpressionFit
+
+    rng = np.random.default_rng(5)
+    y = rng.normal(scale=2e-12, size=600)
+    rows = "\n".join(f"{0.5 * i!r},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "clock.csv").write_text(f"t,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    plot = AllanDeviationPlot(values=col["y"], time=col["t"])
+    fit_range = None
+    if case == "minutes and a range":
+        plot.x_conversion = Conversion(factor=1 / 60, unit="min")
+        plot.x_range = (0.0, 4.0)
+    if case == "fit range":
+        fit_range = (1.5, 60.0)
+    if case == "no error bars":
+        plot.error_bars = False
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    axes = Axes(**({} if case == "linear axes" else log), artists=[plot])
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[axes])],
+    )
+    fit = FitCurve(
+        target=plot.id,
+        model=ExpressionFit(expression="a / sqrt(x)", parameters=["a"]),
+        initial_values={"a": 1e-12},
+        fit_range=fit_range,
+    )
+    add_fit(project, fit, residuals=True).apply(project)
+    placed = next(a for a in project.figures[0].axes[0].artists if a.id == fit.id)
+    refit(project, placed.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "curve_fit(" in script and "import figscribe" not in script
+    if case != "linear axes":
+        assert "geomspace" in script  # even along a logarithmic τ axis
+
+
+def test_an_allan_fit_stays_equal_after_the_error_bars_are_switched_off(
+    tmp_path: Path,
+) -> None:
+    from figscribe.model import AllanDeviationPlot, ExpressionFit
+    from figscribe.units import set_allan_field
+
+    rng = np.random.default_rng(6)
+    y = rng.normal(scale=2e-12, size=600)
+    rows = "\n".join(f"{0.5 * i!r},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "clock.csv").write_text(f"t,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "clock.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    plot = AllanDeviationPlot(values=col["y"], time=col["t"])
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[Axes(**log, artists=[plot])])],
+    )
+    fit = FitCurve(
+        target=plot.id,
+        model=ExpressionFit(expression="a / sqrt(x)", parameters=["a"]),
+        initial_values={"a": 1e-12},
+    )
+    add_fit(project, fit, residuals=True).apply(project)
+    data = load_data(project, tmp_path)
+    refit(project, fit.id, data).apply(project)
+    set_allan_field(
+        project, plot.id, "error_bars", False, data, "Change error bars"
+    ).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "sigma=" not in script  # unweighted now, as the figure's numbers are
+
+
+def test_an_allan_deviation_in_hours_from_cycles_of_2_88_s(tmp_path: Path) -> None:
+    # Cycles numbered 93, 94, ... each take 2.88 s; τ is shown in hours by a
+    # formula that scales the cycles: 2.88 / 3600 = 0.0008 h per cycle.
+    from figscribe.model import AllanDeviationPlot, Conversion
+
+    rng = np.random.default_rng(12)
+    y = rng.normal(scale=2e-12, size=400)
+    rows = "\n".join(f"{93 + i},{float(v)!r}" for i, v in enumerate(y))
+    (tmp_path / "cycles.csv").write_text(f"cycle,y\n{rows}\n", encoding="utf-8")
+    source = csv_source(tmp_path / "cycles.csv", tmp_path, header_row=0)
+    col = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    hours = Conversion(formula="x * 2.88 / 3600", unit="h")
+    plot = AllanDeviationPlot(
+        values=col["y"], time=col["cycle"], x_conversion=hours, x_range=(0.0, 0.2)
+    )
+    log = {"x": AxisSpec(scale="log"), "y": AxisSpec(scale="log")}
+    project = Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(dpi=100, axes=[Axes(**log, artists=[plot])])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert "* 0.0008" in script or "/ 1250" in script  # 3600 / 2.88 = 1250
+
+
+def test_a_mean_of_rows_with_a_fit_and_its_residuals(tmp_path: Path) -> None:
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        left_out=[3, 20],
+        reduction=Reduction(count=5, replace_left_out=True),
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "from scipy.stats import binned_statistic" in script
+    assert "group = rows[member] // 5" in script
+    assert "binned_statistic(group, t[member]," in script
+    assert "sigma=" in script and "absolute_sigma=True" in script
+
+
+def test_derived_errors_with_units_a_range_and_a_dropped_last_group(
+    tmp_path: Path,
+) -> None:
+    from figscribe.model import Conversion, Reduction
+
+    project, ref = _run_csv(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        label="data",
+        x_conversion=Conversion(factor=1 / 3600, from_start=True, unit="h"),
+        x_range=(0.5, 3.5),
+        left_out=[12],
+        reduction=Reduction(count=4, keep_last=False),
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    _assert_same(project, tmp_path)
+
+
+def test_a_median_every_nth_row_and_intervals(tmp_path: Path) -> None:
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    median = LinePlot(
+        x=ref["t"], y=ref["U"], reduction=Reduction(method="median", count=6)
+    )
+    every = ScatterPlot(
+        x=ref["t"],
+        y=ref["U"],
+        left_out=[8],
+        reduction=Reduction(method="every", count=4, replace_left_out=True),
+    )
+    interval = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        left_out=[5],
+        reduction=Reduction(method="interval", width=1.3),
+    )
+    project.figures = [
+        Figure(
+            dpi=150,
+            layout=GridLayout(rows=1, cols=2),
+            axes=[Axes(artists=[median, every]), Axes(col=1, artists=[interval])],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "reduction",
+    [
+        {"method": "mean", "count": 4},
+        {"method": "median", "count": 4},
+        {"method": "every", "count": 4},
+        {"method": "interval", "width": 1.3},
+        {"method": "mean", "count": 4, "replace_left_out": True},
+    ],
+    ids=["mean", "median", "every", "interval", "mean-replacing"],
+)
+def test_a_reduced_plot_whose_range_keeps_no_row_draws_nothing(
+    tmp_path: Path, reduction: dict
+) -> None:
+    """The renderer draws no point, so the script must not stop (B7.1)."""
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    nothing = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        left_out=[3],
+        x_range=(1e6, 2e6),
+        reduction=Reduction(**reduction),
+    )
+    other = LinePlot(x=ref["t"], y=ref["U"])
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[nothing, other])])]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("reduced", [True, False], ids=["reduced", "plain"])
+def test_a_fit_stays_when_the_range_is_narrowed_to_nothing(
+    tmp_path: Path, reduced: bool
+) -> None:
+    """Fit first, then a range that keeps no row: the script must still run."""
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        reduction=Reduction(count=4) if reduced else None,
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    data.x_range = (1e6, 2e6)
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "narrowing",
+    ["fit range", "fit range, curve beyond it", "every row left out"],
+)
+def test_a_fit_with_no_point_left_is_not_drawn_and_the_script_says_so(
+    tmp_path: Path, narrowing: str
+) -> None:
+    """Whatever leaves the fit nothing to run on, after it was run: no curve,
+    no residual points, a script that runs and equals the figure."""
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"])
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    fitted = next(a for a in project.figures[0].axes[0].artists if a.id == fit.id)
+    if narrowing == "every row left out":
+        data.left_out = list(range(len(load_data(project, tmp_path)(ref["t"]))))
+    else:
+        fitted.fit_range = (1e6, 2e6)
+        fitted.extend_curve = narrowing != "fit range"
+    script = _assert_same(project, tmp_path)
+    assert "no point left to run on" in script
+    assert "curve_fit(" not in script
+
+
+def test_a_band_over_reduced_points_and_a_median_without_one(tmp_path: Path) -> None:
+    from figscribe.model import Reduction
+
+    project, ref = _scan(tmp_path)
+    banded = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        linestyle="-",
+        band=ErrorBand(),
+        reduction=Reduction(count=4),
+    )
+    bare = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["t2"],
+        yerr=ref["dU"],
+        linestyle="-",
+        band=ErrorBand(),
+        reduction=Reduction(method="median", count=4),
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[banded, bare])])]
+    _assert_same(project, tmp_path)
+
+
+def test_a_formula_for_x_and_y_with_a_band_a_fit_and_a_range(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, ErrorBand
+
+    project, ref = _run_csv(tmp_path)
+    data = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        label="data",
+        linestyle="-",
+        band=ErrorBand(),
+        x_conversion=Conversion(formula="x / 3600 + 1", from_start=True, unit="h"),
+        y_conversion=Conversion(formula="(x - 0.1) / 7.5", unit="V"),
+        x_range=(1.5, 4.5),
+        left_out=[2, 30],
+    )
+    project.figures = [Figure(dpi=150, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "t_h = (t - np.nanmin(t)) / 3600 + 1  # h since the start" in script
+    assert "U_V = (U - 0.1) / 7.5  # in V" in script
+    assert "dU_V = dU / 7.5" in script
+    assert "used = (t_h >= 1.5) & (t_h <= 4.5)" in script
+
+
+def test_a_formula_for_the_values_of_a_histogram(tmp_path: Path) -> None:
+    from figscribe.model import Conversion, Histogram
+
+    project, ref = _run_csv(tmp_path)
+    counts = Histogram(
+        values=ref["U"],
+        bins=8,
+        x_conversion=Conversion(formula="x * 1000 - 50", unit="mV"),
+        x_range=(0.0, 900.0),
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[counts])])]
+    script = _assert_same(project, tmp_path)
+    assert "U * 1000 - 50" in script
+
+
+def test_two_plots_of_one_column_with_different_formulas_do_not_share_a_variable(
+    tmp_path: Path,
+) -> None:
+    from figscribe.model import Conversion
+
+    project, ref = _run_csv(tmp_path)
+    same_factor = {"unit": "V"}
+    first = LinePlot(
+        x=ref["t"], y=ref["U"], y_conversion=Conversion(formula="x + 1", **same_factor)
+    )
+    second = LinePlot(
+        x=ref["t"], y=ref["U"], y_conversion=Conversion(formula="x - 1", **same_factor)
+    )
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[first, second])])]
+    script = _assert_same(project, tmp_path)
+    assert "U_V = U + 1" in script and "U_V2 = U - 1" in script

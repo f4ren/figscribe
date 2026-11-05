@@ -17,19 +17,22 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from figscribe.commands.core import CommandError, find
 from figscribe.model import (
     AllanDeviationPlot,
     Axes,
     ColorMesh,
     ErrorbarPlot,
+    Figure,
     FitCurve,
     ImagePlot,
     LinePlot,
     Project,
     ReferenceLine,
+    ResidualPlot,
     ScatterPlot,
 )
-from figscribe.render.figure import NO_LINE
+from figscribe.render.figure import NO_LINE, aligned_axes
 
 Path = tuple[str, ...]
 
@@ -69,6 +72,26 @@ def _no_bars(plot: ErrorbarPlot, _) -> bool:
     return plot.xerr is None and (plot.yerr is None or plot.band is not None)
 
 
+def _no_residual_line(residuals: ResidualPlot, project: Project) -> bool:
+    """Nothing is drawn with the width: no joining line, and the data has no
+    y errors to draw as bars."""
+    if residuals.linestyle not in NO_LINE:
+        return False
+    try:
+        data = find(project, find(project, residuals.target).target)
+    except (CommandError, AttributeError):
+        return True
+    return getattr(data, "yerr", None) is None
+
+
+def _target_reduced(fit: FitCurve, project: Project) -> bool:
+    """The plot the fit is made to draws fewer points."""
+    try:
+        return getattr(find(project, fit.target), "reduction", None) is not None
+    except CommandError:
+        return False
+
+
 GRID = ("grid_axis", "grid_which", "grid_color", "grid_linewidth", "grid_linestyle")
 LEGEND = ("position", "frame", "ncols", "fontsize")
 LEFT_OUT = ("left_out_color", "left_out_marker", "left_out_linestyle")
@@ -100,6 +123,25 @@ RULES: list[Rule] = [
         lambda plot, _: plot.linestyle in NO_LINE,
     ),
     Rule(
+        (Figure,),
+        (("align_labels",),),
+        "the figure has fewer than two panels to line up (insets are left out, "
+        "and without the automatic layout panels with a color bar)",
+        lambda figure, _: not aligned_axes(figure),
+    ),
+    Rule(
+        (ResidualPlot,),
+        (("linewidth",),),
+        'there is no line: its line style is "none", and the data has no y errors',
+        _no_residual_line,
+    ),
+    Rule(
+        (ResidualPlot,),
+        (("zero_color",), ("zero_linewidth",), ("zero_linestyle",)),
+        "the zero line is off",
+        lambda residuals, _: not residuals.zero_line,
+    ),
+    Rule(
         (LinePlot, AllanDeviationPlot),
         (("markersize",),),
         "the plot has no marker",
@@ -110,6 +152,36 @@ RULES: list[Rule] = [
         (("capsize",), ("elinewidth",)),
         "no error bars are drawn: the y errors are a band, and there are no x errors",
         _no_bars,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        tuple((name,) for name in LEFT_OUT),
+        "the plot draws fewer points: rows left out are not drawn apart",
+        lambda plot, _: plot.reduction is not None,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "count"),),
+        "the points are averaged over intervals of x, not counted in rows",
+        lambda plot, _: plot.reduction.method == "interval",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "width"),),
+        "the points are grouped by rows, not by intervals of x",
+        lambda plot, _: plot.reduction.method != "interval",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "keep_last"),),
+        "only the mean or median of every n rows has a last, shorter group",
+        lambda plot, _: plot.reduction.method in ("every", "interval"),
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("reduction", "replace_left_out"),),
+        "no rows are left out",
+        lambda plot, _: not plot.left_out,
     ),
     Rule(
         (LinePlot, ScatterPlot, ErrorbarPlot),
@@ -141,6 +213,12 @@ RULES: list[Rule] = [
         (("extend_curve",), ("outside_as_left_out",)),
         "the fit uses all the data: set a range in the fit dialog",
         lambda fit, _: fit.fit_range is None,
+    ),
+    Rule(
+        (FitCurve,),
+        (("outside_as_left_out",),),
+        "the plot it fits draws fewer points: none are drawn apart",
+        _target_reduced,
     ),
 ]
 

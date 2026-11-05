@@ -92,13 +92,16 @@ def test_the_color_bar_can_be_switched_off_and_on(panel, window) -> None:
     document = window.document
     image = _artists(window)[0]
     document.select(image.id)
-    assert "Color bar" in panel.sections
+    assert "Color bar" not in panel.sections  # its settings are under its box
+    assert panel.sections["Look"].isAncestorOf(
+        panel.editors[("colorbar", "label")].widget
+    )
     switch = panel.editors[("colorbar",)].widget
     assert switch.isChecked()
     switch.click()  # as a person does: the box is replaced while it handles the click
     assert _artists(window)[0].colorbar is None
     assert document.history.undo_text == "Remove the color bar"
-    assert "Color bar" not in panel.sections
+    assert ("colorbar", "label") not in panel.editors
     panel.editors[("colorbar",)].widget.click()
     assert _artists(window)[0].colorbar is not None
     assert ("colorbar", "label") in panel.editors

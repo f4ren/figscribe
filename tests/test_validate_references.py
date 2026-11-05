@@ -295,3 +295,43 @@ def test_a_band_without_y_errors_is_a_problem() -> None:
     assert [(i.object_id, i.message) for i in issues if "band" in i.message] == [
         (empty.id, "has an error band but no y errors to shade")
     ]
+
+
+def test_values_are_judged_as_shown_after_a_conversion(project: Project) -> None:
+    # A formula can move positive values to zero or below (K to °C); the axis
+    # shows what the plot shows, not the column.
+    from figscribe.model import Conversion
+
+    plot = project.figures[0].axes[0].artists[0]
+    project.figures[0].axes[0].y.scale = "log"
+    data = _given(
+        {"t": [0.0, 1.0, 2.0, 3.0], "U": [1.0, 2.0, 3.0, 4.0], "dU": [0.1] * 4}
+    )
+    assert not validate_references(project, data)
+    plot.y_conversion = Conversion(formula="x - 2.5", unit="V")
+    issues = validate_references(project, data)
+    assert any("2 of 4 values of y (U) are zero or below" in i.message for i in issues)
+    # And the other way: zeros in the column that the conversion moves up.
+    plot.y_conversion = Conversion(formula="x + 5", unit="V")
+    below = _given(
+        {"t": [0.0, 1.0, 2.0, 3.0], "U": [-1.0, 0.0, 1.0, 2.0], "dU": [0.1] * 4}
+    )
+    assert not validate_references(project, below)
+
+
+def test_a_formula_that_shifts_tau_set_on_the_conversion_alone_is_a_problem() -> None:
+    # The plot refuses a whole conversion with a shifting formula; a change to
+    # the formula alone (SetField on a nested path) only checks the formula.
+    from figscribe.commands import History, SetField
+    from figscribe.model import AllanDeviationPlot, Axes, Conversion, Figure
+
+    ref = ColumnRef(source="s", column="y")
+    allan = AllanDeviationPlot(values=ref, x_conversion=Conversion(factor=1 / 60))
+    project = Project(figures=[Figure(axes=[Axes(artists=[allan])])])
+    data = _given({"y": [float(i % 3) for i in range(40)]})
+    History(project).push(SetField(allan.id, ("x_conversion", "formula"), "x / 60"))
+    scaled = validate_references(project, data)
+    assert not any("a duration" in i.message for i in scaled)  # a scaling is fine
+    History(project).push(SetField(allan.id, ("x_conversion", "formula"), "x + 1"))
+    issues = validate_references(project, data)
+    assert any("a duration" in i.message for i in issues)

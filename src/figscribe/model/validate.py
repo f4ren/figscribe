@@ -41,7 +41,11 @@ from figscribe.model.project import Project
 from figscribe.model.styles import style_problems
 
 FITTABLE = (LinePlot, ScatterPlot, ErrorbarPlot)
-"""Artist types a FitCurve can target: the ones with x and y columns."""
+"""Plots of points with x and y columns: those whose rows can be left out."""
+
+FIT_TARGETS = (*FITTABLE, AllanDeviationPlot)
+"""Artist types a FitCurve can target: the plots of points, and the Allan
+deviation, whose points are derived (decision 0064)."""
 
 
 @dataclass(frozen=True)
@@ -137,6 +141,10 @@ def validate_references(
                 if data is not None:
                     for why in _not_drawn(artist, axes, data):
                         issues.append(ReferenceIssue(tpath, artist.id, why))
+                    if isinstance(artist, FitCurve):
+                        why = _nothing_to_fit(artist, artists_by_id, data)
+                        if why is not None:
+                            issues.append(ReferenceIssue(tpath, artist.id, why))
 
                 for field, ref in data_refs(artist):
                     if ref not in source_ids:
@@ -172,8 +180,8 @@ def validate_references(
                         )
                     elif (
                         artist.fit_range is not None
-                        and isinstance(target, FITTABLE)
-                        and target.x_range is not None
+                        and isinstance(target, FITTABLE)  # an Allan range is in time,
+                        and target.x_range is not None  # the fit range in τ
                         and not (
                             target.x_range[0] <= artist.fit_range[0]
                             and artist.fit_range[1] <= target.x_range[1]
@@ -190,7 +198,7 @@ def validate_references(
                                 "the points within both are fitted",
                             )
                         )
-                    elif not isinstance(target, FITTABLE):
+                    elif not isinstance(target, FIT_TARGETS):
                         issues.append(
                             ReferenceIssue(
                                 f"{tpath}.target",
@@ -317,16 +325,23 @@ def _off_the_log_scale(artist, axes: Axes) -> str | None:
 
 def _not_drawn(artist, axes: Axes, data) -> list[str]:
     """What of the artist's data cannot be seen: a column without a finite
-    value, or values at or below zero on a log axis or color scale."""
+    value, or values at or below zero on a log axis or color scale; as the plot
+    shows them, after its units."""
     # Imported here: the data package imports the model, and NumPy is only
     # needed once there is data.
     import numpy as np
 
+    from figscribe.convert import convert
     from figscribe.io.errors import DataError
 
     right = getattr(artist, "axis", "left") == "right" and axes.y_right is not None
     y_scale = (axes.y_right if right else axes.y).scale
     shown: list[tuple[str, object, str]] = []  # (name, reference, scale)
+    conversions = {
+        "x": getattr(artist, "x_conversion", None),
+        "y": getattr(artist, "y_conversion", None),
+        "values": getattr(artist, "x_conversion", None),
+    }
     if isinstance(artist, FITTABLE):
         shown = [("x", artist.x, axes.x.scale), ("y", artist.y, y_scale)]
     elif isinstance(artist, Histogram):
@@ -358,6 +373,7 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
         what = (
             f"{name} ({reference.column})" if isinstance(reference, ColumnRef) else name
         )
+        values = convert(values, conversions[name])
         finite = values[np.isfinite(values)]
         if values.size and not finite.size:
             found.append(f"{what} has no values to draw")
@@ -383,9 +399,30 @@ def data_refs(artist: ArtistBase) -> list[tuple[str, str]]:
     return refs
 
 
+def _nothing_to_fit(fit: FitCurve, artists: dict, data) -> str | None:
+    """A fit that was run, but has no point left to run on, draws nothing."""
+    from figscribe.convert import plot_data
+    from figscribe.fit import FitError, fitted_points
+    from figscribe.io.errors import DataError
+
+    target = artists.get(fit.target)
+    if fit.result is None or not isinstance(target, FIT_TARGETS):
+        return None
+    try:
+        shown = plot_data(target, data)
+        if fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range).any():
+            return None
+    except (DataError, FitError, KeyError, ValueError):
+        return None  # said elsewhere: unreadable data, a row that is not there
+    return (
+        "no point is left to fit, because of the ranges, the rows left out or "
+        "values that are not finite, so the fit is not drawn"
+    )
+
+
 def _nothing_in_range(artist, data) -> list[str]:
     """A range that keeps no row draws nothing."""
-    from figscribe.convert import convert, plot_data, within
+    from figscribe.convert import convert, within
     from figscribe.io.errors import DataError
 
     try:
@@ -393,7 +430,7 @@ def _nothing_in_range(artist, data) -> list[str]:
             values = convert(data(artist.values), artist.x_conversion)
             what = "value"
         else:
-            values = plot_data(artist, data).x
+            values = convert(data(artist.x), artist.x_conversion)
             what = "row"
     except DataError:
         return []
@@ -412,30 +449,43 @@ def _allan_not_drawn(artist: AllanDeviationPlot, data) -> list[str]:
     from figscribe.allan import samples
     from figscribe.io.errors import DataError
 
+    # A formula set on the conversion alone gets past the plot's own check.
+    ignored = []
+    if artist.x_conversion is not None and artist.x_conversion.formula is not None:
+        from figscribe.convert import linear
+
+        if linear(artist.x_conversion)[1] != 0:
+            ignored = [
+                "τ is a duration: the formula adds or subtracts a number, which is "
+                "not used (decision 0047)"
+            ]
     try:
         values, _ = samples(artist, data)
     except DataError:
-        return []  # the preview says why
+        return ignored  # the preview says why
     if artist.x_range is not None and not values.size:
         low, high = artist.x_range
         return [
+            *ignored,
             f"no sample lies within the range {low:g} to {high:g} after the "
-            "first, so nothing is drawn"
+            "first, so nothing is drawn",
         ]
     what = f"values ({artist.values.column})"
     gaps = int(np.count_nonzero(~np.isfinite(values)))
     if gaps:
         return [
+            *ignored,
             f"{what} has {gaps} of {values.size} entries that are not numbers; an "
-            "Allan deviation needs an unbroken series, so it is not drawn"
+            "Allan deviation needs an unbroken series, so it is not drawn",
         ]
     points = values.size + (1 if artist.data_type == "frequency" else 0)
     if points < 3:
         return [
+            *ignored,
             f"{what} has {values.size} values, too few for an Allan deviation "
-            f"({3 - points + values.size} at the least)"
+            f"({3 - points + values.size} at the least)",
         ]
-    return []
+    return ignored
 
 
 def _check_unique_ids(project: Project, issues: list[ReferenceIssue]) -> None:

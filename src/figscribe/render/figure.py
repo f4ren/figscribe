@@ -21,7 +21,7 @@ from matplotlib.ticker import (
     NullFormatter,
 )
 
-from figscribe.convert import convert, plot_data, scale, within
+from figscribe.convert import convert, plot_data, within
 from figscribe.io.errors import DataError
 from figscribe.model import (
     AllanDeviationPlot,
@@ -45,7 +45,7 @@ from figscribe.model import (
     ShadedSpan,
 )
 from figscribe.model.artists import LIKE_THE_PLOT
-from figscribe.model.validate import FITTABLE, unequal_columns
+from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
 from figscribe.render.labels import axis_label, panel_label_options, panel_labels
 from figscribe.render.layout import (
     creation_order,
@@ -146,7 +146,47 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
         # No gid: a panel label is not a note to drag.
         for i, text in panel_labels(figure).items():
             axs[i].annotate(text, **panel_label_options(figure.panel_labels))
+
+        aligned = aligned_axes(figure)
+        if figure.align_labels and aligned:
+            twins = {
+                ax.get_gid(): ax for ax, _, _ in ticked if ax.get_gid().endswith(RIGHT)
+            }
+            fig.align_labels(
+                [
+                    ax
+                    for i in aligned
+                    for ax in (axs[i], twins.get(f"{figure.axes[i].id}{RIGHT}"))
+                    if ax is not None
+                ]
+            )
     return fig
+
+
+def aligned_axes(figure: Figure) -> list[int]:
+    """The panels whose labels are lined up: those in the grid, not insets,
+    and only when there are two or more; one panel has nothing to line up
+    with. Their right y axes go with them.
+
+    Without the constrained layout a panel with a colour bar is left out too:
+    Matplotlib then splits its grid cell for the bar, which counts the rows
+    and columns from zero again, and the alignment would take the panel for
+    one in the first row or column."""
+    grid = [
+        i
+        for i, axes in enumerate(figure.axes)
+        if axes.inset is None
+        and (figure.layout.constrained_layout or not _has_colour_bar(axes))
+    ]
+    return grid if len(grid) > 1 else []
+
+
+def _has_colour_bar(axes: Axes) -> bool:
+    """Whether the panel draws a colour bar."""
+    return any(
+        getattr(artist, "colorbar", None) is not None and artist.colorbar.visible
+        for artist in axes.artists
+    )
 
 
 def tick_ranges(
@@ -243,6 +283,8 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
     if label is not None:
         size = {"fontsize": spec.label_size} if spec.label_size else {}
         axis.set_label_text(label, **size)
+    if spec.labelpad is not None:
+        axis.labelpad = spec.labelpad
 
     set_scale, set_lim = (
         (ax.set_xscale, ax.set_xlim) if name == "x" else (ax.set_yscale, ax.set_ylim)
@@ -358,27 +400,34 @@ def _draw_points(
     clicks."""
     from figscribe.fit import FitError, kept
 
-    converted = plot_data(artist, data)
+    try:
+        converted = plot_data(artist, data)
+    except FitError as exc:  # a reduction counts the rows left out
+        raise DataError(f"{artist.label or artist.kind}: {exc}") from None
     columns = {
         name: values
         for name in ("x", "y", "xerr", "yerr")
         if (values := getattr(converted, name)) is not None
+        and (name in ("x", "y") or hasattr(artist, name))  # a line has no errors
     }
     # Errors drawn as a band are not drawn as bars, of the left-out rows neither.
-    spread = columns.pop("yerr") if banded(artist) else None
+    spread = columns.pop("yerr", None) if banded(artist) else None
     count = len(columns["x"])
-    try:
-        shown = kept(count, artist.left_out)
-    except FitError as exc:
-        raise DataError(f"{artist.label or artist.kind}: {exc}") from None
-    # Rows outside the plot's range are not drawn at all, not even apart.
     used = converted.used
-    shown &= _inside_fits(artist, artists, columns["x"]) & used
+    if converted.reduced:  # the rows left out and outside the range are gone
+        shown = np.ones(count, dtype=bool)
+    else:
+        try:
+            shown = kept(count, artist.left_out)
+        except FitError as exc:
+            raise DataError(f"{artist.label or artist.kind}: {exc}") from None
+        # Rows outside the plot's range are not drawn at all, not even apart.
+        shown &= _inside_fits(artist, artists, columns["x"]) & used
     y = columns["y"]
     if not shown.all():
         columns["y"] = np.where(shown, y, np.nan)
     part = _draw_part(artist, ax, columns, {}, common)
-    part.rows = np.arange(count)
+    part.rows = np.arange(count) if converted.rows is None else converted.rows
     if spread is not None:
         _draw_band(artist, ax, columns["x"], y, spread, shown, part.get_color())
     if shown.all():
@@ -543,6 +592,12 @@ def _draw_annotation(note: Annotation, ax: MplAxes, common: dict) -> None:
         for key, value in (("fontsize", note.fontsize), ("color", note.color))
         if value is not None
     }
+    if note.background is not None:
+        style["bbox"] = {
+            "boxstyle": "round,pad=0.2",
+            "facecolor": note.background,
+            "edgecolor": "none",
+        }
     ax.annotate(
         note.text,
         xy=note.arrow_to if note.arrow_to is not None else note.position,
@@ -601,20 +656,17 @@ def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:
 
     A series with gaps is not drawn; validate_references says why.
     """
-    from figscribe.allan import averaging_factors, overlapping_adev, phase_of, samples
+    from figscribe.allan import allan_points
 
     try:
-        values, tau0 = samples(artist, data)
+        points = allan_points(artist, data)
     except DataError as exc:
         raise DataError(f"{artist.label or 'the Allan deviation'}: {exc}") from None
-    if not np.all(np.isfinite(values)):
+    if points is None:
         return
-    phase = phase_of(values, artist.data_type, tau0)
-    m = averaging_factors(phase.size, artist.taus)
-    adev = overlapping_adev(phase, tau0, m)
-    yerr = adev / np.sqrt(phase.size - 2 * m) if artist.error_bars else None
+    tau, adev, yerr = points
     container = ax.errorbar(
-        scale(m * tau0, artist.x_conversion),
+        tau,
         adev,
         yerr=yerr,
         color=artist.color,
@@ -652,12 +704,14 @@ def _draw_fit(
 ) -> None:
     """The fitted model across its fit range, where there is data, or across
     all the data; nothing before a fit."""
-    from figscribe.fit import evaluate
+    from figscribe.fit import evaluate, fitted_points
 
-    target = _referenced(artists, fit.target, FITTABLE, "fit")
+    target = _referenced(artists, fit.target, FIT_TARGETS, "fit")
     if fit.result is None:
         return
     shown = plot_data(target, data)
+    if not fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range).any():
+        return  # the fit has no point to run on, and the script no fit
     x = shown.x[np.isfinite(shown.x) & shown.used]
     if x.size == 0:
         return
@@ -666,7 +720,8 @@ def _draw_fit(
         low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
         if not low < high:
             return
-    xs = np.linspace(low, high, CURVE_POINTS)
+    log = isinstance(target, AllanDeviationPlot) and ax.get_xscale() == "log"
+    xs = (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
     ys = evaluate(fit.model, fit.result.parameters, xs)
     ax.plot(
         xs,
@@ -687,16 +742,25 @@ def _draw_residuals(
 ) -> None:
     """Data minus fit at every fitted point, with the data's y errors, around
     a dashed zero line."""
-    from figscribe.fit import evaluate, in_range, kept
+    from figscribe.fit import evaluate, fitted_points
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
-    target = _referenced(artists, fit.target, FITTABLE, "fit")
-    ax.axhline(0.0, color="0.6", linewidth=0.8, linestyle="--", zorder=1)
+    target = _referenced(artists, fit.target, FIT_TARGETS, "fit")
+    if residuals.zero_line:
+        ax.axhline(
+            0.0,
+            color=residuals.zero_color,
+            linewidth=residuals.zero_linewidth,
+            linestyle=residuals.zero_linestyle,
+            zorder=1,
+        )
     if fit.result is None:
         return
     shown = plot_data(target, data)
     x, y, yerr = shown.x, shown.y, shown.yerr
-    used = in_range(x, fit.fit_range) & kept(len(x), target.left_out) & shown.used
+    used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)
+    if not used.any():
+        return  # no point is fitted; the script draws nothing either
     if not used.all():
         x, y = x[used], y[used]
         yerr = None if yerr is None else yerr[used]
@@ -708,6 +772,7 @@ def _draw_residuals(
         marker=residuals.marker,
         markersize=residuals.markersize,
         linestyle=residuals.linestyle,
+        linewidth=residuals.linewidth,
         **common,
     )
     for part in container.get_children():

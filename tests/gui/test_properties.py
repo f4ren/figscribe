@@ -226,13 +226,14 @@ def test_points_take_their_marker_size_in_pt_like_lines(
     assert "-5" in panel.error and _axes(document).artists[-1].size == 25.0
 
 
-def test_the_resolution_is_an_export_setting(panel: PropertyPanel, document) -> None:
+def test_the_resolution_is_named_as_a_png_setting_beside_the_size(
+    panel: PropertyPanel, document
+) -> None:
     from figscribe.gui.names import field_name
 
     document.select(_figure(document).id)
     resolution = panel.editors[("dpi",)].widget
-    assert panel.sections["Export"].isAncestorOf(resolution)
-    assert not panel.sections["Size"].isAncestorOf(resolution)
+    assert panel.sections["Format"].isAncestorOf(resolution)
     assert "PNG" in field_name("dpi")
 
 
@@ -517,6 +518,80 @@ def test_the_grid_color_is_a_color_field(panel: PropertyPanel, document) -> None
     assert _axes(document).grid_color == "#696969"
 
 
+def _with_residuals(document):
+    from figscribe.fit import add_fit
+    from figscribe.model import FitCurve, PredefinedFit
+
+    data = next(a for a in _axes(document).artists if a.kind == "errorbar")
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    document.push(add_fit(document.project, fit, residuals=True))
+    return document.figure.axes[1].artists[0]
+
+
+def test_the_residuals_line_width_is_set_in_the_panel(
+    panel: PropertyPanel, document
+) -> None:
+    residuals = _with_residuals(document)
+    document.select(residuals.id)
+    editor = panel.editors[("linewidth",)]
+    assert editor.line.placeholderText() == "default"
+    _type(panel, ("linewidth",), "2")
+    assert residuals.linewidth == 2.0
+    document.undo()
+    assert residuals.linewidth is None
+    _type(panel, ("linewidth",), "0")  # not a width: refused, nothing changes
+    assert residuals.linewidth is None
+
+
+def test_the_zero_line_is_set_in_the_panel(panel: PropertyPanel, document) -> None:
+    residuals = _with_residuals(document)
+    document.select(residuals.id)
+    _type(panel, ("zero_color",), "tab:red")
+    _type(panel, ("zero_linewidth",), "1.5")
+    assert (residuals.zero_color, residuals.zero_linewidth) == ("tab:red", 1.5)
+    combo = panel.editors[("zero_linestyle",)].widget
+    labels = [combo.itemText(i) for i in range(combo.count())]
+    assert "None" not in labels and "Dotted" in labels
+    combo.activated.emit(labels.index("Dotted"))
+    assert residuals.zero_linestyle == ":"
+    panel.editors[("zero_line",)].widget.click()
+    assert residuals.zero_line is False
+
+
+def _note(document):
+    from figscribe.commands import InsertItem
+    from figscribe.model import Annotation
+
+    note = Annotation(text="peak", position=(1.0, 0.5))
+    document.push(InsertItem(_axes(document).id, "artists", note))
+    return _axes(document).artists[-1]
+
+
+def test_a_note_background_is_chosen_with_white_first(
+    panel: PropertyPanel, document
+) -> None:
+    note = _note(document)
+    document.select(note.id)
+    editor = panel.editors[("background",)]
+    assert editor.line.placeholderText() == "none"
+    assert next(iter(editor.swatches)) == "white"  # for notes over a grid
+    editor.swatches["white"].click()
+    assert note.background == "white"
+    document.undo()
+    assert note.background is None
+    _type(panel, ("background",), "#ffeeaa")
+    assert note.background == "#ffeeaa"
+    _type(panel, ("background",), "")  # none again
+    assert note.background is None
+
+
+def test_a_refused_background_is_reported(panel: PropertyPanel, document) -> None:
+    note = _note(document)
+    document.select(note.id)
+    _type(panel, ("background",), "wh")
+    assert note.background is None and "not a color" in panel.error
+
+
 def test_a_refused_color_is_not_offered_again(
     panel: PropertyPanel, document: Document
 ) -> None:
@@ -534,11 +609,14 @@ def test_errors_are_shaded_as_a_band_and_drawn_as_bars_again(
     panel: PropertyPanel, document: Document
 ) -> None:
     document.select(_artist(document).id)
-    assert "Error band" not in panel.sections
+    assert ("band", "color") not in panel.editors
     panel.editors[("band",)].widget.click()
     assert _artist(document).band is not None
     assert document.history.undo_text == "Shade the errors"
-    assert "Error band" in panel.sections
+    # Its color and opacity are under the box, in the section of the box.
+    assert panel.sections["Error bars"].isAncestorOf(
+        panel.editors[("band", "alpha")].widget
+    )
     color = panel.editors[("band", "color")]
     assert color.line.placeholderText() == "the plot's"
     _type(panel, ("band", "color"), "tab:red")
@@ -548,20 +626,50 @@ def test_errors_are_shaded_as_a_band_and_drawn_as_bars_again(
     panel.editors[("band",)].widget.click()
     assert _artist(document).band is None
     assert document.history.undo_text == "Draw the errors as bars"
-    assert "Error band" not in panel.sections
+    assert ("band", "color") not in panel.editors
     document.history.undo()
     assert _artist(document).band.alpha == 0.5
+
+
+def test_fewer_points_are_switched_on_and_set_up(
+    panel: PropertyPanel, document: Document
+) -> None:
+    document.select(_artist(document).id)
+    assert ("reduction", "count") not in panel.editors
+    panel.editors[("reduction",)].widget.click()
+    assert _artist(document).reduction.count == 10
+    assert document.history.undo_text == "Draw fewer points"
+    assert panel.sections["Units and rows"].isAncestorOf(
+        panel.editors[("reduction", "count")].widget
+    )
+    _type(panel, ("reduction", "count"), "5")
+    assert _artist(document).reduction.count == 5
+    assert not panel.editors[("reduction", "width")].widget.isEnabled()
+    method = panel.editors[("reduction", "method")].widget
+    index = method.findText("mean over x intervals")
+    method.setCurrentIndex(index)
+    method.activated.emit(index)
+    assert _artist(document).reduction.method == "interval"
+    assert panel.editors[("reduction", "width")].widget.isEnabled()
+    assert not panel.editors[("reduction", "count")].widget.isEnabled()
+    panel.editors[("reduction",)].widget.click()
+    assert _artist(document).reduction is None
+    assert document.history.undo_text == "Draw every row"
+    assert "Fewer points" not in panel.sections
 
 
 def test_panel_labels_are_switched_on_and_set_up(
     panel: PropertyPanel, document: Document
 ) -> None:
     document.select(_figure(document).id)
-    assert "Panel labels" not in panel.sections
+    assert ("panel_labels", "placement") not in panel.editors
     panel.editors[("panel_labels",)].widget.click()
     assert _figure(document).panel_labels is not None
     assert document.history.undo_text == "Letter the panels"
-    assert "Panel labels" in panel.sections
+    assert "Panel labels" not in panel.sections  # they are in Text, under the box
+    assert panel.sections["Text"].isAncestorOf(
+        panel.editors[("panel_labels", "placement")].widget
+    )
     placement = panel.editors[("panel_labels", "placement")].widget
     placement.activated.emit(placement.findText("inside the corner"))
     assert _figure(document).panel_labels.placement == "inside"
@@ -595,25 +703,271 @@ def test_the_basic_settings_come_first_the_rest_under_more(
 ) -> None:
     document.select(_artist(document).id)  # the error bars
     fields = _section_fields(panel)
-    assert fields["Look"] == ["color", "marker", "linestyle", "capsize"]
-    assert fields["Legend"] == ["label"]
-    assert fields["Data"] == [
-        "axis",
-        "x",
-        "y",
-        "xerr",
-        "yerr",
+    assert fields["Look"] == ["color", "marker", "markersize", "linestyle", "linewidth"]
+    assert fields["Error bars"] == ["capsize", "elinewidth", "band"]
+    assert fields["Label and data"] == ["label", "axis", "x", "y", "xerr", "yerr"]
+    assert fields["Units and rows"] == [
         "x_conversion",
         "y_conversion",
         "x_range",
-    ]  # all data stays
-    assert "markersize" in fields["More"] and "band" in fields["More"]
-    assert fields["More"][-2:] == ["visible", "zorder"]
+        "reduction",
+    ]
+    assert fields["Left-out points"] == [
+        "left_out_color",
+        "left_out_marker",
+        "left_out_linestyle",
+        "left_out_note",
+    ]
+    assert fields["More"] == ["alpha", "visible", "zorder"]
     assert not panel.sections["More"].expanded
+    assert not panel.sections["Left-out points"].expanded
+    assert "Legend" not in fields and "Data" not in fields
 
     document.select(_figure(document).id)
     fields = _section_fields(panel)
-    assert fields["Size"] == ["name", "width_mm", "height_mm"]
-    assert fields["Style"] == ["font_size", "panel_labels"]
-    assert "tick_length" in fields["More"]
-    assert fields["Export"] == ["dpi"]
+    assert fields["Format"] == ["name", "width_mm", "height_mm", "dpi", "stylesheet"]
+    assert fields["Text"] == [
+        "font_size",
+        "unit_format",
+        "align_labels",
+        "panel_labels",
+    ]
+    assert fields["Ticks and frame"] == ["tick_direction", "ticks_all_sides"]
+    assert fields["Widths and lengths"] == [
+        "frame_width",
+        "tick_width",
+        "tick_length",
+        "minor_tick_width",
+        "minor_tick_length",
+    ]
+    assert "More" not in fields  # nothing rare enough is left to fold
+    assert "Export" not in fields and "Style" not in fields
+
+
+def test_the_figure_panel_follows_what_the_settings_are_for(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    document.select(_figure(document).id)
+    assert list(panel.sections) == [
+        "Format",
+        "Text",
+        "Ticks and frame",
+        "Widths and lengths",
+        "Panel layout",
+    ]
+    # The two tick settings are in view; the details and the grid are folded.
+    assert panel.sections["Ticks and frame"].expanded
+    assert not panel.sections["Widths and lengths"].expanded
+    assert not panel.sections["Panel layout"].expanded
+    # The letters of the panels sit under their check box in Text, with a
+    # caption that is not the figure's font size.
+    panel.editors[("panel_labels",)].widget.click()
+    text = panel.sections["Text"]
+    assert text.isAncestorOf(panel.editors[("panel_labels", "placement")].widget)
+    captions = [
+        label.text()
+        for label in text.body.findChildren(QLabel)
+        if label.objectName() == "caption"
+    ]
+    assert captions.count("Font size (pt)") == 1
+    assert "Letter size (pt)" in captions
+    assert captions.index("Font size (pt)") < captions.index("Letters")
+
+
+def test_every_section_folds_and_stays_as_the_user_left_it(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QToolButton
+
+    document.select(_figure(document).id)
+    assert all(isinstance(s.header, QToolButton) for s in panel.sections.values())
+    opened = [title for title, s in panel.sections.items() if s.expanded]
+    assert opened == ["Format", "Text", "Ticks and frame"]  # as it opens
+    panel.sections["Text"].header.click()  # fold what is not needed
+    assert not panel.sections["Text"].expanded
+    document.select(_axes(document).id)
+    document.select(_figure(document).id)
+    assert not panel.sections["Text"].expanded  # still as it was left
+    assert panel.sections["Format"].expanded
+
+
+def test_a_section_folded_for_one_kind_of_object_stays_open_for_another(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import ColumnRef, Histogram
+
+    data = _artist(document)
+    histogram = Histogram(values=ColumnRef(source=data.y.source, column="U"))
+    document.push(InsertItem(_axes(document).id, "artists", histogram))
+    document.select(data.id)
+    panel.sections["Look"].header.click()  # fold it for the error bars
+    assert not panel.sections["Look"].expanded
+    document.select(histogram.id)
+    assert panel.sections["Look"].expanded  # a histogram's look is not hidden by it
+    document.select(data.id)
+    assert not panel.sections["Look"].expanded  # the error bars keep their own
+
+
+def test_the_panel_follows_what_the_settings_are_for(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    document.select(_axes(document).id)
+    assert list(panel.sections) == [
+        "Title and axes",
+        "Grid",
+        "Legend",
+        "Place in layout",
+    ]
+    assert [t for t, s in panel.sections.items() if not s.expanded] == [
+        "Place in layout"
+    ]
+    fields = _section_fields(panel)
+    assert fields["Title and axes"] == ["title", "title_size", "y_right"]
+    assert fields["Grid"] == [
+        "grid",
+        "grid_axis",
+        "grid_which",
+        "grid_color",
+        "grid_linewidth",
+        "grid_linestyle",
+    ]
+    assert fields["Place in layout"] == ["row", "col", "rowspan", "colspan"]
+    assert "More" not in fields
+    # The title comes first, then the axes with the box for a right y axis, and
+    # the card of that axis right after the box.
+    first = panel.sections["Title and axes"]
+    below = [
+        child.text()
+        for child in first.body.findChildren(QLabel)
+        if child.objectName() == "caption"
+    ]
+    assert below[:2] == ["Title", "Title size (pt)"]
+    assert set(panel.axis_links) == {"x", "y"}  # the example has no right axis
+    # The legend's captions say what they mean without the figure's grid.
+    legend = [
+        child.text()
+        for child in panel.sections["Legend"].body.findChildren(QLabel)
+        if child.objectName() == "caption"
+    ]
+    assert "Columns of entries" in legend and "Position (dragged)" in legend
+
+
+def test_the_right_y_axis_box_adds_and_removes_its_card(
+    panel: PropertyPanel, document
+) -> None:
+    document.select(_axes(document).id)
+    assert "y_right" not in panel.axis_links
+    panel.editors[("y_right",)].widget.click()
+    assert "y_right" in panel.axis_links  # its card appears right after the box
+    assert _axes(document).y_right is not None
+    panel.editors[("y_right",)].widget.click()
+    assert "y_right" not in panel.axis_links
+    assert _axes(document).y_right is None
+
+
+def test_a_section_folded_on_an_axis_stays_folded_whatever_was_selected_before(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.gui.document import axis_id
+
+    x_axis = axis_id(_axes(document).id, "x")
+    document.select(_figure(document).id)
+    document.select(x_axis)
+    panel.sections["Scale"].header.click()  # fold it
+    assert not panel.sections["Scale"].expanded
+    document.select(_artist(document).id)
+    document.select(x_axis)
+    assert not panel.sections["Scale"].expanded  # as the user left it
+
+
+def _sections_of(panel: PropertyPanel) -> dict[str, list[str]]:
+    return {t: f for t, f in _section_fields(panel).items()}
+
+
+def test_a_line_and_points_follow_the_same_arrangement_without_error_bars(
+    panel: PropertyPanel, document
+) -> None:
+    from figscribe.commands import InsertItem
+    from figscribe.model import LinePlot, ScatterPlot
+
+    data = _artist(document)
+    line = LinePlot(x=data.x, y=data.y, label="line")
+    points = ScatterPlot(x=data.x, y=data.y, label="points")
+    for plot in (line, points):
+        document.push(InsertItem(_axes(document).id, "artists", plot))
+    document.select(line.id)
+    assert list(panel.sections) == [
+        "Label and data",
+        "Units and rows",
+        "Look",
+        "Left-out points",
+        "More",
+    ]
+    fields = _sections_of(panel)
+    assert fields["Look"] == ["color", "marker", "markersize", "linestyle", "linewidth"]
+    assert fields["Label and data"] == ["label", "axis", "x", "y"]
+    document.select(points.id)
+    fields = _sections_of(panel)
+    assert fields["Look"] == ["color", "edgecolor", "marker", "size"]
+    assert fields["Left-out points"] == [
+        "left_out_color",
+        "left_out_marker",
+        "left_out_note",
+    ]
+
+
+def test_the_legend_entry_has_its_own_caption_for_these_plots(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    document.select(_artist(document).id)
+    captions = [
+        label.text()
+        for label in panel.sections["Label and data"].body.findChildren(QLabel)
+        if label.objectName() == "caption"
+    ]
+    assert captions[0] == "Legend entry"
+
+
+def test_both_conversion_rows_say_whether_they_are_of_x_or_y(
+    panel: PropertyPanel, document
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    document.select(_artist(document).id)
+    for axis in ("x", "y"):
+        combo = panel.editors[(f"{axis}_conversion",)].widget
+        combo.activated.emit(combo.findText("another factor"))
+    captions = [
+        label.text()
+        for label in panel.sections["Units and rows"].body.findChildren(QLabel)
+        if label.objectName() == "caption"
+    ]
+    assert {"x: Start at 0", "x: Factor", "x: Unit"} <= set(captions)
+    assert {"y: Start at 0", "y: Factor", "y: Unit"} <= set(captions)
+
+
+def test_histograms_and_allan_deviations_have_their_sections(
+    panel: PropertyPanel, document
+) -> None:
+    """Decision 0062 (proposed): what is plotted, then how; the plot's own
+    sections, not the old *Data* and *Legend*."""
+    from figscribe.commands import InsertItem
+    from figscribe.model import AllanDeviationPlot, Histogram
+
+    data = _artist(document)
+    histogram = Histogram(values=data.y)
+    allan = AllanDeviationPlot(values=data.y)
+    for plot in (histogram, allan):
+        document.push(InsertItem(_axes(document).id, "artists", plot))
+    for plot in (histogram, allan):
+        document.select(plot.id)
+        titles = list(panel.sections)
+        assert titles[:3] == ["Label and data", "Units and rows", "Look"]
+        assert "Data" not in titles and "Legend" not in titles

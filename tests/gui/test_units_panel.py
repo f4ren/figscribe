@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QLabel, QLineEdit
 
-from figscribe.commands import InsertItem
+from figscribe.commands import InsertItem, SetField
 from figscribe.gui import Document
 from figscribe.gui.properties import PropertyPanel
 from figscribe.model import AllanDeviationPlot, Conversion
@@ -61,6 +61,7 @@ def test_x_is_shown_in_another_unit_from_a_list(panel, document) -> None:
         "days (÷ 86 400)",
         "ms (× 1000)",
         "another factor",
+        "a formula",
     ]
     assert ("x_conversion", "from_start") not in panel.editors
     _choose(panel, ("x_conversion",), "ms (× 1000)")
@@ -103,5 +104,67 @@ def test_an_allan_deviation_counts_its_range_in_time(panel, document) -> None:
     _choose(panel, ("x_conversion",), "min (÷ 60)")
     # tau starts at tau0 whatever, so there is nothing to start at 0.
     assert ("x_conversion", "from_start") not in panel.editors
+    # A formula may scale τ, here cycles of 2.88 s shown in hours, not shift it.
+    _choose(panel, ("x_conversion",), "a formula")
+    _type(panel, ("x_conversion", "formula"), "x * 2.88 / 3600")
+    _type(panel, ("x_conversion", "unit"), "h")
+    assert _plot_of(document, allan.id).x_conversion == Conversion(
+        formula="x * 2.88 / 3600", unit="h"
+    )
+    _type(panel, ("x_conversion", "formula"), "x + 1")
+    assert "duration" in panel.error and "add or subtract" in panel.error
+    assert ("x_conversion", "from_start") not in panel.editors
     captions = [label.text() for label in panel.widget().findChildren(QLabel)]
     assert "Use only times" in captions
+
+
+def test_a_formula_is_typed_and_moves_the_axis_with_it(panel, document) -> None:
+    document.select(_plot(document).id)
+    _choose(panel, ("x_conversion",), "a formula")
+    assert _plot(document).x_conversion == Conversion(formula="x")
+    assert ("x_conversion", "factor") not in panel.editors
+    _type(panel, ("x_conversion", "formula"), "x / 2 - 1")
+    _type(panel, ("x_conversion", "unit"), "u")
+    assert _plot(document).x_conversion == Conversion(formula="x / 2 - 1", unit="u")
+    assert document.figure.axes[0].x.unit == "u"
+    assert document.history.undo_text == "Show x in u"
+
+
+def test_a_formula_that_is_not_linear_is_refused_in_words(panel, document) -> None:
+    document.select(_plot(document).id)
+    _choose(panel, ("x_conversion",), "a formula")
+    _type(panel, ("x_conversion", "formula"), "log(x)")
+    assert "Formula" in panel.error and "not linear" in panel.error
+    assert "Value error" not in panel.error
+    assert _plot(document).x_conversion == Conversion(formula="x")
+    _type(panel, ("x_conversion", "formula"), "t / 60")
+    assert "write the value as x" in panel.error
+
+
+def test_a_formula_starts_as_what_the_plot_does_now(panel, document) -> None:
+    document.select(_plot(document).id)
+    _choose(panel, ("y_conversion",), "ms (× 1000)")
+    _choose(panel, ("y_conversion",), "a formula")
+    assert _plot(document).y_conversion == Conversion(formula="x * 1000", unit="ms")
+    # back to a factor: the slope is kept, the offset cannot be
+    _type(panel, ("y_conversion", "formula"), "x / 4 + 3")
+    _choose(panel, ("y_conversion",), "another factor")
+    assert _plot(document).y_conversion == Conversion(factor=0.25, unit="ms")
+    assert ("y_conversion", "factor") in panel.editors
+
+
+def test_a_conversion_with_a_formula_is_not_a_unit_of_the_list(panel, document) -> None:
+    document.select(_plot(document).id)
+    document.push(
+        SetField(
+            _plot(document).id,
+            ("x_conversion",),
+            Conversion(formula="x / 60", unit="min"),
+        )
+    )
+    combo = panel.editors[("x_conversion",)].widget
+    assert combo.currentText() == "a formula"
+
+
+def _plot_of(document: Document, oid: str):
+    return next(a for a in document.figure.axes[0].artists if a.id == oid)

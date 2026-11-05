@@ -34,6 +34,7 @@ from figscribe.model import (
     PanelLabels,
     PredefinedFit,
     Project,
+    Reduction,
     ReferenceLine,
     ResidualPlot,
     ScatterPlot,
@@ -46,7 +47,8 @@ def build(folder: Path) -> Path:
     """Write the project and its files into `folder`; return the project file.
 
     Panel A has a line in other units over a range, points, error bars with a
-    fit, a note with an arrow and a right y axis with a plot on it; B a
+    fit, a note with an arrow, a right y axis with a plot on it and error bars
+    drawn with fewer points; B a
     histogram, a reference line, a shaded range and the residuals; C an image
     and D a color mesh, both with color bars; E is an inset in A, with error
     bars drawn as a band.
@@ -96,9 +98,23 @@ def build(folder: Path) -> Path:
                 y_conversion=Conversion(factor=0.5),
                 x_range=(0.5, 3.5),
             ),
-            ScatterPlot(x=col("t"), y=col("U"), label="points", left_out=[7]),
+            ScatterPlot(
+                x=col("t"),
+                y=col("U"),
+                label="points",
+                left_out=[7],
+                y_conversion=Conversion(formula="x * 2 - 1", unit="V"),
+            ),
             LinePlot(x=col("t"), y=col("T"), axis="right", label="temperature"),
             Annotation(text="peak", position=(2.0, 5.0), arrow_to=(2.5, 6.0)),
+            ErrorbarPlot(
+                x=col("t"),
+                y=col("U"),
+                yerr=col("dU"),
+                label="fewer",
+                left_out=[2],
+                reduction=Reduction(count=4),
+            ),
         ],
     )
     b = Axes(
@@ -142,6 +158,7 @@ def build(folder: Path) -> Path:
                 yerr=col("t"),  # wide enough to be seen in the small inset
                 label="shaded",
                 left_out=[4],
+                linewidth=3.0,  # wide enough for the grey stretch to show at 72 dpi
                 band=ErrorBand(),
             ),
         ],

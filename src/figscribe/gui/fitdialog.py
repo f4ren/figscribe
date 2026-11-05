@@ -7,6 +7,8 @@ again right away, on the data of the target plot, without touching the project; 
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -32,7 +34,6 @@ from figscribe.fit import (
     free_names,
     in_range,
     initial_guess,
-    kept,
     outliers,
     parameter_names,
     run_fit,
@@ -40,11 +41,17 @@ from figscribe.fit import (
     within,
 )
 from figscribe.gui import theme
-from figscribe.gui.names import artist_name, with_error
+from figscribe.gui.names import artist_name, no_rows_reason, with_error
 from figscribe.gui.numbers import number
 from figscribe.gui.properties import GREEK
 from figscribe.gui.widgets import label
-from figscribe.model import ErrorbarPlot, ExpressionFit, FitCurve, PredefinedFit
+from figscribe.model import (
+    AllanDeviationPlot,
+    ErrorbarPlot,
+    ExpressionFit,
+    FitCurve,
+    PredefinedFit,
+)
 
 MODELS = [
     ("gaussian", "Gaussian", "A peak with a constant background"),
@@ -52,6 +59,7 @@ MODELS = [
     ("linear", "Straight line", "a * x + b"),
     ("polynomial", "Polynomial", "Of the degree you choose"),
     ("exponential", "Exponential", "Decay or growth with a constant background"),
+    ("power", "Power law", "a * x**b, a straight line on log-log paper"),
     ("expression", "Own formula", "Any expression in x"),
 ]
 
@@ -72,11 +80,11 @@ class FitDialog(QDialog):
         self.target = target
         self.existing = fit
         # In the units the plot shows, as the parameters will be read.
-        shown = plot_data(target, data)
+        self.shown = shown = plot_data(target, data)
         self.x, self.y = shown.x, shown.y
         self.yerr = shown.yerr if isinstance(target, ErrorbarPlot) else None
-        self.in_plot = shown.used
-        """Which rows lie within the plot's range; the others are never fitted."""
+        if shown.reduced:  # derived errors weight the fit of any reduced plot
+            self.yerr = shown.yerr
         self.result = None
         self.start: dict[str, QLineEdit] = {}
         self.fixed: dict[str, QCheckBox] = {}
@@ -110,6 +118,9 @@ class FitDialog(QDialog):
         self.outside.setToolTip(
             "In the left-out color and marker of the plot; they stay in the plot."
         )
+        if shown.reduced:
+            self.outside.setEnabled(False)
+            self.outside.setToolTip(no_rows_reason(target))
         self.k = QDoubleSpinBox()
         self.k.setRange(1.0, 10.0)
         self.k.setDecimals(1)
@@ -122,6 +133,9 @@ class FitDialog(QDialog):
         )
         self.find_outliers = QPushButton("Find outliers")
         self.find_outliers.clicked.connect(self._find_outliers)
+        if shown.reduced:
+            self.find_outliers.setEnabled(False)
+            self.find_outliers.setToolTip(no_rows_reason(target))
         self.outlier_text = label("", "caption")
         self.outlier_text.setWordWrap(True)
         self.leave_outliers_out = QPushButton("Leave them out")
@@ -157,11 +171,22 @@ class FitDialog(QDialog):
     # --- layout ---------------------------------------------------------------
 
     def _layout(self) -> None:
-        weighting = (
-            f"weighted by {self.target.yerr.column}"
-            if self.yerr is not None
-            else "unweighted: the plot has no y errors"
-        )
+        weighting = "unweighted: the plot has no y errors"
+        if self.shown.reduced:
+            weighting = "unweighted: the median of rows has no error"
+        if isinstance(self.target, AllanDeviationPlot):
+            weighting = "unweighted: the plot has no error bars"
+            if self.yerr is not None:
+                weighting = "weighted by the error bars of the plot"
+        elif self.yerr is not None:
+            column = getattr(self.target, "yerr", None)
+            weighting = (
+                "weighted by the standard errors of the groups"
+                if column is None
+                else f"weighted by {column.column}, propagated"
+                if self.shown.reduced
+                else f"weighted by {column.column}"
+            )
         top = QVBoxLayout()
         top.setContentsMargins(24, 20, 24, 16)
         top.setSpacing(4)
@@ -449,14 +474,20 @@ class FitDialog(QDialog):
             used = in_range(self.x, self.fit_range())
         except FitError:
             used = in_range(self.x, None)
-        left_out = [*self.target.left_out, *(self.pending if pending else [])]
-        return used & kept(len(self.x), left_out) & self.in_plot
+        left_out = [
+            *getattr(self.target, "left_out", ()),
+            *(self.pending if pending else []),
+        ]
+        used &= self.shown.rows_kept(left_out)
+        if self.yerr is not None:  # a point without an error is not fitted
+            used &= np.isfinite(self.yerr)
+        return used
 
     def left_out_rows(self) -> list[int] | None:
         """The plot's rows to leave out with this fit; None if unchanged."""
         if not self.pending:
             return None
-        return sorted({*self.target.left_out, *self.pending})
+        return sorted({*getattr(self.target, "left_out", ()), *self.pending})
 
     def left_out_note(self) -> str:
         shown = [row + 1 for row in self.pending]
@@ -540,9 +571,32 @@ class FitDialog(QDialog):
             self._show_error(str(exc))
             return
         self.result = result
-        self.error.setText("" if result.converged else "The fit did not converge.")
+        self.error.setText(self._doubt(result))
         self._show_result()
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
+
+    @staticmethod
+    def _doubt(result) -> str:
+        """What a usable result still lacks: convergence or uncertainties."""
+        if not result.converged:
+            return "The fit did not converge."
+        unknown = [
+            GREEK.get(name, name)
+            for name, error in result.uncertainties.items()
+            if not math.isfinite(error)
+        ]
+        if not unknown:
+            return ""
+        names = ", ".join(unknown[:-1]) + (" and " if unknown[1:] else "") + unknown[-1]
+        if not unknown[1:]:
+            return (
+                f"The uncertainty of {names} cannot be estimated: the data does "
+                "not determine it, or the parameters depend on each other."
+            )
+        return (
+            f"The uncertainties of {names} cannot be estimated: the data does "
+            "not determine them, or the parameters depend on each other."
+        )
 
     def _guesses_within(self, bounds) -> None:
         """Move start values the user did not type into their bounds; a typed

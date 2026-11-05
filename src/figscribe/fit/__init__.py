@@ -21,6 +21,7 @@ from figscribe.fit.ops import (
 )
 from figscribe.fit.run import (
     evaluate,
+    fitted_points,
     free_parameters,
     in_range,
     initial_guess,
@@ -41,6 +42,7 @@ __all__ = [
     "FitError",
     "compile_expression",
     "evaluate",
+    "fitted_points",
     "free_names",
     "free_parameters",
     "in_range",

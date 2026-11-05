@@ -93,7 +93,7 @@ QLabel#projectName {{ font-weight: 600; font-size: 14px; padding: 0 8px 0 4px; }
 QLabel#saveState {{ color: {MUTED}; }}
 
 QWidget#sidePanel {{ background: {SURFACE}; }}
-QLabel#panelTitle {{ font-weight: 600; font-size: 14px; }}
+QLabel#panelTitle {{ font-weight: 600; font-size: 17px; }}
 QLabel#sectionTitle {{ font-weight: 600; padding-top: 6px; }}
 QLabel#caption, QLabel#hint {{ color: {MUTED}; }}
 QLabel#kicker {{ color: {MUTED}; font-size: 11px; font-weight: 500; }}
@@ -170,13 +170,18 @@ QLabel#chip {{
 }}
 QWidget#section {{ border-bottom: 1px solid {BORDER}; }}
 QToolButton#sectionToggle {{
-    border: 0; background: transparent; font-weight: 600; padding: 0;
+    border: 0; background: transparent; font-weight: 600; font-size: 14px; padding: 0;
 }}
 QFrame#card {{
     background: {GROUND}; border: 1px solid {BORDER}; border-radius: 10px;
 }}
 QLabel#value {{ font-family: "{MONO}"; }}
 QLabel#panelKicker {{ color: {ACCENT}; font-size: 11px; font-weight: 600; }}
+QPushButton#crumb {{
+    border: 0; background: transparent; padding: 0 2px;
+    color: {ACCENT}; font-size: 12px; text-align: left;
+}}
+QPushButton#crumb:hover {{ text-decoration: underline; }}
 
 QScrollArea {{ border: 0; background: {SURFACE}; }}
 
@@ -363,7 +368,15 @@ _ICONS = {
     "residual": '<path d="M1 8 H15" stroke="#8A8A90" stroke-width="1" '
     'stroke-dasharray="2 2"/><circle cx="5" cy="6" r="1.7" fill="{c}"/>'
     '<circle cx="11" cy="10" r="1.7" fill="{c}"/>',
-    "annotation": '<path d="M2 13 L7 8 M7 8 H14" stroke="{c}" stroke-width="1.5" '
+    "axis_x": '<path d="M1.5 12 H14.5 M4 12 V8 M8 12 V8 M12 12 V8" '
+    'stroke="{c}" stroke-width="1.3" stroke-linecap="round"/>',
+    "axis_y": '<path d="M4 1.5 V14.5 M4 4 H8 M4 8 H8 M4 12 H8" '
+    'stroke="{c}" stroke-width="1.3" stroke-linecap="round"/>',
+    "annotation": '<path d="M3.5 3.5 H12.5 M8 3.5 V13" stroke="{c}" '
+    'stroke-width="1.8" fill="none" stroke-linecap="round"/>',
+    "duplicate": '<rect x="2" y="5" width="8" height="9" rx="1.2" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><path d="M6 3 V2.5 A1 1 0 0 1 7 1.5 H13 '
+    'A1 1 0 0 1 14 2.5 V10 A1 1 0 0 1 13 11 H12" stroke="{c}" stroke-width="1.3" '
     'fill="none" stroke-linecap="round"/>',
     "histogram": '<path d="M2 14 V9 H5 V5 H8 V7 H11 V10 H14 V14 Z" fill="{c}"/>',
     "refline": '<path d="M8 1.5 V14.5" stroke="{c}" stroke-width="1.6" '
@@ -379,6 +392,29 @@ _ICONS = {
     '<rect x="8" y="2" width="6" height="6" fill="{c}" opacity="0.75"/>'
     '<rect x="2" y="8" width="6" height="6" fill="{c}"/>'
     '<rect x="8" y="8" width="6" height="6" fill="{c}" opacity="0.5"/>',
+    "panel": '<rect x="2" y="3" width="5" height="10" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="9" y="3" width="5" height="10" '
+    'rx="1" fill="none" stroke="{c}" stroke-width="1.3"/>',
+    "reference": '<rect x="3" y="2" width="6" height="12" fill="{c}" opacity="0.35"/>'
+    '<path d="M12 1.5 V14.5" stroke="{c}" stroke-width="1.6" stroke-dasharray="3 2"/>',
+    "refline_h": '<path d="M1.5 8 H14.5" stroke="{c}" stroke-width="1.6" '
+    'stroke-dasharray="3 2"/>',
+    "span_h": '<rect x="1.5" y="4.5" width="13" height="7" fill="{c}" opacity="0.4"/>',
+    "panel_right": '<rect x="2" y="3" width="5" height="10" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="9" y="3" width="5" height="10" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
+    "panel_left": '<rect x="9" y="3" width="5" height="10" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="2" y="3" width="5" height="10" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
+    "panel_above": '<rect x="3" y="9" width="10" height="5" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="3" y="2" width="10" height="5" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
+    "panel_inset": '<rect x="2" y="2" width="12" height="12" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="7.5" y="3.5" width="5" height="5" '
+    'rx="0.8" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.1"/>',
+    "panel_below": '<rect x="3" y="2" width="10" height="5" rx="1" fill="none" '
+    'stroke="{c}" stroke-width="1.3"/><rect x="3" y="9" width="10" height="5" '
+    'rx="1" fill="{c}" fill-opacity="0.75" stroke="{c}" stroke-width="1.3"/>',
     "chat": '<path d="M2.5 3.5 H13.5 V10.5 H7 L4 13 V10.5 H2.5 Z" fill="none" '
     'stroke="{c}" stroke-width="1.4" stroke-linejoin="round"/>',
     "code": '<path d="M6 4 L2 8 L6 12 M10 4 L14 8 L10 12" stroke="{c}" '

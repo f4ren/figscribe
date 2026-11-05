@@ -268,3 +268,19 @@ def test_a_range_needs_a_panel_and_an_axis(project: Project) -> None:
         same_range(project, "nope", "x", (0.0, 1.0))
     with pytest.raises(CommandError, match="x or y"):
         same_range(project, project.figures[0].axes[0].id, "z", (0.0, 1.0))
+
+
+def test_residuals_without_a_width_do_not_take_it_from_a_line_or_give_it_away(
+    project: Project,
+) -> None:
+    axes = project.figures[0].axes[0]
+    line = LinePlot(x=axes.artists[0].x, y=axes.artists[0].y, linewidth=3.0)
+    axes.artists.append(line)
+    residuals = project.figures[0].axes[1].artists[0]
+    assert isinstance(residuals, ResidualPlot) and residuals.linewidth is None
+    # An unset width is not a width the line can have: it keeps its own.
+    paste_style(project, [line.id], residuals.model_copy()).apply(project)
+    assert line.linewidth == 3.0
+    # A line's width goes to the residuals.
+    paste_style(project, [residuals.id], line.model_copy()).apply(project)
+    assert residuals.linewidth == 3.0
