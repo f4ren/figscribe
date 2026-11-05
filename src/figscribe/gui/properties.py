@@ -322,6 +322,7 @@ ORDER = [
     "File",
     "Reading",
     "Look",
+    "Place",
     "Error bars",
     "Left-out points",
     "Style",
@@ -396,9 +397,34 @@ BASIC = {
     "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
     "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
     "ResidualPlot": ("color", "marker", "markersize", "linestyle", "linewidth"),
-    "Annotation": ("text", "color", "background", "fontsize", "position", "arrow_to"),
-    "ReferenceLine": ("color", "linestyle", "linewidth", "label"),
-    "ShadedSpan": ("color", "alpha", "label"),
+    "Annotation": (
+        "text",
+        "fontsize",
+        "color",
+        "background",
+        "position",
+        "coords",
+        "arrow_to",
+        "axis",
+    ),
+    "ReferenceLine": (
+        "label",
+        "orientation",
+        "at",
+        "axis",
+        "color",
+        "linestyle",
+        "linewidth",
+    ),
+    "ShadedSpan": (
+        "label",
+        "orientation",
+        "start",
+        "end",
+        "axis",
+        "color",
+        "alpha",
+    ),
     "ImagePlot": ("cmap", "norm", "vmin", "vmax", "colorbar"),
     "ColorMesh": ("cmap", "norm", "vmin", "vmax", "colorbar"),
     "Figure": (
@@ -748,6 +774,8 @@ CAPTIONS = {
     ("LinePlot", "label"): "Legend entry",
     ("ScatterPlot", "label"): "Legend entry",
     ("ErrorbarPlot", "label"): "Legend entry",
+    ("ReferenceLine", "label"): "Legend entry",
+    ("ShadedSpan", "label"): "Legend entry",
     ("ErrorBand", "color"): "Band color",
     ("ErrorBand", "alpha"): "Band opacity",
     ("Legend", "ncols"): "Columns of entries",
@@ -830,14 +858,51 @@ PLOT_SECTIONS = {
 kinds of plot keep `SECTIONS` until their turn."""
 
 
+ELEMENT_SECTIONS = {
+    "Annotation": {
+        "text": "Text",
+        "fontsize": "Text",
+        "color": "Text",
+        "background": "Text",
+        "position": "Place",
+        "coords": "Place",
+        "arrow_to": "Place",
+        "axis": "Place",
+    },
+    "ReferenceLine": {
+        "label": "Label and data",
+        "orientation": "Label and data",
+        "at": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+    },
+    "ShadedSpan": {
+        "label": "Label and data",
+        "orientation": "Label and data",
+        "start": "Label and data",
+        "end": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "alpha": "Look",
+    },
+}
+"""Where the settings of the other kinds of element that have been arranged are
+shown (decisions 0060 to 0062, proposed), by kind; the rest keeps `SECTIONS`."""
+
+
 def section_of(obj: BaseModel, name: str, fallback: str) -> str:
     """The section a field of `obj` is shown in."""
-    if type(obj).__name__ in PLOT_KINDS and name in PLOT_SECTIONS:
+    kind = type(obj).__name__
+    if kind in PLOT_KINDS and name in PLOT_SECTIONS:
         return PLOT_SECTIONS[name]
+    if name in ELEMENT_SECTIONS.get(kind, {}):
+        return ELEMENT_SECTIONS[kind][name]
     return SECTIONS.get(name, fallback)
 
 
-IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS}
+IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS, *ELEMENT_SECTIONS}
 """Kinds of object whose settings are shown in the order of `BASIC`, not of the
 model, so that what belongs together is next to each other."""
 

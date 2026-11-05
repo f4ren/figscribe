@@ -186,5 +186,11 @@ note the platform, the screen scaling and the theme in the pull request.
     opens on the setting, with the cursor in it. With a plot selected it is the
     same. On a linear axis *symlog* finds *Type* and not *Linear within ±*.
 
+29. **A note, a line and a range** (proposed arrangement, decision 0060): select a
+    note: *Text* (text, size, colors), *Place* (position, *Position in*, *Arrow
+    to*), and the folded *More*. Select a reference line and a shaded range: *Label
+    and data* (*Legend entry* first), *Look*, *More*. Nothing is clipped; the
+    search (Ctrl+F) still finds *Arrow to*, and Ctrl+K *Position in*.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

@@ -54,8 +54,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
   bump).
 - **U11** the settings panel rearranged, element by element, with the user.
   Done: the figure, a panel, the axis form, line, points and error bars.
-  Open: histogram, Allan deviation, image and color mesh, the fit and its
-  residuals, the note, reference lines and ranges, the data files. Nothing is built for an
+  Proposed, built while the user was away (decisions 0060 to 0062): the note,
+  reference lines and ranges, the fit and its residuals, histogram, Allan
+  deviation, image and color mesh. Open: the data files (left as they are). Nothing is built for an
   element before the user has agreed to its arrangement.
 - **U12** finding what the examples use (see below): **done**.
 
