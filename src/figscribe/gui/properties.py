@@ -324,6 +324,7 @@ ORDER = [
     "Look",
     "Place",
     "Error bars",
+    "Zero line",
     "Left-out points",
     "Style",
     "Grid",
@@ -395,8 +396,29 @@ BASIC = {
     ),
     "Histogram": ("color", "histtype", "density", "label"),
     "AllanDeviationPlot": ("color", "marker", "linestyle", "error_bars", "label"),
-    "FitCurve": ("color", "linestyle", "linewidth", "extend_curve", "label"),
-    "ResidualPlot": ("color", "marker", "markersize", "linestyle", "linewidth"),
+    "FitCurve": (
+        "label",
+        "target",
+        "axis",
+        "color",
+        "linestyle",
+        "linewidth",
+        "extend_curve",
+        "outside_as_left_out",
+    ),
+    "ResidualPlot": (
+        "target",
+        "axis",
+        "color",
+        "marker",
+        "markersize",
+        "linestyle",
+        "linewidth",
+        "zero_line",
+        "zero_color",
+        "zero_linewidth",
+        "zero_linestyle",
+    ),
     "Annotation": (
         "text",
         "fontsize",
@@ -776,6 +798,7 @@ CAPTIONS = {
     ("ErrorbarPlot", "label"): "Legend entry",
     ("ReferenceLine", "label"): "Legend entry",
     ("ShadedSpan", "label"): "Legend entry",
+    ("FitCurve", "label"): "Legend entry",
     ("ErrorBand", "color"): "Band color",
     ("ErrorBand", "alpha"): "Band opacity",
     ("Legend", "ncols"): "Columns of entries",
@@ -886,6 +909,29 @@ ELEMENT_SECTIONS = {
         "axis": "Label and data",
         "color": "Look",
         "alpha": "Look",
+    },
+    "FitCurve": {
+        "label": "Label and data",
+        "target": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+        "extend_curve": "Look",
+        "outside_as_left_out": "Look",
+    },
+    "ResidualPlot": {
+        "target": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "marker": "Look",
+        "markersize": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+        "zero_line": "Zero line",
+        "zero_color": "Zero line",
+        "zero_linewidth": "Zero line",
+        "zero_linestyle": "Zero line",
     },
 }
 """Where the settings of the other kinds of element that have been arranged are
@@ -1487,7 +1533,7 @@ class PropertyPanel(QScrollArea):
             if title in titles:
                 name = titles[title]
                 self._nested(form, getattr(obj, name), (name,))
-            if title == "Data" and isinstance(obj, FitCurve):
+            if title == "Label and data" and isinstance(obj, FitCurve):
                 layout.addWidget(self._fit_card(obj))
         self._fit_result = getattr(obj, "result", None)
 
