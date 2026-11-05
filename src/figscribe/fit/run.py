@@ -151,6 +151,18 @@ def in_range(x, fit_range: tuple[float, float] | None) -> np.ndarray:
     return (x >= low) & (x <= high)
 
 
+def fitted_points(shown, left_out: Sequence[int], fit_range) -> np.ndarray:
+    """Which of a plot's points (`PlotData`, as the plot shows them) a fit runs
+    on: those in the plot's range and the fit's range, not left out, with a
+    finite x, y and error. The one rule the fit, its curve, its residuals and
+    the script share; none left is a fit that draws nothing."""
+    used = in_range(shown.x, fit_range) & shown.rows_kept(left_out)
+    used &= np.isfinite(shown.x) & np.isfinite(shown.y)
+    if shown.yerr is not None:
+        used &= np.isfinite(shown.yerr)
+    return used
+
+
 def kept(count: int, left_out: Sequence[int]) -> np.ndarray:
     """Which of `count` rows are not left out; a FitError for a left-out row
     the data does not have."""

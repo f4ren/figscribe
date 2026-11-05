@@ -1296,10 +1296,6 @@ def test_a_reduced_plot_whose_range_keeps_no_row_draws_nothing(
     _assert_same(project, tmp_path)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the script fits again and has no data to fit (roadmap, B7.1 follow-up)",
-)
 @pytest.mark.parametrize("reduced", [True, False], ids=["reduced", "plain"])
 def test_a_fit_stays_when_the_range_is_narrowed_to_nothing(
     tmp_path: Path, reduced: bool
@@ -1320,6 +1316,32 @@ def test_a_fit_stays_when_the_range_is_narrowed_to_nothing(
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     data.x_range = (1e6, 2e6)
     _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "narrowing",
+    ["fit range", "fit range, curve beyond it", "every row left out"],
+)
+def test_a_fit_with_no_point_left_is_not_drawn_and_the_script_says_so(
+    tmp_path: Path, narrowing: str
+) -> None:
+    """Whatever leaves the fit nothing to run on, after it was run: no curve,
+    no residual points, a script that runs and equals the figure."""
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"])
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    fitted = next(a for a in project.figures[0].axes[0].artists if a.id == fit.id)
+    if narrowing == "every row left out":
+        data.left_out = list(range(len(load_data(project, tmp_path)(ref["t"]))))
+    else:
+        fitted.fit_range = (1e6, 2e6)
+        fitted.extend_curve = narrowing != "fit range"
+    script = _assert_same(project, tmp_path)
+    assert "no point left to run on" in script
+    assert "curve_fit(" not in script
 
 
 def test_a_band_over_reduced_points_and_a_median_without_one(tmp_path: Path) -> None:

@@ -21,8 +21,8 @@ import numpy as np
 
 from figscribe import __version__
 from figscribe.allan import samples
-from figscribe.convert import expression, scale_expression
-from figscribe.fit import free_parameters, numpy_source, parameter_names
+from figscribe.convert import expression, plot_data, scale_expression
+from figscribe.fit import fitted_points, free_parameters, numpy_source, parameter_names
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
 from figscribe.model import (
@@ -405,7 +405,9 @@ class _Writer:
     def _name_fits(self) -> dict[str, tuple[str, str]]:
         """{fit id: (model function name, parameter variable)} for drawn fits."""
         fits = [
-            a for a in self.artists.values() if isinstance(a, FitCurve) and a.result
+            a
+            for a in self.artists.values()
+            if isinstance(a, FitCurve) and a.result and self._points_to_fit(a) != 0
         ]
         taken = self._taken()
         found = {}
@@ -1119,6 +1121,24 @@ class _Writer:
                 value = fit.initial_values.get(name, 1.0)
                 self.emit(f"print({_str(f'{name} = {value:.6g} (held)')})")
 
+    def _why_not_drawn(self, fit: FitCurve) -> str:
+        if fit.result and self._points_to_fit(fit) == 0:
+            return "has no point left to run on"
+        return "is not fitted yet"
+
+    def _points_to_fit(self, fit: FitCurve) -> int | None:
+        """How many points the fit has left to run on; None if the data is not
+        at hand. None left (a range that keeps no row) is what the renderer
+        draws nothing for, and curve_fit would stop on."""
+        target = self.artists.get(fit.target)
+        if self.data is None or target is None:
+            return None
+        try:
+            shown = plot_data(target, self.data)
+        except (DataError, KeyError, ValueError):
+            return None
+        return int(fitted_points(shown, target.left_out, fit.fit_range).sum())
+
     def _finite(self, fit: FitCurve) -> bool | None:
         """Whether all data of the fit is finite; None if unknown."""
         if fit.target in self.reduced:  # means are finite; an error may be missing
@@ -1623,7 +1643,9 @@ class _Writer:
 
     def _fit_curve(self, ax: str, fit: FitCurve, common: dict[str, str]) -> None:
         if fit.id not in self.fits:
-            self.emit(f"# {_describe(fit)} is not fitted yet, so it is not drawn.")
+            self.emit(
+                f"# {_describe(fit)} {self._why_not_drawn(fit)}, so it is not drawn."
+            )
             return
         function, popt = self.fits[fit.id]
         target = self.artists[fit.target]
@@ -1662,7 +1684,12 @@ class _Writer:
             )
         fit = self.artists.get(residuals.target)
         if not isinstance(fit, FitCurve) or fit.id not in self.fits:
-            self.emit("# The fit is not run yet, so there are no residuals to draw.")
+            self.emit(
+                f"# {_describe(fit)} {self._why_not_drawn(fit)}, so there are no "
+                "residuals to draw."
+                if isinstance(fit, FitCurve)
+                else "# The fit is not run yet, so there are no residuals to draw."
+            )
             return
         function, popt = self.fits[fit.id]
         target = self.artists[fit.target]

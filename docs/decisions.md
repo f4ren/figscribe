@@ -2751,3 +2751,50 @@ the palette blind. **Building the axis form off-screen to read its rows**:
 more code to keep a hidden widget tree for a list of nine names. **Offering the
 hidden rows**: they would take the person to a form where the field is not.
 
+## 0059 — A fit with no point left is not drawn, and the script says so
+
+### Context
+
+Fit a plot, then narrow its x range (or the fit's own range) to one that keeps
+no row. The renderer drew no curve, and the residuals' empty `errorbar` still
+moved the residual panel's limits; the script ran `curve_fit` again on nothing
+and stopped ("`ydata` must not be empty"). It was the same gap that decision 0045's
+follow-up closed for the statistics of a reduced plot (B7.1), found by the
+equivalence test and kept as a strict `xfail` until now.
+
+### Decision
+
+- `fit.fitted_points(shown, left_out, fit_range)` is the one rule for the points
+  a fit runs on: in the plot's range and the fit's range, not left out, with a
+  finite x, y and error. `refit`, `residuals`, the renderer's curve and
+  residuals and the script all use it; before, each had its own copy, and they
+  differed (the curve looked only at the plot's range, so a fit range that
+  kept no row still drew it when the curve was to go beyond it).
+- With none left, the renderer draws no curve and no residual points, and the
+  script (`Script._points_to_fit`, when the data is at hand) has no model
+  function, no `curve_fit`, no curve and no residuals, and says in a comment
+  "has no point left to run on". Without the data nothing changes, but every
+  caller of `generate` passes it (the code drawer, the export, the CLI when the
+  files are there, the assistant's tool).
+- The problem list says it too, at the fit: "no point is left to fit, because of
+  the ranges, the rows left out or values that are not finite, so the fit is
+  not drawn" (`validate._nothing_to_fit`, with the data; not for a fit that was
+  not run yet, nor when the data cannot be read or a left-out row is not there,
+  which are said elsewhere).
+- The residual panel then holds only its zero line, on limits Matplotlib
+  chooses for an empty panel (0 to 1), so the line lies on the frame: a state
+  to leave, not one to look good. A residual panel that drew an empty
+  `errorbar` had other limits, which a script cannot say without drawing it.
+- `tests/codegen/test_equivalence.py` runs three ways to reach it, through the
+  pixel equivalence test: the plot's range narrowed (plain and reduced), the
+  fit range narrowed with the curve over it and beyond it, and every row left
+  out.
+
+### Alternatives considered
+
+**A check at run time in the script** (`if x_fit.size:` around the fit, the
+curve and the residuals): indents three places of a script that should read
+as a person wrote it, for a case the generator already knows. **Refusing the
+range**: the user may narrow it on the way to another one; the figure shows
+nothing meanwhile, as for a plot without rows.
+

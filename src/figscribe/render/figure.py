@@ -707,12 +707,14 @@ def _draw_fit(
 ) -> None:
     """The fitted model across its fit range, where there is data, or across
     all the data; nothing before a fit."""
-    from figscribe.fit import evaluate
+    from figscribe.fit import evaluate, fitted_points
 
     target = _referenced(artists, fit.target, FITTABLE, "fit")
     if fit.result is None:
         return
     shown = plot_data(target, data)
+    if not fitted_points(shown, target.left_out, fit.fit_range).any():
+        return  # the fit has no point to run on, and the script no fit
     x = shown.x[np.isfinite(shown.x) & shown.used]
     if x.size == 0:
         return
@@ -742,7 +744,7 @@ def _draw_residuals(
 ) -> None:
     """Data minus fit at every fitted point, with the data's y errors, around
     a dashed zero line."""
-    from figscribe.fit import evaluate, in_range
+    from figscribe.fit import evaluate, fitted_points
 
     fit = _referenced(artists, residuals.target, (FitCurve,), "residual plot")
     target = _referenced(artists, fit.target, FITTABLE, "fit")
@@ -758,9 +760,9 @@ def _draw_residuals(
         return
     shown = plot_data(target, data)
     x, y, yerr = shown.x, shown.y, shown.yerr
-    used = in_range(x, fit.fit_range) & shown.rows_kept(target.left_out)
-    if yerr is not None:  # a point without an error is not fitted
-        used &= np.isfinite(yerr)
+    used = fitted_points(shown, target.left_out, fit.fit_range)
+    if not used.any():
+        return  # no point is fitted; the script draws nothing either
     if not used.all():
         x, y = x[used], y[used]
         yerr = None if yerr is None else yerr[used]

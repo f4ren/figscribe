@@ -177,6 +177,35 @@ def test_a_fit_range_beyond_the_plots_range_is_a_problem() -> None:
     assert "reaches beyond the plot's range 3600 to 7200" in problem
 
 
+def test_a_fit_with_no_point_left_is_a_problem() -> None:
+    """Its figure draws no curve, so the list says why (decision 0059)."""
+    from figscribe.model import FitResult
+
+    result = FitResult(
+        parameters={"a": 1.0, "b": 0.0}, uncertainties={"a": 0.1, "b": 0.1}
+    )
+    model = PredefinedFit(name="linear")
+
+    def left(*changes) -> list[str]:
+        plot = LinePlot(x=col("t"), y=col("U"))
+        fit = FitCurve(target=plot.id, model=model, result=result)
+        for name, value in changes:
+            setattr(plot if name == "left_out" else fit, name, value)
+        return [p for p in _problems(plot, fit) if "no point is left" in p]
+
+    (problem,) = left(("fit_range", (1e6, 2e6)))
+    assert "fit is not drawn" in problem
+    assert left(("left_out", list(range(41))))  # every row
+    assert not left()
+    assert not left(("fit_range", (2000.0, 5000.0)))
+    assert not left(("left_out", [0, 1, 2]))
+    # rows that the data does not have are another problem, said elsewhere
+    assert not left(("left_out", [100]))
+    plot = LinePlot(x=col("t"), y=col("U"))
+    not_run = FitCurve(target=plot.id, model=model, fit_range=(1e6, 2e6))
+    assert not [p for p in _problems(plot, not_run) if "no point is left" in p]
+
+
 def test_a_range_with_nothing_in_it_is_a_problem() -> None:
     from figscribe.model import Histogram
 
