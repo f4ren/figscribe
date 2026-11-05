@@ -31,3 +31,4 @@ tests/**/output/
 
 # Backups of saved projects (figscribe keeps the version before the last save)
 *.figscribe.bak
+packaging/out/

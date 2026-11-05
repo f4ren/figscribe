@@ -94,9 +94,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Phase 4 — M7: polish and release**
 - **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
   snapping and alignment guides. **R3** the dpi at export (TIFF, EPS and the
-  transparent background are built, 0065). **R4** installers (`[decide]`: PyInstaller or
-  Briefcase, an Apple developer account), screenshots in the README, a
-  gallery in `examples/`. **R5** measure models with `figscribe bench`.
+  transparent background are built, 0065). **R4** installers (PyInstaller, decision 0066: macOS built and
+  tried here, Windows and Linux left to the CI of its pull request), screenshots
+  in the README, a gallery in `examples/`. **R5** measure models with `figscribe bench`.
   **R7** follow-up: wait out a rate limit in the chat.
 
 **Phase 5** is later and optional.
@@ -1892,5 +1892,5 @@ answer in `docs/decisions.md` when the task is started.
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
-| R4.2 | PyInstaller or Briefcase; is an Apple developer account available? |
+| R4.2 | answered 2026-11-05: PyInstaller, no signing for now, dmg (arm64) + Windows installer + AppImage (0066) |
 | Phase 5 | German user interface? |
