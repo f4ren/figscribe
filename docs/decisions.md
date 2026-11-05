@@ -3020,8 +3020,13 @@ decision about U2 (a model field or not) and is not built.
 ### Decision
 
 - `export` writes `.tif`/`.tiff` (Pillow, LZW, at the figure's dpi) and `.eps` as
-  well as PDF, SVG and PNG; each is byte-stable (no timestamps; EPS has the
-  file's name in its title, so two exports under one name are identical).
+  well as PDF, SVG and PNG; each is byte-stable (no timestamps). Matplotlib puts
+  the time of the export, to the second, and the file's name into an EPS header
+  and has no setting for either, so the EPS is written to memory, its
+  `%%CreationDate` line is dropped (the DSC allows that) and its title goes with
+  the file name; the file is then the same wherever and whenever it is saved. The
+  first version of this test passed on a machine where both exports fell in one
+  second and failed on Windows CI, where they did not.
   *Export Figure…* and *Export All Figures…* offer them; `.tiff` typed is taken
   as TIFF.
 - A TIFF is RGB, without an alpha channel (journals' checkers reject one), unless

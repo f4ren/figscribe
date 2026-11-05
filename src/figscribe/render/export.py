@@ -66,6 +66,9 @@ def _save(
         if FORMATS.get(suffix) == "tiff":
             _save_tiff(fig, figure, target, transparent)
             return
+        if suffix == ".eps":
+            _save_eps(fig, figure, target, transparent)
+            return
         extra = {"metadata": _METADATA[suffix]} if _METADATA[suffix] else {}
         fig.savefig(
             target,
@@ -74,6 +77,27 @@ def _save(
             transparent=transparent,
             **extra,
         )
+
+
+def _save_eps(fig, figure: Figure, target, transparent: bool) -> None:
+    """EPS without the time of the export, which Matplotlib writes to the
+    second and gives no way to leave out. Written to memory first, which also
+    keeps the file's name out of the title: the file is the same wherever it
+    is saved."""
+    buffer = io.BytesIO()
+    fig.savefig(
+        buffer,
+        format="eps",
+        dpi=figure.dpi,
+        transparent=transparent,
+        metadata=_METADATA[".eps"],
+    )
+    lines = buffer.getvalue().splitlines(keepends=True)
+    kept = b"".join(line for line in lines if not line.startswith(b"%%CreationDate:"))
+    if isinstance(target, io.BytesIO):
+        target.write(kept)
+    else:
+        Path(target).write_bytes(kept)
 
 
 def _save_tiff(fig, figure: Figure, target, transparent: bool) -> None:

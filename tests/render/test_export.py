@@ -127,17 +127,25 @@ def test_eps_is_an_encapsulated_postscript_of_the_size(
     assert int(box.group(2)) == pytest.approx(60.0 / MM_PER_INCH * 72, abs=1)
 
 
-@pytest.mark.parametrize("suffix", [".tif", ".eps"])
-def test_the_new_formats_are_byte_stable_too(
-    figure, data, tmp_path: Path, suffix: str
+def test_a_tiff_is_byte_stable_too(figure, data, tmp_path: Path) -> None:
+    a, b = tmp_path / "a.tif", tmp_path / "b.tif"
+    export(figure, data, a)
+    export(figure, data, b)
+    assert a.read_bytes() == b.read_bytes()
+
+
+def test_an_eps_has_neither_a_date_nor_the_name_of_its_file(
+    figure, data, tmp_path: Path
 ) -> None:
-    # The same name twice: EPS has the file's name in its title.
-    for folder in ("one", "two"):
-        (tmp_path / folder).mkdir()
-        export(figure, data, tmp_path / folder / f"f{suffix}")
-    assert (tmp_path / "one" / f"f{suffix}").read_bytes() == (
-        tmp_path / "two" / f"f{suffix}"
-    ).read_bytes()
+    # Matplotlib stamps the time of the export (to the second, so two exports
+    # can differ) and the file's name into the header; neither belongs in a
+    # file that is the same whenever the figure is the same.
+    a, b = tmp_path / "a.eps", tmp_path / "b.eps"
+    export(figure, data, a)
+    export(figure, data, b)
+    assert b"CreationDate" not in a.read_bytes()
+    assert a.read_bytes() == b.read_bytes()
+    assert a.read_bytes() == export_bytes(figure, data, ".eps")
 
 
 def test_a_transparent_background_for_png_and_tiff(
