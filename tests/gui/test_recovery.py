@@ -166,3 +166,28 @@ def test_a_clean_untitled_window_leaves_an_unoffered_recovery_alone(qtbot) -> No
     qtbot.addWidget(other)
     other.autosave()
     assert kept.exists()
+
+
+def test_work_discarded_on_purpose_does_not_come_back(window) -> None:
+    kept = _file(window)
+    _rename(window, "Changed")
+    window.autosave()
+    assert kept.exists()
+    window.new_project()  # asks "Discard the unsaved changes?" and is told yes
+    assert not kept.exists()
+
+
+def test_work_kept_on_a_no_stays_recoverable(window) -> None:
+    kept = _file(window)
+    _rename(window, "Changed")
+    window.autosave()
+    window.ask = lambda title, question: False
+    window.new_project()  # the user decides not to discard
+    assert kept.exists()
+    assert window.document.figure.name == "Changed"
+
+
+def test_the_untitled_folder_is_asked_when_needed(monkeypatch) -> None:
+    """Not when the module is imported, before the application has its name."""
+    monkeypatch.setattr(recovery, "UNTITLED_FOLDER", None)
+    assert recovery.untitled_folder().name == "recovery"
