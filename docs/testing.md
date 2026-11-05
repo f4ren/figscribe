@@ -174,5 +174,11 @@ note the platform, the screen scaling and the theme in the pull request.
     nothing: the property panel says what to select and that Ctrl+K finds
     things by name.
 
+27. **A note's arrow**: add a note, right-click it: *Add an arrow* gives it a
+    short arrow. Right-click somewhere else in the same panel: *Point the note's
+    arrow here*, and the tip is there. Right-click the note again: *Remove the
+    note's arrow*. Undo each step. In a figure with two panels, the entry is not
+    offered in the other panel.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

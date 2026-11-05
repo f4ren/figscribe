@@ -963,8 +963,9 @@ above, which fails when an example uses a kind without words). *Open:* the
 settings of an axis (*Scale*: log, symlog, its limits, ticks) are not in the
 palette, since the axis cards are not form rows; the examples use them (log,
 symlog axes). Then the note's arrow by
-right-clicking the note (*Point arrow here*, *Remove arrow*); dragging the tip
-is a later step if that is not enough. Measured on the examples: *shade*
+right-clicking the note (decision 0057, **done**: *Add an arrow*, *Point the
+note's arrow here*, *Remove the note's arrow*); dragging the tip is a later
+step if that is not enough. Measured on the examples: *shade*
 finds the shaded range, *band* and *region* do not; the arrow is only a typed
 pair of numbers, and nothing is found for "arrow" when no note is selected.
 

@@ -2683,3 +2683,34 @@ a dependency or a guess for what a short list does. **Only the property
 panel's search**: it knows only the selection, and nothing is selected when
 a person looks for something to add.
 
+## 0057 — A note's arrow is set by right-clicking the figure
+
+### Context
+
+`Annotation.arrow_to` was a pair of numbers typed in the property panel, in
+the note's own coordinates; *Add Note…* did not offer an arrow and the tip
+could not be dragged. The user could not find how to make the arrow that the
+*freezing plateau* example has (U12).
+
+### Decision
+
+In the preview's context menu:
+- **on a note** without an arrow: *Add an arrow*, which points a short way
+  toward the middle of the panel (down, for a note in the middle) and selects
+  the note; **with** an arrow: *Remove the note's arrow*;
+- **elsewhere in the panel of the selected note**: *Point the note's arrow
+  here*, as one undo step, in the note's coordinates (data or panel fractions)
+  rounded to five digits. Not offered in another panel, where the coordinates
+  would not mean the same.
+
+The typed field stays, and its tip says how to do it by clicking. Dragging the
+tip, or a handle on it, is not done: a right-click needs no new kind of
+dragging in the preview and works the same as the lines and ranges.
+
+### Alternatives considered
+
+**A drag handle on the tip**: the most direct, but a new interaction in the
+preview, with its own hit test, cursor and undo; kept for later if the
+right-click is not enough. **A check box in *Add Note…***: asks before the note
+is placed, when the place is not yet known.
+
