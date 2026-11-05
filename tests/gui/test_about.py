@@ -46,6 +46,15 @@ def test_the_text_names_the_versions_a_bug_report_needs() -> None:
     assert "github.com/f4ren/figscribe" in text
 
 
+def test_the_text_says_which_licenses_figscribe_is_under() -> None:
+    # The LGPL asks for a notice that Qt is used and under which license.
+    text = about_text()
+    assert "MIT" in text
+    assert "Qt" in text and "LGPL-3.0" in text
+    assert "THIRD-PARTY-NOTICES.txt" in text
+    assert "github.com/f4ren/figscribe#license" in text
+
+
 def test_the_help_menu_is_the_last_and_has_about(window: MainWindow) -> None:
     menus = [a.text() for a in window.menuBar().actions()]
     assert menus[-1] == "&Help"

@@ -29,5 +29,9 @@ def about_text() -> str:
         f"<p>Python {platform.python_version()} · Matplotlib "
         f"{matplotlib.__version__} · PySide6 {PySide6.__version__} "
         f"(Qt {qVersion()})<br>{system_name()}</p>"
+        "<p>figscribe is free software under the MIT license. It uses Qt "
+        "(through PySide6) under the LGPL-3.0; the licenses of the software "
+        "in the installers are in THIRD-PARTY-NOTICES.txt, and "
+        f'<a href="{REPOSITORY}#license">here</a>.</p>'
         f'<p><a href="{REPOSITORY}">{REPOSITORY.removeprefix("https://")}</a></p>'
     )
