@@ -165,7 +165,7 @@ note the platform, the screen scaling and the theme in the pull request.
     menu. Click *Plot* and choose *Histogram*: the dialog opens on it; *Panel*,
     *Plot* and *Reference* open their menus alike, with a picture at each entry. *Reference* offers lines and shaded ranges, as *Insert > Add
     Reference* does. Type "histogram" or "shaded" in Ctrl+K: they are found.
-    *Insert*: every entry has a picture, also *Add Plot As*, *Add Reference*,
+    *Insert*: the entries are in the order of the toolbar buttons; every entry has a picture, also *Add Plot As*, *Add Reference*,
     *Add Panel* and *Duplicate Figure*; there is no *Add Plot…*, but Ctrl+Shift+P
     (shown behind *Add Plot As*, if your system draws it there) opens the
     dialog, and Ctrl+K finds "Add Plot…".

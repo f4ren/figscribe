@@ -1527,6 +1527,14 @@ class MainWindow(QMainWindow):
             insert, "D&uplicate Figure", lambda: self.duplicate_figure()
         )
         duplicate.setIcon(theme.icon("duplicate"))
+        self.panel_menu = insert.addMenu(theme.icon("panel"), "Add Pa&nel")
+        self.panel_actions = {}
+        for side, text in PANEL_SIDES:
+            action = self.panel_menu.addAction(
+                theme.icon(f"panel_{side}"), text.replace("Add ", "").capitalize()
+            )
+            action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
+            self.panel_actions[side] = action
         insert.addSeparator()
         # The kinds are the menu's plot entries; "Add Plot…", the dialog that
         # starts on the first kind, is the key shown behind them and the first
@@ -1549,7 +1557,6 @@ class MainWindow(QMainWindow):
         self.fit_action = self._action(
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
-        self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
         self.marking_menu = insert.addMenu(theme.icon("reference"), "Add &Reference")
         for text, kind, orientation in markings.ENTRIES:
             glyph = kind if orientation == "vertical" else f"{kind}_h"
@@ -1557,14 +1564,7 @@ class MainWindow(QMainWindow):
             action.triggered.connect(
                 lambda _=False, k=kind, o=orientation: self.add_marking(k, o)
             )
-        self.panel_menu = insert.addMenu(theme.icon("panel"), "Add Pa&nel")
-        self.panel_actions = {}
-        for side, text in PANEL_SIDES:
-            action = self.panel_menu.addAction(
-                theme.icon(f"panel_{side}"), text.replace("Add ", "").capitalize()
-            )
-            action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
-            self.panel_actions[side] = action
+        self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
 
         view = self.menuBar().addMenu("&View")
         self.code_action = self._toggle(view, "&Python Code", self.show_code)

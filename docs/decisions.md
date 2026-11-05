@@ -2656,6 +2656,9 @@ only, always**: the words are what a new user reads.
 - The note's picture is a T, the way text is marked in other editors, in the
   toolbar and in the outline; the arrow was a line with nothing to say what it
   was. A *duplicate* picture (two sheets) is new.
+- *Insert* lists its entries in the order of the toolbar: *Import Data*, *Add
+  Figure* (with *Duplicate Figure* beside it), *Add Panel*, a separator, *Add
+  Plot As*, *Add Fit*, *Add Reference*, *Add Note*.
 - Every entry of *Insert* has a picture, the submenus (*Add Plot As*, *Add
   Reference*, *Add Panel*) and *Duplicate Figure* too.
 - *Add Plot…* is no longer an entry of *Insert*: *Add Plot As* holds the kinds,

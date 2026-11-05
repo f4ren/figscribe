@@ -242,3 +242,27 @@ def test_add_plot_is_still_found_from_the_command_palette(window) -> None:
 
 def test_the_reference_comes_before_the_note(window) -> None:
     assert list(_buttons(window))[-2:] == ["Reference", "Note"]
+
+
+def test_the_insert_menu_has_the_order_of_the_toolbar(window) -> None:
+    """Data, figure, panel; then plot, fit, reference, note. Duplicate Figure
+    stays beside Add Figure."""
+    titles = [
+        a.text().replace("&", "")
+        for a in _insert_menu(window).actions()
+        if not a.isSeparator()
+    ]
+    assert titles == [
+        "Import Data…",
+        "Add Figure",
+        "Duplicate Figure",
+        "Add Panel",
+        "Add Plot As",
+        "Add Fit…",
+        "Add Reference",
+        "Add Note…",
+    ]
+    separators = [
+        i for i, a in enumerate(_insert_menu(window).actions()) if a.isSeparator()
+    ]
+    assert separators == [4]  # between what holds and what goes into a panel
