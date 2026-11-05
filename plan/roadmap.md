@@ -1817,8 +1817,9 @@ arranged by what they are for (0060–0062), recovery after a crash (0063), a fi
 an Allan deviation (0064), TIFF and EPS export and a transparent background
 (0065), and the Insert menu and toolbar with pictures. Open from R4.2 (0066):
 Intel Macs, ARM Linux, `.deb` and Flatpak, signing and notarising (needs an Apple
-developer account), the double click on a `.figscribe` file on macOS, and the
-manual checklist (B7.5), which this release went out without.
+developer account), and the manual checklist (B7.5), which this release went out
+without. The double click on a `.figscribe` file on macOS did not open the file
+(found by the user after the release); fixed after 0.3.0.
 
 **R4.4 done** (decision 0053): `examples/` holds twelve projects of synthetic,
 fixed-seed data, made by `examples/make.py`, each with a thumbnail, listed in

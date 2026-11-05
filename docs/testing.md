@@ -228,5 +228,10 @@ note the platform, the screen scaling and the theme in the pull request.
     *File > Export with a Transparent Background*, export a PNG and put it on a
     coloured slide: no white box; the item stays ticked after a restart.
 
+35. **A double click on macOS** (decision 0066): in the installed app, double-click
+    a `.figscribe` file in Finder: figscribe starts and shows that project, not
+    the start page. With figscribe running, double-click another project: it
+    opens (after asking, when the shown one has unsaved changes).
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.
