@@ -194,6 +194,8 @@ def _name(action) -> str:
 
 def _insert_menu(window: MainWindow):
     action = next(a for a in window.menuBar().actions() if a.text() == "&Insert")
+    # Kept: before PySide6 6.12 the menu is gone with the action that holds it.
+    window._insert_action = action
     return action.menu()
 
 
