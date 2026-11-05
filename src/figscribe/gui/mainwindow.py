@@ -80,7 +80,12 @@ from figscribe.gui.fitdialog import FitDialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
-from figscribe.gui.palette import CommandPalette, Entry, menu_entries, words_for
+from figscribe.gui.palette import (
+    CommandPalette,
+    Entry,
+    menu_entries,
+    words_for,
+)
 from figscribe.gui.plotdialog import KINDS, NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
@@ -1550,12 +1555,23 @@ class MainWindow(QMainWindow):
             insert, "&Import Data…", lambda: self.import_csv(), "Ctrl+I"
         )
         self.add_figure_action = self._action(insert, "Add Fi&gure", self.add_figure)
-        self._action(insert, "D&uplicate Figure", lambda: self.duplicate_figure())
+        duplicate = self._action(
+            insert, "D&uplicate Figure", lambda: self.duplicate_figure()
+        )
+        duplicate.setIcon(theme.icon("duplicate"))
+        self.panel_menu = insert.addMenu(theme.icon("panel"), "Add Pa&nel")
+        self.panel_actions = {}
+        for side, text in PANEL_SIDES:
+            action = self.panel_menu.addAction(
+                theme.icon(f"panel_{side}"), text.replace("Add ", "").capitalize()
+            )
+            action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
+            self.panel_actions[side] = action
         insert.addSeparator()
         self.plot_action = self._action(
             insert, "Add &Plot…", lambda: self.add_plot(), "Ctrl+Shift+P"
         )
-        self.plot_menu = insert.addMenu("Add Plot &As")
+        self.plot_menu = insert.addMenu(theme.icon("line"), "Add Plot &As")
         for name, (_, glyph) in KINDS.items():
             action = self.plot_menu.addAction(theme.icon(glyph), name)
             action.triggered.connect(lambda _=False, n=name: self.add_plot(n))
@@ -1567,22 +1583,14 @@ class MainWindow(QMainWindow):
         self.fit_action = self._action(
             insert, "Add &Fit…", self.add_fit, "Ctrl+Shift+F"
         )
-        self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
-        self.marking_menu = insert.addMenu("Add &Reference")
+        self.marking_menu = insert.addMenu(theme.icon("reference"), "Add &Reference")
         for text, kind, orientation in markings.ENTRIES:
             glyph = kind if orientation == "vertical" else f"{kind}_h"
             action = self.marking_menu.addAction(theme.icon(glyph), text)
             action.triggered.connect(
                 lambda _=False, k=kind, o=orientation: self.add_marking(k, o)
             )
-        self.panel_menu = insert.addMenu("Add Pa&nel")
-        self.panel_actions = {}
-        for side, text in PANEL_SIDES:
-            action = self.panel_menu.addAction(
-                theme.icon(f"panel_{side}"), text.replace("Add ", "").capitalize()
-            )
-            action.triggered.connect(lambda _=False, s=side: self.add_panel(s))
-            self.panel_actions[side] = action
+        self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
 
         view = self.menuBar().addMenu("&View")
         self.code_action = self._toggle(view, "&Python Code", self.show_code)
@@ -1669,13 +1677,13 @@ class MainWindow(QMainWindow):
         )
         self._adding_button(self.fit_action, "fit", "Fit", "Fit a curve to a plot")
         self._adding_button(
-            self.note_action, "annotation", "Note", "Add a note to the panel"
-        )
-        self._adding_button(
             self.marking_menu,
             "reference",
             "Reference",
             "Add a reference line or a shaded range",
+        )
+        self._adding_button(
+            self.note_action, "annotation", "Note", "Add a note to the panel"
         )
         bar.addSeparator()
         for action, name in ((self.undo_action, "undo"), (self.redo_action, "redo")):

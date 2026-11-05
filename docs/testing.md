@@ -158,13 +158,16 @@ note the platform, the screen scaling and the theme in the pull request.
     format's suffix is added. *Export All Figures…* offers the folder and format
     of the last time.
 
-25. **The toolbar**: the buttons *Data*, *Figure*, *Panel*, *Plot*, *Fit*, *Note*
-    and *Reference* each have a different picture, with their words beside
+25. **The toolbar**: the buttons *Data*, *Figure*, *Panel*, *Plot*, *Fit*,
+    *Reference* and *Note* (a T) each have a different picture, with their words beside
     them in a wide window. Make the window as narrow as it goes: the words go,
     the pictures stay, every button has a tip and nothing is behind the »
     menu. Click *Plot* and choose *Histogram*: the dialog opens on it; *Panel*,
     *Plot* and *Reference* open their menus alike, with a picture at each entry. *Reference* offers lines and shaded ranges, as *Insert > Add
     Reference* does. Type "histogram" or "shaded" in Ctrl+K: they are found.
+    *Insert*: the entries are in the order of the toolbar buttons; every entry
+    has a picture, also *Add Plot As*, *Add Reference*, *Add Panel* and
+    *Duplicate Figure*; *Add Plot…* has Ctrl+Shift+P behind it.
 
 26. **Finding by other words**: press Ctrl+K and type *band*, *threshold*,
     *callout*, *heatmap*, *residuals*, *subplot*, *csv*: the shaded ranges, the
