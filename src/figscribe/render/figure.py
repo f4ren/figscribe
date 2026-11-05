@@ -761,6 +761,8 @@ def _draw_residuals(
     used = in_range(x, fit.fit_range) & shown.rows_kept(target.left_out)
     if yerr is not None:  # a point without an error is not fitted
         used &= np.isfinite(yerr)
+    if not used.any():
+        return  # no point is fitted; the script draws nothing either
     if not used.all():
         x, y = x[used], y[used]
         yerr = None if yerr is None else yerr[used]

@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **Fixed: the script of a fit whose range keeps no row.** After narrowing the
+  range of a fitted plot (or of the fit) to one without a point, the exported
+  script stopped with "`ydata` must not be empty". It now draws no fit, as the
+  figure does, and says why in a comment.
 - **The settings of an axis are found with Ctrl+K.** *log*, *symlog*, *limits*,
   *range*, *ticks*, *prefix* and more find the axis's scale, range, ticks and
   label, also when only the panel or a plot is selected: choosing one opens that

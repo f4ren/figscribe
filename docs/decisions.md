@@ -2751,3 +2751,35 @@ the palette blind. **Building the axis form off-screen to read its rows**:
 more code to keep a hidden widget tree for a list of nine names. **Offering the
 hidden rows**: they would take the person to a form where the field is not.
 
+## 0059 — A fit with no point left is not drawn, and the script says so
+
+### Context
+
+Fit a plot, then narrow its x range (or the fit's own range) to one that keeps
+no row. The renderer drew no curve, and the residuals' empty `errorbar` still
+moved the residual panel's limits; the script ran `curve_fit` again on nothing
+and stopped ("`ydata` must not be empty"). It was the same gap that decision 0045's
+follow-up closed for the statistics of a reduced plot (B7.1), found by the
+equivalence test and kept as a strict `xfail` until now.
+
+### Decision
+
+- `Script._points_to_fit(fit)` counts the points the fit has left, by the
+  rule of `refit` (the plot's points as shown, the fit range, rows not left
+  out, finite values, a finite error). With the data at hand and none left, the
+  fit is not among `self.fits`: no model function, no `curve_fit`, no curve,
+  and the residual panel keeps its zero line. A comment says "has no point left
+  to run on". Without the data (`None`) nothing changes.
+- The renderer draws no residual points when none is fitted, so its
+  limits equal what the script draws; before, it drew an empty `errorbar`.
+- `tests/codegen/test_equivalence.py` runs both ways of narrowing, for a plain and
+  a reduced plot, through the pixel equivalence test.
+
+### Alternatives considered
+
+**A check at run time in the script** (`if x_fit.size:` around the fit, the
+curve and the residuals): indents three places of a script that should read
+as a person wrote it, for a case the generator already knows. **Refusing the
+range**: the user may narrow it on the way to another one; the figure shows
+nothing meanwhile, as for a plot without rows.
+
