@@ -3045,3 +3045,72 @@ giving up the native look. **A field `transparent` on the figure**: it would
 travel with the project and the script could say it; worth doing if the user
 wants the script to match.
 
+
+## 0066 — Installers: PyInstaller, one folder, a native wrapper for each system
+
+**Date:** 2026-11-05
+**Status:** accepted (the user chose the tool, no signing and the formats).
+
+### Context
+
+Roadmap R4.2. figscribe is installed with `pip` or `pipx` so far, which needs a
+Python. The user asked (2026-11-05) for installers for macOS, Windows and Linux
+and chose: PyInstaller with a native wrapper, no Apple developer account for
+now, no signing on Windows, a `.dmg` for Apple silicon only, a Windows installer
+and an AppImage.
+
+### Decision
+
+- **PyInstaller freezes the program into one folder** (not one file: it starts
+  faster, and Qt stays a set of libraries that can be replaced, which the LGPL
+  of Qt for Python makes worth keeping; this is a consideration, not legal
+  advice). `packaging/figscribe.spec`; the start file is
+  `packaging/launcher.py`, which calls what the command `figscribe` calls, so
+  the frozen program takes the same arguments (`script`, `mcp`, `bench`). It
+  is a build tool only: no runtime dependency, listed in
+  `packaging/requirements-build.txt` with its version.
+- **A wrapper for each system**, made by `packaging/make_installer.py` on that
+  system: macOS `figscribe-VERSION-macos-arm64.dmg` (`hdiutil`, the app and a
+  link to Applications), Windows `figscribe-VERSION-windows-x64-setup.exe`
+  (Inno Setup, per user unless the person chooses otherwise, `.figscribe` opens
+  in figscribe), Linux `figscribe-VERSION-linux-x86_64.AppImage` (appimagetool
+  1.9.1, its checksum pinned). On Windows a second program, `figscribe-cli.exe`,
+  has a console for `script` and `mcp`; the window program has none.
+- **Built from the wheel**, in CI, on each system, with Python 3.13, with the
+  `chat` and `mcp` extras, so that the assistant works in the installer. The
+  Linux build runs on Ubuntu 22.04: a program built on a newer glibc does not
+  start on an older one.
+- **Tried before it is offered** (`packaging/smoke.py`): the frozen program says
+  its version, writes a script from a bundled example that a normal Python
+  runs and that draws the figure, and its window starts (without a screen) and
+  stays up. Starting alone would not have shown that the examples and the
+  fonts were left out.
+- **Its own workflow** `installers.yml`: on a pull request that touches the
+  packaging (the files stay with the run for a week), on a published release
+  (attached to it), and by hand. `release.yml` keeps its name and its rights:
+  the PyPI publisher is bound to it and has no write right to the release.
+- **Not signed.** The app is ad-hoc signed by PyInstaller, which macOS on Apple
+  silicon requires to run it at all; Gatekeeper still asks the person to
+  confirm the first start (right-click, *Open*), and Windows shows a SmartScreen
+  warning. The README says so. Signing and notarising come with an Apple
+  developer account (secrets in the repository); a Windows certificate costs
+  money and is not planned.
+- **Linux needs the system's `libxcb-cursor0`** (and the usual X libraries) for
+  Qt's X11 plugin; an AppImage cannot carry them for every system. The README
+  says so.
+
+### Not done yet
+
+Intel Macs (a second build; they use `pip`), Linux on ARM, `.deb` and Flatpak,
+a first start's Matplotlib font cache (it takes several seconds the first time
+and is written into the person's cache folder), `.figscribe` double-click on
+macOS (the app would have to handle the open-file event), *How to Connect…*
+naming the frozen program's path for MCP instead of `figscribe`.
+
+### Alternatives considered
+
+**Briefcase**: native formats and signing in one tool, but a stricter layout
+and less trodden with scipy and Matplotlib. **One file** (`--onefile`): a single
+download, but it unpacks to a temporary folder at each start. **Putting the
+installers into `release.yml`**: the publish job would need write rights and a
+failing installer would hold back PyPI.
