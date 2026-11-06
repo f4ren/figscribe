@@ -16,14 +16,15 @@ asking what was meant.
   a range per plot, fewer points drawn, the Allan deviation, error bands,
   reference lines, a search and a command palette for settings, and
   settings that grey out when they do nothing.
-- M7 is open: style templates, snapping and alignment guides, installers.
+- M7 is open: style templates, snapping and alignment guides, and the screenshots of R4.
 - About 1,700 tests run in about two and a half minutes in parallel; CI is green on
   Linux, Windows and macOS with Python 3.11 and 3.13, and a further job runs
   the fast tests at the oldest allowed versions (decision 0044). Decisions
   0001 to 0066 are in [`docs/decisions.md`](../docs/decisions.md).
-- 0.1.0 (2026-10-26) and 0.2.0 (2026-10-29) are released, on PyPI; `main` is
-  at 0.2.0 (PR #94). What `develop` has gained since is under "Unreleased"
-  in the [changelog](../CHANGELOG.md).
+- 0.1.0 (2026-10-26), 0.2.0 (2026-10-29) and 0.3.0 (2026-11-05) are released, on
+  PyPI, and since 0.3.0 with installers for macOS, Windows and Linux on the
+  GitHub release; `main` is at 0.3.0 (PR #136). What `develop` has gained since
+  is under "Unreleased" in the [changelog](../CHANGELOG.md).
 
 The findings below marked **(verified)** were reproduced on 2026-10-23; the
 reproduction is given so a session can turn it into a failing test first.
@@ -94,9 +95,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Phase 4 — M7: polish and release**
 - **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
   snapping and alignment guides. **R3** the dpi at export (TIFF, EPS and the
-  transparent background are built, 0065). **R4** installers (PyInstaller, decision 0066: macOS built and
-  tried here, Windows and Linux left to the CI of its pull request), screenshots
-  in the README, a gallery in `examples/`. **R5** measure models with `figscribe bench`.
+  transparent background are built, 0065). **R4** installers (done in 0.3.0: PyInstaller, decision 0066; the macOS disk
+  image tried by hand, the Windows installer and the AppImage only built and
+  started in CI), screenshots in the README, a gallery in `examples/`. **R5** measure models with `figscribe bench`.
   **R7** follow-up: wait out a rate limit in the chat.
 
 **Phase 5** is later and optional.
@@ -1808,6 +1809,16 @@ from the example.
 range per plot, the Allan deviation, error bands, a search and a command
 palette for settings, editing where it is drawn, and the everyday actions.
 Still open from R4: item 2 (installers) and the screenshots of item 3.
+
+**0.3.0 released** (2026-11-05, PR #133, #136; the release made the installers
+of R4.2, decision 0066): installers for macOS (Apple silicon), Windows and Linux
+with the licenses of what is in them, the settings of every kind of object
+arranged by what they are for (0060–0062), recovery after a crash (0063), a fit on
+an Allan deviation (0064), TIFF and EPS export and a transparent background
+(0065), and the Insert menu and toolbar with pictures. Open from R4.2 (0066):
+Intel Macs, ARM Linux, `.deb` and Flatpak, signing and notarising (needs an Apple
+developer account), the double click on a `.figscribe` file on macOS, and the
+manual checklist (B7.5), which this release went out without.
 
 **R4.4 done** (decision 0053): `examples/` holds twelve projects of synthetic,
 fixed-seed data, made by `examples/make.py`, each with a thumbnail, listed in
