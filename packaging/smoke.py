@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import platform
+import plistlib
 import subprocess
 import sys
 import tempfile
@@ -61,6 +62,19 @@ def license_problem(system: str) -> str | None:
     return None
 
 
+def document_type_problem(system: str) -> str | None:
+    """The macOS app has to say it opens `.figscribe` files, or Finder does not
+    hand them to it."""
+    if system != "Darwin":
+        return None
+    plist = FROZEN / "figscribe.app" / "Contents" / "Info.plist"
+    with plist.open("rb") as file:
+        types = plistlib.load(file).get("CFBundleDocumentTypes", [])
+    if not any("figscribe" in t.get("CFBundleTypeExtensions", []) for t in types):
+        return f"{plist} does not list .figscribe as a document type"
+    return None
+
+
 def main(argv: list[str]) -> int:
     system = platform.system()
     example = Path(argv[0]) if argv else EXAMPLE
@@ -81,6 +95,10 @@ def main(argv: list[str]) -> int:
     if problem:
         return fail(problem)
     print("licenses ok", flush=True)
+
+    problem = document_type_problem(system)
+    if problem:
+        return fail(problem)
 
     # Resolved: macOS keeps temporary folders behind a link, and a script's
     # data path is worked out from the folder as it is named.

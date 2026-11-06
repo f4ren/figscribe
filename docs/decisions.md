@@ -3126,9 +3126,22 @@ and an AppImage.
 
 Intel Macs (a second build; they use `pip`), Linux on ARM, `.deb` and Flatpak,
 a first start's Matplotlib font cache (it takes several seconds the first time
-and is written into the person's cache folder), `.figscribe` double-click on
-macOS (the app would have to handle the open-file event), *How to Connect…*
-naming the frozen program's path for MCP instead of `figscribe`.
+and is written into the person's cache folder), *How to Connect…* naming the
+frozen program's path for MCP instead of `figscribe`.
+
+### Changed (2026-11-05, after 0.3.0): a double click on macOS opens the project
+
+The first installer opened figscribe on a double click on a `.figscribe` file
+but not the file (found by the user). macOS does not put the name on the command
+line: it sends the running program a *file open* event, also when it starts it.
+`gui/app.py` has a filter on the application (`FileOpenFilter`, a child of the
+window, installed in `main`) that hands the file to `open_dropped`, the
+function that opens a dropped project, which asks before discarding unsaved
+work and shows an error for a file that is no project. And the app says it
+opens `.figscribe` files: `CFBundleDocumentTypes` in its `Info.plist` (the
+spec), checked by `smoke.py`, since Finder hands a file only to an app that does.
+Windows (a registry entry of the installer) and Linux (the command line, `%f`)
+needed neither.
 
 ### Changed (2026-11-05, before the release)
 

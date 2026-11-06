@@ -62,5 +62,16 @@ if sys.platform == "darwin":
             "CFBundleVersion": figscribe.__version__,
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.graphics-design",
+            # Finder offers figscribe for a project and opens it on a double click
+            # (the program gets the file as an event, see gui/app.py).
+            "CFBundleDocumentTypes": [
+                {
+                    "CFBundleTypeName": "figscribe project",
+                    "CFBundleTypeExtensions": ["figscribe"],
+                    "CFBundleTypeRole": "Editor",
+                    "LSHandlerRank": "Owner",
+                    "CFBundleTypeIconFile": "figscribe.icns",
+                }
+            ],
         },
     )

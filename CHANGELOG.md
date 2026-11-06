@@ -5,7 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
-- Fixed: the first release of the installers (0.3.0) carried a fifth file, the
+- **Fixed: a double click on a project in Finder opens the project.** The macOS
+  app started but showed the start page, because macOS sends the file to a
+  running program as an event instead of an argument. The app also says now that
+  it opens `.figscribe` files, so Finder offers it for them (decision 0066).
+- Fixed: the first release of the installers (0.3.0) carried a fourth file, the
   tool that builds the AppImage, next to the three installers. It is removed from
   that release and no longer kept where the workflow collects installers.
 
