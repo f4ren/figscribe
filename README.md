@@ -15,6 +15,8 @@ hand-write every detail of a Matplotlib figure just to fine-tune it.
 - **Your data stays yours**: an assistant sees file and column names, never
   the values, and can run entirely on your own computer.
 
+![figscribe main window with a two-panel plot and the property panel](docs/figscribe0.3.png)
+
 ## Contents
 
 - [Status](#status)
