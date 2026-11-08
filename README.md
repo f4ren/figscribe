@@ -50,9 +50,11 @@ has an installer for each system, with the assistant and MCP parts included:
 
 | System | File | Notes |
 |---|---|---|
-| macOS (Apple silicon) | `figscribe-VERSION-macos-arm64.dmg` | Open it and drag figscribe to Applications. Intel Macs: use pipx, below. |
-| Windows 10/11 | `figscribe-VERSION-windows-x64-setup.exe` | Installs for you alone; no administrator needed. |
-| Linux (x86-64) | `figscribe-VERSION-linux-x86_64.AppImage` | `chmod +x` it and run it. Needs `libxcb-cursor0` (Debian, Ubuntu) or `xcb-util-cursor` (Fedora), which most desktops have. |
+| Linux (x86-64) | [figscribe-0.3.0-linux-x86_64.AppImage](https://github.com/f4ren/figscribe/releases/download/v0.3.0/figscribe-0.3.0-linux-x86_64.AppImage) | `chmod +x` it and run it. Needs `libxcb-cursor0` (Debian, Ubuntu) or `xcb-util-cursor` (Fedora), which most desktops have. |
+| macOS (Apple silicon) | [figscribe-0.3.0-macos-arm64.dmg](https://github.com/f4ren/figscribe/releases/download/v0.3.0/figscribe-0.3.0-macos-arm64.dmg) | Open it and drag figscribe to Applications. Intel Macs: use pipx, below. |
+| Windows 10/11 | [figscribe-0.3.0-windows-x64-setup.exe](https://github.com/f4ren/figscribe/releases/download/v0.3.0/figscribe-0.3.0-windows-x64-setup.exe)  | Installs for you alone; no administrator needed. |
+
+All releases: [github.com/f4ren/figscribe/releases](https://github.com/f4ren/figscribe/releases)
 
 The installers are **not signed** yet, so the system asks you once:
 
