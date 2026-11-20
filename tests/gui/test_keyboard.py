@@ -41,13 +41,19 @@ def _inputs(dialog: QDialog) -> list[QWidget]:
     ]
 
 
+def _press(dialog: QDialog, key: Qt.Key) -> None:
+    """A key goes to the widget that has the focus, which may use it itself (a
+    table moves between its cells with Tab), not to the dialog."""
+    QTest.keyClick(dialog.focusWidget() or dialog, key)
+
+
 def _tabbed(dialog: QDialog) -> list[QWidget]:
     """The widgets that get the focus, in order, from one Tab after another until
     the first comes round again."""
     dialog.activateWindow()
     seen: list[QWidget] = []
     for _ in range(200):
-        QTest.keyClick(dialog, Qt.Key.Key_Tab)
+        _press(dialog, Qt.Key.Key_Tab)
         focus = dialog.focusWidget()
         if seen and focus is seen[0]:
             return seen
@@ -87,7 +93,17 @@ def test_tab_reaches_every_control_and_the_accept_button(dialogs, name: str) -> 
 @pytest.mark.parametrize("name", ["fit", "import"])
 def test_escape_leaves_and_nothing_is_added(dialogs, name: str) -> None:
     dialog = dialogs[name]
-    QTest.keyClick(dialog, Qt.Key.Key_Escape)
+    _press(dialog, Qt.Key.Key_Escape)
     # FitDialog keeps its fit in `result`, which hides QDialog's
     assert not dialog.isVisible()
     assert QDialog.result(dialog) == QDialog.DialogCode.Rejected
+
+
+def test_tab_leaves_the_preview_table_at_once(dialogs) -> None:
+    """The table only shows the file. Tab that moved from cell to cell, a row
+    after a row, kept someone with only a keyboard in it for 80 key presses."""
+    dialog = dialogs["import"]
+    dialog.table.setFocus()
+    assert dialog.focusWidget() is dialog.table
+    _press(dialog, Qt.Key.Key_Tab)
+    assert dialog.focusWidget() is not dialog.table

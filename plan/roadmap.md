@@ -422,8 +422,8 @@ they find.
    about 1100 px wide, which fits a 1366-wide screen but not 1024. *Dark
    mode:* looked at on a Mac in dark mode (the offscreen platform ignores the
    color scheme): the main window and the dialogs stay light and readable,
-   because the palette and the style sheet are fixed; only native dialogs
-   (file chooser, message boxes) follow the system. *Found on the way:* the
+   because the palette and the style sheet are fixed; message boxes too. Not
+   looked at: the system's own file chooser. *Found on the way:* the
    chosen model in the fit dialog had white text on pale blue, and any model
    tile with the keyboard focus was white on white: the focus makes a button
    the dialog's default, and the rule for default buttons sets white text;
@@ -432,8 +432,16 @@ they find.
    style sheet, so nothing it alone does was tested; the `themed` fixture
    (`tests/conftest.py`) applies it. *Keyboard:* Tab reaches every control and
    the accept button of the fit and import dialogs, Escape leaves
-   (`tests/gui/test_keyboard.py`). *Open:* the property panel by keyboard,
-   150 % and 200 % scaling, dark mode on Windows and Linux.
+   (`tests/gui/test_keyboard.py`, keys sent to the widget with the focus, as
+   a person's are). It found that Tab kept moving from cell to cell in the
+   import dialog's preview table, 80 presses for a file of 21 rows: the table
+   only shows, so Tab leaves it now. *Found, not fixed (it changes what is
+   seen):* a disabled check box and a disabled `QDoubleSpinBox` look exactly
+   like enabled ones, since the style sheet greys `QSpinBox`, `QLineEdit`,
+   `QComboBox` and `QLabel` but names neither; measured with the style sheet
+   on (the fit dialog's "Draw the points outside…" and its "σ" box). *Open:*
+   that, the property panel by keyboard, 150 % and 200 % scaling, dark mode
+   on Windows and Linux.
 6. **Code generator**: every project in `examples/` and every bench case
    through the equivalence test (some bench cases may not be covered yet).
    **Done** (2026-11-20): `test_bench_cases` in `tests/codegen/test_equivalence.py`
