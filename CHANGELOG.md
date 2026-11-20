@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **An open frame.** *Ticks and frame* in the figure's settings has *Open frame*:
+  only the left and bottom axis are drawn, without the frame and tick marks on
+  the top and right. A panel with a right y axis keeps that axis. *Ticks on all
+  sides* is greyed out meanwhile (decision 0068).
 - **An axis can be drawn backwards.** In the axis form, *Scale* has *Direction*
   with *Highest value first*, for wavenumbers and binding energies; it works with
   an automatic range too. A range typed with the higher end first did this before

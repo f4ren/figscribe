@@ -125,6 +125,18 @@ def test_a_reversed_axis_roundtrips_and_an_older_file_runs_forwards(
     assert older.axes[0].x.inverted is False
 
 
+def test_an_open_frame_roundtrips_and_an_older_file_has_a_box(
+    project: Project,
+) -> None:
+    import json
+
+    project.figures[0].open_frame = True
+    assert loads(dumps(project)).figures[0].open_frame is True
+    document = json.loads(dumps(project))
+    del document["figures"][0]["open_frame"]
+    assert loads(json.dumps(document)).figures[0].open_frame is False
+
+
 def test_a_negative_label_distance_is_refused() -> None:
     from pydantic import ValidationError
 

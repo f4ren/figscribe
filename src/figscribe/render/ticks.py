@@ -45,7 +45,12 @@ def tick_style(figure: Figure) -> dict[str, object]:
         if (value := getattr(figure, field)) is not None:
             style[f"xtick.{param}"] = value
             style[f"ytick.{param}"] = value
-    if figure.ticks_all_sides:
+    if figure.open_frame:
+        style["axes.spines.top"] = False
+        style["axes.spines.right"] = False
+        style["xtick.top"] = False
+        style["ytick.right"] = False
+    elif figure.ticks_all_sides:
         style["xtick.top"] = True
         style["ytick.right"] = True
     return style

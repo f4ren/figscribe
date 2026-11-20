@@ -1306,6 +1306,8 @@ class _Writer:
         if axes.y_right is not None:
             right = f"{ax}_right"
             self.emit(f"{right} = {ax}.twinx()")
+            if self.figure.open_frame:
+                self.emit(f'{right}.spines["right"].set_visible(True)')
             self._axis(right, "y", self.axis_specs[(axes.id, "y_right")])
         if axes.grid:
             kwargs = {}
