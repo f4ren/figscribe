@@ -22,6 +22,12 @@ class AxisSpec(StrictModel):
     limits: tuple[float, float] | None = None
     """None means autoscale. Adopting the current zoom writes a fixed pair here;
     the first end may be the higher one, which turns the axis around."""
+    inverted: bool = False
+    """Draws the axis backwards, the highest value first (wavenumbers, binding
+    energies), also while the range is automatic. A range typed highest end
+    first turns the axis around as well, and this field does not undo that:
+    to turn it back, set the field to False and give the range the lower end
+    first."""
     ticks: list[float] | None = None
     """Values of the major ticks; None lets Matplotlib or `major_step` place them."""
     tick_labels: list[str] | None = None

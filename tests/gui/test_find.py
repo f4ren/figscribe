@@ -79,13 +79,31 @@ def test_the_search_looks_in_the_tooltips_and_opens_folded_sections(
     assert not window.properties.sections["More"].expanded  # as the user left it
 
 
+def _shown_texts(window: MainWindow) -> list[str]:
+    """What the search looks in, for the fields shown now: the caption and the
+    tooltip (decision 0038), lower case."""
+    panel = window.properties
+    found = []
+    for section in panel.sections.values():
+        if not section.isVisible() or not section.expanded:
+            continue
+        form = section.body.layout()
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            if item is not None and form.isRowVisible(row):
+                widget = item.widget()
+                found.append(f"{widget.text()} {widget.toolTip()}".lower())
+    return found
+
+
 def test_the_search_stays_while_another_object_is_selected(
     window: MainWindow, qtbot
 ) -> None:
     window.document.select(window.document.figure.id)
     _search(window, qtbot, "tick")
-    shown = _shown_captions(window)
-    assert shown and all("tick" in c.lower() for c in shown)
+    shown = _shown_texts(window)
+    assert shown and all("tick" in text for text in shown)
+    assert "Tick marks point" in _shown_captions(window)
     window.document.select(window.document.figure.axes[0].artists[0].id)
     assert window.properties.search.text() == "tick"
     _search(window, qtbot, "xylophone")

@@ -5,6 +5,20 @@ release open in every later one.
 
 ## Unreleased
 
+- **An open frame.** *Ticks and frame* in the figure's settings has *Open frame*:
+  only the left and bottom axis are drawn, without the frame and tick marks on
+  the top and right. A panel with a right y axis keeps that axis. *Ticks on all
+  sides* is greyed out meanwhile (decision 0068).
+- **An axis can be drawn backwards.** In the axis form, *Scale* has *Direction*
+  with *Highest value first*, for wavenumbers and binding energies; it works with
+  an automatic range too. A range typed with the higher end first did this before
+  and the box shows it. The script writes `set_xlim(10, 0)` or
+  `ax.xaxis.set_inverted(True)` (decision 0067).
+- Fixed: in the fit dialog the chosen model was written in white on pale blue,
+  and a model with the keyboard focus in white on white. Their text is dark now.
+- Fixed: with only the keyboard, Tab in the import dialog moved from cell to
+  cell of the preview table, a key press for each. It moves on to the next
+  control now.
 - **Fixed: a double click on a project in Finder opens the project.** The macOS
   app started but showed the start page, because macOS sends the file to a
   running program as an event instead of an argument. The app also says now that

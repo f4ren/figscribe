@@ -45,10 +45,23 @@ def tick_style(figure: Figure) -> dict[str, object]:
         if (value := getattr(figure, field)) is not None:
             style[f"xtick.{param}"] = value
             style[f"ytick.{param}"] = value
-    if figure.ticks_all_sides:
+    if figure.open_frame:
+        style["axes.spines.top"] = False
+        style["axes.spines.right"] = False
+        style["xtick.top"] = False
+        style["ytick.right"] = False
+    elif figure.ticks_all_sides:
         style["xtick.top"] = True
         style["ytick.right"] = True
     return style
+
+
+def reversed_axis(spec: AxisSpec) -> bool:
+    """Whether the axis runs backwards: by its flag, or by a range given highest
+    end first. The panel's box, the renderer and the script all ask this."""
+    return spec.inverted or (
+        spec.limits is not None and spec.limits[0] > spec.limits[1]
+    )
 
 
 def scaling(spec: AxisSpec) -> tuple[str, str] | None:

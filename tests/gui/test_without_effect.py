@@ -273,6 +273,14 @@ CASES: dict[tuple, Case] = {
         ("axes",),
         SECOND_PANEL,
     ),
+    ("Figure", ("ticks_all_sides",)): (
+        lambda: (lambda f: (f, f))(
+            Figure(dpi=72, open_frame=True, axes=[_panel()()[0]])
+        ),
+        False,
+        ("open_frame",),
+        False,
+    ),
     ("FitCurve", ("extend_curve",)): (
         _fitted(),
         True,

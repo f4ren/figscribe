@@ -74,7 +74,10 @@ note the platform, the screen scaling and the theme in the pull request.
    With 150 % or 200 % screen scaling, icons and text are sharp.
 10. **Theme**: switch the system to dark mode; text and lines stay readable.
 11. **Keyboard**: go through the import dialog and the property panel with
-    Tab and Enter only.
+    Tab and Enter only. On macOS, Tab
+    skips buttons and boxes unless *Keyboard navigation* is on (System
+    Settings > Keyboard); switch it on first. The automatic test
+    (`tests/gui/test_keyboard.py`) covers the fit and import dialogs only.
 12. **Clipboard and file manager** (what no test can see): *Edit > Copy
     Figure*, then paste into a slide (PowerPoint or Keynote) and a Word or
     LibreOffice document; the picture has the figure's size and is sharp.

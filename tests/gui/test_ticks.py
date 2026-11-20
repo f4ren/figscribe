@@ -76,3 +76,17 @@ def test_an_axis_shows_its_values_with_a_prefix(panel, document) -> None:
     assert document.figure.axes[0].x.prefix == "m"
     document.undo()
     assert document.figure.axes[0].x.prefix is None
+
+
+def test_an_open_frame_is_set_by_a_click_and_greys_the_ticks_on_all_sides(
+    panel, document
+) -> None:
+    document.select(document.figure.id)
+    box = panel.editors[("open_frame",)].widget
+    sides = panel.editors[("ticks_all_sides",)].widget
+    assert not box.isChecked() and sides.isEnabled()
+    box.click()
+    assert document.figure.open_frame and box.isChecked()
+    assert not sides.isEnabled()  # there are no tick marks on those sides then
+    document.undo()
+    assert not document.figure.open_frame and sides.isEnabled()

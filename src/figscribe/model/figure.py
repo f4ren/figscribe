@@ -85,6 +85,10 @@ class Figure(Identified):
     """Tick marks also on the top and right edge of every panel, as many
     physics journals have them; the numbers stay bottom and left. On for a new
     figure; a file keeps what it was saved with."""
+    open_frame: bool = False
+    """Draws only the left and bottom axis of every panel, without the frame on
+    the top and right and without tick marks there (a panel with a right y axis
+    keeps that axis's line). While it is set, `ticks_all_sides` does nothing."""
     frame_width: float | None = Field(None, gt=0.0)
     """Line width of the frame around every panel in pt; None keeps
     Matplotlib's (or the style sheet's), which is 0.8."""
