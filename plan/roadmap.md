@@ -42,9 +42,10 @@ here is done; its follow-ups ("only if asked") stay in its text.
   edge-data matrix), item 2 (undo stress), item 3 (fits that fail politely)
   and item 4 (files; only the Windows network share and other drive are left
   to the manual checklist); the fit whose range was narrowed to no row is
-  fixed (2026-11-05, decision 0059). Open: item 5 the GUI at 1024 × 700, 150 % and
-  200 % scaling, dark mode, keyboard only; item 6 every bench case through
-  the equivalence test (the projects in `examples/` already are).
+  fixed (2026-11-05, decision 0059). Open: item 5, what is left of the GUI at small
+  sizes (the fit dialog's height, 150 % and 200 % scaling, dark mode on
+  Windows and Linux, the panel by keyboard). Item 6 (every bench case through
+  the equivalence test) is done, 2026-11-20.
 - **B8**: about twenty dialog tests still set widgets instead of clicking
   them, and the preview's zoom, pan and legend drag lack mouse-event tests.
   Follow-ups: ratios that no longer match the grid; a lower bound for font
@@ -412,8 +413,42 @@ they find.
 5. **GUI**: small window (1024 × 700), high-DPI scaling 150 % and 200 %, dark
    mode on all three platforms, keyboard-only use of the import dialog, fit
    dialog and property panel.
+   **Partly done** (2026-11-20). *Small window:* at 1024 × 700 the main window
+   fits and the property panel cuts nothing off for any of the 22 kinds of
+   object (`tests/gui/test_small_screens.py`); the fit dialog is 840 px high,
+   too much for a 1366 × 768 laptop screen, and it grows with the model (a
+   polynomial has up to ten parameters): **open**, it needs a scrolling
+   middle part (the test lists it in `KNOWN`). The import and plot dialogs are
+   about 1100 px wide, which fits a 1366-wide screen but not 1024. *Dark
+   mode:* looked at on a Mac in dark mode (the offscreen platform ignores the
+   color scheme): the main window and the dialogs stay light and readable,
+   because the palette and the style sheet are fixed; message boxes too. Not
+   looked at: the system's own file chooser. *Found on the way:* the
+   chosen model in the fit dialog had white text on pale blue, and any model
+   tile with the keyboard focus was white on white: the focus makes a button
+   the dialog's default, and the rule for default buttons sets white text;
+   fixed (`QPushButton#modelChoice` sets its color) with a test that measures
+   the contrast of each tile. *Learned:* almost no GUI test runs with the
+   style sheet, so nothing it alone does was tested; the `themed` fixture
+   (`tests/conftest.py`) applies it. *Keyboard:* Tab reaches every control and
+   the accept button of the fit and import dialogs, Escape leaves
+   (`tests/gui/test_keyboard.py`, keys sent to the widget with the focus, as
+   a person's are). It found that Tab kept moving from cell to cell in the
+   import dialog's preview table, 80 presses for a file of 21 rows: the table
+   only shows, so Tab leaves it now. *Found, not fixed (it changes what is
+   seen):* a disabled check box and a disabled `QDoubleSpinBox` look exactly
+   like enabled ones, since the style sheet greys `QSpinBox`, `QLineEdit`,
+   `QComboBox` and `QLabel` but names neither; measured with the style sheet
+   on (the fit dialog's "Draw the points outside…" and its "σ" box). *Open:*
+   that, the property panel by keyboard, 150 % and 200 % scaling, dark mode
+   on Windows and Linux.
 6. **Code generator**: every project in `examples/` and every bench case
    through the equivalence test (some bench cases may not be covered yet).
+   **Done** (2026-11-20): `test_bench_cases` in `tests/codegen/test_equivalence.py`
+   applies each case's reference solution to a copy of the example and compares
+   the renderer's PNG with the script's, for every figure (21 cases, `slow`,
+   six seconds on several cores). All were pixel-identical at once; nothing
+   to fix. A new case is in the test without anyone adding it.
 
 ### B8 Every GUI element is tested the way a person uses it (verified) — M
 

@@ -23,6 +23,8 @@ from figscribe.model import (
     ResidualPlot,
 )
 
+from .legible import readable  # noqa: E402
+
 
 @pytest.fixture
 def document(qtbot, example: Path) -> Document:
@@ -573,3 +575,23 @@ def test_an_exponential_on_data_that_only_falls_still_gives_a_result(qtbot) -> N
     assert result is not None
     unknown = any(not np.isfinite(e) for e in result.uncertainties.values())
     assert unknown == ("uncertaint" in widget.error.text())
+
+
+def test_every_model_can_be_read_chosen_or_with_the_focus(
+    qtbot, themed, document: Document
+) -> None:
+    """The first tile is the dialog's default button, and so is the one with
+    the focus; a rule for default buttons turned their text white, on the
+    tile's pale blue or white ground."""
+    dialog = FitDialog(_data(document), document.data)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.activateWindow()
+    qtbot.waitActive(dialog)
+    tiles = dialog.models.buttons()
+    for tile in tiles:
+        tile.setFocus()
+        qtbot.waitUntil(tile.hasFocus)
+        assert tile.isDefault()  # the premise: focus makes a button default
+        for other in tiles:
+            assert readable(other) >= 4.5, (tile.text(), other.text())
