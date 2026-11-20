@@ -10,7 +10,19 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QPushButton, QToolButton
+from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .legible import readable
 from .test_small_screens import _make
@@ -41,3 +53,32 @@ def test_every_button_can_be_read_with_and_without_the_focus(
                 label = button.text() or button.objectName()
                 faint.append(f"{label!r} {'with' if focused else 'without'} focus")
     assert not faint, f"{name}: " + ", ".join(faint)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: QCheckBox("Draw the points outside like left-out ones"),
+        lambda: QDoubleSpinBox(),
+        lambda: QSpinBox(),
+        lambda: QLineEdit("text"),
+        lambda: QComboBox(),
+        lambda: QLabel("a label"),
+    ],
+    ids=["check box", "double spin box", "spin box", "line edit", "combo box", "label"],
+)
+def test_a_disabled_control_looks_disabled(qtbot, themed, make) -> None:
+    """The style sheet greys fields and captions that do nothing (B8.4); a
+    control it did not name looked as if it still worked."""
+    host = QWidget()
+    qtbot.addWidget(host)
+    control = make()
+    if isinstance(control, QComboBox):
+        control.addItem("an entry")
+    if isinstance(control, QAbstractSpinBox):
+        control.setValue(7)
+    QVBoxLayout(host).addWidget(control)
+    host.show()
+    enabled = readable(control)
+    control.setEnabled(False)
+    assert readable(control) < enabled * 0.5
