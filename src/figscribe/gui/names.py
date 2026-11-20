@@ -118,6 +118,7 @@ FIELD_NAMES = {
     "unit": "Unit",
     "scale": "Scale",
     "limits": "Range",
+    "inverted": "Reversed",
     "ticks": "Ticks at",
     "tick_labels": "Tick labels",
     "minor_ticks": "Minor ticks",

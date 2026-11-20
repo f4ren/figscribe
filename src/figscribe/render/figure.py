@@ -296,6 +296,9 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
 
     if spec.limits is not None:
         set_lim(*spec.limits)
+    if spec.inverted:
+        # Not a toggle: panels that share an axis each ask for it.
+        axis.set_inverted(True)
     if spec.ticks is not None:
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
 

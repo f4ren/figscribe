@@ -285,6 +285,17 @@ def _figures(ref) -> dict[str, Figure]:
                 )
             ],
         ),
+        # F5.2: an automatic range drawn backwards, as a spectrum is shown
+        "reversed_axis": Figure(
+            dpi=100,
+            axes=[
+                Axes(
+                    x=AxisSpec(label="Wavenumber", unit="cm$^{-1}$", inverted=True),
+                    y=AxisSpec(label="Absorbance"),
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                )
+            ],
+        ),
     }
 
 
@@ -302,6 +313,7 @@ def _figures(ref) -> dict[str, Figure]:
         "residuals",
         "reduced",
         "note_background",
+        "reversed_axis",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

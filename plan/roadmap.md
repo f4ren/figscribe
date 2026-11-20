@@ -71,7 +71,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **F4** plot types (M each): hollow markers, error bar colour and caps, an
   error bar on every n-th point (3); step plot (4); points coloured by a
   third column (5); waterfall (6); contours (7); bar chart (8).
-- **F5** axes: number format and the decimal comma (1); inverted axes (2);
+- **F5** axes: number format and the decimal comma (1); ~~inverted axes (2)~~ done;
   a second x axis on top that converts (3); hiding and offsetting spines
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
   **broken axes (6, wanted for a measurement at a fixed point,
@@ -1223,7 +1223,12 @@ In order of demand:
 1. **Number format** of tick labels: automatic, fixed decimals, scientific
    (×10ⁿ at the axis end or per tick), and the **decimal comma** for German
    theses and journals. Per figure, overridable per axis.
-2. **Invert** an axis (wavenumbers, binding energies).
+2. **Invert** an axis (wavenumbers, binding energies). **Done**
+   (2026-11-20, decision 0067; no schema bump): `AxisSpec.inverted`, and a
+   range typed highest end first reverses an axis as before; the box
+   *Direction* in *Scale* shows both and clearing it puts the range right too.
+   *Learned:* `set_inverted(True)` keeps an automatic range automatic, but
+   `invert_xaxis()` toggles, which breaks panels that share an axis.
 3. **Second x axis on top** that converts the bottom one (wavelength ↔
    energy, temperature ↔ 1/T), from a small set of conversions or an
    expression, like the right y axis.
