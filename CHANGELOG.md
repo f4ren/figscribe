@@ -5,6 +5,8 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed: in the fit dialog the chosen model was written in white on pale blue,
+  and a model with the keyboard focus in white on white. Their text is dark now.
 - **Fixed: a double click on a project in Finder opens the project.** The macOS
   app started but showed the start page, because macOS sends the file to a
   running program as an event instead of an argument. The app also says now that

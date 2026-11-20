@@ -42,8 +42,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
   edge-data matrix), item 2 (undo stress), item 3 (fits that fail politely)
   and item 4 (files; only the Windows network share and other drive are left
   to the manual checklist); the fit whose range was narrowed to no row is
-  fixed (2026-11-05, decision 0059). Open: item 5 the GUI at 1024 × 700, 150 % and
-  200 % scaling, dark mode, keyboard only. Item 6 (every bench case through
+  fixed (2026-11-05, decision 0059). Open: item 5, what is left of the GUI at small
+  sizes (the fit dialog's height, 150 % and 200 % scaling, dark mode on
+  Windows and Linux, the panel by keyboard). Item 6 (every bench case through
   the equivalence test) is done, 2026-11-20.
 - **B8**: about twenty dialog tests still set widgets instead of clicking
   them, and the preview's zoom, pan and legend drag lack mouse-event tests.
@@ -412,6 +413,27 @@ they find.
 5. **GUI**: small window (1024 × 700), high-DPI scaling 150 % and 200 %, dark
    mode on all three platforms, keyboard-only use of the import dialog, fit
    dialog and property panel.
+   **Partly done** (2026-11-20). *Small window:* at 1024 × 700 the main window
+   fits and the property panel cuts nothing off for any of the 22 kinds of
+   object (`tests/gui/test_small_screens.py`); the fit dialog is 840 px high,
+   too much for a 1366 × 768 laptop screen, and it grows with the model (a
+   polynomial has up to ten parameters): **open**, it needs a scrolling
+   middle part (the test lists it in `KNOWN`). The import and plot dialogs are
+   about 1100 px wide, which fits a 1366-wide screen but not 1024. *Dark
+   mode:* looked at on a Mac in dark mode (the offscreen platform ignores the
+   color scheme): the main window and the dialogs stay light and readable,
+   because the palette and the style sheet are fixed; only native dialogs
+   (file chooser, message boxes) follow the system. *Found on the way:* the
+   chosen model in the fit dialog had white text on pale blue, and any model
+   tile with the keyboard focus was white on white: the focus makes a button
+   the dialog's default, and the rule for default buttons sets white text;
+   fixed (`QPushButton#modelChoice` sets its color) with a test that measures
+   the contrast of each tile. *Learned:* almost no GUI test runs with the
+   style sheet, so nothing it alone does was tested; the `themed` fixture
+   (`tests/conftest.py`) applies it. *Keyboard:* Tab reaches every control and
+   the accept button of the fit and import dialogs, Escape leaves
+   (`tests/gui/test_keyboard.py`). *Open:* the property panel by keyboard,
+   150 % and 200 % scaling, dark mode on Windows and Linux.
 6. **Code generator**: every project in `examples/` and every bench case
    through the equivalence test (some bench cases may not be covered yet).
    **Done** (2026-11-20): `test_bench_cases` in `tests/codegen/test_equivalence.py`
