@@ -732,7 +732,11 @@ def test_the_basic_settings_come_first_the_rest_under_more(
         "align_labels",
         "panel_labels",
     ]
-    assert fields["Ticks and frame"] == ["tick_direction", "ticks_all_sides"]
+    assert fields["Ticks and frame"] == [
+        "tick_direction",
+        "open_frame",
+        "ticks_all_sides",
+    ]
     assert fields["Widths and lengths"] == [
         "frame_width",
         "tick_width",

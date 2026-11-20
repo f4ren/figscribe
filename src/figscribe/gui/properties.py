@@ -259,6 +259,7 @@ SECTIONS = {
     "grid_linestyle": "Grid",
     "font_size": "Text",
     "tick_direction": "Ticks and frame",
+    "open_frame": "Ticks and frame",
     "ticks_all_sides": "Ticks and frame",
     "align_labels": "Text",
     "frame_width": "Widths and lengths",
@@ -504,6 +505,7 @@ BASIC = {
         "align_labels",
         "panel_labels",
         "tick_direction",
+        "open_frame",
         "ticks_all_sides",
         "frame_width",
         "tick_width",
@@ -613,6 +615,9 @@ TIPS = {
     "align_labels": "Put the axis labels of panels in one column or row on one "
     "line, whatever the width of their numbers. Insets and color bars are left "
     "out.",
+    "open_frame": "Draw only the left and bottom axis, without the frame or tick "
+    "marks on the top and right edge of every panel. A panel with a right y axis "
+    "keeps that axis.",
     "ticks_all_sides": "Tick marks also on the top and right edge of every "
     "panel; the numbers stay at the bottom and left.",
     "frame_width": "Line width of the frame around every panel; empty keeps "

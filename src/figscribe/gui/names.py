@@ -90,6 +90,7 @@ FIELD_NAMES = {
     "share_x": "Share x axis",
     "y_right": "Right y axis",
     "tick_direction": "Tick marks point",
+    "open_frame": "Open frame",
     "ticks_all_sides": "Ticks on all sides",
     "align_labels": "Line up axis labels",
     "labelpad": "Label distance (pt)",

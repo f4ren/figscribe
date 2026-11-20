@@ -1592,3 +1592,50 @@ def test_panels_that_share_an_axis_drawn_backwards(
     figure.axes[1].x = AxisSpec(inverted=flagged[1])
     project.figures = [figure]
     _assert_same(project, tmp_path)
+
+
+# --- an open frame ---------------------------------------------------------------
+
+
+def test_an_open_frame(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.open_frame = True
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    assert '"axes.spines.top": False' in script and '"xtick.top": False' in script
+
+
+def test_an_open_frame_with_a_right_axis_an_inset_and_a_colour_bar(
+    tmp_path: Path,
+) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ImagePlot, Inset
+
+    np.save(tmp_path / "frame.npy", np.arange(60.0).reshape(6, 10))
+    frame = numpy_source(tmp_path / "frame.npy", tmp_path)
+    project, ref = _scan(tmp_path)
+    project.sources.append(frame)
+    figure = _stacked_panels(ref)
+    figure.open_frame = True
+    figure.axes[0].y_right = AxisSpec(label="right", limits=(0.0, 1.0))
+    figure.axes[1].artists = [
+        ImagePlot(data=ArrayRef(source=frame.id), colorbar=Colorbar(label="counts"))
+    ]
+    figure.axes.append(
+        Axes(
+            inset=Inset(parent=figure.axes[0].id, bounds=(0.6, 0.6, 0.3, 0.3)),
+            artists=[LinePlot(x=ref["t"], y=ref["U"])],
+        )
+    )
+    project.figures = [figure]
+    script = _assert_same(project, tmp_path)
+    assert script.count('.spines["right"].set_visible(True)') == 1  # the right axis
+
+
+def test_an_open_frame_over_a_style_sheet_with_ticks_on_top(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref, stylesheet="classic")
+    figure.open_frame = True
+    project.figures = [figure]
+    _assert_same(project, tmp_path)

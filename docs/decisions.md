@@ -3224,3 +3224,47 @@ by itself): the model would have to rewrite ranges at load. **A box bound to the
 flag alone**: it lies for an axis reversed by its range, and clearing it does
 nothing, a dead control of the kind B8.4 removed. **`invert_xaxis()` in the
 script**: reads naturally, but breaks with shared axes.
+
+
+## 0068 — An open frame: only the left and bottom axis
+
+**Date:** 2026-11-20
+**Status:** accepted (roadmap F5.4; the user saw pictures of the open frame and
+of the half-done variant on 2026-11-20 and chose it per figure, with the
+default as it is).
+
+### Context
+
+Some journals and theses draw only the left and bottom axis. Hiding the top and
+right lines alone leaves the tick marks there standing in the empty, since a new
+figure has ticks on all sides (decision 0048).
+
+### Decision
+
+- `Figure.open_frame: bool = False`, one choice per figure so that every panel
+  matches, as the tick direction and the line widths are. In the *Ticks and
+  frame* section, a check box *Open frame*, before *Ticks on all sides*.
+- It is four rcParams, set in the one `plt.rcParams.update` the script already
+  writes: `axes.spines.top` and `axes.spines.right` off, and `xtick.top` and
+  `ytick.right` off, written out so that a style sheet that turns them on
+  (`classic`) does not win. Minor ticks follow.
+- While the frame is open, *Ticks on all sides* does nothing and is greyed out
+  (a rule in `gui/effect.py`, checked against the renderer).
+- A panel with a right y axis keeps that axis's line and ticks: the twin's right
+  spine is shown again, in the renderer and in the script. Only for an open
+  frame; a style sheet that hides the right spine keeps doing so, as before.
+- Insets and the panels of residuals are open too, like every panel. The outline
+  of a colour bar is its own and stays.
+- No schema bump: the default draws what was drawn and no released file has the
+  field.
+- Not done: offsetting the spines (the other half of roadmap F5.4), a frame per
+  panel.
+
+### Alternatives considered
+
+**Hiding the spines alone:** leaves tick marks floating, as the pictures showed.
+**A choice per panel:** panels of one figure would differ, which journals do not
+want, and a style template sets one look per figure. **Writing
+`ax.spines[["top", "right"]].set_visible(False)` in the script:** what a person
+often writes, but it needs a loop over the panels and the twin axes; the
+rcParams are one line and the script already uses them for the ticks.
