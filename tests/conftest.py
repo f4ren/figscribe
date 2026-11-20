@@ -124,3 +124,20 @@ def _no_recovery_in_the_users_folder(tmp_path_factory, monkeypatch) -> None:
     monkeypatch.setattr(
         recovery, "UNTITLED_FOLDER", tmp_path_factory.mktemp("recovery")
     )
+
+
+@pytest.fixture
+def themed(qapp):
+    """The application as the program starts it: figscribe's style sheet,
+    palette and font. Most GUI tests run without it, which leaves what only
+    the style sheet does (colors of states, sizes) to the tests that ask."""
+    style = qapp.style().objectName()
+    palette, font = qapp.palette(), qapp.font()
+    from figscribe.gui import theme
+
+    theme.apply(qapp)
+    yield qapp
+    qapp.setStyleSheet("")
+    qapp.setStyle(style)
+    qapp.setPalette(palette)
+    qapp.setFont(font)

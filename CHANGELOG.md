@@ -5,6 +5,16 @@ release open in every later one.
 
 ## Unreleased
 
+- **The fit dialog fits a small screen.** Its settings scroll when the window is
+  too small for them (a polynomial of high degree has many parameters), while the
+  model list and the buttons stay in view. On a large screen it looks as before.
+- A disabled check box and a disabled number field with decimals are grey now, as
+  the other disabled fields were.
+- Fixed: in the fit dialog the chosen model was written in white on pale blue,
+  and a model with the keyboard focus in white on white. Their text is dark now.
+- Fixed: with only the keyboard, Tab in the import dialog moved from cell to
+  cell of the preview table, a key press for each. It moves on to the next
+  control now.
 - **Fixed: a double click on a project in Finder opens the project.** The macOS
   app started but showed the start page, because macOS sends the file to a
   running program as an event instead of an argument. The app also says now that

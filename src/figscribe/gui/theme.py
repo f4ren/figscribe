@@ -121,6 +121,8 @@ QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {{
     background: {GROUND}; border-color: {BORDER}; color: #A0A0A6;
 }}
 QLabel:disabled, QLabel#caption:disabled {{ color: #B4B4B9; }}
+QCheckBox:disabled {{ color: #B4B4B9; }}
+QDoubleSpinBox:disabled {{ background: {SUBTLE}; color: #A0A0A6; }}
 QToolButton:disabled {{ color: #A0A0A6; border-color: {BORDER}; }}
 QComboBox::drop-down {{ border: 0; width: 22px; }}
 QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: 0; }}
@@ -184,6 +186,7 @@ QPushButton#crumb {{
 QPushButton#crumb:hover {{ text-decoration: underline; }}
 
 QScrollArea {{ border: 0; background: {SURFACE}; }}
+QScrollArea#fitScroll, QWidget#fitSettings {{ background: {SURFACE}; }}
 
 QScrollArea#startPage, QWidget#startBody {{ background: {GROUND}; }}
 QWidget#startHeader {{ background: {SURFACE}; border-bottom: 1px solid {BORDER}; }}
@@ -225,7 +228,7 @@ QToolButton#pill {{
 QToolButton#pill:hover {{ background: {SUBTLE}; }}
 QPushButton#modelChoice {{
     background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 8px;
-    padding: 8px 12px; text-align: left;
+    padding: 8px 12px; text-align: left; color: {INK};
 }}
 QPushButton#modelChoice:checked {{
     background: {ACCENT_SOFT}; border-color: {ACCENT}; font-weight: 500;
