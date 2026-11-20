@@ -5,6 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
+- **An axis can be drawn backwards.** In the axis form, *Scale* has *Direction*
+  with *Highest value first*, for wavenumbers and binding energies; it works with
+  an automatic range too. A range typed with the higher end first did this before
+  and the box shows it. The script writes `set_xlim(10, 0)` or
+  `ax.xaxis.set_inverted(True)` (decision 0067).
 - Fixed: in the fit dialog the chosen model was written in white on pale blue,
   and a model with the keyboard focus in white on white. Their text is dark now.
 - Fixed: with only the keyboard, Tab in the import dialog moved from cell to

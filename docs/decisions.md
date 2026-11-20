@@ -3181,3 +3181,46 @@ and less trodden with scipy and Matplotlib. **One file** (`--onefile`): a single
 download, but it unpacks to a temporary folder at each start. **Putting the
 installers into `release.yml`**: the publish job would need write rights and a
 failing installer would hold back PyPI.
+
+
+## 0067 — An axis can be drawn backwards, by a flag or by its range
+
+**Date:** 2026-11-20
+**Status:** accepted (roadmap F5.2, which asks for no answer; the box sits in
+the *Scale* section that decision 0050 arranged, which the user has not seen
+with it yet).
+
+### Context
+
+Wavenumbers and binding energies are drawn with the highest value first. A
+range typed highest end first already turned an axis around (`limits` says so),
+but an automatic range cannot be given ends, so there was no way to reverse it.
+
+### Decision
+
+- `AxisSpec.inverted: bool = False`. An axis runs backwards when the flag is
+  set **or** its range is typed highest end first (`render.ticks.reversed_axis`,
+  which the renderer, the script and the panel's box all ask). The flag does not
+  undo a backwards range.
+- The panel's box *Direction › Highest value first* shows `reversed_axis`, so it
+  never says "forwards" over a backwards axis. Checking it sets the flag;
+  clearing it is one undo step that sets the flag to False and, if the range is
+  typed highest end first, writes it lowest end first.
+- The renderer calls `axis.set_inverted(True)`, which keeps an automatic range
+  automatic and is not a toggle. Not `invert_xaxis()`: panels that share an axis
+  would each flip it, and two flagged panels would turn it forward again. The
+  script writes the same: a given range with the flag as `set_xlim(high, low)`,
+  as a person would, an automatic one as `ax.xaxis.set_inverted(True)`.
+- Panels that share an axis share its direction; a later panel's range typed
+  lowest end first turns it forward again, in the renderer and in the script
+  alike, since both work in the same order.
+- No schema bump: the default draws what was drawn, and no released file has the
+  field.
+
+### Alternatives considered
+
+**A flag that is the only truth** (clearing it turns a backwards range forward
+by itself): the model would have to rewrite ranges at load. **A box bound to the
+flag alone**: it lies for an axis reversed by its range, and clearing it does
+nothing, a dead control of the kind B8.4 removed. **`invert_xaxis()` in the
+script**: reads naturally, but breaks with shared axes.

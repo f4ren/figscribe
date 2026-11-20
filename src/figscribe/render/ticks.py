@@ -51,6 +51,14 @@ def tick_style(figure: Figure) -> dict[str, object]:
     return style
 
 
+def reversed_axis(spec: AxisSpec) -> bool:
+    """Whether the axis runs backwards: by its flag, or by a range given highest
+    end first. The panel's box, the renderer and the script all ask this."""
+    return spec.inverted or (
+        spec.limits is not None and spec.limits[0] > spec.limits[1]
+    )
+
+
 def scaling(spec: AxisSpec) -> tuple[str, str] | None:
     """How tick values are turned into the numbers shown, as the script writes
     it: ("/", "1e3") for kHz, ("*", "1e3") for mV, ("*", "1") for plain

@@ -1342,7 +1342,11 @@ class _Writer:
             self.emit(f"{ax}.set_{name}scale({_str(spec.scale)})")
         if spec.limits is not None:
             low, high = spec.limits
+            if spec.inverted and low < high:  # as a person writes a reversed axis
+                low, high = high, low
             self.emit(f"{ax}.set_{name}lim({_num(low)}, {_num(high)})")
+        elif spec.inverted:
+            self.emit(f"{ax}.{name}axis.set_inverted(True)")
         if spec.ticks is not None:
             kwargs = {}
             if spec.tick_labels is not None:

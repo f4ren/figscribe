@@ -1528,3 +1528,67 @@ def test_bench_cases(case: bench.Case, tmp_path: Path) -> None:
     assert case.check(workspace.project) is None  # it did what was asked
     for figure in workspace.project.figures:
         _assert_same(workspace.project, folder, figure)
+
+
+# --- an axis drawn backwards ---------------------------------------------------
+
+
+def _backwards(project: Project, ref, tmp_path: Path, **axes) -> str:
+    """One panel of the scan with the given x and y specs, through the script."""
+    panel = Axes(
+        artists=[LinePlot(x=ref["t"], y=ref["U"], label="U")],
+        legend=Legend(visible=True),
+        **axes,
+    )
+    project.figures = [Figure(dpi=100, axes=[panel])]
+    return _assert_same(project, tmp_path)
+
+
+def test_an_automatic_range_drawn_backwards(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    script = _backwards(
+        project, ref, tmp_path, x=AxisSpec(inverted=True), y=AxisSpec(inverted=True)
+    )
+    assert "ax.xaxis.set_inverted(True)" in script
+    assert "ax.yaxis.set_inverted(True)" in script
+
+
+def test_a_range_with_the_flag_is_written_highest_end_first(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    script = _backwards(
+        project, ref, tmp_path, x=AxisSpec(limits=(0.0, 10.0), inverted=True)
+    )
+    assert "ax.set_xlim(10, 0)" in script and "inverted" not in script
+
+
+def test_a_range_already_backwards_is_not_turned_back(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    script = _backwards(
+        project, ref, tmp_path, x=AxisSpec(limits=(10.0, 0.0), inverted=True)
+    )
+    assert "ax.set_xlim(10, 0)" in script and "inverted" not in script
+
+
+def test_a_log_axis_and_a_right_axis_drawn_backwards(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    _backwards(
+        project,
+        ref,
+        tmp_path,
+        x=AxisSpec(scale="log", limits=(0.5, 20.0), inverted=True),
+        y_right=AxisSpec(label="T", inverted=True),
+    )
+
+
+@pytest.mark.parametrize("flagged", [(True, True), (True, False), (False, True)])
+def test_panels_that_share_an_axis_drawn_backwards(
+    tmp_path: Path, flagged: tuple[bool, bool]
+) -> None:
+    """The script must not toggle: both panels ask, and one reversal results."""
+    project, ref = _scan(tmp_path)
+    figure = _stacked_panels(ref)
+    figure.layout = GridLayout(rows=2, share_x="col")
+    figure.axes[0].x = AxisSpec(inverted=flagged[0])
+    figure.axes[1].x = AxisSpec(inverted=flagged[1])
+    project.figures = [figure]
+    _assert_same(project, tmp_path)
