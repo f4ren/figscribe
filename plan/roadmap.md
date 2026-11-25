@@ -43,8 +43,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
   and item 4 (files; only the Windows network share and other drive are left
   to the manual checklist); the fit whose range was narrowed to no row is
   fixed (2026-11-05, decision 0059). Open: item 5 the GUI at 1024 × 700, 150 % and
-  200 % scaling, dark mode, keyboard only; item 6 every bench case through
-  the equivalence test (the projects in `examples/` already are).
+  200 % scaling, dark mode, keyboard only. Item 6 (every bench case through
+  the equivalence test) is done, 2026-11-20.
 - **B8**: about twenty dialog tests still set widgets instead of clicking
   them, and the preview's zoom, pan and legend drag lack mouse-event tests.
   Follow-ups: ratios that no longer match the grid; a lower bound for font
@@ -414,6 +414,11 @@ they find.
    dialog and property panel.
 6. **Code generator**: every project in `examples/` and every bench case
    through the equivalence test (some bench cases may not be covered yet).
+   **Done** (2026-11-20): `test_bench_cases` in `tests/codegen/test_equivalence.py`
+   applies each case's reference solution to a copy of the example and compares
+   the renderer's PNG with the script's, for every figure (21 cases, `slow`,
+   six seconds on several cores). All were pixel-identical at once; nothing
+   to fix. A new case is in the test without anyone adding it.
 
 ### B8 Every GUI element is tested the way a person uses it (verified) — M
 

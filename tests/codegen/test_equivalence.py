@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from figscribe.assistant import bench
 from figscribe.codegen import generate
 from figscribe.commands import add_panel
 from figscribe.fit import add_fit, refit
@@ -1508,3 +1509,22 @@ def test_two_plots_of_one_column_with_different_formulas_do_not_share_a_variable
     project.figures = [Figure(dpi=100, axes=[Axes(artists=[first, second])])]
     script = _assert_same(project, tmp_path)
     assert "U_V = U + 1" in script and "U_V2 = U - 1" in script
+
+
+# --- the assistant's bench cases ---------------------------------------------
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("case", bench.CASES, ids=[c.name for c in bench.CASES])
+def test_bench_cases(case: bench.Case, tmp_path: Path) -> None:
+    """What each bench case asks for, done by its reference solution, is drawn
+    by the script as the renderer draws it."""
+    from figscribe.examples import bundled_example
+
+    folder = tmp_path / "bench"
+    shutil.copytree(bundled_example(), folder)
+    workspace = bench.example_workspace(folder)
+    bench.apply_solution(case, workspace)
+    assert case.check(workspace.project) is None  # it did what was asked
+    for figure in workspace.project.figures:
+        _assert_same(workspace.project, folder, figure)

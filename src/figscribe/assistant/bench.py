@@ -17,6 +17,7 @@ import json
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Literal
 
 from figscribe.assistant.chat import Chat, ChatError, Model
@@ -611,13 +612,16 @@ def run_case(case: Case, model: Model) -> Outcome:
     )
 
 
-def example_workspace():
-    """A workspace on the example project, which is only read, never written."""
+def example_workspace(folder: Path | None = None):
+    """A workspace on the example project, which is only read, never written.
+
+    `folder` is a copy of the example's folder, for a caller that needs the
+    data next to a place it may write to; by default the bundled one."""
     from figscribe.examples import bundled_example
     from figscribe.model import loads
     from figscribe.tools import ProjectWorkspace
 
-    folder = bundled_example()
+    folder = folder or bundled_example()
     project = loads((folder / "scan.figscribe").read_text(encoding="utf-8"))
     workspace = ProjectWorkspace(project, folder)
     workspace.allow_preview = True
