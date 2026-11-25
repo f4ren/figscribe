@@ -23,10 +23,7 @@ from .test_every_field import OBJECTS
 ROOM = (1366 - 40, 768 - 110)
 """What a dialog can have of the smallest laptop screen."""
 
-KNOWN = {
-    "fit": "its height grows with the model: a polynomial has up to ten "
-    "parameters (roadmap B7.5)",
-}
+KNOWN: dict[str, str] = {}
 """Dialogs that are too big, with why; the test says when one is fixed."""
 
 
@@ -115,3 +112,76 @@ def test_the_panel_clips_nothing_at_1024_by_700(
         if right > edge + 1:
             cut.append(f"{type(child).__name__} {child.objectName()!r} to {right}")
     assert not cut, f"{name}: panel is {edge} wide; " + "; ".join(cut[:5])
+
+
+# --- the fit dialog scrolls when the screen is small ---------------------------
+
+
+def _fit_dialog(qtbot, example: Path, monkeypatch, room: int) -> FitDialog:
+    """The dialog as it opens on a screen that leaves `room` points of height."""
+    from figscribe.gui import fitdialog
+
+    monkeypatch.setattr(fitdialog, "screen_room", lambda: room)
+    dialog = _make("fit", example)
+    qtbot.addWidget(dialog)
+    return dialog
+
+
+def _bottom_is_reachable(dialog: FitDialog) -> bool:
+    ok = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
+    return dialog.rect().contains(ok.mapTo(dialog, ok.rect().bottomRight()))
+
+
+def test_the_fit_dialog_shows_everything_where_there_is_room(
+    qtbot, themed, example: Path, monkeypatch
+) -> None:
+    dialog = _fit_dialog(qtbot, example, monkeypatch, room=2000)
+    opens_at = dialog.height()  # Qt cuts a window to the screen when it shows it
+    assert opens_at >= dialog._settings.sizeHint().height()
+    dialog.show()
+    dialog.resize(dialog.width(), opens_at)
+    qtbot.wait(20)
+    assert not dialog.scroll.verticalScrollBar().isVisible()
+    assert dialog.residuals.isVisibleTo(dialog) and _bottom_is_reachable(dialog)
+
+
+def test_the_fit_dialog_scrolls_its_middle_where_there_is_not(
+    qtbot, themed, example: Path, monkeypatch
+) -> None:
+    dialog = _fit_dialog(qtbot, example, monkeypatch, room=560)
+    assert dialog.height() <= 560
+    dialog.show()
+    bar = dialog.scroll.verticalScrollBar()
+    assert bar.isVisible() and bar.maximum() > 0
+    # the buttons stay in view, and the last setting can be scrolled to
+    assert _bottom_is_reachable(dialog)
+    bar.setValue(bar.maximum())
+    visible = dialog.scroll.viewport().rect()
+    last = dialog.residuals
+    assert visible.contains(last.mapTo(dialog.scroll.viewport(), last.rect().center()))
+
+
+def test_the_model_list_stays_put_while_the_middle_scrolls(
+    qtbot, themed, example: Path, monkeypatch
+) -> None:
+    dialog = _fit_dialog(qtbot, example, monkeypatch, room=560)
+    dialog.show()
+    first = dialog.models.buttons()[0]
+    before = first.mapTo(dialog, first.rect().topLeft())
+    bar = dialog.scroll.verticalScrollBar()
+    bar.setValue(bar.maximum())
+    assert first.mapTo(dialog, first.rect().topLeft()) == before
+
+
+def test_the_scrolling_settings_have_the_dialogs_white_ground(
+    qtbot, themed, example: Path, monkeypatch
+) -> None:
+    """Inside a scroll area the ground is the window's grey unless told."""
+    from figscribe.gui import theme
+
+    dialog = _fit_dialog(qtbot, example, monkeypatch, room=560)
+    dialog.show()
+    viewport = dialog.scroll.viewport()
+    spot = viewport.mapTo(dialog, viewport.rect().center())
+    color = dialog.grab().toImage().pixelColor(spot.x(), spot.y() + 150)
+    assert color.name().upper() == theme.SURFACE
