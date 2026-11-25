@@ -95,6 +95,8 @@ AXIS_KEYWORDS = {
     ("Label", "Label distance (pt)"): "labelpad padding spacing gap",
     ("Scale", "Type"): "log logarithmic symlog symmetric linear scale semilog loglog",
     ("Scale", "From"): "range limits limit xlim ylim min max bounds extent zoom",
+    ("Scale", "Direction"): "reverse reversed invert inverted flip backwards "
+    "descending highest first wavenumber binding energy",
     ("Scale", "Linear within ±"): "symlog linthresh threshold",
     ("Scale", "Number size (pt)"): "tick label font numbers",
     ("Ticks", "Major ticks"): "tick spacing step interval positions locator labels",

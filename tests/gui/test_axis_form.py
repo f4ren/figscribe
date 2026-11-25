@@ -250,6 +250,54 @@ def test_the_distance_of_the_right_axis_is_its_own(panel, document) -> None:
     assert axes.y_right.labelpad == 9.0 and axes.y.labelpad is None
 
 
+# --- the direction of an axis (F5.2) -------------------------------------------
+
+
+def test_the_box_reverses_the_axis_and_undo_turns_it_back(panel, document) -> None:
+    axes = _axes(document)
+    document.select(axis_id(axes.id, "x"))
+    box = panel.axis_form.reverse
+    assert not box.isChecked() and not axes.x.inverted
+    box.click()
+    assert axes.x.inverted and box.isChecked()
+    document.undo()
+    assert not axes.x.inverted and not box.isChecked()
+
+
+def test_the_box_shows_a_range_typed_highest_end_first_as_reversed(
+    panel, document
+) -> None:
+    """Otherwise the box would say forwards over a backwards axis, and clearing
+    it would change nothing."""
+    axes = _axes(document)
+    document.select(axis_id(axes.id, "x"))
+    form = panel.axis_form
+    _enter_range(form, "10", "0")
+    assert axes.x.limits == (10.0, 0.0) and not axes.x.inverted
+    assert form.reverse.isChecked()
+    form.reverse.click()  # clear it: the axis goes forwards, as one step
+    assert not form.reverse.isChecked()
+    assert axes.x.limits == (0.0, 10.0) and not axes.x.inverted
+    document.undo()
+    assert axes.x.limits == (10.0, 0.0) and form.reverse.isChecked()
+
+
+def test_the_box_of_the_right_axis_is_its_own(panel, document) -> None:
+    from figscribe.model import AxisSpec
+
+    axes = _axes(document)
+    document.push(SetField(axes.id, ("y_right",), AxisSpec(label="dU")))
+    document.select(axis_id(axes.id, "y_right"))
+    panel.axis_form.reverse.click()
+    assert axes.y_right.inverted and not axes.y.inverted
+
+
+def _enter_range(form, low: str, high: str) -> None:
+    form.low.setText(low)
+    form.high.setText(high)
+    form.high.editingFinished.emit()
+
+
 def _captions(panel, section: str) -> list[str]:
     from PySide6.QtWidgets import QLabel
 
@@ -274,7 +322,12 @@ def test_the_axis_form_is_arranged_by_what_the_settings_are_for(
     ]
     # The size of the numbers is with the scale, the placement of the ticks is
     # all that Ticks holds.
-    assert _captions(panel, "Scale") == ["Type", "From", "Number size (pt)"]
+    assert _captions(panel, "Scale") == [
+        "Type",
+        "From",
+        "Direction",
+        "Number size (pt)",
+    ]
     assert _captions(panel, "Ticks") == ["Major ticks", "Minor ticks"]
 
 
@@ -307,6 +360,7 @@ def test_the_linear_zone_of_a_symmetric_log_axis_is_in_the_scale(
     assert _captions(panel, "Scale") == [
         "Type",
         "From",
+        "Direction",
         "Linear within ±",
         "Number size (pt)",
     ]

@@ -888,3 +888,23 @@ def test_a_formula_for_the_units_is_set_and_refused_in_words(tools, workspace) -
             },
         )
     assert find(workspace.project, artist).y_conversion.formula == "x * 1000 + 5"
+
+
+def test_the_assistant_reverses_an_axis(tools, workspace) -> None:
+    _, axes, *_ = _ids(workspace)
+    tools.call(
+        "set_field", {"object_id": axes, "path": ["x", "inverted"], "value": True}
+    )
+    assert workspace.project.figures[0].axes[0].x.inverted is True
+    with pytest.raises(ToolError):
+        tools.call(
+            "set_field", {"object_id": axes, "path": ["x", "inverted"], "value": "up"}
+        )
+
+
+def test_the_assistant_opens_the_frame(tools, workspace) -> None:
+    figure, *_ = _ids(workspace)
+    tools.call(
+        "set_field", {"object_id": figure, "path": ["open_frame"], "value": True}
+    )
+    assert workspace.project.figures[0].open_frame is True

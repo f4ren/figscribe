@@ -285,6 +285,37 @@ def _figures(ref) -> dict[str, Figure]:
                 )
             ],
         ),
+        # F5.4: only the left and bottom axis; the right y axis keeps its line
+        "open_frame": Figure(
+            dpi=100,
+            open_frame=True,
+            layout=GridLayout(rows=2),
+            axes=[
+                Axes(
+                    x=AxisSpec(label="t", unit="s"),
+                    y=AxisSpec(label="U", unit="V"),
+                    y_right=AxisSpec(label="T", unit="K", limits=(0.0, 2.0)),
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                ),
+                Axes(
+                    row=1,
+                    x=AxisSpec(label="t", unit="s"),
+                    y=AxisSpec(label="U", unit="V"),
+                    artists=[ScatterPlot(x=ref("t"), y=ref("U"))],
+                ),
+            ],
+        ),
+        # F5.2: an automatic range drawn backwards, as a spectrum is shown
+        "reversed_axis": Figure(
+            dpi=100,
+            axes=[
+                Axes(
+                    x=AxisSpec(label="Wavenumber", unit="cm$^{-1}$", inverted=True),
+                    y=AxisSpec(label="Absorbance"),
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                )
+            ],
+        ),
     }
 
 
@@ -302,6 +333,8 @@ def _figures(ref) -> dict[str, Figure]:
         "residuals",
         "reduced",
         "note_background",
+        "reversed_axis",
+        "open_frame",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

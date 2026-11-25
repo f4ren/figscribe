@@ -1306,6 +1306,8 @@ class _Writer:
         if axes.y_right is not None:
             right = f"{ax}_right"
             self.emit(f"{right} = {ax}.twinx()")
+            if self.figure.open_frame:
+                self.emit(f'{right}.spines["right"].set_visible(True)')
             self._axis(right, "y", self.axis_specs[(axes.id, "y_right")])
         if axes.grid:
             kwargs = {}
@@ -1342,7 +1344,11 @@ class _Writer:
             self.emit(f"{ax}.set_{name}scale({_str(spec.scale)})")
         if spec.limits is not None:
             low, high = spec.limits
+            if spec.inverted and low < high:  # as a person writes a reversed axis
+                low, high = high, low
             self.emit(f"{ax}.set_{name}lim({_num(low)}, {_num(high)})")
+        elif spec.inverted:
+            self.emit(f"{ax}.{name}axis.set_inverted(True)")
         if spec.ticks is not None:
             kwargs = {}
             if spec.tick_labels is not None:

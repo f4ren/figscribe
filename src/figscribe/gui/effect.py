@@ -130,6 +130,12 @@ RULES: list[Rule] = [
         lambda figure, _: not aligned_axes(figure),
     ),
     Rule(
+        (Figure,),
+        (("ticks_all_sides",),),
+        "the frame is open: there are no tick marks on the top and right then",
+        lambda figure, _: figure.open_frame,
+    ),
+    Rule(
         (ResidualPlot,),
         (("linewidth",),),
         'there is no line: its line style is "none", and the data has no y errors',

@@ -116,7 +116,9 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                     sharey=axs[partners[1]] if partners[1] is not None else None,
                 )
             ax.set_gid(axes.id)
-            ticked += _draw_axes(axes, ax, data, figure.unit_format, artists)
+            ticked += _draw_axes(
+                axes, ax, data, figure.unit_format, artists, figure.open_frame
+            )
             axs[i] = ax
 
         # Only now are the automatic ranges known that decide whether a tick
@@ -238,6 +240,7 @@ def _draw_axes(
     data: DataProvider,
     unit_format: str,
     artists: Mapping[str, Artist],
+    open_frame: bool = False,
 ) -> list[tuple[MplAxes, str, AxisSpec]]:
     """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
@@ -249,6 +252,8 @@ def _draw_axes(
     if axes.y_right is not None:
         right = ax.twinx()
         right.set_gid(f"{axes.id}{RIGHT}")
+        if open_frame:
+            right.spines["right"].set_visible(True)  # the frame left it out
         _apply_axis(right, "y", axes.y_right, unit_format)
     if axes.grid:
         style = {
@@ -296,6 +301,9 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
 
     if spec.limits is not None:
         set_lim(*spec.limits)
+    if spec.inverted:
+        # Not a toggle: panels that share an axis each ask for it.
+        axis.set_inverted(True)
     if spec.ticks is not None:
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
 

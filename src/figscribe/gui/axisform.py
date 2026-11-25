@@ -13,6 +13,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QHBoxLayout,
@@ -28,7 +29,7 @@ from figscribe.gui.numbers import number, numbers
 from figscribe.gui.widgets import label
 from figscribe.model import AxisSpec
 from figscribe.render.labels import unit_shown
-from figscribe.render.ticks import PREFIXES, too_many_ticks
+from figscribe.render.ticks import PREFIXES, reversed_axis, too_many_ticks
 
 if TYPE_CHECKING:
     from figscribe.gui.properties import PropertyPanel
@@ -52,6 +53,9 @@ TIPS = {
     "scale": "How values are spaced along the axis.",
     "range": "Leave empty for an automatic range; the grey numbers show the "
     "current one.",
+    "reverse": "Draws the axis backwards, the highest value first, as wavenumbers "
+    "and binding energies are shown; also while the range is automatic. A range "
+    "typed with the higher end first does the same.",
     "linthresh": "Around zero, a symmetric log axis is linear within ± this value.",
     "major": "Where the numbered ticks go.",
     "labels": "Text for each tick value, separated by commas; empty for numbers.",
@@ -83,6 +87,7 @@ def axis_settings(spec: AxisSpec) -> list[tuple[str, str]]:
         ("Label", "Label distance (pt)"),
         ("Scale", "Type"),
         ("Scale", "From"),
+        ("Scale", "Direction"),
     ]
     if spec.scale == "symlog":
         rows.append(("Scale", "Linear within ±"))
@@ -152,6 +157,9 @@ class AxisForm:
         self._add(form, "From", row, "range")
         self.low.editingFinished.connect(self._set_range)
         self.high.editingFinished.connect(self._set_range)
+        self.reverse = QCheckBox("Highest value first")
+        self._add(form, "Direction", self.reverse, "reverse")
+        self.reverse.clicked.connect(self._set_reversed)
         self.linthresh = self._line(form, "Linear within ±", "linthresh")
         self.linthresh.editingFinished.connect(
             lambda: self._number("symlog_linthresh", self.linthresh, shown=True)
@@ -198,6 +206,7 @@ class AxisForm:
             self.scale,
             self.low,
             self.high,
+            self.reverse,
             self.linthresh,
             self.major,
             self.major_value,
@@ -238,6 +247,7 @@ class AxisForm:
             self.high.clear()
         self.low.setPlaceholderText(self._shown(now[0]) if now else "automatic")
         self.high.setPlaceholderText(self._shown(now[1]) if now else "automatic")
+        self.reverse.setChecked(reversed_axis(spec))
         self._visible(self.linthresh, spec.scale == "symlog")
         _text(self.linthresh, self._shown(spec.symlog_linthresh))
 
@@ -321,6 +331,18 @@ class AxisForm:
             self.panel.report("Enter both ends of the range.")
             return
         self._set(limits=(a, b))
+
+    def _set_reversed(self, checked: bool) -> None:
+        """The box shows an axis as reversed also when only its range is typed
+        highest end first; turning it off then puts the range right as well."""
+        if checked:
+            self._set(inverted=True)
+            return
+        limits = self.spec.limits
+        if limits is not None and limits[0] > limits[1]:
+            self._set(inverted=False, limits=(limits[1], limits[0]))
+        else:
+            self._set(inverted=False)
 
     def _set_major_mode(self) -> None:
         mode = self.major.currentData()
