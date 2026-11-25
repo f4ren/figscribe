@@ -11,6 +11,7 @@ import math
 
 import numpy as np
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -162,11 +164,11 @@ class FitDialog(QDialog):
         self.buttons.rejected.connect(self.reject)
 
         self._layout()
-        self.resize(820, 560)
         if fit is None:
             self.models.button(0).setChecked(True)
         else:
             self._show_fit(fit)
+        self.resize(820, self._height_for(screen_room()))  # once its rows are there
 
     # --- layout ---------------------------------------------------------------
 
@@ -263,10 +265,24 @@ class FitDialog(QDialog):
         right.addWidget(self.residuals)
         right.addStretch(1)
 
+        # The model list and the buttons stay; the settings scroll when the
+        # window is too small for them (a polynomial has up to ten parameters).
+        self._settings = QWidget()
+        self._settings.setObjectName("fitSettings")
+        self._settings.setLayout(right)
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("fitScroll")
+        self.scroll.setWidget(self._settings)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
         middle = QHBoxLayout()
         middle.setSpacing(0)
         middle.addWidget(left)
-        middle.addLayout(right, 1)
+        middle.addWidget(self.scroll, 1)
+        self._middle = middle
+        self._aside = left
 
         bottom = QHBoxLayout()
         bottom.setContentsMargins(24, 12, 24, 16)
@@ -281,6 +297,15 @@ class FitDialog(QDialog):
         layout.addLayout(middle, 1)
         layout.addWidget(_rule())
         layout.addLayout(bottom)
+
+    def _height_for(self, room: int) -> int:
+        """The height that shows every setting without scrolling, or all the
+        room there is."""
+        around = self.layout().sizeHint().height() - self._middle.sizeHint().height()
+        middle = max(
+            self._settings.sizeHint().height(), self._aside.sizeHint().height()
+        )
+        return max(self.minimumSizeHint().height(), min(around + middle, room))
 
     def _show_fit(self, fit: FitCurve) -> None:
         """Fill the dialog from a fit that is there; Add becomes Update."""
@@ -686,6 +711,13 @@ def _clear(grid: QGridLayout) -> None:
             widget.hide()
             widget.setParent(None)
             widget.deleteLater()
+
+
+def screen_room() -> int:
+    """The height of the screen the dialog may take: what the system leaves,
+    less the title bar and some air. A function, so a test can say otherwise."""
+    screen = QGuiApplication.primaryScreen()
+    return screen.availableGeometry().height() - 80 if screen else 560
 
 
 def _rule() -> QFrame:
