@@ -3312,3 +3312,35 @@ goes online unasked; may come later as a setting that is off. **Qt's network
 module:** uses the system's certificates and is already in the installers, but
 the command line would then need Qt. **PyPI instead of GitHub:** knows the
 versions, not the installers' page.
+
+
+## 0070 — CI: the slow tests in two jobs of their own
+
+**Date:** 2026-11-25
+**Status:** accepted (changes where decision 0028 runs the slow tests).
+
+### Context
+
+The user found CI very slow. A measured run took 14 minutes: the job on Ubuntu
+with Python 3.13, which alone ran the slow tests, took 12, every other job 2 to
+5; one macOS job also waited 10 minutes for a runner.
+
+### Decision
+
+- Every job of the test matrix runs the fast tests only. The slow tests run in a
+  job `slow`, on Ubuntu with Python 3.13 as before, in two parts of about the
+  same length, measured on 2026-11-25: `test_every_action.py` (half of the
+  time) and all other slow tests. The second part is named by what it leaves
+  out, so a new slow test runs without being listed.
+- The branch protection is unchanged. It requires `ruff` and the three jobs with
+  Python 3.11; the job that ran the slow tests was not among them, and its name
+  stays.
+- When one part grows much longer than the other, move a file between them.
+
+### Alternatives considered
+
+**A sharding plugin** (`pytest-split`): balances by recorded times, but is a
+dependency and a file of times to keep current. **Splitting by test number in a
+conftest:** code to maintain for what two paths do. **Fewer macOS jobs on pull
+requests:** shortens the wait for a runner, but a failure of one version would
+show only after the merge; not done.
