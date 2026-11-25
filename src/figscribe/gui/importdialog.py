@@ -169,6 +169,7 @@ class ImportDialog(QDialog):
         self.table.setFont(theme.mono_font(12))
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)  # it only shows; Tab moves on
         self.table.horizontalHeader().setStretchLastSection(True)
         self.summary = label("", "caption")
         self.status = label("", "caption")

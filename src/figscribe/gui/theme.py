@@ -225,7 +225,7 @@ QToolButton#pill {{
 QToolButton#pill:hover {{ background: {SUBTLE}; }}
 QPushButton#modelChoice {{
     background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 8px;
-    padding: 8px 12px; text-align: left;
+    padding: 8px 12px; text-align: left; color: {INK};
 }}
 QPushButton#modelChoice:checked {{
     background: {ACCENT_SOFT}; border-color: {ACCENT}; font-weight: 500;
