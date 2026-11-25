@@ -15,6 +15,7 @@ usage: figscribe [PROJECT.figscribe]   open the GUI, optionally with a project
                                        write a script for every figure
        figscribe mcp                   serve the open project to an MCP client
        figscribe bench [--help]        measure a model on typical assistant requests
+       figscribe check-update          say whether there is a newer release
        figscribe --version"""
 
 
@@ -28,6 +29,8 @@ def main() -> int:
         return 0
     if args[:1] == ["script"]:
         return _script(args[1:])
+    if args[:1] == ["check-update"]:
+        return _check_update()
     if args[:1] == ["bench"]:
         from figscribe.assistant.bench import main as bench
 
@@ -47,6 +50,20 @@ def main() -> int:
     from figscribe.gui.app import main as gui
 
     return gui()
+
+
+def _check_update() -> int:
+    """`figscribe check-update`: 0 with an answer, 3 if the secure connection
+    cannot be verified, 1 for any other failure."""
+    from figscribe import updates
+
+    try:
+        release = updates.latest_release()
+    except updates.UpdateError as exc:
+        print(f"figscribe: {exc}", file=sys.stderr)
+        return 3 if isinstance(exc, updates.CertificateError) else 1
+    print(updates.describe(release, installed=getattr(sys, "frozen", False)))
+    return 0
 
 
 def _script(args: list[str]) -> int:

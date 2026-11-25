@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,7 @@ from PySide6.QtGui import (
     QKeySequence,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QDockWidget,
     QFileDialog,
@@ -41,6 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from figscribe import __version__, updates
 from figscribe.allan import allan_axes
 from figscribe.assistant.chat import Provider
 from figscribe.assistant.toolserver import ToolServer
@@ -366,6 +369,29 @@ class MainWindow(QMainWindow):
         self.settings.setValue("assistant/model", provider.model)
         self.settings.setValue("assistant/base_url", provider.base_url or "")
         self.settings.setValue("assistant/vision", provider.vision)
+
+    def check_for_updates(self) -> None:
+        """Ask GitHub, now and only now, and say what it answered."""
+        title = "Check for Updates"
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            release = updates.latest_release()
+        except updates.UpdateError as exc:
+            release, problem = None, str(exc)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if release is None:
+            QMessageBox.warning(self, title, problem)
+            return
+        installed = getattr(sys, "frozen", False)
+        text = updates.describe(release, installed=installed)
+        if not (installed and updates.is_newer(release.version, __version__)):
+            QMessageBox.information(self, title, text)
+            return
+        buttons = QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Close
+        answer = QMessageBox.information(self, title, text, buttons)
+        if answer == QMessageBox.StandardButton.Open:
+            QDesktopServices.openUrl(QUrl(release.url))
 
     def show_about(self) -> None:
         QMessageBox.about(self, "About figscribe", about_text())
@@ -1613,6 +1639,10 @@ class MainWindow(QMainWindow):
         self._action(assistant, "&How to Connect…", self._show_mcp_help)
 
         help_menu = self.menuBar().addMenu("&Help")
+        self.update_action = self._action(
+            help_menu, "Check for &Updates…", self.check_for_updates
+        )
+        self.update_action.setMenuRole(QAction.MenuRole.NoRole)  # stays in Help
         self.about_action = self._action(help_menu, "&About figscribe", self.show_about)
         # Qt moves an entry that starts with "About" into the application
         # menu on macOS and leaves Help empty; the version is looked for here.

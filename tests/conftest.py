@@ -141,3 +141,14 @@ def themed(qapp):
     qapp.setStyle(style)
     qapp.setPalette(palette)
     qapp.setFont(font)
+
+
+@pytest.fixture(autouse=True)
+def _no_test_goes_online_for_updates(monkeypatch) -> None:
+    """The update check asks GitHub; a test that wants an answer gives one."""
+    from figscribe import updates
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a test tried to ask GitHub for the latest release")
+
+    monkeypatch.setattr(updates, "urlopen", refuse)

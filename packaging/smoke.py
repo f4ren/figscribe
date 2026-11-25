@@ -4,9 +4,10 @@ from it (decision 0066).
     python packaging/smoke.py [PROJECT]
 
 Run after `make_installer.py`, with the Python that has figscribe installed: it
-runs the script the frozen program writes. Three things are tried: it says its
+runs the script the frozen program writes. Four things are tried: it says its
 version, it writes a script from a bundled example that a normal Python runs and
-that draws the figure, and its window starts (here without a screen) and stays up.
+that draws the figure, it asks GitHub for the latest release over a secure
+connection, and its window starts (here without a screen) and stays up.
 The licenses of what is inside have to be in the program's folder and beside the
 installer's contents too.
 """
@@ -125,6 +126,20 @@ def main(argv: list[str]) -> int:
         if ran.returncode or not list(Path(folder).glob("*.pdf")):
             return fail(f"the script did not draw: {ran.stdout} {ran.stderr}")
     print("script ok", flush=True)
+
+    # A frozen program may not find the certificates of the system. A runner may
+    # be refused for asking too often, which the program says in its own words;
+    # that is a warning, a certificate it cannot check or a crash is not.
+    asked = subprocess.run(
+        [program, "check-update"], capture_output=True, text=True, env=env, timeout=120
+    )
+    said_why = asked.returncode == 1 and asked.stderr.startswith("figscribe: ")
+    if asked.returncode and not said_why:
+        return fail(f"check-update: {asked.returncode} {asked.stdout} {asked.stderr}")
+    if asked.returncode:
+        print(f"WARNING: no answer to check-update: {asked.stderr}", flush=True)
+    else:
+        print("check-update ok", flush=True)
 
     shown = subprocess.Popen(
         [window, example], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
