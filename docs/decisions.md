@@ -3268,3 +3268,47 @@ want, and a style template sets one look per figure. **Writing
 `ax.spines[["top", "right"]].set_visible(False)` in the script:** what a person
 often writes, but it needs a loop over the panels and the twin axes; the
 rcParams are one line and the script already uses them for the ticks.
+
+
+## 0069 — Updates: asked for on request, nothing downloaded
+
+**Date:** 2026-11-25
+**Status:** accepted (the user chose stage 1 of three: a notice).
+
+### Context
+
+The user asked how hard an updater would be. The installers are not signed
+(decision 0066), and the three systems and `pip` replace a program differently.
+
+### Decision
+
+- *Help > Check for Updates…* and `figscribe check-update` ask GitHub for the
+  latest release (`/repos/f4ren/figscribe/releases/latest`, which leaves out
+  drafts and pre-releases). **Only when the person asks**: figscribe does not go
+  online by itself.
+- The request carries the program's version in the `User-Agent` and nothing
+  about the person or the project. An unauthenticated request is limited to 60 an
+  hour per address.
+- **Nothing is downloaded or run.** The installed program offers to open the
+  release page; with `pip` it names the upgrade command. Only a page of the
+  repository is ever opened, whatever the answer says.
+- **No new dependency.** The standard library asks. Certificates are checked
+  through `truststore` where it is installed, which it is with the `chat` extra
+  and so in the installers: Python's own default looks for certificate files a
+  frozen program does not have. It is not injected into `ssl`, which the
+  assistant's connections use too. Without it, Python's default.
+- The installers' smoke test runs `check-update` in the frozen program and fails
+  on a certificate that cannot be checked or on a crash, not on a runner being
+  refused for asking too often.
+- The window waits for the answer, at most about eight seconds, with a wait
+  cursor, as *Load models* does in the assistant's settings.
+
+### Alternatives considered
+
+**Downloading and replacing by itself:** the program would fetch and run code
+from an unsigned release; a checksum from the same release does not protect
+against a taken-over account. It needs signing first. **A check at every start:**
+goes online unasked; may come later as a setting that is off. **Qt's network
+module:** uses the system's certificates and is already in the installers, but
+the command line would then need Qt. **PyPI instead of GitHub:** knows the
+versions, not the installers' page.

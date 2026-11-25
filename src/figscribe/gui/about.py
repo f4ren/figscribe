@@ -9,8 +9,7 @@ import PySide6
 from PySide6.QtCore import qVersion
 
 import figscribe
-
-REPOSITORY = "https://github.com/f4ren/figscribe"
+from figscribe.updates import REPOSITORY
 
 
 def system_name() -> str:

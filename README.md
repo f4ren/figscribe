@@ -209,6 +209,9 @@ script.
   live, as you edit.
 - *Help > About figscribe* names the versions of figscribe, Python,
   Matplotlib and Qt, for a bug report.
+- *Help > Check for Updates…* (or `figscribe check-update`) asks GitHub whether
+  there is a newer release, only when you ask. Nothing about you or your figures
+  is sent, and nothing is downloaded or installed by itself.
 
 **Export**
 - PDF, SVG, EPS, PNG and TIFF (LZW compressed, as journals ask) at the exact size,

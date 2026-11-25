@@ -17,6 +17,8 @@ import pytest
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
 
+import figscribe
+from figscribe import updates
 from figscribe.assistant import endpoint
 from figscribe.commands import SetField
 from figscribe.gui import Document, MainWindow, reveal
@@ -74,6 +76,8 @@ def window_factory(qtbot, tmp_path: Path, monkeypatch):
     )
     monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
     monkeypatch.setattr(reveal, "show_in_file_manager", lambda path: None)
+    newest = updates.Release(figscribe.__version__, updates.RELEASES_PAGE)
+    monkeypatch.setattr(updates, "latest_release", lambda: newest)
 
     def make() -> MainWindow:
         window = MainWindow(Document.open(project))

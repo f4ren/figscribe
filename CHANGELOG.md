@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **Check for updates.** *Help > Check for Updates…* (and `figscribe
+  check-update`) asks GitHub for the latest release and says whether it is newer.
+  The installed program offers to open the release page; with `pip` it names the
+  upgrade command. Only when asked, and nothing is downloaded (decision 0069).
 - **An open frame.** *Ticks and frame* in the figure's settings has *Open frame*:
   only the left and bottom axis are drawn, without the frame and tick marks on
   the top and right. A panel with a right y axis keeps that axis. *Ticks on all

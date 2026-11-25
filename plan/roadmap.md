@@ -1921,6 +1921,19 @@ Follow-up: **wait out a rate limit** in the chat when the server says how
 long (up to a minute), with the countdown shown, instead of stopping the
 request halfway. `figscribe bench` could then run on a free tier too.
 
+### R8 Hear of a new version — S
+
+Asked for by the user (2026-11-25): an updater inside figscribe. Three stages:
+a notice, downloading the installer, replacing the program by itself.
+
+**Stage 1 done** (2026-11-25, decision 0069): *Help > Check for Updates…* and
+`figscribe check-update`, only on request; the installers' smoke test asks once
+from the frozen program, since its certificates are the risk. A version without
+this cannot hear of a later one, so it matters that 0.4 has it. *Follow-ups,
+only if asked:* a check at start that is off until switched on; downloading the
+installer and opening it (stage 2); replacing the program (stage 3), which
+needs signed releases first.
+
 ---
 
 ## Phase 5 — Later, optional
