@@ -1790,11 +1790,13 @@ is: the file has what it has). The program's own defaults stay as decision
   same figure"): *Use another file…*, fits run again, left-out rows taken back
   in. *Follow-ups, only if asked:* choosing the reading options in the same
   step. *Open:* ask whether this is what was meant.
-- **Fits after a new version** (found while building the above, 2026-11-27).
-  *Use the new version* and *Locate file…* keep the fit results of the file as
-  it was; the figure then shows the old curve over the new data until *Fit
-  again* is pressed, and nothing says so. `[decide]` fit again in the same
-  step, as *Use another file…* does, or say it in the data bar.
+- **Bug: fits after a new version of a file** (found while building the above,
+  2026-11-27; in 0.3.0 too). *Use the new version* and *Locate file…* keep the
+  fit results of the file as it was. The window and its export then draw the
+  old curve over the new data, while the generated script fits again and draws
+  another one: the two no longer match, and nothing says so. Reproduced with the
+  example's peak doubled (stored amplitude 1.01, the script's 2.02). The fix
+  that is there for *Use another file…*: fit again in the same step.
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,
@@ -2000,7 +2002,6 @@ answer in `docs/decisions.md` when the task is started.
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | answered 2026-11-26: another file for the same figure (0075) |
-| E4 | After a new version of a file: fit again in the same step, or only say that the fits are old? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |

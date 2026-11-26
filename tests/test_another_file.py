@@ -108,7 +108,18 @@ def test_a_fit_that_fails_draws_nothing(tmp_path: Path) -> None:
     swap = _use(project, tmp_path, _write(tmp_path / "new.csv", 5.0, rows=1))
     History(project).push(swap.command)
     assert _parts(project)[1].result is None
-    assert any("not fitted" in note for note in swap.notes)
+    assert any(note.startswith("fit is not fitted") for note in swap.notes)
+    assert _name_of_unlabelled(tmp_path).startswith("The fit is not fitted")
+
+
+def _name_of_unlabelled(tmp_path: Path) -> str:
+    """The note about a fit without a label: it begins the sentence."""
+    folder = tmp_path / "unlabelled"
+    folder.mkdir()
+    project = _project(folder)
+    _parts(project)[1].label = None
+    swap = _use(project, folder, _write(folder / "new.csv", 5.0, rows=1))
+    return next(note for note in swap.notes if "not fitted" in note)
 
 
 def test_an_own_formula_starts_from_the_values_it_had(tmp_path: Path) -> None:

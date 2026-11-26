@@ -109,7 +109,8 @@ def use_another_file(
         why = _fit_again(staging, fit, base_dir, change)
         if why is not None:
             change(SetField(fit.id, ("result",), None))
-            notes.append(f"{_name(fit)} is not fitted on the new data: {why}.")
+            subject = fit.label or "The fit"
+            notes.append(f"{subject} is not fitted on the new data: {why}.")
     return Swap(Macro(f"Use another file for {old}", steps), notes)
 
 
