@@ -23,7 +23,6 @@ from figscribe import __version__
 from figscribe.allan import samples
 from figscribe.convert import expression, plot_data, scale_expression
 from figscribe.fit import (
-    evaluate,
     fitted_points,
     free_parameters,
     numpy_source,
@@ -59,7 +58,7 @@ from figscribe.model import (
 )
 from figscribe.model.breaks import Breaks, effective_breaks
 from figscribe.model.sharing import sharing_group
-from figscribe.render.breaks import crossings, curve_parts
+from figscribe.render.breaks import curve_parts
 from figscribe.render.figure import (
     COORDS,
     CURVE_POINTS,
@@ -142,6 +141,7 @@ RESERVED = {
     "colorbar",
     *(f"colorbar{i}" for i in range(2, 100)),
     "squeezed",
+    "across_breaks",
     "cut_out",
     "Shape",
 }
@@ -1611,17 +1611,33 @@ class _Writer:
         self.emit("    ],")
         self.emit(*(f"    {k}={v}," for k, v in kwargs.items()), ")")
 
-    def _apart(self, at: np.ndarray, base: str, expression: str, source) -> str:
-        """Define `base`, or a free name like it: `expression` with a NaN before
-        each position of `at`; `source` the values, whole numbers or not."""
+    def _free(self, base: str) -> str:
+        """`base`, or `base2`, `base3`…: a name nothing else has, now taken."""
         name, n = base, 2
         while name in {*self._taken(), *self._masks}:
             name, n = f"{base}{n}", n + 1
         self._masks.add(name)
+        return name
+
+    def _cuts(self, x: str, y: str) -> str:
+        """Define where the line through `x` and `y` crosses a break, found by
+        the script from its own data; returns the name."""
+        name = self._free("cuts")
+        kwargs = {
+            f"{axis}_breaks": _value(breaks)
+            for axis, breaks in zip(("x", "y"), self._cut, strict=True)
+            if breaks
+        }
+        self.call(f"{name} = across_breaks", x, y, **kwargs)
+        return name
+
+    def _apart(self, cuts: str, base: str, expression: str, source) -> str:
+        """Define `base`, or a free name like it: `expression` with a NaN at the
+        positions `cuts`; `source` the values, whole numbers or not."""
+        name = self._free(base)
         if np.asarray(source).dtype.kind != "f":
             expression = f"np.asarray({expression}, dtype=float)"
-        where = "[" + ", ".join(str(int(i)) for i in at) + "]"
-        self.call(f"{name} = np.insert", expression, where, "np.nan")
+        self.call(f"{name} = np.insert", expression, cuts, "np.nan")
         return name
 
     def _tick_numbers(self, ax: str, name: str, spec: AxisSpec) -> None:
@@ -1840,30 +1856,34 @@ class _Writer:
         # The band takes the line's color; one from the color cycle is known
         # only once the line is drawn.
         named = spread is not None and artist.band.color is artist.color is None
-        at, values = self._crossings(artist)
+        broken = self._cut != ([], [])
+        has_line = getattr(artist, "linestyle", "none") not in NO_LINE
+        left_line = like_the_plot(artist, "linestyle") not in NO_LINE
+        apart_rows = mask is not None and mask != used and left_line
+        cuts, values = None, None
+        if broken and (has_line or spread is not None or apart_rows):
+            values = plot_data(artist, self.data)
+            self.emit("# No line across a break: a NaN between the points beside it.")
+            cuts = self._cuts(x, y)
         line = (x, shown, errors)
-        if at.size and getattr(artist, "linestyle", "none") not in NO_LINE:
-            self.emit(
-                "# No line across a break: a NaN between the points on either side."
-            )
+        if cuts is not None and has_line:
             line = (
-                self._apart(at, "line_x", x, values.x),
-                self._apart(at, "line_y", shown, values.y),
+                self._apart(cuts, "line_x", x, values.x),
+                self._apart(cuts, "line_y", shown, values.y),
                 {
-                    k: self._apart(at, f"line_{k}", v, getattr(values, k))
+                    k: self._apart(cuts, f"line_{k}", v, getattr(values, k))
                     for k, v in errors.items()
                 },
             )
         self._part(ax, artist, *line, {}, common, "line" if named else None)
         if spread is not None:
             band = (x, y, spread, mask)
-            if at.size:
-                self.emit("# The band stops at a break too.")
+            if cuts is not None:
                 band = (
-                    self._apart(at, "band_x", x, values.x),
-                    self._apart(at, "band_y", y, values.y),
-                    self._apart(at, "band_spread", spread, values.yerr),
-                    mask and self._apart_mask(at, mask),
+                    self._apart(cuts, "band_x", x, values.x),
+                    self._apart(cuts, "band_y", y, values.y),
+                    self._apart(cuts, "band_spread", spread, values.yerr),
+                    mask and self._apart_mask(cuts, mask),
                 )
             self._band(ax, artist, *band)
         if mask is None or mask == used:
@@ -1878,9 +1898,8 @@ class _Writer:
                 "# The line runs on through the rows left out, in their color.",
                 f"{steps} = ~({mask}[:-1] & {mask}[1:]){within}",
             )
-            if at.size:
-                where = ", ".join(str(int(i) - 1) for i in at)
-                self.emit(f"{steps}[[{where}]] = False  # not across a break")
+            if cuts is not None:
+                self.emit(f"{steps}[{cuts} - 1] = False  # not across a break")
             pieces = [
                 f"np.column_stack([{v}[:-1], {v}[1:], np.full({v}.size - 1, np.nan)])"
                 f"[{steps}].ravel()"
@@ -1898,22 +1917,9 @@ class _Writer:
         style = {"color": color, "marker": _str(marker or "none")}
         self._part(ax, artist, f"{x}[{rows}]", f"{y}[{rows}]", out, style, apart)
 
-    def _crossings(self, artist) -> tuple[np.ndarray, object]:
-        """Where the plot's line would cross a break, as positions for
-        np.insert, and the plot's values."""
-        none = np.empty(0, dtype=int)
-        if self._cut == ([], []):
-            return none, None
-        values = plot_data(artist, self.data)
-        return crossings(values.x, values.y, *self._cut), values
-
-    def _apart_mask(self, at: np.ndarray, mask: str) -> str:
-        name, n = "band_shown", 2
-        while name in {*self._taken(), *self._masks}:
-            name, n = f"band_shown{n}", n + 1
-        self._masks.add(name)
-        where = "[" + ", ".join(str(int(i)) for i in at) + "]"
-        self.call(f"{name} = np.insert", mask, where, "False")
+    def _apart_mask(self, cuts: str, mask: str) -> str:
+        name = self._free("band_shown")
+        self.call(f"{name} = np.insert", mask, cuts, "False")
         return name
 
     def _band(self, ax: str, artist, x: str, y: str, spread: str, mask) -> None:
@@ -2073,16 +2079,14 @@ class _Writer:
             self.emit(f"{xs} = {spans[0]}")
         else:
             self.call(f"{xs} = np.concatenate", f"[{', '.join(spans)}]")
-        sampled = np.concatenate([np.linspace(*part) for part in parts])
-        ys = evaluate(fit.model, fit.result.parameters, sampled)
-        at = crossings(sampled, ys, *self._cut)
-        if not at.size:
+        # A line can cross a break only between two stretches, or in y.
+        if len(parts) == 1 and not self._cut[1]:
             return curve
         values = f"{xs}_y"
         self.emit(f"{values} = {curve}")
-        where = "[" + ", ".join(str(int(i)) for i in at) + "]"
-        self.call(f"{xs} = np.insert", xs, where, "np.nan")
-        self.call(f"{values} = np.insert", values, where, "np.nan")
+        cuts = self._cuts(xs, values)
+        self.call(f"{xs} = np.insert", xs, cuts, "np.nan")
+        self.call(f"{values} = np.insert", values, cuts, "np.nan")
         return values
 
     def _residuals(
@@ -2145,22 +2149,15 @@ class _Writer:
     ) -> tuple[str, str, dict[str, str]]:
         """The residuals' columns with no line across a break."""
         shown = plot_data(self.artists[fit.target], self.data)
-        used = fitted_points(
-            shown, getattr(self.artists[fit.target], "left_out", ()), fit.fit_range
-        )
-        values = shown.x[used]
-        rest = shown.y[used] - evaluate(fit.model, fit.result.parameters, values)
-        at = crossings(values, rest, *self._cut)
-        if not at.size:
-            return x, left, kwargs
         self.emit("# No line across a break.")
-        new_x = self._apart(at, "line_x", x, values)
-        new_y = self._apart(at, "line_y", left, rest)
+        residual = self._free("residual")
+        self.emit(f"{residual} = {left}")
+        cuts = self._cuts(x, residual)
+        new_x = self._apart(cuts, "line_x", x, shown.x)
+        new_y = self._apart(cuts, "line_y", residual, shown.y)
         if "yerr" in kwargs:
-            kwargs = {
-                **kwargs,
-                "yerr": self._apart(at, "line_yerr", kwargs["yerr"], rest),
-            }
+            yerr = self._apart(cuts, "line_yerr", kwargs["yerr"], shown.y)
+            kwargs = {**kwargs, "yerr": yerr}
         return new_x, new_y, kwargs
 
     def _legend(self, ax: str, legend: Legend, right: str | None = None) -> None:
@@ -2247,6 +2244,11 @@ class MinorLogNumbers(LogFormatterSciNotation):
 
 
 BROKEN_AXES = '''\
+# The widths of the gaps, the automatic ranges, the ticks and the stretches fits
+# are sampled on are as figscribe drew them for this data. For other data,
+# generate the script again.
+
+
 def squeezed(breaks, width):
     """The two functions of a "function" scale that is linear, except that
     each (start, end) of `breaks` takes only `width` of the axis."""
@@ -2270,6 +2272,19 @@ def squeezed(breaks, width):
         return values
 
     return forward, inverse
+
+
+def across_breaks(x, y, x_breaks=(), y_breaks=()):
+    """Where the line from one point to the next would cross a break: the
+    positions at which np.insert puts a NaN, so that none is drawn there."""
+    x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+    crossing = np.zeros(max(x.size - 1, 0), dtype=bool)
+    for values, breaks in ((x, x_breaks), (y, y_breaks)):
+        low = np.minimum(values[:-1], values[1:])
+        high = np.maximum(values[:-1], values[1:])
+        for start, end in breaks:
+            crossing |= (high > start) & (low < end)
+    return np.flatnonzero(crossing) + 1
 
 
 def cut_out(ax, x_breaks=(), y_breaks=(), twin=None, frame=True):

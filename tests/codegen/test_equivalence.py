@@ -26,6 +26,7 @@ from figscribe.model import (
     Axes,
     AxisSpec,
     ColumnRef,
+    Conversion,
     ErrorBand,
     ErrorbarPlot,
     Figure,
@@ -37,6 +38,7 @@ from figscribe.model import (
     PanelLabels,
     PredefinedFit,
     Project,
+    Reduction,
     ReferenceLine,
     ResidualPlot,
     ScatterPlot,
@@ -2002,7 +2004,8 @@ def test_broken_axes(tmp_path: Path, x, y, frame) -> None:
     ]
     script = _assert_same(project, tmp_path)
     assert "def cut_out(" in script
-    assert "np.insert(" in script  # no line across a break
+    assert "across_breaks(" in script  # no line across a break
+    assert "np.insert(t, [" not in script  # nor row numbers of today's data
     assert [line for line in script.splitlines() if len(line) > 88] == []
 
 
@@ -2091,4 +2094,47 @@ def test_broken_axes_of_scatter_histogram_and_mesh(tmp_path: Path) -> None:
         )
     ]
     script = _assert_same(project, tmp_path)
-    assert "np.insert(" not in script  # no lines to cut
+    assert "= across_breaks(" not in script  # no lines to cut
+
+
+@pytest.mark.parametrize(
+    "plot",
+    [
+        {"reduction": Reduction(method="mean", count=3)},
+        {"x_conversion": Conversion(factor=2.0)},
+        {"x_range": (1.0, 420.0)},
+    ],
+    ids=["reduced", "converted", "range"],
+)
+def test_a_broken_line_of_data_changed_before_it_is_drawn(tmp_path: Path, plot) -> None:
+    """The breaks cut the arrays the script plots, not the rows of the file."""
+    project, ref = _far(tmp_path)
+    breaks = [(46.0, 700.0)] if "x_conversion" in plot else _BROKEN
+    line = LinePlot(x=ref["t"], y=ref["U"], marker="o", **plot)
+    panel = Axes(x=AxisSpec(breaks=breaks), artists=[line])
+    project.figures = [Figure(dpi=110, width_mm=120, axes=[panel])]
+    _assert_same(project, tmp_path)
+
+
+def test_the_script_cuts_other_data_where_its_breaks_are(tmp_path: Path) -> None:
+    """With the hash check deleted and a row more, the line is still cut where
+    it crosses the break."""
+    project, ref = _far(tmp_path)
+    panel = Axes(x=AxisSpec(breaks=_BROKEN), artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    path = tmp_path / "far.csv"
+    header, first, *rows = path.read_text(encoding="utf-8").splitlines()
+    more = [header, first, first, *rows]  # the break is a row further down
+    path.write_text("\n".join(more) + "\n", encoding="utf-8")
+    start, end = script.index("if hashlib"), script.index("raise SystemExit")
+    unchecked = script[:start] + "if False:\n    " + script[end:]
+    unchecked = unchecked.replace(
+        'fig.savefig(HERE / "from_script.png")',
+        "(line,) = [a for a in ax.lines if a.get_gid() is None][:1]\n"
+        "x = line.get_xdata()\n"
+        "at = int(np.flatnonzero(np.isnan(x))[0])\n"
+        "assert (x[at - 1], x[at + 1]) == (20.0, 419.5), x\n"
+        'fig.savefig(HERE / "from_script.png")',
+    )
+    _run(unchecked, tmp_path)
