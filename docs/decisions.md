@@ -2517,7 +2517,9 @@ taken as it came.
 
 ### Decision
 
-- **Twelve examples**, each a folder in `examples/` with its data, its
+- **Twelve examples** (fourteen since 2026-11-26: *Up to the zinc point* for
+  broken axes and *An infrared spectrum* for a reversed axis, an open frame and
+  a decimal comma), each a folder in `examples/` with its data, its
   `.figscribe` project and a `thumbnail.png`: the Gaussian scan, a noisy sensor
   (reduced points over the raw line), an RC discharge, a freezing plateau
   (a formula for °C, a second axis), a resonance, a diode's current (symmetric

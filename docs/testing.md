@@ -143,7 +143,7 @@ note the platform, the screen scaling and the theme in the pull request.
     and select another plot of the same kind: it stays folded.
 
 22. **The gallery**: on the start page *Recent* (when there are recent projects)
-    comes right under the drop zone, then the layouts, then the twelve example
+    comes right under the drop zone, then the layouts, then the fourteen example
     tiles, which show their pictures, titles and two lines of text in three
     columns, with nothing cut off, at the smallest window too (the page
     scrolls). *Try an example* scrolls to the gallery and *How it works* opens the

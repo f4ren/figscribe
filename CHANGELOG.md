@@ -5,6 +5,9 @@ release open in every later one.
 
 ## Unreleased
 
+- **Two more examples:** *Up to the zinc point*, a broken axis with a fit
+  across it, and *An infrared spectrum*, wavenumbers from high to low with an
+  open frame and a decimal comma (fourteen in all).
 - **Broken axes.** Cut a stretch out of an x or y axis, for a measurement far
   from the rest: right-click the empty stretch in the preview, or use *Add a
   break* in the axis form under *Scale*; several breaks are possible. The axis

@@ -111,7 +111,7 @@ Start `figscribe`. The start page offers four ways in:
   16:9 slide.
 - **Open an example** from the gallery: a Gaussian scan, a noisy sensor
   with its means over the raw line, an RC discharge with fit and residuals,
-  a resonance, a color map and more, twelve in all. Each is a copy in a
+  a resonance, a broken axis up to the zinc point and more, fourteen in all. Each is a copy in a
   folder you choose, with its data, ready to change.
 
 Then click anything in the figure or in the contents list to select it, and

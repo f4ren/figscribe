@@ -918,6 +918,123 @@ def paper_figure(folder: Path) -> Project:
     return project_of([source, noise], paper, single)
 
 
+def fixed_points(folder: Path) -> Project:
+    """A platinum thermometer in baths up to 30 °C and once at the zinc point:
+    the x axis is broken between them, the quadratic fit runs across, and the
+    residuals share the broken axis."""
+    rng = np.random.default_rng(113)
+    t = np.array([0.01, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 29.76])
+    t = np.append(t, 419.527)  # °C, the freezing point of zinc
+    a, b = 3.9083e-3, -5.775e-7  # Callendar-Van Dusen, platinum
+    resistance = 25.0 * (1.0 + a * t + b * t**2)
+    resistance += rng.normal(0.0, 0.002, t.size)
+    source = write_csv(
+        folder,
+        "pt25.csv",
+        {"t": t, "R": resistance, "dR": np.full(t.size, 0.003)},
+        units=["°C", "Ω", "Ω"],
+        comment="Synthetic calibration of a platinum resistance thermometer",
+    )
+    points = ErrorbarPlot(
+        x=column(source, "t"),
+        y=column(source, "R"),
+        yerr=column(source, "dR"),
+        label="calibration",
+        color="C0",
+        marker="o",
+        markersize=3.5,
+        capsize=1.5,
+    )
+    cut = [(32.0, 416.0)]
+    top = Axes(
+        x=AxisSpec(breaks=cut),
+        y=axis("Resistance $R$", "Ω"),
+        legend=Legend(visible=True, location="upper left"),
+        artists=[points],
+    )
+    figure = Figure(
+        name="Fixed points",
+        width_mm=120,
+        height_mm=90,
+        layout=GridLayout(rows=1, cols=1),
+        axes=[top],
+    )
+    project = project_of([source], figure)
+    fit_to(
+        project,
+        folder,
+        points,
+        PredefinedFit(name="polynomial", degree=2),
+        residuals=True,
+        color="C1",
+        label="quadratic fit",
+    )
+    upper, lower = project.figures[0].axes
+    upper.x = AxisSpec(breaks=cut)
+    lower.x = axis("Temperature $t$", "°C", breaks=cut)
+    lower.y = axis("Residual", "Ω", prefix="m")
+    return project
+
+
+def ir_spectrum(folder: Path) -> Project:
+    """An infrared spectrum as a German thesis prints it: wavenumbers from high
+    to low, only the left and bottom axis, and a decimal comma."""
+    rng = np.random.default_rng(114)
+    wavenumber = np.arange(400.0, 4001.0, 4.0)
+    transmission = np.full(wavenumber.size, 0.93)
+    for centre, depth, width in (
+        (3400.0, 0.38, 140.0),  # O-H
+        (2950.0, 0.30, 45.0),  # C-H
+        (1715.0, 0.72, 22.0),  # C=O
+        (1450.0, 0.28, 28.0),
+        (1240.0, 0.45, 35.0),
+        (1050.0, 0.40, 30.0),
+        (720.0, 0.20, 18.0),
+    ):
+        transmission -= depth * np.exp(-(((wavenumber - centre) / width) ** 2))
+    transmission += rng.normal(0.0, 0.004, wavenumber.size)
+    source = write_csv(
+        folder,
+        "spectrum.csv",
+        {"k": wavenumber, "T": transmission},
+        units=["1/cm", "1"],
+        comment="Synthetic infrared spectrum",
+    )
+    panel = Axes(
+        x=axis("Wellenzahl", "cm$^{-1}$", limits=(400.0, 4000.0), inverted=True),
+        y=axis(
+            "Transmission",
+            limits=(0.0, 1.0),
+            number_format="fixed",
+            decimals=1,
+        ),
+        artists=[
+            LinePlot(
+                x=column(source, "k"),
+                y=column(source, "T"),
+                color="black",
+                linewidth=0.8,
+            ),
+            Annotation(
+                text="C=O",
+                position=(2300.0, 0.17),
+                arrow_to=(1725.0, 0.21),
+                fontsize=8,
+            ),
+        ],
+    )
+    figure = Figure(
+        name="IR spectrum",
+        width_mm=120,
+        height_mm=75,
+        open_frame=True,
+        decimal_comma=True,
+        layout=GridLayout(rows=1, cols=1),
+        axes=[panel],
+    )
+    return project_of([source], figure)
+
+
 # --- the program --------------------------------------------------------------
 
 EXAMPLES: dict[str, tuple[str, str, str, Callable[[Path], Project] | None]] = {
@@ -994,6 +1111,18 @@ EXAMPLES: dict[str, tuple[str, str, str, Callable[[Path], Project] | None]] = {
         "A figure for a paper",
         "175 mm, four panels, shared axes, letters, and a single-column copy.",
         paper_figure,
+    ),
+    "fixed-points": (
+        "thermometer.figscribe",
+        "Up to the zinc point",
+        "A broken axis to a far point, a fit across it and residuals below.",
+        fixed_points,
+    ),
+    "ir-spectrum": (
+        "spectrum.figscribe",
+        "An infrared spectrum",
+        "Wavenumbers from high to low, an open frame and a decimal comma.",
+        ir_spectrum,
     ),
 }
 

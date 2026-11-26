@@ -111,7 +111,7 @@ def test_every_example_has_a_tile_that_opens_a_copy(window: MainWindow) -> None:
     from figscribe.examples import gallery
 
     assert set(window.start.example_tiles) == {e.folder for e in gallery()}
-    assert len(window.start.example_tiles) >= 12
+    assert len(window.start.example_tiles) >= 14
     for example in gallery():
         window.show_start()
         window.start.example_tiles[example.folder].click()

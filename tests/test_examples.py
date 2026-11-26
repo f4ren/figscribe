@@ -24,7 +24,7 @@ MAX_BYTES = 1_000_000
 
 
 def test_there_are_examples() -> None:
-    assert len(NAMES) >= 12
+    assert len(NAMES) >= 14
     assert examples_root().resolve() == ROOT.resolve()
 
 
