@@ -441,6 +441,10 @@ class FitCurve(ArtistBase):
     """Draw the curve across the range typed on the x axis, instead of over
     `curve_range` or the data. It waits for a typed range: with an automatic
     one the curve would move the limit it is to reach."""
+    extrapolated_linestyle: str | None = "--"
+    """The line style of the curve where it leaves the data, which only ends
+    given to it make it do: no points back it there. None draws it like the
+    rest."""
     result: FitResult | None = None
     """The outcome of the last fit; None before the first."""
     color: Color | None = None
@@ -472,6 +476,21 @@ class FitCurve(ArtistBase):
         if self.curve_to_limits and x_limits is not None:
             return x_limits
         return self.curve_range
+
+    def extrapolated_style(
+        self, ends: tuple[float, float], data_ends: tuple[float, float] | None
+    ) -> str | None:
+        """The line style of the parts beyond the data, for a curve drawn from
+        and to `ends` over data from and to `data_ends`; None where the whole
+        curve is drawn alike. With the data not known (None), as if the curve
+        left them."""
+        style = self.extrapolated_linestyle
+        if style is None or style == self.linestyle:
+            return None
+        if data_ends is not None:
+            if data_ends[0] <= ends[0] and ends[1] <= data_ends[1]:
+                return None
+        return style
 
     def curve_ends(
         self, low: float, high: float, x_limits: tuple[float, float] | None

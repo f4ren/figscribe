@@ -377,7 +377,7 @@ def _curve_problems(
     import numpy as np
 
     from figscribe.convert import plot_data
-    from figscribe.fit import FitError, fitted_points
+    from figscribe.fit import FitError
     from figscribe.io.errors import DataError
 
     found = []
@@ -404,15 +404,26 @@ def _curve_problems(
             )
         )
     target = artists.get(fit.target)
-    if to_limits or data is None or not isinstance(target, FIT_TARGETS):
+    if data is None or not isinstance(target, FIT_TARGETS):
         return found
     try:
         shown = plot_data(target, data)
-        used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)
-        x = np.asarray(shown.x, dtype=float)[used]
+        x = np.asarray(shown.x, dtype=float)
+        x = x[np.isfinite(x) & shown.used]  # the data, fitted or not
     except (DataError, FitError, KeyError, ValueError, IndexError):
         return found  # said elsewhere
-    if x.size and (high < x.min() or low > x.max()):
+    if not x.size:
+        return found
+    leaves = low < x.min() or high > x.max()
+    if leaves and fit.extrapolated_linestyle == fit.linestyle:
+        found.append(
+            (
+                "extrapolated_linestyle",
+                "its curve reaches beyond the data in the same line style, so the "
+                "two cannot be told apart; choose another for the part beyond",
+            )
+        )
+    if not to_limits and (high < x.min() or low > x.max()):
         found.append(
             (
                 field,

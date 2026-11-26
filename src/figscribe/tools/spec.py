@@ -86,6 +86,12 @@ _FIT_FIELDS = {
         "description": "Draw the curve across the range typed on the x axis "
         "(x.limits); without one it has no effect",
     },
+    "extrapolated_linestyle": {
+        "type": ["string", "null"],
+        "enum": ["-", "--", ":", "-.", None],
+        "description": "Line style of the curve where it leaves the data; "
+        '"--" when omitted, null draws it like the rest',
+    },
     "bounds": {
         "type": "object",
         "additionalProperties": {

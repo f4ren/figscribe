@@ -196,6 +196,7 @@ FIELD_NAMES = {
     "extend_curve": "Curve over all the data",
     "curve_range": "Curve from, to",
     "curve_to_limits": "Curve to the axis limits",
+    "extrapolated_linestyle": "Line beyond the data",
     "outside_as_left_out": "Points outside the range like left out",
     "left_out": "Rows left out",
     "left_out_color": "Left-out color",

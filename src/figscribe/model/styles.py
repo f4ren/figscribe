@@ -20,6 +20,7 @@ KINDS = {
     "grid_linestyle": "line style",
     "grid_minor_color": "color",
     "grid_minor_linestyle": "line style",
+    "extrapolated_linestyle": "line style",
     "zero_color": "color",
     "zero_linestyle": "line style",
     "left_out_color": "color",

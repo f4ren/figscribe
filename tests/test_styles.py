@@ -41,6 +41,7 @@ def test_what_matplotlib_accepts_passes(name: str, value) -> None:
         ("grid_color", "dark", "is not a color"),
         ("grid_minor_color", "dark", "is not a color"),
         ("grid_minor_linestyle", "..", "is not a line style"),
+        ("extrapolated_linestyle", "..", "is not a line style"),
         ("zero_color", "2", "is not a color"),
         ("zero_linestyle", "..", "is not a line style"),
         ("background", "2", "is not a color"),

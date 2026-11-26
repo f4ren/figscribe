@@ -2064,20 +2064,23 @@ class _Writer:
         )
         x_limits = typed_limits(self.figure, index, "x")
         given = fit.given_ends(x_limits)
+        # Where the data begin and end.
+        if target.id in self.used:  # NaN lies outside the range too
+            first = f"{x}[{self.used[target.id]}].min()"
+            last = f"{x}[{self.used[target.id]}].max()"
+        elif self._finite(fit) or target.id in self.reduced:
+            first, last = f"{x}.min()", f"{x}.max()"
+        else:
+            first = f"{x}[np.isfinite({x})].min()"
+            last = f"{x}[np.isfinite({x})].max()"
+        low, high = first, last
         if given is not None:
             low, high = (repr(float(end)) for end in given)
-        elif target.id in self.used:  # NaN lies outside the range too
-            low = f"{x}[{self.used[target.id]}].min()"
-            high = f"{x}[{self.used[target.id]}].max()"
-        elif self._finite(fit) or target.id in self.reduced:
-            low, high = f"{x}.min()", f"{x}.max()"
-        else:
-            low = f"{x}[np.isfinite({x})].min()"
-            high = f"{x}[np.isfinite({x})].max()"
-        if given is None and fit.fit_range is not None and not fit.extend_curve:
+        elif fit.fit_range is not None and not fit.extend_curve:
             # Over the fit range, where there is data.
             low = f"max({fit.fit_range[0]!r}, {low})"
             high = f"min({fit.fit_range[1]!r}, {high})"
+        beyond = None if given is None else self._extrapolated(fit, given)
         # Evenly in log x for an Allan deviation, and over ends of the user's.
         log = panel.x.scale == "log" and (
             isinstance(target, AllanDeviationPlot) if given is None else given[0] > 0
@@ -2092,12 +2095,55 @@ class _Writer:
             "linewidth": _num(fit.linewidth),
         }
         curve = f"{function}({xs}, *{popt})"
+        joined = None  # the data's ends, to be sampled where the style changes
+        if beyond:
+            self.emit(
+                "# Another line beyond the data: no points back the curve there.",
+                f"{x}_first = {first}",
+                f"{x}_last = {last}",
+            )
+            first, last = f"{x}_first", f"{x}_last"
+            joined = f"np.clip([{first}, {last}], {low}, {high})"
         if self._cut == ([], []):
-            self.emit(f"{xs} = np.{space}({low}, {high}, {CURVE_POINTS})")
-        elif (curve := self._broken_curve(fit, xs, curve, space, x_limits)) is None:
-            self.emit(f"# {_describe(fit)} lies within a break, so it is not drawn.")
+            sampled = f"np.{space}({low}, {high}, {CURVE_POINTS})"
+            if joined:
+                self.call(f"{xs} = np.union1d", sampled, joined)
+            else:
+                self.emit(f"{xs} = {sampled}")
+        else:
+            curve = self._broken_curve(fit, xs, curve, space, x_limits, joined)
+            if curve is None:
+                self.emit(
+                    f"# {_describe(fit)} lies within a break, so it is not drawn."
+                )
+                return
+        if not beyond:
+            self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
             return
-        self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
+        values = curve
+        if values != f"{xs}_y":
+            values = f"{xs}_y"
+            self.emit(f"{values} = {curve}")
+        for name, where in (
+            ("measured", f"({xs} >= {first}) & ({xs} <= {last})"),
+            ("beyond", f"({xs} <= {first}) | ({xs} >= {last})"),
+        ):
+            self.call(f"{xs}_{name} = np.where", where, values, "np.nan")
+        line = f"{xs}_line"
+        self.call(f"{line}, = {ax}.plot", xs, f"{xs}_measured", **kwargs, **common)
+        rest = {key: value for key, value in common.items() if key != "label"}
+        style = {"color": f"{line}.get_color()", "linestyle": _str(beyond)}
+        style["linewidth"] = kwargs["linewidth"]
+        self.call(f"{ax}.plot", xs, f"{xs}_beyond", **style, **rest)
+
+    def _extrapolated(self, fit: FitCurve, ends: tuple[float, float]) -> str | None:
+        """The line style of the curve beyond the data; None where the renderer
+        draws one line."""
+        if self.data is None:
+            return fit.extrapolated_style(ends, None)
+        shown = plot_data(self.artists[fit.target], self.data)
+        x = shown.x[np.isfinite(shown.x) & shown.used]
+        return fit.extrapolated_style(ends, (float(x.min()), float(x.max())))
 
     def _broken_curve(
         self,
@@ -2106,6 +2152,7 @@ class _Writer:
         curve: str,
         space: str,
         x_limits: tuple[float, float] | None,
+        joined: str | None,
     ) -> str | None:
         """Define `xs` and, if need be, the curve of a fit on a broken axis, as
         the renderer samples it: on each stretch, and no line across a break.
@@ -2135,6 +2182,8 @@ class _Writer:
             self.emit(f"{xs} = {spans[0]}")
         else:
             self.call(f"{xs} = np.concatenate", f"[{', '.join(spans)}]")
+        if joined:
+            self.call(f"{xs} = np.union1d", xs, joined)
         # A line can cross a break only between two stretches, or in y.
         if len(parts) == 1 and not self._cut[1]:
             return curve

@@ -246,6 +246,12 @@ CASES: dict[tuple, Case] = {
         ("curve_to_limits",),
         False,
     ),
+    ("FitCurve", ("extrapolated_linestyle",)): (
+        _fitted(),
+        ":",
+        ("curve_range",),
+        (-5.0, 15.0),
+    ),
     ("FitCurve", ("curve_range",)): (
         _fitted_across(curve_to_limits=True),
         (1.0, 3.0),

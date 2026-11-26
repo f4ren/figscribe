@@ -95,6 +95,25 @@ def test_a_curve_from_zero_on_a_log_axis_is_reported(x, curve) -> None:
     assert any("logarithmic" in p for p in _problems(_project(x, **curve)))
 
 
+def test_an_extrapolation_that_looks_like_the_rest_is_reported() -> None:
+    same = _project(curve_range=(0.0, 20.0), linestyle="--")
+    (problem,) = _problems(same)
+    assert "extrapolated_linestyle" in problem and "told apart" in problem
+    for fine in (
+        {"curve_range": (0.0, 20.0)},
+        {"curve_range": (2.0, 8.0), "linestyle": "--"},  # never leaves the data
+        {"curve_range": (0.0, 20.0), "extrapolated_linestyle": None},  # wanted
+    ):
+        assert _problems(_project(**fine)) == []
+
+
+def test_the_extrapolation_style_is_kept_in_the_file() -> None:
+    assert _project().figures[0].axes[0].artists[1].extrapolated_linestyle == "--"
+    for style in (None, ":"):
+        text = dumps(_project(extrapolated_linestyle=style))
+        assert loads(text).figures[0].axes[0].artists[1].extrapolated_linestyle == style
+
+
 def test_a_curve_beyond_the_data_counts_among_the_values() -> None:
     """The breaks and the range of an automatic axis reason from what is drawn."""
     figure = _project(curve_range=(0.0, 20.0)).figures[0]

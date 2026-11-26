@@ -102,9 +102,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 needs no answer. The user named the order on 2026-11-03: B7.4, F13, U11 and
 F14 are done, F15 follows (ask its `[decide]` first). The lab user's two
 wishes of 2026-11-04 went before it (the user's choice, 2026-11-26): F5.10 is
-done and so is F1.9, the fit's curve beyond the data, whose part about the
-axis limits the user has still to agree to (0074). Before 0.4: the manual
-checklist (B7.5), which 0.3.0 went out without.
+done and so is F1.9, the fit's curve beyond the data (0074). Before 0.4: the
+manual checklist (B7.5), which 0.3.0 went out without.
 
 ---
 
@@ -1066,10 +1065,11 @@ covariance detected). Missing:
    assistant's `fit` tool and `set_field`; a range that does not reach the
    data is a problem in the list. Leave `extend_curve` as it is.
 
-   **Done** (2026-11-26, decision 0074): `curve_range`, and `curve_to_limits`
-   for a typed x range (the second proposed, not yet agreed). *Learned:* the
-   curve's ends were worked out in three places; they now come from
-   `FitCurve.curve_ends`. *Not done:* automatic axis limits as ends.
+   **Done** (2026-11-26, decision 0074): `curve_range`, `curve_to_limits` for
+   a typed x range, and the part beyond the data dashed
+   (`extrapolated_linestyle`), asked for by the user. *Learned:* the curve's
+   ends were worked out in three places; they now come from
+   `FitCurve.curve_ends`. *Decided against:* automatic axis limits as ends.
 
 ### F2 Leave points out, reproducibly — M
 
@@ -1995,7 +1995,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
-| F1.9 | proposed 2026-11-26, to be agreed: a typed range, and "to the axis limits" where they are typed (0074) |
+| F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | A source's file: what did the user mean by changing the name of the .csv in the template? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |

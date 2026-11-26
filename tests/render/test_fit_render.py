@@ -147,12 +147,13 @@ def test_the_zero_line_can_be_left_out(figure: Figure, data) -> None:
 def _curve(figure: Figure, data) -> np.ndarray:
     """Where the fitted curve of the first panel was sampled."""
     fit = figure.axes[0].artists[1]
-    (line,) = _lines(render(figure, data).axes[0], fit.id)
+    line = _lines(render(figure, data).axes[0], fit.id)[0]
     return np.asarray(line.get_xdata())
 
 
 def test_a_given_range_draws_the_curve_there(figure: Figure, data) -> None:
     figure.axes[0].artists[1].curve_range = (-5.0, 25.0)
+    figure.axes[0].artists[1].extrapolated_linestyle = None  # one plain curve
     xs = _curve(figure, data)
     assert (len(xs), xs[0], xs[-1]) == (400, -5.0, 25.0)
     low, high = render(figure, data).axes[0].get_xlim()
@@ -198,5 +199,60 @@ def test_on_a_log_axis_a_given_range_is_sampled_in_log(figure, data) -> None:
     even = np.diff(_curve(figure, data))
     assert even == pytest.approx([even[0]] * len(even))  # as before
     figure.axes[0].artists[1].curve_range = (0.1, 100.0)
+    figure.axes[0].artists[1].extrapolated_linestyle = None  # one plain curve
     ratios = np.diff(np.log(_curve(figure, data)))
     assert ratios == pytest.approx([ratios[0]] * len(ratios))
+
+
+# --- beyond the data, another line (F1.9) ------------------------------------
+
+
+def _drawn_x(line) -> np.ndarray:
+    """The x of the samples a line really shows."""
+    x, y = (np.asarray(v, dtype=float) for v in line.get_data())
+    return x[np.isfinite(y)]
+
+
+def _curve_lines(figure: Figure, data):
+    fit = figure.axes[0].artists[1]
+    return _lines(render(figure, data).axes[0], fit.id)
+
+
+def test_the_curve_is_dashed_where_it_leaves_the_data(figure, data, columns) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.linestyle, fit.label, fit.curve_range = "-", "fit", (-5.0, 25.0)
+    measured, beyond = _curve_lines(figure, data)
+    first, last = columns["t"].min(), columns["t"].max()
+    assert (measured.get_linestyle(), beyond.get_linestyle()) == ("-", "--")
+    assert measured.get_color() == beyond.get_color()
+    assert measured.get_label() == "fit" and beyond.get_label() == "_nolegend_"
+    inside, outside = _drawn_x(measured), _drawn_x(beyond)
+    assert (inside.min(), inside.max()) == (first, last)  # no gap between them
+    assert (outside.min(), outside.max()) == (-5.0, 25.0)
+    assert not ((outside > first) & (outside < last)).any()
+    assert {first, last} <= set(outside)
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {},  # along the data
+        {"curve_range": (2.0, 8.0)},  # given, but within them
+        {"curve_range": (-5.0, 25.0), "extrapolated_linestyle": None},
+        {"curve_range": (-5.0, 25.0), "extrapolated_linestyle": "--"},  # as it is
+        {"fit_range": (3.0, 7.0), "extend_curve": True},  # unfitted, but measured
+    ],
+)
+def test_a_curve_drawn_alike_stays_one_line(figure, data, settings) -> None:
+    fit = figure.axes[0].artists[1]  # dashed itself
+    for name, value in settings.items():
+        setattr(fit, name, value)
+    assert len(_curve_lines(figure, data)) == 1
+
+
+def test_a_curve_away_from_the_data_is_dashed_all_along(figure, data) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.linestyle, fit.curve_range = "-", (20.0, 30.0)
+    measured, beyond = _curve_lines(figure, data)
+    assert _drawn_x(measured).size == 0
+    assert (_drawn_x(beyond).min(), _drawn_x(beyond).max()) == (20.0, 30.0)

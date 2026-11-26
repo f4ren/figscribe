@@ -186,6 +186,51 @@ def test_a_curve_beyond_the_data(tmp_path: Path, x, curve, written) -> None:
     assert [line for line in script.splitlines() if len(line) > 88] == []
 
 
+@pytest.mark.parametrize(
+    "curve",
+    [
+        {"curve_range": (-3.0, 15.0)},
+        {"curve_range": (-3.0, 15.0), "extrapolated_linestyle": ":"},
+        {"curve_range": (-3.0, 15.0), "extrapolated_linestyle": None},
+        {"curve_range": (4.0, 15.0)},  # leaves the data on one side only
+        {"curve_range": (12.0, 15.0)},  # nowhere on them
+        {"curve_range": (2.0, 8.0)},  # never leaves them
+    ],
+    ids=["dashed", "dotted", "as-the-curve", "one-side", "away", "within"],
+)
+@pytest.mark.parametrize("known", [True, False], ids=["data", "no-data"])
+def test_the_extrapolated_part_of_a_curve(tmp_path: Path, curve, known) -> None:
+    """In the cycle's colors, which the two parts of the curve share: the plot
+    after them keeps its own."""
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"], linestyle="none", marker="o")
+    fit = FitCurve(
+        target=data.id, model=PredefinedFit(name="gaussian"), label="fit", **curve
+    )
+    panel = Axes(legend=Legend(visible=True), artists=[data])
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    add_fit(project, fit, residuals=False).apply(project)
+    values = load_data(project, tmp_path)
+    refit(project, fit.id, values).apply(project)
+    project.figures[0].axes[0].artists.append(LinePlot(x=ref["t"], y=ref["U"]))
+    export(project.figures[0], values, tmp_path / "from_renderer.png")
+    script = generate(
+        project,
+        base_dir=tmp_path,
+        output="from_script.png",
+        data=values if known else None,
+    )
+    a = np.asarray(Image.open(tmp_path / "from_renderer.png"))
+    b = np.asarray(Image.open(_run(script, tmp_path)))
+    assert np.array_equal(a, b), f"{np.count_nonzero(np.any(a != b, axis=-1))} pixels"
+    assert [line for line in script.splitlines() if len(line) > 88] == []
+    if known:
+        dashed = curve["curve_range"] != (2.0, 8.0) and curve.get(
+            "extrapolated_linestyle", "--"
+        )
+        assert ("beyond" in script) == bool(dashed)
+
+
 def test_a_curve_beyond_the_data_with_residuals_sharing_x(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")

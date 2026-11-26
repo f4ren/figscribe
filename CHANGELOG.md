@@ -7,7 +7,8 @@ release open in every later one.
 
 - **A fit beyond the data.** To extrapolate, type *Draw curve from … to …* in
   the fit dialog or *Curve from, to* in the panel, or tick *To the axis limits*
-  where the x range is typed (decision 0074).
+  where the x range is typed. Beyond the data the curve is dashed, as no
+  points back it there; *Line beyond the data* changes that (decision 0074).
 - **Minor grid lines of their own.** Where the grid is shown at both kinds of
   ticks, the minor lines are now half as thick as the major ones, so such
   figures look different from before. The panel's *Grid* section has *Minor

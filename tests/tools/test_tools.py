@@ -831,10 +831,12 @@ def test_a_fit_curve_can_reach_beyond_the_data(tools, workspace) -> None:
             "model": {"kind": "predefined", "name": "gaussian"},
             "curve_range": [-2.0, 15.0],
             "curve_to_limits": True,
+            "extrapolated_linestyle": ":",
         },
     )
     fit = find(workspace.project, result["id"])
     assert (fit.curve_range, fit.curve_to_limits) == ((-2.0, 15.0), True)
+    assert fit.extrapolated_linestyle == ":"
 
 
 def test_leaving_points_out_fits_the_plot_again(tools, workspace) -> None:

@@ -243,6 +243,12 @@ RULES: list[Rule] = [
     ),
     Rule(
         (FitCurve,),
+        (("extrapolated_linestyle",),),
+        "the curve's ends follow the data",
+        lambda fit, project: fit.given_ends(x_limits_of(project, fit.id)) is None,
+    ),
+    Rule(
+        (FitCurve,),
         (("curve_range",),),
         "the curve goes to the axis limits",
         lambda fit, project: (

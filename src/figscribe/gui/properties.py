@@ -446,6 +446,7 @@ BASIC = {
         "extend_curve",
         "curve_range",
         "curve_to_limits",
+        "extrapolated_linestyle",
         "outside_as_left_out",
     ),
     "ResidualPlot": (
@@ -619,6 +620,8 @@ TIPS = {
     "curve_range": "Draw the fitted curve from one x to another, which may reach "
     "beyond the data to extrapolate; the fit does not change.",
     "curve_to_limits": "Draw the curve across the range typed on the x axis.",
+    "extrapolated_linestyle": "How the curve is drawn where it leaves the data, "
+    "which no points back; empty draws it like the rest.",
     "extend_curve": "Draw the fitted curve across all the data, not only over the "
     "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",
@@ -1001,6 +1004,7 @@ ELEMENT_SECTIONS = {
         "extend_curve": "Look",
         "curve_range": "Look",
         "curve_to_limits": "Look",
+        "extrapolated_linestyle": "Look",
         "outside_as_left_out": "Look",
     },
     "Histogram": {
@@ -2037,6 +2041,7 @@ CHOICES["method"] = [
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
 CHOICES["grid_minor_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["zero_linestyle"] = CHOICES["grid_linestyle"]
+CHOICES["extrapolated_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
 CHOICES["taus"] = [
     ("octaves: 1, 2, 4, 8 …", "octave"),
@@ -2062,6 +2067,7 @@ NONE_TEXT = {
     "time": "the sample interval below",
     "grid_linestyle": "style default",
     "grid_minor_linestyle": "as the major lines",
+    "extrapolated_linestyle": "as the curve",
     "prefix": "as in the data",
     "marker": "No marker",
     "left_out_marker": "No marker",

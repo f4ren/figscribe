@@ -3530,16 +3530,16 @@ not asked, and in print a thin line reads better than a pale one.
 
 ## 0074 — The fitted curve beyond the data
 
-2026-11-26. Roadmap F1.9. The part about the axis limits is **proposed, not
-yet agreed**.
+2026-11-26. Roadmap F1.9.
 
 ### Context
 
 A lab user wants the fit drawn over a larger range than the points, to
 extrapolate (2026-11-04). `extend_curve` reaches across the data, never
-beyond. Asked whether a typed range is enough or "to the axis limits" is
-wanted too, the user answered that both, typed or the axis limits, would be
-best, and asked for a recommendation.
+beyond. The user decided, after pictures of the variants: **a fit holds only
+for the measured data**. Going beyond them has to be stated, so that one
+thinks about it instead of taking it for granted, and the figure should show
+which part no points back.
 
 ### Decision
 
@@ -3548,13 +3548,22 @@ best, and asked for a recommendation.
   in the panel (*Curve from, to*). A unit conversion moves it with the fit
   range.
 - `FitCurve.curve_to_limits` (*To the axis limits*): the curve is drawn across
-  the range **typed** on the x axis, of this panel or one sharing it
-  (proposed). With an automatic range it does nothing: the curve would move
-  the limit it is to reach, and the script could not write its ends. The box
-  is greyed then, and a file that has it ticked is told in the problem list.
-- Order: typed axis limits where asked for, else `curve_range`, else as
-  before. Given ends win over `extend_curve`. The fit itself, its residuals
-  and its range are not touched.
+  the range **typed** on the x axis, of this panel or one sharing it. Ticking
+  it is a deliberate step. With an automatic range it does nothing; the box is
+  greyed then, and a file that has it ticked is told in the problem list.
+- `FitCurve.extrapolated_linestyle` (*Line beyond the data*): where the curve
+  leaves the data it is **dashed** by default, in the curve's color and width.
+  Another line style can be chosen, or "as the curve" (None). "The data" are
+  the x values the plot shows, fitted or not: between them the reader sees the
+  points, so a stretch outside the fit range is not marked, and figures with
+  `extend_curve` are drawn as before. The dashed part has no legend entry. A
+  curve whose own style it is cannot be told apart, which the problem list
+  says.
+- Order of the ends: typed axis limits where asked for, else `curve_range`,
+  else as before. Given ends win over `extend_curve`. The fit itself, its
+  residuals and its range are not touched.
+- The curve is sampled at the data's ends too, so the two lines meet; the
+  script draws them as two `plot` calls with the same color.
 - On a log x axis a curve with given ends is sampled evenly in log x
   (`np.geomspace`). Without given ends it is sampled as before, so saved
   figures are drawn unchanged.
@@ -3562,12 +3571,15 @@ best, and asked for a recommendation.
   axis's values (breaks, the break dialog). The problem list reports a typed
   range that misses the data altogether, and a curve from zero or below on a
   log axis.
-- No schema bump: both fields have defaults.
+- No schema bump: the fields have defaults, and the only one that is not
+  "off", the dashed style, counts only where ends are given.
 
 ### Alternatives considered
 
-**To the automatic limits too**, drawn last from `get_xlim()` with the limits
-then held: possible, but a plot added later, a shared panel or a break would
-move the ends, and the order of drawing would become part of the figure. **One
-open end** (from the data to a typed x): a third meaning of an empty field;
-both numbers are typed, as for the fit range.
+**To the edge of an automatic axis**: decided against (the user, 2026-11-26).
+The curve would extrapolate without anyone having asked for how far, and by
+as much as whatever else moves the axis. **Only typed numbers, no *To the axis
+limits***: the box follows limits that may be widened for other reasons; kept
+because the dashed part then shows it. **One open end** (from the data to a
+typed x): a third meaning of an empty field; both numbers are typed, as for
+the fit range.

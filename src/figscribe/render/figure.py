@@ -959,10 +959,12 @@ def _draw_fit(
     x = shown.x[np.isfinite(shown.x) & shown.used]
     if x.size == 0:
         return
-    ends = fit.curve_ends(float(x.min()), float(x.max()), x_limits)
+    first, last = float(x.min()), float(x.max())  # where the data begin and end
+    ends = fit.curve_ends(first, last, x_limits)
     if ends is None:
         return
     low, high = ends
+    beyond = fit.extrapolated_style(ends, (first, last))
     # Evenly in log x for an Allan deviation, and over ends of the user's, which
     # may reach across decades.
     log = (
@@ -981,18 +983,32 @@ def _draw_fit(
         xs = np.concatenate([np.linspace(*part) for part in parts])
     else:
         xs = (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
+    if beyond:  # both parts reach the data's ends, so there is no gap
+        xs = np.union1d(xs, np.clip([first, last], low, high))
     ys = evaluate(fit.model, fit.result.parameters, xs)
     at = crossings(xs, ys, *cut)
     if at.size:
         xs, ys = _apart(xs, at), _apart(ys, at)
-    ax.plot(
+    measured = ys
+    if beyond:
+        measured = np.where((xs >= first) & (xs <= last), ys, np.nan)
+    (line,) = ax.plot(
         xs,
-        ys,
+        measured,
         color=fit.color,
         linestyle=fit.linestyle,
         linewidth=fit.linewidth,
         **common,
     )
+    if beyond:
+        ax.plot(
+            xs,
+            np.where((xs <= first) | (xs >= last), ys, np.nan),
+            color=line.get_color(),
+            linestyle=beyond,
+            linewidth=fit.linewidth,
+            **common | {"label": "_nolegend_"},
+        )
 
 
 def _draw_residuals(

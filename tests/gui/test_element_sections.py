@@ -77,6 +77,7 @@ EXPECTED = {
             "extend_curve",
             "curve_range",
             "curve_to_limits",
+            "extrapolated_linestyle",
             "outside_as_left_out",
         ],
         "More": ["alpha", "visible", "zorder"],
