@@ -3349,7 +3349,10 @@ show only after the merge; not done.
 
 **Date:** 2026-11-26
 **Status:** accepted (roadmap F5.1; the user saw pictures of the formats and
-chose them on 2026-11-20, the point staying the default).
+chose them on 2026-11-20, the point staying the default). Where the settings
+sit, *Number format* and *Decimals* in the axis form's *Scale* (arranged by
+decision 0050) and *Decimal comma* in the figure's *Text*, the user has not
+seen yet.
 
 ### Context
 
