@@ -67,7 +67,9 @@ Common set_field paths (get_schema has all of them):
 `panel_labels` (letters (a), (b) on the panels: {"style": "(a)", "bold": \
 false}; null removes them)
 - panel (axes): `title`, `grid`, `grid_color`, `grid_linewidth`, \
-`grid_linestyle`, `x.label`, `x.unit`, \
+`grid_linestyle`, `grid_which` ("major", "minor", "both"), \
+`grid_minor_color`, `grid_minor_linewidth`, `grid_minor_linestyle`, \
+`x.label`, `x.unit`, \
 `x.scale` ("linear", "log", "symlog"), `x.limits` ([min, max]), `x.major_step`, \
 `x.minor_divisions` (4 minor ticks between majors = 5), `x.prefix` ("k" \
 shows Hz values as kHz; limits and steps stay in Hz), `x.number_format` \

@@ -68,8 +68,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **F5** axes: ~~number format and the decimal comma (1)~~ done; ~~inverted axes (2)~~ done;
   a second x axis on top that converts (3); hiding (done) and offsetting spines
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
-  ~~broken axes (6)~~ done; minor grid lines of their own, thinner than the
-  major ones (10).
+  ~~broken axes (6)~~ done; ~~minor grid lines of their own, thinner than the
+  major ones (10)~~ done.
 - **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
@@ -100,10 +100,10 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Where to start** (rule 1): the first open task is B7, and its open item 5
 needs no answer. The user named the order on 2026-11-03: B7.4, F13, U11 and
-F14 are done, F15 follows (ask its `[decide]` first). A lab user waits for
-F1.9, the fit's curve beyond the data, and F5.10, minor grid lines of their
-own (2026-11-04); whether they go before F15 is the user's choice. Before
-0.4: the manual checklist (B7.5), which 0.3.0 went out without.
+F14 are done, F15 follows (ask its `[decide]` first). The lab user's two
+wishes of 2026-11-04 went before it (the user's choice, 2026-11-26): F5.10 is
+done, F1.9, the fit's curve beyond the data, is in work. Before 0.4: the
+manual checklist (B7.5), which 0.3.0 went out without.
 
 ---
 
@@ -1365,6 +1365,11 @@ In order of demand:
     minor lines should be thinner by default (say half) when *Grid lines at*
     is "both", instead of equal.
 
+    **Done** (2026-11-26, decision 0073): the three fields as proposed, and
+    the user chose half the width by default when both are shown. *Learned:*
+    Matplotlib's `get_xgridlines()` gives the major lines only, so minor grid
+    lines ran across an axis break; fixed in the same pull request.
+
 ### F6 Several files as one series — M
 
 Import many files at once (a folder or a multi-selection) with the same
@@ -1981,7 +1986,7 @@ answer in `docs/decisions.md` when the task is started.
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
 | F5.6 | answered 2026-11-26: x and y, several breaks; the rest decided and built (0072) |
-| F5.10 | Minor grid lines: thinner by default when both kinds are shown? |
+| F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
 | F1.9 | The curve beyond the data: a typed range, or also "to the axis limits"? |

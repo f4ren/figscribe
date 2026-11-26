@@ -840,6 +840,9 @@ def test_the_panel_follows_what_the_settings_are_for(
         "grid_color",
         "grid_linewidth",
         "grid_linestyle",
+        "grid_minor_color",
+        "grid_minor_linewidth",
+        "grid_minor_linestyle",
     ]
     assert fields["Place in layout"] == ["row", "col", "rowspan", "colspan"]
     assert "More" not in fields

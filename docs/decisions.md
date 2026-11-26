@@ -3493,3 +3493,37 @@ side-by-side drawing does, but here the straight segment on screen is not the
 data's. **Each stretch with its own scale** (to magnify the far point): not
 asked; the axis would no longer read as one.
 
+
+## 0073 — Minor grid lines of their own
+
+2026-11-26. Roadmap F5.10.
+
+### Context
+
+A lab user asked for minor grid lines thinner than the major ones, set apart
+(2026-11-04). One width, style and color served both.
+
+### Decision
+
+Per panel, beside the grid's settings: `grid_minor_color`,
+`grid_minor_linewidth` and `grid_minor_linestyle`, each empty meaning as the
+major lines, with one exception the user chose (2026-11-26, from a picture of
+both): where *Grid lines at* is "both" and no minor width is given, the minor
+lines are **half as thick**, as half of `grid_linewidth` or else of the
+style's `grid.linewidth`. Where only minor lines are shown, there is nothing
+to set them apart from, and they keep the grid's width.
+
+- Saved figures that show both kinds look different once opened. No schema
+  bump: the fields have defaults.
+- With "both", the renderer and the script make two `grid()` calls; the script
+  writes the half as a number where `grid_linewidth` is given, else as
+  `plt.rcParams["grid.linewidth"] / 2`, so it follows the style sheet.
+- The fields are greyed while the grid is off or shows only major lines.
+- A style sheet that sets `grid.minor.linewidth` of its own (Matplotlib 3.11)
+  is overridden by the half; a width typed in the panel is the way to another.
+
+### Alternatives considered
+
+**Equal widths unless set**: saved files unchanged, but the wish would need a
+setting in every figure. **A lighter color instead of a thinner line**: was
+not asked, and in print a thin line reads better than a pale one.

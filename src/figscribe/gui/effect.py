@@ -92,7 +92,15 @@ def _target_reduced(fit: FitCurve, project: Project) -> bool:
         return False
 
 
-GRID = ("grid_axis", "grid_which", "grid_color", "grid_linewidth", "grid_linestyle")
+MINOR_GRID = ("grid_minor_color", "grid_minor_linewidth", "grid_minor_linestyle")
+GRID = (
+    "grid_axis",
+    "grid_which",
+    "grid_color",
+    "grid_linewidth",
+    "grid_linestyle",
+    *MINOR_GRID,
+)
 LEGEND = ("position", "frame", "ncols", "fontsize")
 LEFT_OUT = ("left_out_color", "left_out_marker", "left_out_linestyle")
 
@@ -102,6 +110,12 @@ RULES: list[Rule] = [
         tuple((name,) for name in GRID),
         "the grid lines are off",
         lambda axes, _: not axes.grid,
+    ),
+    Rule(
+        (Axes,),
+        tuple((name,) for name in MINOR_GRID),
+        "grid lines are only at the major ticks",
+        lambda axes, _: axes.grid_which == "major",
     ),
     Rule(
         (Axes,),

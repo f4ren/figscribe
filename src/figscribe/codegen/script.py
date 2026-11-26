@@ -89,6 +89,7 @@ from figscribe.render.layout import (
 from figscribe.render.ticks import (
     comma_formatter,
     counted_interval,
+    grid_calls,
     minor_numbers,
     minor_ticks,
     scaling,
@@ -1482,19 +1483,7 @@ class _Writer:
             if self.figure.open_frame:
                 self.emit(f'{right}.spines["right"].set_visible(True)')
             self._axis(right, "y", (index, "y_right"), [])
-        if axes.grid:
-            kwargs = {}
-            if axes.grid_which != "major":
-                kwargs["which"] = _str(axes.grid_which)
-            if axes.grid_axis != "both":
-                kwargs["axis"] = _str(axes.grid_axis)
-            if axes.grid_color is not None:
-                kwargs["color"] = _str(axes.grid_color)
-            if axes.grid_linewidth is not None:
-                kwargs["linewidth"] = _num(axes.grid_linewidth)
-            if axes.grid_linestyle is not None:
-                kwargs["linestyle"] = _str(axes.grid_linestyle)
-            self.call(f"{ax}.grid", "True", **kwargs)
+        self._grid(ax, axes)
         # Those the renderer drew the panel's axes with: the script cuts there.
         x_breaks, y_breaks = (
             self.broken.get((axes.id, name), ([],))[0] for name in ("x", "y")
@@ -1506,6 +1495,23 @@ class _Writer:
             self._artist(right if on_right else ax, artist)
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)
+
+    def _grid(self, ax: str, axes: Axes) -> None:
+        for style in grid_calls(axes):
+            kwargs = {}
+            if "which" in style:
+                kwargs["which"] = _str(style["which"])
+            if axes.grid_axis != "both":
+                kwargs["axis"] = _str(axes.grid_axis)
+            for key in ("color", "linewidth", "linestyle"):
+                if key not in style:
+                    continue
+                if style[key] is None:  # only a width is: half the style's
+                    self.emit("# The minor grid lines half as thick as the major.")
+                    kwargs[key] = 'plt.rcParams["grid.linewidth"] / 2'
+                else:
+                    kwargs[key] = (_num if key == "linewidth" else _str)(style[key])
+            self.call(f"{ax}.grid", "True", **kwargs)
 
     def _axis(
         self, ax: str, name: str, which: tuple[int, str], shared: list[AxisSpec]

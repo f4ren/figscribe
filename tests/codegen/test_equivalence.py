@@ -565,7 +565,8 @@ def test_font_sizes_ticks_and_grid(tmp_path: Path) -> None:
     assert "ax.xaxis.set_major_locator(MultipleLocator(2.5))" in script
     assert "ax.xaxis.set_minor_locator(AutoMinorLocator(5))" in script
     assert "MultipleLocator(0.1)" not in script  # explicit ticks win
-    assert 'ax.grid(True, which="both", axis="y")' in script
+    assert 'ax.grid(True, which="major", axis="y")' in script
+    assert 'ax.grid(True, which="minor", axis="y", linewidth=' in script
 
 
 def test_a_tick_step_too_small_is_left_to_matplotlib(tmp_path: Path) -> None:
@@ -1204,6 +1205,56 @@ def test_a_stepped_log_axis_keeps_its_minor_ticks(tmp_path: Path) -> None:
     assert "NullFormatter()" in script
 
 
+@pytest.mark.parametrize(
+    ("grid", "written"),
+    [
+        (
+            {"grid_which": "both"},
+            'linewidth=plt.rcParams["grid.linewidth"] / 2',
+        ),
+        (
+            {"grid_which": "both", "grid_linewidth": 1.4, "grid_axis": "y"},
+            'ax.grid(True, which="minor", axis="y", linewidth=0.7)',
+        ),
+        (
+            {
+                "grid_which": "both",
+                "grid_color": "dimgray",
+                "grid_minor_color": "silver",
+                "grid_minor_linestyle": ":",
+                "grid_minor_linewidth": 0.3,
+            },
+            'which="minor"',
+        ),
+        (
+            {"grid_which": "minor", "grid_minor_linewidth": 0.3},
+            'ax.grid(True, which="minor", linewidth=0.3)',
+        ),
+    ],
+    ids=["default", "half-the-major", "own", "minor-alone"],
+)
+def test_minor_grid_lines(tmp_path: Path, grid, written) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(grid=True, artists=[LinePlot(x=ref["t"], y=ref["U"])], **grid)
+    project.figures = [Figure(dpi=110, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert written in script
+    assert [line for line in script.splitlines() if len(line) > 88] == []
+
+
+def test_minor_grid_lines_on_broken_axes(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        grid=True,
+        grid_which="both",
+        x=AxisSpec(breaks=[(4.2, 5.8)]),
+        y=AxisSpec(breaks=[(0.4, 0.6)]),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=110, axes=[axes])]
+    _assert_same(project, tmp_path)
+
+
 def test_a_grid_in_its_own_color(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     axes = Axes(
@@ -1240,7 +1291,8 @@ def test_wide_frame_long_ticks_and_a_dotted_grid(tmp_path: Path) -> None:
     script = _assert_same(project, tmp_path)
     assert '"axes.linewidth": 1.5' in script
     assert '"xtick.major.size": 6' in script and '"ytick.minor.width": 0.8' in script
-    assert 'ax.grid(True, which="both", linewidth=0.4, linestyle=":")' in script
+    assert 'ax.grid(True, which="major", linewidth=0.4, linestyle=":")' in script
+    assert 'ax.grid(True, which="minor", linewidth=0.2, linestyle=":")' in script
 
 
 def test_panel_labels_outside_with_an_inset_lettered(tmp_path: Path) -> None:

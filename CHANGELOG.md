@@ -5,6 +5,10 @@ release open in every later one.
 
 ## Unreleased
 
+- **Minor grid lines of their own.** Where the grid is shown at both kinds of
+  ticks, the minor lines are now half as thick as the major ones, so such
+  figures look different from before. The panel's *Grid* section has *Minor
+  grid color*, *width* and *style* (decision 0073).
 - **Two more examples:** *Up to the zinc point*, a broken axis with a fit
   across it, and *An infrared spectrum*, wavenumbers from high to low with an
   open frame and a decimal comma (fourteen in all).
