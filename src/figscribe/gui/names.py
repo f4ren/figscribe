@@ -194,7 +194,7 @@ FIELD_NAMES = {
     "parameter_bounds": "Parameter bounds",
     "fit_range": "Fit range",
     "extend_curve": "Curve over all the data",
-    "curve_range": "Draw the curve from, to",
+    "curve_range": "Curve from, to",
     "curve_to_limits": "Curve to the axis limits",
     "outside_as_left_out": "Points outside the range like left out",
     "left_out": "Rows left out",

@@ -179,7 +179,10 @@ def build(folder: Path) -> Path:
 
     history = History(project)
     fit = FitCurve(
-        target=errorbars.id, model=PredefinedFit(name="linear"), fit_range=(0.5, 3.5)
+        target=errorbars.id,
+        model=PredefinedFit(name="linear"),
+        fit_range=(0.5, 3.5),
+        curve_range=(0.0, 4.5),
     )
     history.push(add_fit(project, fit))
     history.push(refit(project, fit.id, load_data(project, folder)))

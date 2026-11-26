@@ -3527,3 +3527,47 @@ to set them apart from, and they keep the grid's width.
 **Equal widths unless set**: saved files unchanged, but the wish would need a
 setting in every figure. **A lighter color instead of a thinner line**: was
 not asked, and in print a thin line reads better than a pale one.
+
+## 0074 — The fitted curve beyond the data
+
+2026-11-26. Roadmap F1.9. The part about the axis limits is **proposed, not
+yet agreed**.
+
+### Context
+
+A lab user wants the fit drawn over a larger range than the points, to
+extrapolate (2026-11-04). `extend_curve` reaches across the data, never
+beyond. Asked whether a typed range is enough or "to the axis limits" is
+wanted too, the user answered that both, typed or the axis limits, would be
+best, and asked for a recommendation.
+
+### Decision
+
+- `FitCurve.curve_range`: the curve is drawn from one x to another, in the
+  units the plot shows. Typed in the fit dialog (*Draw curve from … to …*) and
+  in the panel (*Curve from, to*). A unit conversion moves it with the fit
+  range.
+- `FitCurve.curve_to_limits` (*To the axis limits*): the curve is drawn across
+  the range **typed** on the x axis, of this panel or one sharing it
+  (proposed). With an automatic range it does nothing: the curve would move
+  the limit it is to reach, and the script could not write its ends. The box
+  is greyed then, and a file that has it ticked is told in the problem list.
+- Order: typed axis limits where asked for, else `curve_range`, else as
+  before. Given ends win over `extend_curve`. The fit itself, its residuals
+  and its range are not touched.
+- On a log x axis a curve with given ends is sampled evenly in log x
+  (`np.geomspace`). Without given ends it is sampled as before, so saved
+  figures are drawn unchanged.
+- An automatic axis range follows the curve, and its samples count among the
+  axis's values (breaks, the break dialog). The problem list reports a typed
+  range that misses the data altogether, and a curve from zero or below on a
+  log axis.
+- No schema bump: both fields have defaults.
+
+### Alternatives considered
+
+**To the automatic limits too**, drawn last from `get_xlim()` with the limits
+then held: possible, but a plot added later, a shared panel or a break would
+move the ends, and the order of drawing would become part of the figure. **One
+open end** (from the data to a typed x): a third meaning of an empty field;
+both numbers are typed, as for the fit range.
