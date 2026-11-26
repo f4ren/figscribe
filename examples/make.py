@@ -1001,7 +1001,7 @@ def ir_spectrum(folder: Path) -> Project:
         comment="Synthetic infrared spectrum",
     )
     panel = Axes(
-        x=axis("Wellenzahl", "cm$^{-1}$", limits=(400.0, 4000.0), inverted=True),
+        x=axis("Wavenumber", "cm$^{-1}$", limits=(400.0, 4000.0), inverted=True),
         y=axis(
             "Transmission",
             limits=(0.0, 1.0),

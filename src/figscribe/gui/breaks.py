@@ -7,7 +7,7 @@ import numpy as np
 from figscribe.convert import convert, plot_data
 from figscribe.gui.document import Document
 from figscribe.model import Histogram, ReferenceLine
-from figscribe.model.breaks import own_breaks
+from figscribe.model.breaks import breaks_blocked, own_breaks
 from figscribe.model.sharing import sharing_group
 from figscribe.model.validate import FITTABLE
 from figscribe.render.breaks import widest_gap
@@ -59,6 +59,33 @@ def axis_values(document: Document, axes_id: str, field: str) -> np.ndarray:
     if not found:
         return np.array([])
     return np.concatenate([np.asarray(v, dtype=float).ravel() for v in found])
+
+
+def break_entries(
+    document: Document,
+    axes_id: str,
+    fields: tuple[str, ...] = ("x", "y"),
+    spot: tuple[float, float] | None = None,
+) -> list[tuple[str, str, list]]:
+    """(menu text, field, breaks) for what a menu offers to do with the breaks
+    of a panel: cut an empty stretch of the data out of an axis, the one at
+    `spot`, (x, y), if it is in one, or take the axis's breaks out."""
+    index = panel_index(document, axes_id)
+    if index is None:
+        return []
+    entries = []
+    for field in fields:
+        breaks = current_breaks(document, axes_id, field)
+        if breaks_blocked(document.figure, index, field) is None:
+            at = None if spot is None else float(spot["xy".index(field)])
+            found = proposed_break(document, axes_id, field, at)
+            if found is not None:
+                start, end = found
+                text = f"Break the {field} axis (cut out {start:g} to {end:g})"
+                entries.append((text, field, sorted([*breaks, found])))
+        if breaks:
+            entries.append((f"Remove the breaks of the {field} axis", field, []))
+    return entries
 
 
 def proposed_break(

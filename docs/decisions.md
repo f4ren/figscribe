@@ -3445,8 +3445,9 @@ temperature. Matplotlib has no broken axis.
 - Points, reference lines and ranges within a break are not shown, and the
   problem list says how many points. A note placed there is drawn.
 - In the GUI: *Scale* has a row per break and *Add a break*, which cuts the
-  widest empty stretch of the data; a right click in a panel offers the same;
-  the search finds it by "break", "gap", "skip".
+  widest empty stretch of the data; a right click in a panel, or on a panel or
+  axis in the outline, offers the same; the search finds it by "break", "gap",
+  "skip".
 
 ### Alternatives considered
 

@@ -244,3 +244,23 @@ def test_a_broken_axis_says_so_in_the_panel_summary(window) -> None:
     window.document.select(_axes(window).id)
     texts = [b.text() for b in window.properties.axis_links.values()]
     assert any("broken at 21 – 418" in t for t in texts), texts
+
+
+def _texts(menu) -> list[str]:
+    return [a.text() for a in menu.actions() if not a.isSeparator()]
+
+
+def test_the_outline_offers_to_break_a_panel_and_an_axis(window) -> None:
+    panel = _axes(window).id
+    entry = "Break the x axis (cut out 21 to 418)"
+    assert entry in _texts(window.outline.context_menu(panel))
+    menu = window.outline.context_menu(axis_id(panel, "x"))
+    assert entry in _texts(menu)
+    assert not [t for t in _texts(menu) if "the y axis" in t]
+    _entry(menu, "Break the x axis").trigger()
+    assert _axes(window).x.breaks == [(21.0, 418.0)]
+    assert window.preview._figure.axes[0].get_xscale() == "function"
+    _entry(
+        window.outline.context_menu(panel), "Remove the breaks of the x axis"
+    ).trigger()
+    assert _axes(window).x.breaks == []

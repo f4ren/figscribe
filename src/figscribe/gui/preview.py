@@ -61,7 +61,7 @@ from figscribe.commands import (
 )
 from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
-from figscribe.gui.breaks import current_breaks, panel_index, proposed_break
+from figscribe.gui.breaks import break_entries
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.inplace import Editable, open_editor
@@ -78,7 +78,7 @@ from figscribe.gui.resize import (
     ratios,
 )
 from figscribe.model import Annotation
-from figscribe.model.breaks import breaks_blocked, effective_breaks
+from figscribe.model.breaks import effective_breaks
 from figscribe.model.validate import FIT_TARGETS
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
@@ -968,39 +968,18 @@ class Preview(QWidget):
         """Cut an empty stretch of the data out of an axis of the panel `ax`,
         the one clicked in if the click is in one, or take its breaks out."""
         axes_id = ax.get_gid()
-        index = panel_index(self.document, axes_id)
-        if index is None:
-            return
         spot = ax.transData.inverted().transform(self._to_display(point))
-        first = True
-        for field, at in zip(("x", "y"), spot, strict=True):
-            entries = []
-            if breaks_blocked(self.document.figure, index, field) is None:
-                found = proposed_break(self.document, axes_id, field, float(at))
-                if found is not None:
-                    start, end = found
-                    entries.append(
-                        (
-                            f"Break the {field} axis (cut out {start:g} to {end:g})",
-                            sorted(
-                                [
-                                    *current_breaks(self.document, axes_id, field),
-                                    found,
-                                ]
-                            ),
-                        )
-                    )
-            if current_breaks(self.document, axes_id, field):
-                entries.append((f"Remove the breaks of the {field} axis", []))
-            for text, breaks in entries:
-                if first:
-                    menu.addSeparator()
-                    first = False
-                menu.addAction(
-                    text, lambda f=field, b=breaks: self._set_breaks(axes_id, f, b)
-                )
+        entries = break_entries(self.document, axes_id, spot=tuple(spot))
+        if entries:
+            menu.addSeparator()
+        for text, field, breaks in entries:
+            menu.addAction(
+                text,
+                lambda f=field, b=breaks: self.set_axis_breaks(axes_id, f, b),
+            )
 
-    def _set_breaks(self, axes_id: str, field: str, breaks: list) -> None:
+    def set_axis_breaks(self, axes_id: str, field: str, breaks: list) -> None:
+        """Give an axis these breaks, as a menu asks."""
         self.drop_view([a.id for a in self.document.figure.axes])
         try:
             self.document.push(

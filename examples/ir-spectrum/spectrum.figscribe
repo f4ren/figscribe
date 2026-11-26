@@ -63,7 +63,7 @@
           "title": null,
           "title_size": null,
           "x": {
-            "label": "Wellenzahl",
+            "label": "Wavenumber",
             "unit": "cm$^{-1}$",
             "scale": "linear",
             "limits": [
