@@ -3427,7 +3427,9 @@ temperature. Matplotlib has no broken axis.
   reach out of the gap; this happens last, so that they count for the range.
 - **No line or band is drawn across a break**: a NaN goes between the points on
   either side. A straight line through a squeezed stretch would show values
-  the data do not have. A fit's curve is sampled on each stretch.
+  the data do not have. A fit's curve is sampled on each stretch. This holds
+  for an Allan deviation too. A break that a typed range does not show, because
+  it lies outside the range or around all of it, cuts nothing.
 - **Ticks** are placed one by one: Matplotlib's step over what is shown, each
   stretch getting at least one, none within a break, and automatic ones clear
   of the marks. Typed ticks within a break are left out.
@@ -3438,10 +3440,15 @@ temperature. Matplotlib has no broken axis.
   history refuses a command that would make a broken axis logarithmic; the
   problem list names it in a file, and the axis is drawn whole.
 - **Panels sharing an axis share its breaks**; the panel sets them together.
+- **A change of units takes the breaks along**, on every panel sharing the
+  axis, while none of them shows other data against it.
+- **Ticks are counted over what is shown**, so a step that fits the stretches
+  is not refused for the ones cut out.
 - The **script** defines `squeezed`, `across_breaks` and `cut_out`. It finds
   the cuts from its own data, but the gap's width, the ticks, an automatic
   range and the stretches of a fit are numbers as drawn for this data, which a
-  comment says.
+  comment says. Without data it can read, the script draws the axes whole
+  and says so.
 - Points, reference lines and ranges within a break are not shown, and the
   problem list says how many points. A note placed there is drawn.
 - In the GUI: *Scale* has a row per break and *Add a break*, which cuts the

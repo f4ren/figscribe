@@ -1251,8 +1251,11 @@ In order of demand:
    `AxisSpec.breaks`, one Matplotlib axis with a squeezed scale and clipping
    instead of the separate axes sketched below. *Learned:* `set_xscale` does
    not redo a range that `axhline` has settled; a script must find the cuts
-   from its own data. *Follow-ups, only if asked:* log axes; notes within a
-   break; a magnified stretch; images.
+   from its own data. A review after the merge found ten faults, since fixed:
+   renderer and script have to decide what to cut by one rule from the model,
+   and whatever counts ticks, converts units or draws a line (the Allan
+   deviation too) has to know of breaks. *Follow-ups, only if asked:* log axes;
+   notes within a break; a magnified stretch; images.
    Before it was built: No longer later: asked for by a lab user (2026-11-04),
    who will add a measurement at the zinc point to a diagram after a break
    in an axis. `[decide]` before building; this is an L. Matplotlib has no
