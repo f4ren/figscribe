@@ -77,9 +77,9 @@ from figscribe.render.layout import (
 )
 from figscribe.render.ticks import (
     comma_formatter,
+    minor_numbers,
     minor_ticks,
     scaling,
-    silent_minor_labels,
     tick_style,
     ticks_that_fit,
     zero_below,
@@ -607,12 +607,12 @@ class _Writer:
             for s in specs
         ):
             needed.append("MultipleLocator")
-        if any(silent_minor_labels(s) for s in specs):
+        if any(minor_numbers(s) == "silent" for s in specs):
             needed.append("NullFormatter")
         kinds = self._comma_kinds()
         if "linear" in kinds:
             needed.append("ScalarFormatter")
-        if "log" in kinds:
+        if "log" in kinds or any(minor_numbers(s) == "ours" for s in specs):
             needed.append("LogFormatterSciNotation")
         return sorted(needed)
 
@@ -643,6 +643,8 @@ class _Writer:
             helpers.append(COMMA_FORMATTER)
         if "log" in kinds:
             helpers.append(COMMA_LOG_FORMATTER)
+        if any(minor_numbers(s) == "ours" for s in own):
+            helpers.append(MINOR_LOG_NUMBERS)
         if not helpers:
             return
         self.section("Tick numbers")
@@ -1418,8 +1420,14 @@ class _Writer:
         elif kind := comma_formatter(spec, self.figure.decimal_comma):
             minor = spec.scale == "log" and how != "off"
             self._comma_numbers(f"{ax}.{name}axis", kind, minor)
-        if silent_minor_labels(spec):
+        minor = minor_numbers(spec)
+        if minor == "silent":
             self.emit(f"{ax}.{name}axis.set_minor_formatter(NullFormatter())")
+        elif minor == "ours":
+            major = f"{ax}.{name}axis.get_major_formatter()"
+            self.call(
+                f"{ax}.{name}axis.set_minor_formatter", f"MinorLogNumbers({major})"
+            )
         if spec.tick_size is not None:
             self.call(
                 f"{ax}.tick_params",
@@ -1915,6 +1923,16 @@ class CommaLogFormatter(LogFormatterSciNotation):
 
     def __call__(self, x, pos=None):
         return decimal_comma(super().__call__(x, pos))'''
+MINOR_LOG_NUMBERS = '''\
+class MinorLogNumbers(LogFormatterSciNotation):
+    """Numbers the minor ticks Matplotlib would number, as `major` writes them."""
+
+    def __init__(self, major):
+        super().__init__(labelOnlyBase=False)
+        self.major = major
+
+    def __call__(self, x, pos=None):
+        return self.major(x, pos) if super().__call__(x, pos) else ""'''
 """What the script defines to write tick numbers; render.ticks does the same."""
 
 

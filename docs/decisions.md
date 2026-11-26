@@ -3368,9 +3368,13 @@ comma, which German theses and journals ask for.
   `ScalarFormatter` or `LogFormatterSciNotation` replaces it in Matplotlib's
   text, also in the offset at the end of an axis. Inside mathtext the comma is
   written `{,}`, or TeX puts a space after it ("2, 5").
-- The script defines `decimal_comma`, `power_of_ten` and the two classes, only
+- The script defines `decimal_comma`, `power_of_ten` and these classes, only
   those it uses; renderer and script have the same text, and the equivalence
   test compares them.
+- On a log axis spanning less than a decade Matplotlib numbers minor ticks.
+  Where figscribe writes the numbers and the user set no major ticks,
+  `MinorLogNumbers` writes those same ticks our way; before, they were silenced
+  and such an axis could be left without a number, also with a prefix.
 - "Fixed" uses Python's `z` format, so that -0.001 reads 0.0, not -0.0.
 - No schema bump: the defaults draw what was drawn, and no released file has
   the fields.

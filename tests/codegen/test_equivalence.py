@@ -1024,6 +1024,31 @@ def test_shared_axes_with_different_number_formats(tmp_path: Path, formatted) ->
     _assert_same(project, tmp_path)
 
 
+@pytest.mark.parametrize("comma", [False, True])
+def test_log_axes_of_less_than_a_decade_with_numbers_of_our_own(
+    tmp_path: Path, comma
+) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(label="t", scale="log", prefix="m", limits=(0.2, 0.8)),
+        y=AxisSpec(
+            label="U",
+            scale="log",
+            number_format="scientific",
+            limits=(0.15, 0.9),
+        ),
+        y_right=AxisSpec(scale="log", number_format="fixed", limits=(0.002, 5.0)),
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"]),
+            ScatterPlot(x=ref["t"], y=ref["dU"], axis="right"),
+        ],
+    )
+    project.figures = [Figure(dpi=110, width_mm=175, decimal_comma=comma, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert "class MinorLogNumbers(LogFormatterSciNotation):" in script
+    assert "NullFormatter" not in script
+
+
 def test_a_stepped_log_axis_keeps_its_minor_ticks(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     axes = Axes(

@@ -56,10 +56,11 @@ from figscribe.render.layout import (
 from figscribe.render.ticks import (
     CommaFormatter,
     CommaLogFormatter,
+    MinorLogNumbers,
     comma_formatter,
+    minor_numbers,
     minor_ticks,
     scaling,
-    silent_minor_labels,
     tick_style,
     tick_text,
     ticks_that_fit,
@@ -339,8 +340,11 @@ def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec, comma: bool) -> None:
         )
     elif kind := comma_formatter(spec, comma):
         _comma_numbers(axis, kind, minor=spec.scale == "log" and how != "off")
-    if silent_minor_labels(spec):
+    minor = minor_numbers(spec)
+    if minor == "silent":
         axis.set_minor_formatter(NullFormatter())
+    elif minor == "ours":
+        axis.set_minor_formatter(MinorLogNumbers(axis.get_major_formatter()))
     if spec.tick_size is not None:
         ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
 

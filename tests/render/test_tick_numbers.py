@@ -97,9 +97,9 @@ def test_typed_tick_labels_win_over_the_format() -> None:
 
 
 def test_a_log_axis_with_a_format_leaves_out_matplotlibs_minor_numbers() -> None:
-    spec = AxisSpec(scale="log", number_format="fixed", limits=(0.5, 30))
+    spec = AxisSpec(scale="log", number_format="fixed", limits=(0.05, 3000))
     fig = _drawn(Figure(axes=[Axes(x=spec)]))
-    assert _texts(fig.axes[0].xaxis) == ["1.0", "10.0"]
+    assert _texts(fig.axes[0].xaxis) == ["0.1", "1.0", "10.0", "100.0", "1000.0"]
     assert set(_texts(fig.axes[0].xaxis, "minor")) == {""}
 
 
@@ -107,6 +107,24 @@ def test_a_log_axis_with_a_format_leaves_out_matplotlibs_minor_numbers() -> None
 def test_decimals_are_bounded(decimals) -> None:
     with pytest.raises(ValidationError):
         AxisSpec(decimals=decimals)
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        AxisSpec(scale="log", prefix="k", limits=(200, 800)),
+        AxisSpec(scale="log", number_format="fixed", decimals=0, limits=(200, 800)),
+    ],
+    ids=["prefix", "fixed"],
+)
+def test_a_log_axis_of_less_than_a_decade_keeps_numbers(spec) -> None:
+    """There Matplotlib numbers the minor ticks, having no major one: leaving
+    those out left the axis without a single number."""
+    fig = _drawn(Figure(axes=[Axes(x=spec)]))
+    numbers = [text for text in _texts(fig.axes[0].xaxis, "minor") if text]
+    assert len(numbers) >= 3
+    allowed = {0.2, 0.3, 0.4, 0.6, 200, 300, 400, 600}
+    assert {float(text) for text in numbers} <= allowed
 
 
 # --- the decimal comma ---------------------------------------------------------

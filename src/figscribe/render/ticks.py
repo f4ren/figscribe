@@ -165,10 +165,30 @@ def zero_below(spec: AxisSpec) -> float | None:
     return spec.major_step / 2
 
 
-def silent_minor_labels(spec: AxisSpec) -> bool:
-    """Whether minor ticks must lose their labels: a log axis labels them
-    itself when it spans less than a decade, ignoring a divisor."""
-    return spec.scale == "log" and scaling(spec) is not None
+def minor_numbers(spec: AxisSpec) -> Literal["silent", "ours"] | None:
+    """What becomes of the numbers Matplotlib puts at minor ticks, on a log
+    axis spanning less than a decade, where figscribe writes the numbers.
+
+    With major ticks set by the user, they go ("silent"). Without, such an axis
+    may have no major tick at all, so the same minor ticks are numbered our way
+    ("ours"). None: there is nothing to do.
+    """
+    if spec.scale != "log" or scaling(spec) is None:
+        return None
+    if spec.ticks is not None or spec.major_step is not None:
+        return "silent"
+    return "ours" if spec.minor_ticks else None
+
+
+class MinorLogNumbers(LogFormatterSciNotation):
+    """Numbers the minor ticks Matplotlib would number, as `major` writes them."""
+
+    def __init__(self, major):
+        super().__init__(labelOnlyBase=False)
+        self.major = major
+
+    def __call__(self, x, pos=None):
+        return self.major(x, pos) if super().__call__(x, pos) else ""
 
 
 Minor = tuple[Literal["off", "on", "parts", "step"], float | int | None]
