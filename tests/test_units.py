@@ -560,3 +560,49 @@ def test_residuals_that_do_not_share_x_follow_it_all_the_same() -> None:
     below = project.figures[0].axes[1]
     assert below.x.unit == "h"
     assert below.x.limits == pytest.approx((0.0, 4.0))
+
+
+# --- an SI prefix of the old unit ----------------------------------------------
+
+
+def _shown_in_milli() -> Project:
+    """_with_marked_residuals, both y axes showing their volts as mV."""
+    project = _with_marked_residuals()
+    for axes in project.figures[0].axes:
+        axes.y.prefix = "m"
+        axes.y.unit = "V"
+    return project
+
+
+def test_a_new_unit_drops_the_prefix_of_the_old_one() -> None:
+    project = _shown_in_milli()
+    before = dumps(project)
+    history = History(project)
+    plot = _parts(project)[1][0]
+    mV = Conversion(factor=1000.0, unit="mV")
+    history.push(set_conversion(project, plot.id, "y", mV, data))
+    for axes in project.figures[0].axes:
+        assert (axes.y.unit, axes.y.prefix) == ("mV", None)  # not "mmV"
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_a_conversion_that_keeps_the_unit_keeps_the_prefix() -> None:
+    """Such as a calibration factor: the axis is in volts as before."""
+    project = _shown_in_milli()
+    plot = _parts(project)[1][0]
+    calibrated = Conversion(factor=1.02, unit="V")
+    History(project).push(set_conversion(project, plot.id, "y", calibrated, data))
+    for axes in project.figures[0].axes:
+        assert (axes.y.unit, axes.y.prefix) == ("V", "m")
+
+
+def test_emptying_the_unit_empties_its_prefix() -> None:
+    project = _project()
+    plot = _parts(project)[1][0]
+    history = History(project)
+    history.push(set_conversion(project, plot.id, "x", HOURS, data))
+    project.figures[0].axes[0].x.prefix = "m"
+    history.push(set_conversion(project, plot.id, "x", None, data))
+    spec = project.figures[0].axes[0].x
+    assert (spec.unit, spec.prefix) == (None, None)

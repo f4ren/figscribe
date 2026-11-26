@@ -44,6 +44,9 @@ release open in every later one.
   other panels sharing the axis that show no data of their own: their label's
   unit, range, ticks and reference lines were left in the old unit. This
   includes the residuals' y axis, and residuals that do not share x.
+- Fixed: an axis shown with an SI prefix kept it when a change of units gave
+  the axis another unit, which could read "mmV". The prefix is dropped when the
+  unit's text changes.
 - Fixed: with only the keyboard, Tab in the import dialog moved from cell to
   cell of the preview table, a key press for each. It moves on to the next
   control now.

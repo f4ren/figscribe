@@ -195,6 +195,10 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
                         changes["unit"] = None  # the file's unit is not known here
                 elif new.unit is not None and spec.unit in (None, old_unit):
                     changes["unit"] = new.unit
+            # An SI prefix belongs to the unit it was chosen for: kept beside
+            # "mV", an "m" would read "mmV".
+            if spec.prefix is not None and changes.get("unit", spec.unit) != spec.unit:
+                changes["prefix"] = None
             if follows:
                 if spec.limits is not None:
                     changes["limits"] = _ends(spec.limits, move)
