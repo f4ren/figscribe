@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -78,11 +79,13 @@ from figscribe.model import (
     Colorbar,
     ColumnRef,
     Conversion,
+    CsvSource,
     ErrorBand,
     ExpressionFit,
     Figure,
     FitCurve,
     FitResult,
+    NumpySource,
     PanelLabels,
     PredefinedFit,
     Project,
@@ -120,7 +123,7 @@ SKIPPED = {
 """Fields with no editor here, and why."""
 
 READ_ONLY = {
-    "path": "set by importing the file or locating it again",
+    "path": "set by importing, locating or using another file",
     "sha256": "the file's fingerprint, taken on import",
     "row_count": "counted on import",
     "target": "the plot a fit or its residuals belong to, set when added",
@@ -1196,6 +1199,8 @@ class PropertyPanel(QScrollArea):
         """The range an axis shows right now; the window asks the preview."""
         self.edit_fit: Callable[[str], None] = lambda fit_id: None
         """Opens the fit dialog on a fit that is there; the window does."""
+        self.use_another_file: Callable[[str], None] = lambda source_id: None
+        """Takes another file in a data file's place; the window does."""
         self._folded: dict[tuple[str, str], bool] = {}
         """Whether the user left a section folded, by kind of object and title;
         until then it starts as `COLLAPSED` says. Kept while the program runs."""
@@ -1695,6 +1700,8 @@ class PropertyPanel(QScrollArea):
                 self._row(form, obj, (name,))
                 if name in INLINE and getattr(obj, name) is not None:
                     self._nested(form, getattr(obj, name), (name,))
+            if title == "File" and isinstance(obj, CsvSource | NumpySource):
+                self._another_file_link(form, obj.id)
             if title in titles:
                 name = titles[title]
                 self._nested(form, getattr(obj, name), (name,))
@@ -1784,6 +1791,17 @@ class PropertyPanel(QScrollArea):
             )
             self.axis_links[field] = link
             form.addRow(link)
+
+    def _another_file_link(self, form: QFormLayout, source_id: str) -> None:
+        link = QPushButton("Use another file…")
+        link.setObjectName("link")
+        link.setToolTip(
+            "Draw the same figure with a different data file, read the same way"
+        )
+        link.clicked.connect(lambda: self.use_another_file(source_id))
+        link.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.another_file_button = link
+        form.addRow(QLabel(), link)  # under the file's name
 
     def _fit_card(self, fit: FitCurve) -> QWidget:
         holder = QWidget()

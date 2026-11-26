@@ -111,7 +111,11 @@ def test_removing_a_data_file_asks_what_goes_with_it(window: MainWindow) -> None
     asked = []
     window.ask = lambda title, question: asked.append(question) or False
     menu = window.outline.context_menu(source.id)
-    assert _menu_texts(menu) == [reveal.reveal_label(), "Remove data file"]
+    assert _menu_texts(menu) == [
+        reveal.reveal_label(),
+        "Use another file…",
+        "Remove data file",
+    ]
     menu.actions()[-1].trigger()
     assert "scan.csv" in asked[0] and "measurement" in asked[0]
     assert document.project.sources == [source]  # "No" keeps everything

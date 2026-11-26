@@ -68,6 +68,7 @@ from figscribe.commands import (
     same_range,
 )
 from figscribe.commands.core import noun, walk
+from figscribe.datafile import use_another_file
 from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import clipboard, markings, recovery, reveal, theme
@@ -107,10 +108,13 @@ from figscribe.model import (
     AxisSpec,
     Colorbar,
     ColumnRef,
+    CsvSource,
+    DataSource,
     Figure,
     FitCurve,
     Histogram,
     ImagePlot,
+    NumpySource,
     ResidualPlot,
 )
 from figscribe.model.sharing import x_limits_of
@@ -187,6 +191,12 @@ class MainWindow(QMainWindow):
         """Whether the workspace was shown: the start page then offers a way back."""
         self.ask: Callable[[str, str], bool] = self._ask_user
         """Asks a yes/no question; replaced in tests."""
+        self.tell: Callable[[str, str], None] = self._tell_user
+        """Shows a few lines the user should know; replaced in tests."""
+        self.choose_data_file: Callable[[DataSource], Path | None] = (
+            self._choose_data_file
+        )
+        """Asks for the file to use instead of a source's; replaced in tests."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         self.ask_text: Callable[[str, str], str | None] = self._ask_text
         """Asks for a line of text, None if cancelled; replaced in tests."""
@@ -262,6 +272,8 @@ class MainWindow(QMainWindow):
             lambda oid, field, breaks: self.preview.set_axis_breaks(oid, field, breaks)
         )
         self.outline.reveal_requested.connect(self.reveal_source)
+        self.outline.another_file_requested.connect(self.use_another_file)
+        self.properties.use_another_file = self.use_another_file
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
         )
@@ -1096,6 +1108,16 @@ class MainWindow(QMainWindow):
             for caption, title, _ in self.properties.settings()
         ]
         entries += self._axis_entries()
+        entries += [
+            Entry(
+                f"Use another file for {Path(source.path).name}",
+                "Data",
+                lambda oid=source.id: self.use_another_file(oid),
+                keywords="replace change swap csv data file own name",
+            )
+            for source in self.document.project.sources
+            if isinstance(source, CsvSource | NumpySource)
+        ]
         return entries
 
     def _axis_entries(self) -> list[Entry]:
@@ -1344,6 +1366,43 @@ class MainWindow(QMainWindow):
             return
         clipboard.put_figure(png, svg)
         self.statusBar().showMessage("Copied the figure to the clipboard", 5000)
+
+    def use_another_file(self, oid: str) -> None:
+        """Take another file in the place of a data file, keeping the plots."""
+        source = find(self.document.project, oid)
+        path = self.choose_data_file(source)
+        if path is None:
+            return
+        try:
+            swap = use_another_file(
+                self.document.project, oid, self.document.base_dir, path
+            )
+        except DataError as exc:
+            self.show_error("The file cannot be used", exc)
+            return
+        self._push(swap.command)
+        self.statusBar().showMessage(f"Now using {path.name}", 5000)
+        if swap.notes:
+            self.tell(f"Now using {path.name}", "\n\n".join(swap.notes))
+
+    def _choose_data_file(self, source: DataSource) -> Path | None:
+        name = Path(source.path).name
+        kinds = {
+            "csv": "Text data (*.csv *.txt *.dat *.tsv)",
+            "npy": "NumPy array (*.npy)",
+            "npz": "NumPy archive (*.npz)",
+        }
+        folder = resolve_path(source.path, self.document.base_dir).parent
+        chosen, _ = QFileDialog.getOpenFileName(
+            self,
+            f"Use another data file for {name}",
+            str(folder if folder.is_dir() else self.document.base_dir),
+            f"{kinds.get(source.format, 'Data (*)')};;All files (*)",
+        )
+        return Path(chosen) if chosen else None
+
+    def _tell_user(self, title: str, text: str) -> None:
+        QMessageBox.information(self, title, text)
 
     def reveal_source(self, oid: str) -> None:
         """Show the data file in the system's file manager."""

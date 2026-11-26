@@ -3587,3 +3587,46 @@ limits***: the box follows limits that may be widened for other reasons; kept
 because the dashed part then shows it. **One open end** (from the data to a
 typed x): a third meaning of an empty field; both numbers are typed, as for
 the fit range.
+
+## 0075 — Use another file for a data file
+
+2026-11-27. Roadmap E4.
+
+### Context
+
+A lab user "wanted to change the name of the .csv in the template and did not
+manage" (2026-11-04). A source's file could only be taken again when it had
+changed or gone missing. The user chose the reading "draw the same figure with
+a different file" (2026-11-26).
+
+### Decision
+
+*Use another file…* on a data file: in its context menu in *Contents*, in its
+panel and in the search (Ctrl+K). One undo step.
+
+- The file is read **the way the old one was**; one that cannot be is refused
+  with the settings that were tried. Every source read from the old file goes
+  over together (the arrays of an `.npz`), and an array must be there under its
+  name.
+- **Fits are run again**: a different file under an old fit curve would be a
+  wrong figure. A predefined model guesses its start values anew; an own
+  formula keeps the ones it had, since nothing can be guessed for it; held
+  values and bounds stay. A fit that fails or does not converge is left **not
+  fitted**, so it draws nothing, and is named.
+- **Left-out rows are taken back in**, with a message: their numbers meant the
+  old file.
+- Ranges, axis limits, breaks and curve ends are in the data's units and the
+  user's; they stay, and the problem list says where they no longer fit.
+- Columns the new file lacks are listed, as after a new version; the change is
+  made anyway.
+- **No assistant tool**, as for *Locate file…* (0007): the assistant must not
+  point a source at other files on the machine.
+
+### Alternatives considered
+
+**Keep the old fit results** until *Fit again* is pressed, as *Use the new
+version* does: for a different file the curve would belong to other data.
+**Refuse the swap when a fit fails or a column is missing**: the user could not
+then point the plots at the new columns. **Choose the reading options in the
+same step**, through the import dialog: not built; a follow-up if files differ
+in their separator or header.

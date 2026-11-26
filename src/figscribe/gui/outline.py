@@ -68,6 +68,8 @@ class Outline(QTreeWidget):
     """(panel id, "x" or "y", the breaks to give that axis)."""
     reveal_requested = Signal(str)
     """Show the data file with this id in the file manager."""
+    another_file_requested = Signal(str)
+    """Take another file in the place of the data file with this id."""
     marking_requested = Signal(str, str, str)
     figure_requested = Signal(str, str)
     """Something done with the figure with this id: (id, what), as
@@ -316,6 +318,9 @@ class Outline(QTreeWidget):
             )
         elif any(source.id == oid for source in self.document.project.sources):
             menu.addAction(reveal_label(), lambda: self.reveal_requested.emit(oid))
+            menu.addAction(
+                "Use another file…", lambda: self.another_file_requested.emit(oid)
+            )
             menu.addSeparator()
             menu.addAction("Remove data file", lambda: self.delete_requested.emit(oid))
         elif hasattr(obj, "visible") and hasattr(obj, "kind"):

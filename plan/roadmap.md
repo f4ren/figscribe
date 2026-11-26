@@ -84,8 +84,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
   from the property panel still render at once.
 - **E2** is done (atomic save and `.bak`, autosave and recovery; 0054, 0063). **E3** save a figure as a template. **E4**
   fewer steps for the common path (everything except the plot dialog),
-  among them a source's file changed
-  after all (`[decide]`, a question for the user who asked).
+  among them ~~a source's file changed
+  after all~~ done (*Use another file…*, 0075).
 
 **Phase 4 — M7: polish and release**
 - **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
@@ -102,8 +102,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 needs no answer. The user named the order on 2026-11-03: B7.4, F13, U11 and
 F14 are done, F15 follows (ask its `[decide]` first). The lab user's two
 wishes of 2026-11-04 went before it (the user's choice, 2026-11-26): F5.10 is
-done and so is F1.9, the fit's curve beyond the data (0074). Before 0.4: the
-manual checklist (B7.5), which 0.3.0 went out without.
+done and so are F1.9, the fit's curve beyond the data (0074), and their last
+open question, *Use another file…* (E4, 0075). Before 0.4: the manual
+checklist (B7.5), which 0.3.0 went out without.
 
 ---
 
@@ -1071,6 +1072,8 @@ covariance detected). Missing:
    user asked. *Learned:* the curve's
    ends were worked out in three places; they now come from
    `FitCurve.curve_ends`. *Decided against:* automatic axis limits as ends.
+   *Offered, not asked for yet:* a legend entry of its own for the part beyond
+   the data.
 
 ### F2 Leave points out, reproducibly — M
 
@@ -1781,18 +1784,17 @@ is: the file has what it has). The program's own defaults stay as decision
   `QSettings` between runs; the file name is the figure's, as the script
   export suggests it, and a name typed without a suffix gets the one of the
   chosen format. A suffix typed decides the format that is remembered.
-- **A source's file changed after all** (`[decide]`, unclear). The same user
-  "wanted to change the name of the .csv in the template and did not manage"
-  (the absolute path of B9 may be what got in the way: ask).
-  Today the file of a source can only be taken again when it is missing
-  (*Locate file…*) or changed (*Use the new version*), and the panel shows
-  the path read-only. Ask the user what was meant: use another file for the
-  plots of the example or a project (the data replaced), or change a name
-  that is shown (the file name is in the column lists, `scan.csv: t`, and in
-  the script's comments). Proposed for the first: *Use Another File…* on a
-  source in the outline: choose a file, read it with the source's options,
-  keep the plots whose columns it has and list those it does not (B2's
-  machinery, `io/refresh.py`); one undo step.
+- **A source's file changed after all.** The same lab user "wanted to change
+  the name of the .csv in the template and did not manage".
+  **Done** (2026-11-27, decision 0075; the user chose "another file for the
+  same figure"): *Use another file…*, fits run again, left-out rows taken back
+  in. *Follow-ups, only if asked:* choosing the reading options in the same
+  step. *Open:* ask whether this is what was meant.
+- **Fits after a new version** (found while building the above, 2026-11-27).
+  *Use the new version* and *Locate file…* keep the fit results of the file as
+  it was; the figure then shows the old curve over the new data until *Fit
+  again* is pressed, and nothing says so. `[decide]` fit again in the same
+  step, as *Use another file…* does, or say it in the data bar.
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,
@@ -1997,7 +1999,8 @@ answer in `docs/decisions.md` when the task is started.
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
-| E4 | A source's file: what did the user mean by changing the name of the .csv in the template? |
+| E4 | answered 2026-11-26: another file for the same figure (0075) |
+| E4 | After a new version of a file: fit again in the same step, or only say that the fits are old? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
