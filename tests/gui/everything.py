@@ -83,6 +83,10 @@ def build(folder: Path) -> Path:
     a = Axes(
         title="Scan",
         grid=True,
+        grid_which="both",
+        grid_minor_color="silver",
+        grid_minor_linewidth=0.3,
+        grid_minor_linestyle=":",
         x=AxisSpec(label="t", unit="s"),
         y=AxisSpec(label="U", unit="V"),
         y_right=AxisSpec(label="T", unit="K"),
