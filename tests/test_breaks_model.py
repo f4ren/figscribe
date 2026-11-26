@@ -145,4 +145,4 @@ def test_the_problem_list_counts_the_points_of_an_allan_deviation() -> None:
     project = Project(sources=[source], figures=[Figure(axes=[panel])])
     noise = np.random.default_rng(1).normal(size=100)  # tau = 1, 2, 4, 8, ...
     messages = [str(i) for i in validate_references(project, lambda ref: noise)]
-    assert any("1 point lies in a break" in m for m in messages), messages
+    assert any("1 point lies in a break and is not shown" in m for m in messages)

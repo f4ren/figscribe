@@ -11,6 +11,7 @@ from figscribe.model.breaks import breaks_blocked, own_breaks
 from figscribe.model.sharing import sharing_group
 from figscribe.model.validate import FITTABLE
 from figscribe.render.breaks import widest_gap
+from figscribe.render.ticks import PREFIXES
 
 WORTH = 0.2
 """The share of the data's span an empty stretch must have to be offered."""
@@ -80,8 +81,10 @@ def break_entries(
             at = None if spot is None else float(spot["xy".index(field)])
             found = proposed_break(document, axes_id, field, at)
             if found is not None:
-                start, end = found
-                text = f"Break the {field} axis (cut out {start:g} to {end:g})"
+                prefix = getattr(document.figure.axes[index], field).prefix
+                factor = 10.0 ** PREFIXES[prefix] if prefix else 1.0
+                start, end = (f"{end / factor:.6g}" for end in found)  # as shown
+                text = f"Break the {field} axis (cut out {start} to {end})"
                 entries.append((text, field, sorted([*breaks, found])))
         if breaks:
             entries.append((f"Remove the breaks of the {field} axis", field, []))

@@ -280,3 +280,11 @@ def test_a_tick_step_counts_only_what_a_broken_axis_shows(
     _enter(form.major_value, "2")
     assert _axes(window, 1 if shared else 0).x.major_step == 2.0
     assert window.properties._error.isHidden()
+
+
+def test_the_menu_names_a_break_in_the_unit_the_axis_shows(window) -> None:
+    window.document.push(SetField(_axes(window).id, ("x", "prefix"), "k"))
+    entry = _entry(window.outline.context_menu(_axes(window).id), "Break the x axis")
+    assert entry.text() == "Break the x axis (cut out 0.021 to 0.418)"
+    entry.trigger()
+    assert _axes(window).x.breaks == [(21.0, 418.0)]

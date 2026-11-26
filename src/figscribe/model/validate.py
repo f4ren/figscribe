@@ -349,8 +349,9 @@ def _in_a_break(figure: Figure, index: int, artist, data) -> list[str]:
     count = int(hidden.sum())
     if not count:
         return []
-    points = "point lies" if count == 1 else "points lie"
-    return [f"{count} {points} in a break and are not shown"]
+    if count == 1:
+        return ["1 point lies in a break and is not shown"]
+    return [f"{count} points lie in a break and are not shown"]
 
 
 def _off_the_log_scale(artist, axes: Axes) -> str | None:
