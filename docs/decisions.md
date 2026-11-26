@@ -1757,6 +1757,9 @@ parameters would not match the axis they are read against.
   other data against it, a residual plot of another plot included. The unit
   text follows on each. Before, only the plot's own panel followed, so
   residuals below kept the old unit and a range in it.
+- **The y axis of a fit's residuals** follows a change of the plot's y unit
+  by the same rule (added 2026-11-26). Residuals are differences, so what is
+  typed there is scaled and never shifted.
 - **The unit text** follows when the axis showed the old conversion's unit,
   or the axis's own unit when the old setting gave none; taking a
   conversion with a unit back empties the axis's unit, since figscribe does

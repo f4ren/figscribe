@@ -416,3 +416,55 @@ def test_a_sharing_panel_with_other_data_keeps_the_axis_in_its_numbers(shown) ->
         assert axes.x.limits == (1000.0, 15400.0)
     assert _parts(project)[1][2].at == 8200.0  # nor the marks
     assert below.x.unit == "h"  # the unit's text follows still
+
+
+def _with_marked_residuals() -> Project:
+    """_with_residuals with a range, a step and a line on the residuals' y."""
+    project = _with_residuals()
+    below = project.figures[0].axes[1]
+    below.y.limits = (-0.01, 0.01)
+    below.y.major_step = 0.005
+    below.artists.append(ReferenceLine(orientation="horizontal", at=0.002))
+    return project
+
+
+@pytest.mark.parametrize(
+    "conversion",
+    [
+        Conversion(factor=1000.0, unit="mV"),
+        # The offset moves the data, not what lies between data and fit.
+        Conversion(formula="x * 1000 + 5", unit="mV"),
+    ],
+    ids=["factor", "formula"],
+)
+def test_the_residuals_y_axis_follows_without_the_offset(conversion) -> None:
+    project = _with_marked_residuals()
+    before = dumps(project)
+    history = History(project)
+    plot = _parts(project)[1][0]
+    history.push(set_conversion(project, plot.id, "y", conversion, data))
+
+    below = project.figures[0].axes[1]
+    assert (below.y.label, below.y.unit) == ("Residual", "mV")
+    assert below.y.limits == pytest.approx((-10.0, 10.0))
+    assert below.y.major_step == pytest.approx(5.0)
+    assert below.artists[-1].at == pytest.approx(2.0)
+
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_residuals_beside_those_of_another_plot_keep_their_numbers() -> None:
+    project = _with_marked_residuals()
+    figure = project.figures[0]
+    other = LinePlot(x=col("t"), y=col("V"))
+    fit = FitCurve(target=other.id, model=PredefinedFit(name="linear"))
+    figure.axes[0].artists += [other, fit]
+    figure.axes[1].artists.append(ResidualPlot(target=fit.id))
+    plot = _parts(project)[1][0]
+    mV = Conversion(factor=1000.0, unit="mV")
+    History(project).push(set_conversion(project, plot.id, "y", mV, data))
+
+    below = project.figures[0].axes[1]
+    assert below.y.limits == (-0.01, 0.01)
+    assert below.y.unit == "mV"  # the unit's text follows still

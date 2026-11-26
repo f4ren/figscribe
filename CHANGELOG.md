@@ -43,7 +43,8 @@ release open in every later one.
 - Fixed: changing a plot's units now reaches the panels that share the axis,
   such as the residuals below: their label's unit, range, ticks and reference
   lines were left in the old unit. If one of those panels shows other data
-  against the axis, the numbers stay on all of them.
+  against the axis, the numbers stay on all of them. The y axis of a fit's
+  residuals follows a change of the data's y unit too.
 - Fixed: with only the keyboard, Tab in the import dialog moved from cell to
   cell of the preview table, a key press for each. It moves on to the next
   control now.
