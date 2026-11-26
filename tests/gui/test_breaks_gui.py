@@ -288,3 +288,15 @@ def test_the_menu_names_a_break_in_the_unit_the_axis_shows(window) -> None:
     assert entry.text() == "Break the x axis (cut out 0.021 to 0.418)"
     entry.trigger()
     assert _axes(window).x.breaks == [(21.0, 418.0)]
+
+
+def test_widening_the_range_counts_with_the_break_it_brings_into_view(window) -> None:
+    """From 0 to 22 the break is not shown; up to 440 it is, and every 2 over
+    the two stretches is about 24 ticks."""
+    panel = _axes(window).id
+    window.document.push(SetField(panel, ("x", "breaks"), [(23, 416)]))
+    window.document.push(SetField(panel, ("x", "limits"), (0.0, 22.0)))
+    window.document.push(SetField(panel, ("x", "major_step"), 2.0))
+    form = _form(window)
+    _enter(form.high, "440")
+    assert _axes(window).x.limits == (0.0, 440.0), window.properties._error.text()

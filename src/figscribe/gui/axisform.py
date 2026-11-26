@@ -440,7 +440,11 @@ class AxisForm:
         interval = changed.limits or self.current()
         index = panel_index(self.panel.document, self.axes_id)
         if interval and index is not None:  # a break's stretch has no ticks
+            # The figure as it would be: a wider range can bring a break into view.
             figure = self.panel.document.figure
+            panels = list(figure.axes)
+            panels[index] = panels[index].model_copy(update={self.field: changed})
+            figure = figure.model_copy(update={"axes": panels})
             counted = as_drawn(figure, index, self.field, changed)
             interval = counted_interval(counted, interval)
         problem = too_many_ticks(changed, interval) if interval else None
