@@ -326,13 +326,22 @@ def _in_a_break(figure: Figure, index: int, artist, data) -> list[str]:
         breaks = x_breaks if artist.orientation == "vertical" else y_breaks
         hidden = any(a < artist.at < b for a, b in breaks)
         return ["lies in a break and is not shown"] if hidden else []
-    if not isinstance(artist, FITTABLE):
+    if not isinstance(artist, (*FITTABLE, AllanDeviationPlot)):
         return []
     try:
-        shown = plot_data(artist, data)
+        if isinstance(artist, AllanDeviationPlot):
+            from figscribe.allan import allan_points
+
+            points = allan_points(artist, data)
+            if points is None:  # a series with gaps is not drawn at all
+                return []
+            x, y = points[0], points[1]
+        else:
+            shown = plot_data(artist, data)
+            x, y = shown.x, shown.y
     except Exception:  # what is wrong with the data is said elsewhere
         return []
-    x, y = np.asarray(shown.x, float), np.asarray(shown.y, float)
+    x, y = np.asarray(x, float), np.asarray(y, float)
     hidden = np.zeros(x.shape, dtype=bool)
     for values, breaks in ((x, x_breaks), (y, y_breaks)):
         for start, end in breaks:

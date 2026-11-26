@@ -56,9 +56,9 @@ from figscribe.model import (
     ScatterPlot,
     ShadedSpan,
 )
-from figscribe.model.breaks import Breaks, effective_breaks
+from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
 from figscribe.model.sharing import sharing_group
-from figscribe.render.breaks import curve_parts
+from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
     CURVE_POINTS,
@@ -1184,6 +1184,14 @@ class _Writer:
             taus = f"{m} * {tau0}"
             if plot.x_conversion:
                 taus = scale_expression(taus, plot.x_conversion)
+        if self._cut != ([], []) and plot.linestyle not in NO_LINE:
+            self.emit("# No line across a break: a NaN between the points beside it.")
+            cuts = self._cuts(taus, adev)
+            floats = np.zeros(0)
+            if "yerr" in kwargs:
+                kwargs["yerr"] = self._apart(cuts, "line_yerr", kwargs["yerr"], floats)
+            taus = self._apart(cuts, "line_x", taus, floats)
+            adev = self._apart(cuts, "line_y", adev, floats)
         self.call(f"{ax}.errorbar", taus, adev, **kwargs, **common)
 
     def _fits(self) -> None:
@@ -1481,7 +1489,7 @@ class _Writer:
                 kwargs["linestyle"] = _str(axes.grid_linestyle)
             self.call(f"{ax}.grid", "True", **kwargs)
         x_breaks, y_breaks = (
-            effective_breaks(self.figure, index, name) for name in ("x", "y")
+            line_breaks(self.figure, index, name) for name in ("x", "y")
         )
         for artist in axes.artists:
             on_right = artist.axis == "right" and right is not None
@@ -2062,12 +2070,14 @@ class _Writer:
         curve = f"{function}({xs}, *{popt})"
         if self._cut == ([], []):
             self.emit(f"{xs} = np.{space}({low}, {high}, {CURVE_POINTS})")
-        elif (curve := self._broken_curve(fit, xs, curve)) is None:
+        elif (curve := self._broken_curve(fit, xs, curve, space)) is None:
             self.emit(f"# {_describe(fit)} lies within a break, so it is not drawn.")
             return
         self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
 
-    def _broken_curve(self, fit: FitCurve, xs: str, curve: str) -> str | None:
+    def _broken_curve(
+        self, fit: FitCurve, xs: str, curve: str, space: str
+    ) -> str | None:
         """Define `xs` and, if need be, the curve of a fit on a broken axis, as
         the renderer samples it: on each stretch, and no line across a break.
         Returns the y expression to plot; None if nothing is left."""
@@ -2076,15 +2086,18 @@ class _Writer:
         low, high = float(x.min()), float(x.max())
         if fit.fit_range is not None and not fit.extend_curve:
             low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
-        parts = (
-            curve_parts(low, high, self._cut[0], CURVE_POINTS) if self._cut[0] else None
-        )
-        if parts == []:
-            return None
-        if parts is None:
+        if overlapping(self._cut[0], low, high):
+            parts = curve_parts(low, high, self._cut[0], CURVE_POINTS)
+            if not parts:
+                return None
+            space = "linspace"  # a broken x axis is linear
+            self.emit(
+                "# Sampled on each stretch of the broken axis, from the data's ends."
+            )
+        else:  # only y is broken: x as on any axis
             parts = [(low, high, CURVE_POINTS)]
-        self.emit("# Sampled on each stretch of the broken axis, from the data's ends.")
-        spans = [f"np.linspace({float(a)!r}, {float(b)!r}, {n})" for a, b, n in parts]
+            self.emit("# From the data's ends.")
+        spans = [f"np.{space}({float(a)!r}, {float(b)!r}, {n})" for a, b, n in parts]
         if len(spans) == 1:
             self.emit(f"{xs} = {spans[0]}")
         else:

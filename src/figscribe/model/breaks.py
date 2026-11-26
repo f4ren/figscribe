@@ -45,3 +45,27 @@ def effective_breaks(figure: Figure, index: int, field: str) -> Breaks:
     if not found or breaks_blocked(figure, index, field) is not None:
         return []
     return found[0]
+
+
+def line_breaks(figure: Figure, index: int, field: str) -> Breaks:
+    """The breaks no line may run across. Of the effective ones, a break that a
+    typed range does not show, because it lies outside the range or around all
+    of it, is not drawn, and the lines stay whole there."""
+    breaks = effective_breaks(figure, index, field)
+    if not breaks:
+        return []
+    typed = [
+        sorted(spec.limits)
+        for i in sharing_group(figure, index, field)
+        if (spec := getattr(figure.axes[i], field)).limits
+    ]
+    if not typed:
+        return breaks  # a line cannot cross a break that the data do not reach
+    return [
+        (start, end)
+        for start, end in breaks
+        if any(
+            start < high and end > low and not (start <= low and high <= end)
+            for low, high in typed
+        )
+    ]

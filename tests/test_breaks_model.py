@@ -5,17 +5,21 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
 import pytest
 from pydantic import ValidationError
 
 from figscribe.commands import CommandError, History, InsertItem, SetField
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     Axes,
     AxisSpec,
+    ColumnRef,
     Figure,
     GridLayout,
     ImagePlot,
+    NumpySource,
     Project,
     dumps,
     loads,
@@ -132,3 +136,13 @@ def test_the_problem_list_says_when_shared_panels_disagree(project: Project) -> 
     figure.axes[1].x.breaks = [(4.0, 5.0)]
     messages = [str(issue) for issue in validate_references(project)]
     assert any("different breaks" in m for m in messages)
+
+
+def test_the_problem_list_counts_the_points_of_an_allan_deviation() -> None:
+    plot = AllanDeviationPlot(values=ColumnRef(source="s", column="y"))
+    panel = Axes(x=AxisSpec(breaks=[(3.0, 5.0)]), artists=[plot])
+    source = NumpySource(id="s", path="y.npy", sha256="0" * 64, columns=["y"])
+    project = Project(sources=[source], figures=[Figure(axes=[panel])])
+    noise = np.random.default_rng(1).normal(size=100)  # tau = 1, 2, 4, 8, ...
+    messages = [str(i) for i in validate_references(project, lambda ref: noise)]
+    assert any("1 point lies in a break" in m for m in messages), messages

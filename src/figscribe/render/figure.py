@@ -45,7 +45,7 @@ from figscribe.model import (
     ShadedSpan,
 )
 from figscribe.model.artists import LIKE_THE_PLOT
-from figscribe.model.breaks import Breaks, effective_breaks
+from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
 from figscribe.model.sharing import sharing_group
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
 from figscribe.render.breaks import (
@@ -144,7 +144,7 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                 artists,
                 figure.open_frame,
                 figure.decimal_comma,
-                tuple(effective_breaks(figure, i, name) for name in ("x", "y")),
+                tuple(line_breaks(figure, i, name) for name in ("x", "y")),
             )
             if len(drawn) > 2:
                 twins[i] = drawn[2][0]
@@ -559,7 +559,7 @@ def _draw_artist(
     elif isinstance(artist, ImagePlot | ColorMesh):
         _draw_2d(artist, ax, data, common, comma)
     elif isinstance(artist, AllanDeviationPlot):
-        _draw_allan(artist, ax, data, common)
+        _draw_allan(artist, ax, data, common, cut)
     elif isinstance(artist, FitCurve):
         _draw_fit(artist, ax, data, artists, common, cut)
     elif isinstance(artist, ResidualPlot):
@@ -864,7 +864,13 @@ def _draw_2d(
             _comma_numbers(colorbar.ax.yaxis, kind, minor=True)
 
 
-def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:
+def _draw_allan(
+    artist: AllanDeviationPlot,
+    ax: MplAxes,
+    data,
+    common: dict,
+    cut: tuple[Breaks, Breaks],
+) -> None:
     """σ_y(τ) against τ, computed as the script computes it (figscribe.allan).
 
     A series with gaps is not drawn; validate_references says why.
@@ -878,6 +884,10 @@ def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:
     if points is None:
         return
     tau, adev, yerr = points
+    at = crossings(tau, adev, *cut)
+    if at.size and artist.linestyle not in NO_LINE:
+        tau, adev = _apart(tau, at), _apart(adev, at)
+        yerr = None if yerr is None else _apart(yerr, at)
     container = ax.errorbar(
         tau,
         adev,
@@ -935,7 +945,8 @@ def _draw_fit(
         if not low < high:
             return
     log = isinstance(target, AllanDeviationPlot) and ax.get_xscale() == "log"
-    if cut[0]:  # sampled on each stretch, so that a short one stays smooth
+    # Sampled on each stretch, so that a short one stays smooth.
+    if overlapping(cut[0], low, high):
         parts = curve_parts(low, high, cut[0], CURVE_POINTS)
         if not parts:
             return
