@@ -831,12 +831,16 @@ def test_a_fit_curve_can_reach_beyond_the_data(tools, workspace) -> None:
             "model": {"kind": "predefined", "name": "gaussian"},
             "curve_range": [-2.0, 15.0],
             "curve_to_limits": True,
-            "extrapolated_linestyle": ":",
         },
     )
     fit = find(workspace.project, result["id"])
     assert (fit.curve_range, fit.curve_to_limits) == ((-2.0, 15.0), True)
-    assert fit.extrapolated_linestyle == ":"
+    # Its look is set like the curve's own, with set_field.
+    tools.call(
+        "set_field",
+        {"object_id": fit.id, "path": ["extrapolated_color"], "value": "red"},
+    )
+    assert find(workspace.project, fit.id).extrapolated_color == "red"
 
 
 def test_leaving_points_out_fits_the_plot_again(tools, workspace) -> None:

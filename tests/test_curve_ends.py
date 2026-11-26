@@ -102,16 +102,30 @@ def test_an_extrapolation_that_looks_like_the_rest_is_reported() -> None:
     for fine in (
         {"curve_range": (0.0, 20.0)},
         {"curve_range": (2.0, 8.0), "linestyle": "--"},  # never leaves the data
-        {"curve_range": (0.0, 20.0), "extrapolated_linestyle": None},  # wanted
+        {"curve_range": (0.0, 20.0), "linestyle": "--", "mark_extrapolated": False},
+        {"curve_range": (0.0, 20.0), "linestyle": "--", "extrapolated_color": "red"},
+        {"curve_range": (0.0, 20.0), "linestyle": "--", "extrapolated_linewidth": 3.0},
     ):
-        assert _problems(_project(**fine)) == []
+        assert _problems(_project(**fine)) == [], fine
 
 
-def test_the_extrapolation_style_is_kept_in_the_file() -> None:
-    assert _project().figures[0].axes[0].artists[1].extrapolated_linestyle == "--"
-    for style in (None, ":"):
-        text = dumps(_project(extrapolated_linestyle=style))
-        assert loads(text).figures[0].axes[0].artists[1].extrapolated_linestyle == style
+def test_the_look_beyond_the_data_is_kept_in_the_file() -> None:
+    plain = _project().figures[0].axes[0].artists[1]
+    assert (plain.mark_extrapolated, plain.extrapolated_linestyle) == (True, "--")
+    assert (plain.extrapolated_color, plain.extrapolated_linewidth) == (None, None)
+    set_up = _project(
+        mark_extrapolated=False,
+        extrapolated_linestyle=":",
+        extrapolated_color="red",
+        extrapolated_linewidth=0.5,
+    )
+    fit = loads(dumps(set_up)).figures[0].axes[0].artists[1]
+    assert not fit.mark_extrapolated
+    assert (
+        fit.extrapolated_linestyle,
+        fit.extrapolated_color,
+        fit.extrapolated_linewidth,
+    ) == (":", "red", 0.5)
 
 
 def test_a_curve_beyond_the_data_counts_among_the_values() -> None:

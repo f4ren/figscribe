@@ -2080,7 +2080,7 @@ class _Writer:
             # Over the fit range, where there is data.
             low = f"max({fit.fit_range[0]!r}, {low})"
             high = f"min({fit.fit_range[1]!r}, {high})"
-        beyond = None if given is None else self._extrapolated(fit, given)
+        look = None if given is None else self._extrapolated(fit, given)
         # Evenly in log x for an Allan deviation, and over ends of the user's.
         log = panel.x.scale == "log" and (
             isinstance(target, AllanDeviationPlot) if given is None else given[0] > 0
@@ -2096,9 +2096,9 @@ class _Writer:
         }
         curve = f"{function}({xs}, *{popt})"
         joined = None  # the data's ends, to be sampled where the style changes
-        if beyond:
+        if look:
             self.emit(
-                "# Another line beyond the data: no points back the curve there.",
+                "# Drawn differently beyond the data: no points back the curve there.",
                 f"{x}_first = {first}",
                 f"{x}_last = {last}",
             )
@@ -2117,7 +2117,7 @@ class _Writer:
                     f"# {_describe(fit)} lies within a break, so it is not drawn."
                 )
                 return
-        if not beyond:
+        if not look:
             self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
             return
         values = curve
@@ -2129,21 +2129,30 @@ class _Writer:
             ("beyond", f"({xs} <= {first}) | ({xs} >= {last})"),
         ):
             self.call(f"{xs}_{name} = np.where", where, values, "np.nan")
-        line = f"{xs}_line"
-        self.call(f"{line}, = {ax}.plot", xs, f"{xs}_measured", **kwargs, **common)
+        plot, color = f"{ax}.plot", look["color"]
+        if color is None:  # the curve's, which may come from the color cycle
+            plot, color = f"{xs}_line, = {plot}", f"{xs}_line.get_color()"
+        else:
+            color = _str(color)
+        self.call(plot, xs, f"{xs}_measured", **kwargs, **common)
+        style = {
+            "color": color,
+            "linestyle": _str(look["linestyle"]),
+            "linewidth": _num(look["linewidth"]),
+        }
         rest = {key: value for key, value in common.items() if key != "label"}
-        style = {"color": f"{line}.get_color()", "linestyle": _str(beyond)}
-        style["linewidth"] = kwargs["linewidth"]
         self.call(f"{ax}.plot", xs, f"{xs}_beyond", **style, **rest)
 
-    def _extrapolated(self, fit: FitCurve, ends: tuple[float, float]) -> str | None:
-        """The line style of the curve beyond the data; None where the renderer
-        draws one line."""
+    def _extrapolated(
+        self, fit: FitCurve, ends: tuple[float, float]
+    ) -> dict[str, object] | None:
+        """How the curve is drawn beyond the data; None where the renderer draws
+        one line."""
         if self.data is None:
-            return fit.extrapolated_style(ends, None)
+            return fit.extrapolated_look(ends, None)
         shown = plot_data(self.artists[fit.target], self.data)
         x = shown.x[np.isfinite(shown.x) & shown.used]
-        return fit.extrapolated_style(ends, (float(x.min()), float(x.max())))
+        return fit.extrapolated_look(ends, (float(x.min()), float(x.max())))
 
     def _broken_curve(
         self,

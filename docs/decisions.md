@@ -3551,14 +3551,18 @@ which part no points back.
   the range **typed** on the x axis, of this panel or one sharing it. Ticking
   it is a deliberate step. With an automatic range it does nothing; the box is
   greyed then, and a file that has it ticked is told in the problem list.
-- `FitCurve.extrapolated_linestyle` (*Line beyond the data*): where the curve
-  leaves the data it is **dashed** by default, in the curve's color and width.
-  Another line style can be chosen, or "as the curve" (None). "The data" are
-  the x values the plot shows, fitted or not: between them the reader sees the
-  points, so a stretch outside the fit range is not marked, and figures with
-  `extend_curve` are drawn as before. The dashed part has no legend entry. A
-  curve whose own style it is cannot be told apart, which the problem list
-  says.
+- Where the curve leaves the data it is drawn differently, **dashed** by
+  default in the curve's color and width. The user wants to switch that off
+  and to set that part themselves (2026-11-26): `mark_extrapolated` (*Mark the
+  part beyond the data*, on) with `extrapolated_linestyle` (*Line beyond the
+  data*), `extrapolated_color` and `extrapolated_linewidth`, the last two
+  empty for the curve's. One box switches it off, as for the grid, rather than
+  three fields to be set back; the three are greyed while it is off.
+- "The data" are the x values the plot shows, fitted or not: between them the
+  reader sees the points, so a stretch outside the fit range is not marked,
+  and figures with `extend_curve` are drawn as before. The part beyond has no
+  legend entry. If it would look like the rest in style, color and width while
+  the box is on, the problem list says so.
 - Order of the ends: typed axis limits where asked for, else `curve_range`,
   else as before. Given ends win over `extend_curve`. The fit itself, its
   residuals and its range are not touched.
@@ -3571,8 +3575,8 @@ which part no points back.
   axis's values (breaks, the break dialog). The problem list reports a typed
   range that misses the data altogether, and a curve from zero or below on a
   log axis.
-- No schema bump: the fields have defaults, and the only one that is not
-  "off", the dashed style, counts only where ends are given.
+- No schema bump: the fields have defaults, and those that are not "off", the
+  box and the dashed style, count only where ends are given.
 
 ### Alternatives considered
 

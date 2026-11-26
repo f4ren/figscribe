@@ -68,7 +68,9 @@ Common set_field paths (get_schema has all of them):
 false}; null removes them)
 - fit: `curve_range` ([lower, upper] of x, may reach beyond the data), \
 `curve_to_limits` (the curve reaches to the typed `x.limits`), \
-`extrapolated_linestyle` (beyond the data; "--" unless changed)
+`mark_extrapolated` (on: drawn differently beyond the data), \
+`extrapolated_linestyle` ("--"), `extrapolated_color`, \
+`extrapolated_linewidth`
 - panel (axes): `title`, `grid`, `grid_color`, `grid_linewidth`, \
 `grid_linestyle`, `grid_which` ("major", "minor", "both"), \
 `grid_minor_color`, `grid_minor_linewidth`, `grid_minor_linestyle`, \

@@ -1066,8 +1066,9 @@ covariance detected). Missing:
    data is a problem in the list. Leave `extend_curve` as it is.
 
    **Done** (2026-11-26, decision 0074): `curve_range`, `curve_to_limits` for
-   a typed x range, and the part beyond the data dashed
-   (`extrapolated_linestyle`), asked for by the user. *Learned:* the curve's
+   a typed x range, and the part beyond the data dashed,
+   with a box to switch that off and its own line style, color and width, as the
+   user asked. *Learned:* the curve's
    ends were worked out in three places; they now come from
    `FitCurve.curve_ends`. *Decided against:* automatic axis limits as ends.
 

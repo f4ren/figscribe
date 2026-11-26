@@ -964,7 +964,7 @@ def _draw_fit(
     if ends is None:
         return
     low, high = ends
-    beyond = fit.extrapolated_style(ends, (first, last))
+    look = fit.extrapolated_look(ends, (first, last))
     # Evenly in log x for an Allan deviation, and over ends of the user's, which
     # may reach across decades.
     log = (
@@ -983,14 +983,14 @@ def _draw_fit(
         xs = np.concatenate([np.linspace(*part) for part in parts])
     else:
         xs = (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
-    if beyond:  # both parts reach the data's ends, so there is no gap
+    if look:  # both parts reach the data's ends, so there is no gap
         xs = np.union1d(xs, np.clip([first, last], low, high))
     ys = evaluate(fit.model, fit.result.parameters, xs)
     at = crossings(xs, ys, *cut)
     if at.size:
         xs, ys = _apart(xs, at), _apart(ys, at)
     measured = ys
-    if beyond:
+    if look:
         measured = np.where((xs >= first) & (xs <= last), ys, np.nan)
     (line,) = ax.plot(
         xs,
@@ -1000,13 +1000,11 @@ def _draw_fit(
         linewidth=fit.linewidth,
         **common,
     )
-    if beyond:
+    if look:
         ax.plot(
             xs,
             np.where((xs <= first) | (xs >= last), ys, np.nan),
-            color=line.get_color(),
-            linestyle=beyond,
-            linewidth=fit.linewidth,
+            **look | {"color": look["color"] or line.get_color()},
             **common | {"label": "_nolegend_"},
         )
 

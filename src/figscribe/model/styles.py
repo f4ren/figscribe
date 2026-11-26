@@ -21,6 +21,7 @@ KINDS = {
     "grid_minor_color": "color",
     "grid_minor_linestyle": "line style",
     "extrapolated_linestyle": "line style",
+    "extrapolated_color": "color",
     "zero_color": "color",
     "zero_linestyle": "line style",
     "left_out_color": "color",

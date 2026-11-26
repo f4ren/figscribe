@@ -415,12 +415,13 @@ def _curve_problems(
     if not x.size:
         return found
     leaves = low < x.min() or high > x.max()
-    if leaves and fit.extrapolated_linestyle == fit.linestyle:
+    if leaves and fit.mark_extrapolated and fit.looks_alike_beyond():
         found.append(
             (
                 "extrapolated_linestyle",
-                "its curve reaches beyond the data in the same line style, so the "
-                "two cannot be told apart; choose another for the part beyond",
+                "its curve reaches beyond the data and looks the same there, so "
+                "the two cannot be told apart; give the part beyond another line "
+                "style, color or width",
             )
         )
     if not to_limits and (high < x.min() or low > x.max()):

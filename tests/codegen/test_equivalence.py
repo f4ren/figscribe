@@ -191,12 +191,14 @@ def test_a_curve_beyond_the_data(tmp_path: Path, x, curve, written) -> None:
     [
         {"curve_range": (-3.0, 15.0)},
         {"curve_range": (-3.0, 15.0), "extrapolated_linestyle": ":"},
-        {"curve_range": (-3.0, 15.0), "extrapolated_linestyle": None},
+        {"curve_range": (-3.0, 15.0), "mark_extrapolated": False},
+        {"curve_range": (-3.0, 15.0), "extrapolated_color": "red"},
+        {"curve_range": (-3.0, 15.0), "extrapolated_linewidth": 3.0},
         {"curve_range": (4.0, 15.0)},  # leaves the data on one side only
         {"curve_range": (12.0, 15.0)},  # nowhere on them
         {"curve_range": (2.0, 8.0)},  # never leaves them
     ],
-    ids=["dashed", "dotted", "as-the-curve", "one-side", "away", "within"],
+    ids=["dashed", "dotted", "unmarked", "color", "width", "one-side", "away", "in"],
 )
 @pytest.mark.parametrize("known", [True, False], ids=["data", "no-data"])
 def test_the_extrapolated_part_of_a_curve(tmp_path: Path, curve, known) -> None:
@@ -225,10 +227,14 @@ def test_the_extrapolated_part_of_a_curve(tmp_path: Path, curve, known) -> None:
     assert np.array_equal(a, b), f"{np.count_nonzero(np.any(a != b, axis=-1))} pixels"
     assert [line for line in script.splitlines() if len(line) > 88] == []
     if known:
-        dashed = curve["curve_range"] != (2.0, 8.0) and curve.get(
-            "extrapolated_linestyle", "--"
+        marked = curve["curve_range"] != (2.0, 8.0) and curve.get(
+            "mark_extrapolated", True
         )
-        assert ("beyond" in script) == bool(dashed)
+        assert ("beyond" in script) == marked
+        # A color of its own is written plainly, not taken from the curve.
+        assert ("get_color()" in script) == (
+            marked and "extrapolated_color" not in curve
+        )
 
 
 def test_a_curve_beyond_the_data_with_residuals_sharing_x(tmp_path: Path) -> None:

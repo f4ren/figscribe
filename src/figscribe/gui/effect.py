@@ -104,6 +104,11 @@ GRID = (
 )
 LEGEND = ("position", "frame", "ncols", "fontsize")
 LEFT_OUT = ("left_out_color", "left_out_marker", "left_out_linestyle")
+EXTRAPOLATED = (
+    "extrapolated_linestyle",
+    "extrapolated_color",
+    "extrapolated_linewidth",
+)
 
 RULES: list[Rule] = [
     Rule(
@@ -243,9 +248,15 @@ RULES: list[Rule] = [
     ),
     Rule(
         (FitCurve,),
-        (("extrapolated_linestyle",),),
+        tuple((name,) for name in ("mark_extrapolated", *EXTRAPOLATED)),
         "the curve's ends follow the data",
         lambda fit, project: fit.given_ends(x_limits_of(project, fit.id)) is None,
+    ),
+    Rule(
+        (FitCurve,),
+        tuple((name,) for name in EXTRAPOLATED),
+        "the part beyond the data is not marked",
+        lambda fit, _: not fit.mark_extrapolated,
     ),
     Rule(
         (FitCurve,),

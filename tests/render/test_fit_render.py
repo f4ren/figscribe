@@ -153,7 +153,7 @@ def _curve(figure: Figure, data) -> np.ndarray:
 
 def test_a_given_range_draws_the_curve_there(figure: Figure, data) -> None:
     figure.axes[0].artists[1].curve_range = (-5.0, 25.0)
-    figure.axes[0].artists[1].extrapolated_linestyle = None  # one plain curve
+    figure.axes[0].artists[1].mark_extrapolated = False  # one plain curve
     xs = _curve(figure, data)
     assert (len(xs), xs[0], xs[-1]) == (400, -5.0, 25.0)
     low, high = render(figure, data).axes[0].get_xlim()
@@ -199,7 +199,7 @@ def test_on_a_log_axis_a_given_range_is_sampled_in_log(figure, data) -> None:
     even = np.diff(_curve(figure, data))
     assert even == pytest.approx([even[0]] * len(even))  # as before
     figure.axes[0].artists[1].curve_range = (0.1, 100.0)
-    figure.axes[0].artists[1].extrapolated_linestyle = None  # one plain curve
+    figure.axes[0].artists[1].mark_extrapolated = False  # one plain curve
     ratios = np.diff(np.log(_curve(figure, data)))
     assert ratios == pytest.approx([ratios[0]] * len(ratios))
 
@@ -238,7 +238,12 @@ def test_the_curve_is_dashed_where_it_leaves_the_data(figure, data, columns) -> 
     [
         {},  # along the data
         {"curve_range": (2.0, 8.0)},  # given, but within them
-        {"curve_range": (-5.0, 25.0), "extrapolated_linestyle": None},
+        {"curve_range": (-5.0, 25.0), "mark_extrapolated": False},
+        {
+            "curve_range": (-5.0, 25.0),
+            "mark_extrapolated": False,
+            "extrapolated_color": "red",
+        },
         {"curve_range": (-5.0, 25.0), "extrapolated_linestyle": "--"},  # as it is
         {"fit_range": (3.0, 7.0), "extend_curve": True},  # unfitted, but measured
     ],
@@ -256,3 +261,45 @@ def test_a_curve_away_from_the_data_is_dashed_all_along(figure, data) -> None:
     measured, beyond = _curve_lines(figure, data)
     assert _drawn_x(measured).size == 0
     assert (_drawn_x(beyond).min(), _drawn_x(beyond).max()) == (20.0, 30.0)
+
+
+@pytest.mark.parametrize(
+    ("settings", "look"),
+    [
+        ({"extrapolated_color": "red"}, ("--", "#ff0000", 1.5)),
+        ({"extrapolated_linewidth": 0.5}, ("--", None, 0.5)),
+        # In the curve's own style, set apart by color or width alone.
+        (
+            {
+                "linestyle": "-",
+                "extrapolated_linestyle": "-",
+                "extrapolated_color": "k",
+            },
+            ("-", "#000000", 1.5),
+        ),
+        (
+            {
+                "linestyle": "-",
+                "extrapolated_linestyle": "-",
+                "extrapolated_linewidth": 3.0,
+            },
+            ("-", None, 3.0),
+        ),
+        ({"extrapolated_linestyle": ":"}, (":", None, 1.5)),
+    ],
+    ids=["color", "width", "color-alone", "width-alone", "dotted"],
+)
+def test_the_part_beyond_the_data_has_a_look_of_its_own(
+    figure, data, settings, look
+) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.curve_range = (-5.0, 25.0)
+    for name, value in settings.items():
+        setattr(fit, name, value)
+    measured, beyond = _curve_lines(figure, data)
+    style, color, width = look
+    assert beyond.get_linestyle() == style and beyond.get_linewidth() == width
+    expected = color or measured.get_color()  # None: the curve's
+    assert matplotlib.colors.to_hex(beyond.get_color()) == matplotlib.colors.to_hex(
+        expected
+    )

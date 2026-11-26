@@ -151,6 +151,7 @@ COLOR_FIELDS = {
     "edgecolor",
     "grid_color",
     "grid_minor_color",
+    "extrapolated_color",
     "left_out_color",
     "zero_color",
     "background",
@@ -446,7 +447,10 @@ BASIC = {
         "extend_curve",
         "curve_range",
         "curve_to_limits",
+        "mark_extrapolated",
         "extrapolated_linestyle",
+        "extrapolated_color",
+        "extrapolated_linewidth",
         "outside_as_left_out",
     ),
     "ResidualPlot": (
@@ -570,6 +574,8 @@ PLACEHOLDERS = {
     "grid_linewidth": "default",
     "grid_minor_color": "as the major lines",
     "curve_range": "as the data",
+    "extrapolated_color": "as the curve",
+    "extrapolated_linewidth": "as the curve",
     "grid_minor_linewidth": "default",
     "linewidth": "default",
     "frame_width": "default",
@@ -620,8 +626,13 @@ TIPS = {
     "curve_range": "Draw the fitted curve from one x to another, which may reach "
     "beyond the data to extrapolate; the fit does not change.",
     "curve_to_limits": "Draw the curve across the range typed on the x axis.",
-    "extrapolated_linestyle": "How the curve is drawn where it leaves the data, "
-    "which no points back; empty draws it like the rest.",
+    "mark_extrapolated": "Draw the curve differently where it leaves the data, "
+    "which no points back.",
+    "extrapolated_linestyle": "Line style of the curve beyond the data.",
+    "extrapolated_color": "Color of the curve beyond the data; empty keeps the "
+    "curve's.",
+    "extrapolated_linewidth": "Line width of the curve beyond the data; empty "
+    "keeps the curve's.",
     "extend_curve": "Draw the fitted curve across all the data, not only over the "
     "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",
@@ -1004,7 +1015,10 @@ ELEMENT_SECTIONS = {
         "extend_curve": "Look",
         "curve_range": "Look",
         "curve_to_limits": "Look",
+        "mark_extrapolated": "Look",
         "extrapolated_linestyle": "Look",
+        "extrapolated_color": "Look",
+        "extrapolated_linewidth": "Look",
         "outside_as_left_out": "Look",
     },
     "Histogram": {
@@ -2067,7 +2081,6 @@ NONE_TEXT = {
     "time": "the sample interval below",
     "grid_linestyle": "style default",
     "grid_minor_linestyle": "as the major lines",
-    "extrapolated_linestyle": "as the curve",
     "prefix": "as in the data",
     "marker": "No marker",
     "left_out_marker": "No marker",
