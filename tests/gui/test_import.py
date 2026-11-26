@@ -174,7 +174,9 @@ def test_a_windows_file_is_detected_and_read(qtbot, tmp_path: Path) -> None:
     ]
     assert any("Windows" in chip for chip in chips)
 
-    dialog.encoding.setCurrentIndex(dialog.encoding.findData("utf-8-sig"))
+    at = dialog.encoding.findData("utf-8-sig")
+    dialog.encoding.setCurrentIndex(at)
+    dialog.encoding.activated.emit(at)
     assert not _ok(dialog) and "encoding" in dialog.error.text()
 
 

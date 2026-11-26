@@ -5,7 +5,7 @@ left off. The brief stays the vision; this file is the work list. It is written
 so that a coding session can take the next open task and finish it without
 asking what was meant.
 
-**State as of 2026-11-05** (branch `develop`):
+**State as of 2026-11-26** (branch `develop`):
 
 - M1 to M6 of the brief are done: model, renderer, code generator with the
   pixel equivalence test, GUI with import, property panel, outline, undo/redo,
@@ -15,12 +15,14 @@ asking what was meant.
   first version of this plan also several figures in one project, units and
   a range per plot, fewer points drawn, the Allan deviation, error bands,
   reference lines, a search and a command palette for settings, and
-  settings that grey out when they do nothing.
+  settings that grey out when they do nothing. Since 0.3.0: number formats
+  and the decimal comma, broken and inverted axes, an open frame, a check
+  for updates, and two more examples (fourteen in all).
 - M7 is open: style templates, snapping and alignment guides, and the screenshots of R4.
-- About 1,700 tests run in about two and a half minutes in parallel; CI is green on
+- About 2,100 tests run in about three minutes in parallel; CI is green on
   Linux, Windows and macOS with Python 3.11 and 3.13, and a further job runs
   the fast tests at the oldest allowed versions (decision 0044). Decisions
-  0001 to 0066 are in [`docs/decisions.md`](../docs/decisions.md).
+  0001 to 0072 are in [`docs/decisions.md`](../docs/decisions.md).
 - 0.1.0 (2026-10-26), 0.2.0 (2026-10-29) and 0.3.0 (2026-11-05) are released, on
   PyPI, and since 0.3.0 with installers for macOS, Windows and Linux on the
   GitHub release; `main` is at 0.3.0 (PR #136). What `develop` has gained since
@@ -31,7 +33,7 @@ reproduction is given so a session can turn it into a failing test first.
 
 ---
 
-## What is open (2026-11-05)
+## What is open (2026-11-26)
 
 A map of the tasks below that are not finished; the tasks hold the detail.
 `[decide]` needs the user's answer first (rule 2). A task that is not named
@@ -46,21 +48,13 @@ here is done; its follow-ups ("only if asked") stay in its text.
   sizes (150 % and 200 % scaling, dark mode on Windows and Linux, the panel
   by keyboard). Item 6 (every bench case through
   the equivalence test) is done, 2026-11-20.
-- **B8**: about twenty dialog tests still set widgets instead of clicking
-  them, and the preview's zoom, pan and legend drag lack mouse-event tests.
-  Follow-ups: ratios that no longer match the grid; a lower bound for font
-  sizes and the figure size; marking columns of another length.
+- **B8** is done but for its follow-ups: ratios that no longer match the
+  grid; a lower bound for font sizes and the figure size; marking columns of
+  another length.
 
-**Phase 1 — The settings** (U1 to U5, U7 to U10 and U12 are done)
+**Phase 1 — The settings** (U1 to U5 and U7 to U12 are done)
 - **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
   bump).
-- **U11** the settings panel rearranged, element by element, with the user.
-  Done: the figure, a panel, the axis form, line, points and error bars.
-  Proposed, built while the user was away (decisions 0060 to 0062): the note,
-  reference lines and ranges, the fit and its residuals, histogram, Allan
-  deviation, image and color mesh. Open: the data files (left as they are), and the user's look at all of it. Nothing is built for an
-  element before the user has agreed to its arrangement.
-- **U12** finding what the examples use (see below): **done**.
 
 **Phase 2 — What a scientist needs**
 - **F1** fits (L): the range dragged in the preview (1); the result as text
@@ -80,8 +74,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
   (`[decide]`, judged by decision 0036).
-- **F14** fit an Allan deviation (M): built, proposed (0064); named noise-type
-  models are open. **F15** draw a function (M), from the user.
+- **F14** fit an Allan deviation (M): built and accepted (0064); named
+  noise-type models are open. **F15** draw a function (M), from the user
+  (`[decide]`).
 
 **Phase 3 — Speed and working faster**
 - **E1** large data: render off the GUI thread (2), thin the preview only
@@ -97,16 +92,18 @@ here is done; its follow-ups ("only if asked") stay in its text.
   snapping and alignment guides. **R3** the dpi at export (TIFF, EPS and the
   transparent background are built, 0065). **R4** installers (done in 0.3.0: PyInstaller, decision 0066; the macOS disk
   image tried by hand, the Windows installer and the AppImage only built and
-  started in CI), screenshots in the README, a gallery in `examples/`. **R5** measure models with `figscribe bench`.
+  started in CI), screenshots in the README (one of the main window is
+  there). **R5** measure models with `figscribe bench`.
   **R7** follow-up: wait out a rate limit in the chat.
 
 **Phase 5** is later and optional.
 
-**Where to start** (rule 1): the first open task is B7, and its open items 5
-and 6 need no answer. The user named the order on 2026-11-03: B7.4 and F13 are
-done, then comes U11 (the settings panel arranged element by element); see
-that task. U12 (finding what the examples use) came in between and is done;
-F14 then F15 follow U11; E2 is done.
+**Where to start** (rule 1): the first open task is B7, and its open item 5
+needs no answer. The user named the order on 2026-11-03: B7.4, F13, U11 and
+F14 are done, F15 follows (ask its `[decide]` first). A lab user waits for
+F1.9, the fit's curve beyond the data, and F5.10, minor grid lines of their
+own (2026-11-04); whether they go before F15 is the user's choice. Before
+0.4: the manual checklist (B7.5), which 0.3.0 went out without.
 
 ---
 
@@ -594,10 +591,9 @@ the project. It found:
    two to three minutes (the field test alone added two to four to each).
    That job then took ten minutes; since decision 0028 every job runs the
    tests in parallel with pytest-xdist, and the sweeps are split to spread.
-   *Open:* about twenty places in the dialog tests (import, images, fit,
-   notes, chat) still set widgets with `setChecked` or `setCurrentText`;
-   make them click, and add the preview's zoom, pan and legend drag with
-   `QTest` mouse events.
+   **Done** (2026-11-26): the dialog tests click and pick, and the preview's
+   wheel zoom, pan and legend drag have mouse-event tests
+   (`tests/gui/test_interaction.py`).
 3. **A manual checklist** in `docs/testing.md`, about 15 minutes, for what a
    test cannot judge: the result looks right; real mouse and trackpad on macOS
    and Windows; high DPI; dark mode; small window. Run before every release
@@ -975,6 +971,12 @@ saved between runs). *Learned:* a test that passed on one pixel (a grey stretch
 of a line in a small inset) failed when the new ticks hid it; check what a sweep
 sees before a change of defaults.
 
+**The rest: done** (2026-11-05, decisions 0060 to 0062, accepted after the
+user had looked): the note, reference lines and ranges, the fit and its
+residuals, histogram, Allan deviation, image and color mesh. The data files
+are left as they are. Still to be looked at in the application: an image's
+two boxes *Color bar* and *Color bar shown* (0062).
+
 ### U12 Finding the elements the examples use — S, with the user
 
 Asked for by the user (2026-11-04), after opening some of the gallery's
@@ -1251,7 +1253,9 @@ In order of demand:
    `AxisSpec.breaks`, one Matplotlib axis with a squeezed scale and clipping
    instead of the separate axes sketched below. *Learned:* `set_xscale` does
    not redo a range that `axhline` has settled; a script must find the cuts
-   from its own data. A review after the merge found ten faults, since fixed:
+   from its own data. Where two panels with data of their own share a broken
+   axis, a change of units leaves the breaks in the old numbers (open). A
+   review after the merge found ten faults, since fixed:
    renderer and script have to decide what to cut by one rule from the model,
    and whatever counts ticks, converts units or draws a line (the Allan
    deviation too) has to know of breaks. *Follow-ups, only if asked:* log axes;
@@ -1488,6 +1492,11 @@ apart.
 *Follow-ups, only if asked:* the conversion in the plot dialog; dragging
 the range in the preview; a row range; converted positions of a color
 mesh; date axes (F5.5) for timestamps instead of hours since the start.
+Since 2026-11-26 panels sharing an axis and the residuals follow a change of
+units, and an SI prefix of the old unit is dropped. Open from the reviews of
+that: `[decide]` a conversion without a unit leaves the old unit text and
+prefix on the axis, which then name the wrong unit; an axis with a prefix and
+no unit loses it when a factor-1 conversion first names one ("k", then "Hz").
 
 ### F12 Fewer points drawn: averaged or thinned — M
 
@@ -1973,6 +1982,8 @@ answer in `docs/decisions.md` when the task is started.
 | F5.5 | Date and time axes? |
 | F5.6 | answered 2026-11-26: x and y, several breaks; the rest decided and built (0072) |
 | F5.10 | Minor grid lines: thinner by default when both kinds are shown? |
+| F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
+| F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
 | F1.9 | The curve beyond the data: a typed range, or also "to the axis limits"? |
 | E4 | A source's file: what did the user mean by changing the name of the .csv in the template? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |

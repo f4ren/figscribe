@@ -241,7 +241,8 @@ def test_fields_are_grouped_in_sections(panel: PropertyPanel, document) -> None:
 def test_an_opened_section_stays_open(panel: PropertyPanel, document) -> None:
     artist = document.figure.axes[0].artists[0]
     document.select(artist.id)
-    panel.sections["More"].header.setChecked(True)
+    assert not panel.sections["More"].expanded
+    panel.sections["More"].header.click()
     document.select(None)
     document.select(artist.id)
     assert panel.sections["More"].expanded
