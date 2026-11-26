@@ -126,9 +126,12 @@ def test_the_ends_are_typed_and_a_break_removed(window) -> None:
 def test_the_empty_row_goes_again(window) -> None:
     form = _form(window)
     form.add_break.click()
+    assert form.break_hint.isHidden()
     form.add_break.click()
-    assert len(form.break_rows) == 2
+    assert len(form.break_rows) == 2 and not form.break_hint.isHidden()
+    assert window.properties._error.isHidden()  # a hint, not a complaint
     form.break_rows[1].remove.click()
+    assert form.break_hint.isHidden()
     assert len(form.break_rows) == 1 and _axes(window).x.breaks == [(21.0, 418.0)]
 
 

@@ -202,6 +202,9 @@ class AxisForm:
         self._break_stack = QVBoxLayout()
         self._break_stack.setSpacing(6)
         stack.addLayout(self._break_stack)
+        # One line: a wrapped label would squeeze the fields above it.
+        self.break_hint = label("Type the ends of the cut.", "caption")
+        stack.addWidget(self.break_hint)
         self.add_break = QPushButton("Add a break")
         self.add_break.clicked.connect(self._add_break)
         stack.addWidget(self.add_break, 0, Qt.AlignmentFlag.AlignLeft)
@@ -386,6 +389,7 @@ class AxisForm:
         for row, (start, end) in zip(self.break_rows, breaks, strict=False):
             _text(row.start, self._shown(start))
             _text(row.end, self._shown(end))
+        self.break_hint.setVisible(self._typing)
         why = breaks_blocked(document.figure, index, self.field)
         tip = TIPS["breaks"] if why is None else f"{why[0].upper()}{why[1:]}."
         self.add_break.setEnabled(why is None)
@@ -518,7 +522,6 @@ class AxisForm:
         self._typing = True
         self._show_breaks()
         self.break_rows[-1].start.setFocus()
-        self.panel.report("Type where the stretch to cut out begins and ends.")
 
     def _set_range(self) -> None:
         low, high = self.low.text().strip(), self.high.text().strip()
