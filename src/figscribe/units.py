@@ -176,7 +176,7 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
             for panel in panels
             for a in panel.artists
         )
-        steps: list[Command] = []
+        planned = []
         for panel in panels:
             here = [a for a in panel.artists if standing[panel.id](a)]
             own = any(a.id == plot.id for a in panel.artists)
@@ -195,10 +195,6 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
                         changes["unit"] = None  # the file's unit is not known here
                 elif new.unit is not None and spec.unit in (None, old_unit):
                     changes["unit"] = new.unit
-            # An SI prefix belongs to the unit it was chosen for: kept beside
-            # "mV", an "m" would read "mmV".
-            if spec.prefix is not None and changes.get("unit", spec.unit) != spec.unit:
-                changes["prefix"] = None
             if follows:
                 if spec.limits is not None:
                     changes["limits"] = _ends(spec.limits, move)
@@ -212,6 +208,10 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
             # conversion rises with the value, so they stay in order.
             if group_alone and spec.breaks:
                 changes["breaks"] = [_ends(ends, move) for ends in spec.breaks]
+            planned.append((panel, spec, changes, follows))
+        _drop_prefix(planned, None if new is None else new.unit)
+        steps: list[Command] = []
+        for panel, spec, changes, follows in planned:
             if changes:
                 changed = spec.model_copy(update=changes)
                 steps.append(SetField(panel.id, (field,), changed))
@@ -244,6 +244,27 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
                 done |= {(other.id, there) for other in group}
                 steps += follow(group, there, side, remap if axis == "x" else rescale)
     return steps
+
+
+def _drop_prefix(planned, unit: str | None) -> None:
+    """Take the SI prefix off a shared axis whose unit is renamed to `unit`: it
+    was chosen for the old one, and an "m" beside "mV" reads "mmV".
+
+    The axis has one formatter, so a prefix left on one panel scales the numbers
+    of all: it goes from every panel or from none, and only once each panel
+    that has one shows `unit`."""
+    texts = [(spec, changes.get("unit", spec.unit)) for _, spec, changes, _ in planned]
+    stated = any(spec.unit is not None for spec, _ in texts)
+    # Naming a panel whose unit is stated on another one renames nothing.
+    renamed = any(
+        text != spec.unit and (spec.unit is not None or not stated)
+        for spec, text in texts
+    )
+    agreed = all(text == unit for spec, text in texts if spec.prefix is not None)
+    if renamed and agreed:
+        for _, spec, changes, _ in planned:
+            if spec.prefix is not None:
+                changes["prefix"] = None
 
 
 def _side(panel: Axes, artist) -> str:

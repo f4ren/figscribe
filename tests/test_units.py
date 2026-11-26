@@ -606,3 +606,50 @@ def test_emptying_the_unit_empties_its_prefix() -> None:
     history.push(set_conversion(project, plot.id, "x", None, data))
     spec = project.figures[0].axes[0].x
     assert (spec.unit, spec.prefix) == (None, None)
+
+
+def _side_by_side() -> Project:
+    """Two panels sharing y, each with a plot of its own, volts shown as mV."""
+    axes = [
+        Axes(
+            col=i,
+            y=AxisSpec(label="U", unit="V", prefix="m"),
+            artists=[LinePlot(x=col("t"), y=col(name))],
+        )
+        for i, name in enumerate(("U", "V"))
+    ]
+    figure = Figure(layout=GridLayout(cols=2, share_y="row"), axes=axes)
+    return Project(sources=[SOURCE], figures=[figure])
+
+
+def test_a_shared_axis_never_gets_two_prefixes() -> None:
+    """Panels sharing an axis have one formatter: a prefix left on one of them
+    would scale the numbers of both. While the other is still in V, the first
+    one keeps it too and reads "mmV", with right numbers; once both are in mV it
+    goes."""
+    project = _side_by_side()
+    before = dumps(project)
+    history = History(project)
+    first, second = (axes.artists[0] for axes in project.figures[0].axes)
+    mV = Conversion(factor=1000.0, unit="mV")
+    history.push(set_conversion(project, first.id, "y", mV, data))
+    assert [a.y.prefix for a in project.figures[0].axes] == ["m", "m"]
+
+    history.push(set_conversion(project, second.id, "y", mV, data))
+    assert [a.y.prefix for a in project.figures[0].axes] == [None, None]
+    history.undo()
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_a_calibration_keeps_the_prefix_on_the_residual_stack_too() -> None:
+    """*Fit…* leaves the upper panel without a unit but with the prefix."""
+    project = _project()
+    project.figures[0].axes[0].x.prefix = "m"
+    plot = _parts(project)[1][0]
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, data).apply(project)
+    calibrated = Conversion(factor=1.02, unit="s")
+    History(project).push(set_conversion(project, plot.id, "x", calibrated, data))
+    assert [a.x.prefix for a in project.figures[0].axes] == ["m", "m"]

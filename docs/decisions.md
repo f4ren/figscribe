@@ -1767,7 +1767,10 @@ parameters would not match the axis they are read against.
   and never shifted.
 - **An SI prefix** on the axis (0025) is dropped when the unit's text changes
   (added 2026-11-26): it was chosen for the old unit, and "m" beside a new
-  "mV" reads "mmV". It stays when the text does.
+  "mV" reads "mmV". It stays when the text does. Panels sharing an axis have
+  one formatter, so it goes from all of them or from none, and only once each
+  that has one shows the new unit; with two data panels, the first one
+  converted reads "mmV", with right numbers, until the second follows.
 - **The unit text** follows when the axis showed the old conversion's unit,
   or the axis's own unit when the old setting gave none; taking a
   conversion with a unit back empties the axis's unit, since figscribe does
