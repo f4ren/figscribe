@@ -81,6 +81,7 @@ from figscribe.render.ticks import (
     silent_minor_labels,
     tick_style,
     ticks_that_fit,
+    zero_below,
 )
 
 WIDTH = 88
@@ -1368,16 +1369,8 @@ class _Writer:
             self.emit(f"{ax}.{name}axis.minorticks_on()")
         elif self.figure.stylesheet is not None:
             self.emit(f"{ax}.{name}axis.minorticks_off()")
-        scaled = scaling(spec)
-        if scaled is not None:
-            op, factor = scaled
-            number = "v" if (op, factor) == ("*", "1") else f"v {op} {factor}"
-            if spec.prefix is not None:
-                self.emit(f"# Values shown in {unit_shown(spec)}")
-            self.emit(
-                f"{ax}.{name}axis.set_major_formatter("
-                f'FuncFormatter(lambda v, _: f"{{{number}:g}}"))'
-            )
+        if scaling(spec) is not None:
+            self._tick_numbers(ax, name, spec)
         if silent_minor_labels(spec):
             self.emit(f"{ax}.{name}axis.set_minor_formatter(NullFormatter())")
         if spec.tick_size is not None:
@@ -1387,6 +1380,22 @@ class _Writer:
                 which='"both"',
                 labelsize=_num(spec.tick_size),
             )
+
+    def _tick_numbers(self, ax: str, name: str, spec: AxisSpec) -> None:
+        """The formatter of an axis whose numbers the script writes itself."""
+        op, factor = scaling(spec)
+        value = "v"
+        if spec.prefix is not None:
+            self.emit(f"# Values shown in {unit_shown(spec)}")
+        if (zero := zero_below(spec)) is not None:
+            self.emit("# The tick at zero may come out as 1e-17: write it as 0.")
+            value = f"(v if abs(v) > {_num(zero)} else 0)"
+        number = value if (op, factor) == ("*", "1") else f"{value} {op} {factor}"
+        text = f'FuncFormatter.fix_minus(f"{{{number}:g}}")'  # "−", not "-"
+        self.call(
+            f"{ax}.{name}axis.set_major_formatter",
+            f"FuncFormatter(lambda v, _: {text})",
+        )
 
     def _artist(self, ax: str, artist) -> None:
         common = _common(artist, default_zorder=DEFAULT_ZORDER.get(artist.kind, 2.0))

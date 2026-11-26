@@ -86,6 +86,15 @@ def shown(value: float, how: tuple[str, str]) -> str:
     return f"{number:g}"
 
 
+def zero_below(spec: AxisSpec) -> float | None:
+    """Tick values smaller than this are the tick at zero; None where Matplotlib
+    places it exactly. Ticks every `major_step` can put it at 1e-17, which
+    Matplotlib's own labels hide and a formatter of ours would print."""
+    if spec.scale == "log" or spec.ticks is not None or spec.major_step is None:
+        return None
+    return spec.major_step / 2
+
+
 def silent_minor_labels(spec: AxisSpec) -> bool:
     """Whether minor ticks must lose their labels: a log axis labels them
     itself when it spans less than a decade, ignoring a divisor."""

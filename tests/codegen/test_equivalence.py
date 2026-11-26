@@ -883,8 +883,22 @@ def test_ticks_inside_on_all_sides_with_prefixes(tmp_path: Path) -> None:
     ]
     script = _assert_same(project, tmp_path)
     assert '"xtick.direction": "in"' in script and '"ytick.right": True' in script
-    assert 'f"{v * 1e3:g}"' in script and 'f"{v / 1e3:g}"' in script
+    assert 'f"{(v if abs(v) > 1.25 else 0) * 1e3:g}"' in script
+    assert 'f"{v / 1e3:g}"' in script
     assert '"t (ms)"' in script
+
+
+def test_a_prefixed_axis_with_negative_ticks_and_a_step(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    axes = Axes(
+        x=AxisSpec(label="t", prefix="m", limits=(-0.0533, 0.0533), major_step=0.01),
+        y=AxisSpec(label="U", prefix="m", limits=(-1.2, 1.2)),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=110, width_mm=175, axes=[axes])]
+    script = _assert_same(project, tmp_path)
+    assert "abs(v) > 0.005 else 0" in script
+    assert "FuncFormatter.fix_minus" in script
 
 
 def test_a_stepped_log_axis_keeps_its_minor_ticks(tmp_path: Path) -> None:

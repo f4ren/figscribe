@@ -60,6 +60,7 @@ from figscribe.render.ticks import (
     silent_minor_labels,
     tick_style,
     ticks_that_fit,
+    zero_below,
 )
 
 DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
@@ -322,13 +323,24 @@ def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec) -> None:
         axis.minorticks_on()
     else:
         axis.minorticks_off()
-    scaled = scaling(spec)
-    if scaled is not None:
-        axis.set_major_formatter(FuncFormatter(lambda v, _: shown(v, scaled)))
+    if scaling(spec) is not None:
+        axis.set_major_formatter(_tick_numbers(spec))
     if silent_minor_labels(spec):
         axis.set_minor_formatter(NullFormatter())
     if spec.tick_size is not None:
         ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
+
+
+def _tick_numbers(spec: AxisSpec) -> FuncFormatter:
+    """The formatter of an axis whose numbers figscribe writes itself."""
+    how, zero = scaling(spec), zero_below(spec)
+
+    def text(value: float, _) -> str:
+        if zero is not None and abs(value) < zero:
+            value = 0
+        return FuncFormatter.fix_minus(shown(value, how))  # "−", not "-"
+
+    return FuncFormatter(text)
 
 
 def _draw_artist(

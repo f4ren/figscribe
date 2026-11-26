@@ -35,6 +35,9 @@ release open in every later one.
 - Fixed: the first release of the installers (0.3.0) carried a fourth file, the
   tool that builds the AppImage, next to the three installers. It is removed from
   that release and no longer kept where the workflow collects installers.
+- Fixed: on an axis shown with an SI prefix and a tick step of its own, the tick
+  at zero could be written as -6.93889e-15. Negative numbers on such an axis
+  also have the minus sign Matplotlib uses now, not a hyphen.
 
 ## 0.3.0 — 2026-11-05
 
