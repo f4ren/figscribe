@@ -241,6 +241,26 @@ def test_the_right_axis_is_cut_along_with_x(ref) -> None:
     assert line.get_clip_path() is not None and np.isnan(line.get_xdata()).any()
 
 
+@pytest.mark.parametrize("kind", [LinePlot, ScatterPlot])
+def test_no_marker_of_a_point_in_a_break_reaches_out_of_the_gap(ref, kind) -> None:
+    """A big marker is wider than the gap."""
+    size = {"size": 400.0} if kind is ScatterPlot else {"markersize": 20.0}
+    look = {"marker": "o", **size}
+    # The point at 10 lies in the break; its neighbours are far from the ends.
+    panel = _panel(ref, kind, plot=look, x=AxisSpec(breaks=[(9.0, 11.0)]))
+    (ax,) = _drawn(Figure(axes=[panel])).axes
+    (drawn,) = [a for a in (*ax.lines, *ax.collections) if a.get_gid()]
+    if kind is ScatterPlot:
+        xy = np.asarray(drawn.get_offsets(), dtype=float)
+        shown = xy[
+            np.isfinite(np.ma.filled(drawn.get_offsets(), np.nan)).all(axis=1), 0
+        ]
+    else:
+        xy = drawn.get_xydata()
+        shown = xy[np.isfinite(xy).all(axis=1), 0]
+    assert 10.0 not in shown and {8.0, 12.0} <= set(shown)
+
+
 def test_the_pieces_between_breaks() -> None:
     assert pieces([(2, 3), (5, 6)], 0, 10) == [(0, 2), (3, 5), (6, 10)]
     assert pieces([(2, 3)], 2.5, 10) == [(3, 10)]

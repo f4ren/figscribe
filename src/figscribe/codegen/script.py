@@ -144,6 +144,7 @@ RESERVED = {
     "across_breaks",
     "cut_out",
     "Shape",
+    "PathCollection",
 }
 
 
@@ -594,7 +595,10 @@ class _Writer:
         if any(getattr(a, "norm", None) == "log" for a in self.artists.values()):
             self.emit("from matplotlib.colors import LogNorm")
         if self.broken:
-            self.emit("from matplotlib.path import Path as Shape")
+            self.emit(
+                "from matplotlib.collections import PathCollection",
+                "from matplotlib.path import Path as Shape",
+            )
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
         if self._grouped():
@@ -2291,6 +2295,25 @@ def cut_out(ax, x_breaks=(), y_breaks=(), twin=None, frame=True):
     """Leave the breaks of `ax` blank, with slanted marks at their ends; `twin`
     is its right y axis, and without `frame` there are no top and right lines."""
 
+    def hide_markers(axes, x_breaks, y_breaks):
+        """A marker within a break would reach out of the gap: take it out."""
+
+        def outside(points):
+            inside = np.zeros(len(points), dtype=bool)
+            for values, breaks in zip(points.T, (x_breaks, y_breaks)):
+                for start, end in breaks:
+                    inside |= (values > start) & (values < end)
+            return np.where(inside[:, None], np.nan, points)
+
+        for line in axes.lines:
+            if line.get_marker() not in ("None", "none", "", " ", None):
+                points = outside(line.get_xydata())
+                line.set_data(points[:, 0], points[:, 1])
+        for scatter in axes.collections:
+            if isinstance(scatter, PathCollection):
+                points = np.ma.filled(scatter.get_offsets().astype(float), np.nan)
+                scatter.set_offsets(outside(points))
+
     def stretches(breaks, limits):
         low, high = sorted(limits)
         low, high = 2 * low - high, 2 * high - low  # well past the axes
@@ -2306,6 +2329,9 @@ def cut_out(ax, x_breaks=(), y_breaks=(), twin=None, frame=True):
         return Shape.make_compound_path(*(Shape(c, closed=True) for c in corners))
 
     xs, ys = ax.get_xlim(), ax.get_ylim()
+    hide_markers(ax, x_breaks, y_breaks)
+    if twin is not None:
+        hide_markers(twin, x_breaks, [])
     shown = visible(x_breaks, y_breaks, xs, ys)
     for artist in [*ax.lines, *ax.collections, *ax.patches]:
         artist.set_clip_path(shown, ax.transData)

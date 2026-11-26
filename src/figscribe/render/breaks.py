@@ -13,6 +13,7 @@ import math
 
 import matplotlib
 import numpy as np
+from matplotlib.collections import PathCollection
 from matplotlib.path import Path
 from matplotlib.ticker import MaxNLocator
 
@@ -232,6 +233,9 @@ def cut_out(ax, x_breaks: Breaks, y_breaks: Breaks, twin=None, frame=True) -> No
     clipped there, and slanted marks stand at their ends. `twin` is its right
     y axis; without `frame` there are no lines on the top and right."""
     xs, ys = ax.get_xlim(), ax.get_ylim()
+    _hide_markers(ax, x_breaks, y_breaks)
+    if twin is not None:
+        _hide_markers(twin, x_breaks, [])
     shown = _clip(x_breaks, y_breaks, xs, ys)
     for artist in [*ax.lines, *ax.collections, *ax.patches]:
         artist.set_clip_path(shown, ax.transData)
@@ -277,6 +281,27 @@ def cut_out(ax, x_breaks: Breaks, y_breaks: Breaks, twin=None, frame=True) -> No
             transform=ax.get_yaxis_transform(),
             **style,
         )
+
+
+def _hide_markers(ax, x_breaks: Breaks, y_breaks: Breaks) -> None:
+    """Take out the markers and scatter points that lie within a break: clipped,
+    a marker in the gap would still reach out of it."""
+
+    def outside(points: np.ndarray) -> np.ndarray:
+        inside = np.zeros(len(points), dtype=bool)
+        for values, breaks in zip(points.T, (x_breaks, y_breaks), strict=True):
+            for start, end in breaks:
+                inside |= (values > start) & (values < end)
+        return np.where(inside[:, None], np.nan, points)
+
+    for line in ax.lines:
+        if line.get_marker() not in ("None", "none", "", " ", None):
+            points = outside(line.get_xydata())
+            line.set_data(points[:, 0], points[:, 1])
+    for scatter in ax.collections:
+        if isinstance(scatter, PathCollection):
+            points = np.ma.filled(scatter.get_offsets().astype(float), np.nan)
+            scatter.set_offsets(outside(points))
 
 
 def _clip(x_breaks: Breaks, y_breaks: Breaks, xs, ys) -> Path:
