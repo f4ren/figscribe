@@ -5,6 +5,12 @@ release open in every later one.
 
 ## Unreleased
 
+- **Broken axes.** Cut a stretch out of an x or y axis, for a measurement far
+  from the rest: right-click the empty stretch in the preview, or use *Add a
+  break* in the axis form under *Scale*; several breaks are possible. The axis
+  gets a narrow gap with break marks, nothing is drawn in it, and no line runs
+  across. Panels sharing the axis are broken alike. Linear axes only
+  (decision 0072).
 - **Number format and decimal comma.** In the axis form, *Scale* has *Number
   format*: automatic, fixed decimals, or scientific (2.5×10³ at every tick),
   with *Decimals*. The figure's *Text* settings have *Decimal comma*, which

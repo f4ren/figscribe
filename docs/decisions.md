@@ -3400,3 +3400,61 @@ format: *Show values in* already puts the factor into the unit, which physics
 journals prefer; not built. **A comma setting per axis**: a figure with both
 marks would be a mistake.
 
+## 0072 — A broken axis: one axis with a squeezed scale
+
+**Date:** 2026-11-26
+**Status:** accepted in part (roadmap F5.6). The user chose a broken axis, on x
+and y, with several breaks, for a measurement far from the rest. Everything
+else below was decided at their request and they have not seen it.
+
+### Context
+
+A lab user adds a measurement at the zinc point (419.5 °C) to points near room
+temperature. Matplotlib has no broken axis.
+
+### Decision
+
+- `AxisSpec.breaks`: a list of (start, end) in data units, rising and apart;
+  those stretches are cut out. No schema bump.
+- **One Matplotlib axis** with a "function" scale: linear, except that each
+  break takes 2.5 % of the axis; the stretches are to one scale. Plots, the
+  right y axis, shared panels, the legend, notes, insets and the preview's
+  zoom work as on any axis. What falls into a gap is clipped away, grid lines
+  and frame too, and slanted marks stand at the ends. Markers and scatter
+  points within a break are taken out, since a clipped marker would still
+  reach out of the gap; this happens last, so that they count for the range.
+- **No line or band is drawn across a break**: a NaN goes between the points on
+  either side. A straight line through a squeezed stretch would show values
+  the data do not have. A fit's curve is sampled on each stretch.
+- **Ticks** are placed one by one: Matplotlib's step over what is shown, each
+  stretch getting at least one, none within a break, and automatic ones clear
+  of the marks. Typed ticks within a break are left out.
+- An **automatic range** is worked out for the squeezed scale and fixed to six
+  digits. The gap's width follows from the model's range or the data, not from
+  the preview's zoom.
+- **Linear x and left y axes only**, no images (a color mesh is fine). The
+  history refuses a command that would make a broken axis logarithmic; the
+  problem list names it in a file, and the axis is drawn whole.
+- **Panels sharing an axis share its breaks**; the panel sets them together.
+- The **script** defines `squeezed`, `across_breaks` and `cut_out`. It finds
+  the cuts from its own data, but the gap's width, the ticks, an automatic
+  range and the stretches of a fit are numbers as drawn for this data, which a
+  comment says.
+- Points, reference lines and ranges within a break are not shown, and the
+  problem list says how many points. A note placed there is drawn.
+- In the GUI: *Scale* has a row per break and *Add a break*, which cuts the
+  widest empty stretch of the data; a right click in a panel offers the same;
+  the search finds it by "break", "gap", "skip".
+
+### Alternatives considered
+
+**Separate Matplotlib axes side by side**, as the roadmap expected and as
+Matplotlib's examples do: with x and y and several breaks that is a grid of
+axes in every panel, each drawing every plot again, and legends, notes, insets,
+the right axis, shared panels, label alignment and the preview's picking all
+take one panel to be one axes. **A white patch over the gap**: in a
+transparent export it is a white bar. **Lines left to cross the gap**: what a
+side-by-side drawing does, but here the straight segment on screen is not the
+data's. **Each stretch with its own scale** (to magnify the far point): not
+asked; the axis would no longer read as one.
+

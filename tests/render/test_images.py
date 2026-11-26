@@ -78,6 +78,36 @@ def _residuals_figure(ref) -> Figure:
     )
 
 
+def _broken_figure(ref) -> Figure:
+    data = ErrorbarPlot(x=ref("t"), y=ref("U"), yerr=ref("dU"), linestyle="-")
+    fit = FitCurve(
+        target=data.id,
+        model=PredefinedFit(name="linear"),
+        result=FitResult(parameters={"a": 0.02, "b": 0.2}, uncertainties={}),
+    )
+    right = LinePlot(x=ref("t"), y=ref("U"), axis="right", color="C3")
+    return Figure(
+        dpi=100.0,
+        width_mm=120,
+        height_mm=90,
+        layout=GridLayout(rows=2, share_x="col", height_ratios=[3, 1]),
+        axes=[
+            Axes(
+                grid=True,
+                x=AxisSpec(breaks=[(2.2, 3.8), (6.2, 7.8)]),
+                y=AxisSpec(label="U", unit="V", breaks=[(0.45, 0.6)]),
+                y_right=AxisSpec(label="V"),
+                artists=[data, fit, right],
+            ),
+            Axes(
+                row=1,
+                x=AxisSpec(label="t", unit="s"),
+                artists=[ResidualPlot(target=fit.id)],
+            ),
+        ],
+    )
+
+
 def _figures(ref) -> dict[str, Figure]:
     labelled = {
         "x": AxisSpec(label="$t$", unit="s"),
@@ -330,6 +360,8 @@ def _figures(ref) -> dict[str, Figure]:
                 ),
             ],
         ),
+        # F5.6: x and y broken, a right y axis, residuals sharing x
+        "broken_axes": _broken_figure(ref),
         # F5.2: an automatic range drawn backwards, as a spectrum is shown
         "reversed_axis": Figure(
             dpi=100,
@@ -361,6 +393,7 @@ def _figures(ref) -> dict[str, Figure]:
         "reversed_axis",
         "open_frame",
         "number_formats",
+        "broken_axes",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:
