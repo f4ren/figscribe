@@ -1105,7 +1105,7 @@ class MainWindow(QMainWindow):
             if spec is None or (axis is not None and axis == (panel.id, field)):
                 continue  # not there, or its form is open and has them
             oid = axis_id(panel.id, field)
-            for section, caption in axis_settings(spec):
+            for section, caption in axis_settings(spec, field):
                 entries.append(
                     Entry(
                         caption,

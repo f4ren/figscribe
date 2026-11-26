@@ -99,6 +99,8 @@ AXIS_KEYWORDS = {
     ("Scale", "Direction"): "reverse reversed invert inverted flip backwards "
     "descending highest first wavenumber binding energy",
     ("Scale", "Linear within ±"): "symlog linthresh threshold",
+    ("Scale", "Breaks"): "break broken axis gap skip cut interrupt interrupted "
+    "discontinuous split",
     ("Scale", "Number format"): "decimals places digits precision scientific "
     "exponent power of ten notation fixed",
     ("Scale", "Decimals"): "places digits precision number format",

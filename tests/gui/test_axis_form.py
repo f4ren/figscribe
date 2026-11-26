@@ -303,7 +303,7 @@ def test_choosing_a_number_format_and_its_decimals(panel, document) -> None:
     assert form.decimals.isHidden()  # automatic numbers have none to set
     _choose(form.number_format, "fixed")
     assert axes.x.number_format == "fixed" and not form.decimals.isHidden()
-    assert _captions(panel, "Scale")[3:5] == ["Number format", "Decimals"]
+    assert _captions(panel, "Scale")[4:6] == ["Number format", "Decimals"]
     form.decimals.setValue(3)
     assert axes.x.decimals == 3
     _choose(form.number_format, "scientific")
@@ -363,6 +363,7 @@ def test_the_axis_form_is_arranged_by_what_the_settings_are_for(
         "Type",
         "From",
         "Direction",
+        "Breaks",
         "Number format",
         "Number size (pt)",
     ]
@@ -399,6 +400,7 @@ def test_the_linear_zone_of_a_symmetric_log_axis_is_in_the_scale(
         "Type",
         "From",
         "Direction",
+        "Breaks",
         "Linear within ±",
         "Number format",
         "Number size (pt)",

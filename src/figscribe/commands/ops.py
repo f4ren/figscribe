@@ -25,6 +25,7 @@ from figscribe.model import (
     ResidualPlot,
     new_id,
 )
+from figscribe.model.sharing import sharing_group
 from figscribe.model.validate import data_refs
 
 Side = Literal["right", "left", "above", "below", "inset"]
@@ -453,3 +454,20 @@ def _locate(project: Project, oid: str, field: str) -> tuple[Any, Any]:
             return obj, parent
     kind = {"artists": "artist", "sources": "data file"}.get(field, field)
     raise CommandError(f"no {kind} with id {oid!r}")
+
+
+def set_breaks(
+    project: Project, axes_id: str, field: str, breaks: list[tuple[float, float]]
+) -> Macro:
+    """Give the `field` axis ("x" or "y") of the panel `axes_id` these breaks,
+    and every panel that shares the axis with it, as one step."""
+    for figure in project.figures:
+        for index, axes in enumerate(figure.axes):
+            if axes.id == axes_id:
+                steps = [
+                    SetField(figure.axes[i].id, (field, "breaks"), list(breaks))
+                    for i in sharing_group(figure, index, field)
+                ]
+                what = "Change the breaks" if breaks else "Remove the breaks"
+                return Macro(f"{what} of the {field} axis", steps)
+    raise CommandError(f"no panel with id {axes_id!r}")

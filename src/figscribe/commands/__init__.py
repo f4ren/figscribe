@@ -31,6 +31,7 @@ from figscribe.commands.ops import (
     remove_figure,
     remove_source,
     same_range,
+    set_breaks,
     to_front,
 )
 
@@ -58,5 +59,6 @@ __all__ = [
     "remove_figure",
     "remove_source",
     "same_range",
+    "set_breaks",
     "to_front",
 ]

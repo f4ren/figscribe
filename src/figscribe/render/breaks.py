@@ -106,6 +106,33 @@ def curve_parts(
     ]
 
 
+def widest_gap(
+    values, breaks: Breaks, at: float | None = None
+) -> tuple[float, float] | None:
+    """A break that cuts out the widest empty stretch between `values`, or the
+    stretch `at` lies in, with a little room on both sides; None if there is no
+    stretch between them that no break cuts already."""
+    values = np.asarray(values, dtype=float)
+    values = np.unique(values[np.isfinite(values)])
+    if values.size < 2:
+        return None
+    gaps = [
+        (a, b)
+        for a, b in zip(values[:-1], values[1:], strict=True)
+        if (at is None or a < at < b)
+        and not any(start < b and end > a for start, end in breaks)
+    ]
+    if not gaps:
+        return None
+    a, b = max(gaps, key=lambda gap: gap[1] - gap[0])
+    rest = (values[-1] - values[0]) - (b - a)
+    room = min(0.05 * rest, (b - a) / 4) if rest > 0 else (b - a) / 10
+    step = 10.0 ** math.floor(math.log10(room))
+    start = float(f"{math.ceil((a + room) / step - 1e-9) * step:.12g}")
+    end = float(f"{math.floor((b - room) / step + 1e-9) * step:.12g}")
+    return (start, end) if start < end else None
+
+
 # --- ticks ------------------------------------------------------------------
 
 

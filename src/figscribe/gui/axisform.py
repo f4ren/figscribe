@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from itertools import pairwise
+from typing import TYPE_CHECKING, Any, NamedTuple
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,15 +21,19 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from figscribe.commands import CommandError, Macro, SetField
+from figscribe.commands import CommandError, Macro, SetField, set_breaks
+from figscribe.gui.breaks import current_breaks, panel_index, proposed_break
 from figscribe.gui.numbers import number, numbers
 from figscribe.gui.widgets import label
 from figscribe.model import AxisSpec
+from figscribe.model.breaks import breaks_blocked
 from figscribe.render.labels import unit_shown
 from figscribe.render.ticks import PREFIXES, reversed_axis, too_many_ticks
 
@@ -58,6 +64,10 @@ TIPS = {
     "scale": "How values are spaced along the axis.",
     "range": "Leave empty for an automatic range; the grey numbers show the "
     "current one.",
+    "breaks": "Cuts a stretch out of the axis, with a narrow gap and break marks: "
+    "for a measurement far from the rest. Nothing is shown within a break, and "
+    "no line is drawn across it. Linear x and left y axes only; panels that "
+    "share the axis are broken alike.",
     "reverse": "Draws the axis backwards, the highest value first, as wavenumbers "
     "and binding energies are shown; also while the range is automatic. A range "
     "typed with the higher end first does the same.",
@@ -85,7 +95,7 @@ def major_mode(spec: AxisSpec) -> str:
     return "step" if spec.major_step is not None else "auto"
 
 
-def axis_settings(spec: AxisSpec) -> list[tuple[str, str]]:
+def axis_settings(spec: AxisSpec, field: str = "x") -> list[tuple[str, str]]:
     """(section, caption) of each row the axis form shows for `spec`, in
     order, for finding them without the form open."""
     mode = major_mode(spec)
@@ -99,6 +109,8 @@ def axis_settings(spec: AxisSpec) -> list[tuple[str, str]]:
         ("Scale", "From"),
         ("Scale", "Direction"),
     ]
+    if field != "y_right":  # the right y axis cannot be broken
+        rows.append(("Scale", "Breaks"))
     if spec.scale == "symlog":
         rows.append(("Scale", "Linear within ±"))
     rows.append(("Scale", "Number format"))
@@ -111,6 +123,13 @@ def axis_settings(spec: AxisSpec) -> list[tuple[str, str]]:
         rows.append(("Ticks", "Tick labels"))
     rows.append(("Ticks", "Minor ticks"))
     return rows
+
+
+class BreakRow(NamedTuple):
+    widget: QWidget
+    start: QLineEdit
+    end: QLineEdit
+    remove: QToolButton
 
 
 class AxisForm:
@@ -173,6 +192,21 @@ class AxisForm:
         self.reverse = QCheckBox("Highest value first")
         self._add(form, "Direction", self.reverse, "reverse")
         self.reverse.clicked.connect(self._set_reversed)
+        self.break_rows: list[BreakRow] = []
+        self._typing = False
+        """Whether an empty row waits for a break to be typed."""
+        holder = QWidget()
+        stack = QVBoxLayout(holder)
+        stack.setContentsMargins(0, 0, 0, 0)
+        stack.setSpacing(6)
+        self._break_stack = QVBoxLayout()
+        self._break_stack.setSpacing(6)
+        stack.addLayout(self._break_stack)
+        self.add_break = QPushButton("Add a break")
+        self.add_break.clicked.connect(self._add_break)
+        stack.addWidget(self.add_break, 0, Qt.AlignmentFlag.AlignLeft)
+        self._add(form, "Breaks", holder, "breaks")
+        self.breaks_holder = holder
         self.linthresh = self._line(form, "Linear within ±", "linthresh")
         self.linthresh.editingFinished.connect(
             lambda: self._number("symlog_linthresh", self.linthresh, shown=True)
@@ -274,6 +308,7 @@ class AxisForm:
         self.low.setPlaceholderText(self._shown(now[0]) if now else "automatic")
         self.high.setPlaceholderText(self._shown(now[1]) if now else "automatic")
         self.reverse.setChecked(reversed_axis(spec))
+        self._show_breaks()
         self._visible(self.linthresh, spec.scale == "symlog")
         _text(self.linthresh, self._shown(spec.symlog_linthresh))
         self._show_number_format(spec)
@@ -332,6 +367,54 @@ class AxisForm:
                 part.setEnabled(not typed)
                 part.setToolTip(reason + TIPS[name])
 
+    def _show_breaks(self) -> None:
+        document = self.panel.document
+        index = panel_index(document, self.axes_id)
+        self._visible(self.breaks_holder, self.field != "y_right")
+        if index is None or self.field == "y_right":
+            return
+        breaks = current_breaks(document, self.axes_id, self.field)
+        if len(breaks) + self._typing != len(self.break_rows):
+            for row in self.break_rows:
+                # Hiding a focused field finishes its editing: not any more.
+                row.start.blockSignals(True)
+                row.end.blockSignals(True)
+                row.widget.hide()
+                row.widget.deleteLater()
+            count = len(breaks) + self._typing
+            self.break_rows = [self._break_row(i) for i in range(count)]
+        for row, (start, end) in zip(self.break_rows, breaks, strict=False):
+            _text(row.start, self._shown(start))
+            _text(row.end, self._shown(end))
+        why = breaks_blocked(document.figure, index, self.field)
+        tip = TIPS["breaks"] if why is None else f"{why[0].upper()}{why[1:]}."
+        self.add_break.setEnabled(why is None)
+        self.add_break.setToolTip(tip)
+        for row in self.break_rows:
+            row.start.setEnabled(why is None)
+            row.end.setEnabled(why is None)
+
+    def _break_row(self, number: int) -> BreakRow:
+        widget = QWidget()
+        line = QHBoxLayout(widget)
+        line.setContentsMargins(0, 0, 0, 0)
+        start, end = QLineEdit(), QLineEdit()
+        remove = QToolButton()
+        remove.setText("×")
+        remove.setToolTip("Remove this break")
+        start.setToolTip("Where the stretch cut out begins")
+        end.setToolTip("Where the stretch cut out ends")
+        line.addWidget(start, 1)
+        line.addWidget(QLabel("to"))
+        line.addWidget(end, 1)
+        line.addWidget(remove)
+        self._break_stack.addWidget(widget)
+        row = BreakRow(widget, start, end, remove)
+        start.editingFinished.connect(lambda: self._set_break(number))
+        end.editingFinished.connect(lambda: self._set_break(number))
+        remove.clicked.connect(lambda: self._remove_break(number))
+        return row
+
     # --- changing -------------------------------------------------------------
 
     def _set(self, **values: Any) -> None:
@@ -358,6 +441,84 @@ class AxisForm:
             self.show(self.spec)
         else:
             self.panel.clear_report()
+
+    def _set_breaks(self, breaks: list[tuple[float, float]]) -> None:
+        """Give the axis, and those sharing it, these breaks, as one step."""
+        document = self.panel.document
+        breaks = sorted(breaks)
+        if any(not a < b for a, b in breaks):
+            self.panel.report("A break needs a start below its end.")
+            return
+        if any(not end < start for (_, end), (start, _) in pairwise(breaks)):
+            self.panel.report("Breaks must be apart from each other.")
+            return
+        if breaks == current_breaks(document, self.axes_id, self.field):
+            return
+        try:
+            document.push(
+                set_breaks(document.project, self.axes_id, self.field, breaks)
+            )
+        except CommandError as exc:
+            self.panel.report(str(exc))
+            self.show(self.spec)
+        else:
+            self.panel.clear_report()
+
+    def _set_break(self, number: int) -> None:
+        breaks = current_breaks(self.panel.document, self.axes_id, self.field)
+        row = self.break_rows[number]
+        if number >= len(breaks):
+            self._set_typed(row, breaks)
+            return
+        ends = []
+        for edit, old in zip((row.start, row.end), breaks[number], strict=True):
+            text = edit.text().strip()
+            if text == self._shown(old):  # unchanged: not rounded to what shows
+                ends.append(old)
+                continue
+            try:
+                ends.append(self._parsed(text))
+            except ValueError as exc:
+                self.panel.report(str(exc))
+                return
+        self._set_breaks([*breaks[:number], tuple(ends), *breaks[number + 1 :]])
+
+    def _set_typed(self, row: BreakRow, breaks: list) -> None:
+        """Take the break typed into the empty row, once both ends are there."""
+        texts = [edit.text().strip() for edit in (row.start, row.end)]
+        if not all(texts):
+            return
+        try:
+            new = tuple(self._parsed(text) for text in texts)
+        except ValueError as exc:
+            self.panel.report(str(exc))
+            return
+        self._typing = False
+        self._set_breaks([*breaks, new])
+        if current_breaks(self.panel.document, self.axes_id, self.field) == breaks:
+            self._typing = True  # refused: left as typed, to be corrected
+
+    def _remove_break(self, number: int) -> None:
+        breaks = current_breaks(self.panel.document, self.axes_id, self.field)
+        if number >= len(breaks):
+            self._typing = False
+            self._show_breaks()
+            return
+        self._set_breaks([b for i, b in enumerate(breaks) if i != number])
+
+    def _add_break(self) -> None:
+        """Cut out an empty stretch of the data; where it has none worth it, an
+        empty row to type the break into."""
+        found = proposed_break(self.panel.document, self.axes_id, self.field)
+        if found is not None:
+            breaks = current_breaks(self.panel.document, self.axes_id, self.field)
+            self._typing = False
+            self._set_breaks([*breaks, found])
+            return
+        self._typing = True
+        self._show_breaks()
+        self.break_rows[-1].start.setFocus()
+        self.panel.report("Type where the stretch to cut out begins and ends.")
 
     def _set_range(self) -> None:
         low, high = self.low.text().strip(), self.high.text().strip()
@@ -540,4 +701,9 @@ def axis_summary(spec: AxisSpec) -> str:
     else:
         shown = "automatic range"
     scale = dict((v, t) for t, v in SCALES)[spec.scale]
-    return f"{name} · {scale} · {shown}"
+    summary = f"{name} · {scale} · {shown}"
+    if spec.breaks:
+        factor = 10.0 ** PREFIXES[spec.prefix] if spec.prefix else 1.0
+        cut = ", ".join(f"{a / factor:g} – {b / factor:g}" for a, b in spec.breaks)
+        summary += f" · broken at {cut}"
+    return summary
