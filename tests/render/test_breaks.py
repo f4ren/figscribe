@@ -16,6 +16,7 @@ from figscribe.model import (
     Figure,
     GridLayout,
     LinePlot,
+    ReferenceLine,
     ScatterPlot,
 )
 from figscribe.render import export_bytes, render
@@ -190,6 +191,16 @@ def test_a_given_range_also_turned_around(ref, limits) -> None:
     (ax,) = _drawn(Figure(axes=[_panel(ref, x=spec)])).axes
     assert ax.get_xlim() == pytest.approx(limits)
     assert any(t >= 416 for t in _ticks(ax))
+
+
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+def test_the_range_stays_tight_beside_a_reference_line(ref, orientation) -> None:
+    """Such a line settles Matplotlib's range early, with the gap still in it."""
+    panel = _panel(ref, x=X_BREAK)
+    panel.artists.append(ReferenceLine(orientation=orientation, at=2.0))
+    (ax,) = _drawn(Figure(axes=[panel])).axes
+    low, high = ax.get_xlim()
+    assert -3 < low < 0 and 420 < high < 423
 
 
 def test_a_break_outside_the_data_does_nothing(ref) -> None:

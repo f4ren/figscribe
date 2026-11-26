@@ -38,6 +38,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
     ReferenceLine,
+    ResidualPlot,
     ScatterPlot,
     ShadedSpan,
     loads,
@@ -1931,3 +1932,163 @@ def test_an_open_frame_over_a_style_sheet_with_ticks_on_top(tmp_path: Path) -> N
     figure.open_frame = True
     project.figures = [figure]
     _assert_same(project, tmp_path)
+
+
+# --- broken axes -------------------------------------------------------------
+
+
+def _far(folder: Path):
+    """Points from 0 to 20 and one far away at 420, with errors and a second
+    quantity, also as whole numbers."""
+    t = np.r_[np.linspace(0.0, 20.0, 11), 419.5]
+    u = np.r_[1 + 0.1 * np.linspace(0.0, 20.0, 11), 9.0]
+    rows = "\n".join(
+        f"{a:.3f},{b:.4f},0.25,{10 * b:.4f},{int(a)}" for a, b in zip(t, u, strict=True)
+    )
+    (folder / "far.csv").write_text(f"t,U,dU,V,n\n{rows}\n", encoding="utf-8")
+    source = csv_source(folder / "far.csv", folder)
+    refs = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    return Project(sources=[source]), refs
+
+
+_BROKEN = [(23.0, 416.0)]
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "frame"),
+    [
+        (AxisSpec(label="t", breaks=_BROKEN), AxisSpec(label="U"), False),
+        (AxisSpec(), AxisSpec(breaks=[(3.8, 8.0)]), False),
+        (AxisSpec(breaks=_BROKEN), AxisSpec(breaks=[(3.8, 8.0)]), True),
+        (AxisSpec(breaks=[(8.0, 12.0), (23.0, 416.0)]), AxisSpec(), False),
+        (
+            AxisSpec(breaks=_BROKEN, limits=(430.0, -3.0), major_step=5),
+            AxisSpec(),
+            False,
+        ),
+        (
+            AxisSpec(
+                breaks=_BROKEN, ticks=[0, 100, 419.5], tick_labels=["a", "b", "c"]
+            ),
+            AxisSpec(minor_ticks=False),
+            False,
+        ),
+        (
+            AxisSpec(breaks=_BROKEN, prefix="m", number_format="fixed", decimals=3),
+            AxisSpec(breaks=[(3.8, 8.0)], minor_divisions=2),
+            False,
+        ),
+        (AxisSpec(breaks=_BROKEN, inverted=True), AxisSpec(), True),
+    ],
+    ids=["x", "y", "both-open", "two", "range-step", "typed", "prefix", "inverted"],
+)
+def test_broken_axes(tmp_path: Path, x, y, frame) -> None:
+    project, ref = _far(tmp_path)
+    panel = Axes(
+        x=x,
+        y=y,
+        grid=True,
+        legend=Legend(visible=True, location="upper left"),
+        artists=[
+            ErrorbarPlot(
+                x=ref["t"], y=ref["U"], yerr=ref["dU"], linestyle="-", label="data"
+            ),
+        ],
+    )
+    project.figures = [
+        Figure(
+            dpi=110, width_mm=120, open_frame=frame, decimal_comma=frame, axes=[panel]
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert "def cut_out(" in script
+    assert "np.insert(" in script  # no line across a break
+    assert [line for line in script.splitlines() if len(line) > 88] == []
+
+
+@pytest.mark.parametrize("band", [False, True])
+def test_a_broken_axis_with_a_fit_left_out_rows_and_residuals(
+    tmp_path: Path, band
+) -> None:
+    project, ref = _far(tmp_path)
+    plot = ErrorbarPlot(
+        x=ref["t"],
+        y=ref["U"],
+        yerr=ref["dU"],
+        linestyle="-",
+        label="data",
+        left_out=[3],
+        band=ErrorBand() if band else None,
+    )
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"), label="fit")
+    top = Axes(x=AxisSpec(breaks=_BROKEN), artists=[plot, fit])
+    project.figures = [
+        Figure(
+            dpi=110,
+            height_mm=90,
+            layout=GridLayout(rows=2, share_x="col", height_ratios=[3, 1]),
+            axes=[
+                top,
+                Axes(
+                    row=1,
+                    artists=[ResidualPlot(target=fit.id, linestyle="-")],
+                ),
+            ],
+        )
+    ]
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "np.concatenate(" in script
+    assert script.count('set_xscale("function"') == 1  # shared between the two
+
+
+def test_a_broken_x_axis_with_a_right_axis_marks_and_integers(tmp_path: Path) -> None:
+    project, ref = _far(tmp_path)
+    panel = Axes(
+        x=AxisSpec(breaks=_BROKEN),
+        y_right=AxisSpec(label="V"),
+        artists=[
+            LinePlot(x=ref["n"], y=ref["U"], marker="o"),
+            LinePlot(x=ref["n"], y=ref["V"], axis="right", color="C3"),
+            ReferenceLine(orientation="horizontal", at=5.0),
+            ShadedSpan(start=10.0, end=200.0),
+        ],
+    )
+    project.figures = [Figure(dpi=110, width_mm=120, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert "twin=ax_right" in script
+
+
+def test_broken_axes_of_scatter_histogram_and_mesh(tmp_path: Path) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, ColorMesh
+
+    project, ref = _far(tmp_path)
+    np.save(tmp_path / "z.npy", np.arange(20.0).reshape(4, 5))
+    frame = numpy_source(tmp_path / "z.npy", tmp_path)
+    project.sources.append(frame)
+    project.figures = [
+        Figure(
+            dpi=110,
+            width_mm=175,
+            layout=GridLayout(cols=3),
+            axes=[
+                Axes(
+                    x=AxisSpec(breaks=_BROKEN),
+                    artists=[ScatterPlot(x=ref["t"], y=ref["U"])],
+                ),
+                Axes(
+                    col=1,
+                    x=AxisSpec(breaks=_BROKEN),
+                    artists=[Histogram(values=ref["t"], bins=30)],
+                ),
+                Axes(
+                    col=2,
+                    x=AxisSpec(breaks=[(1.5, 3.5)]),
+                    artists=[ColorMesh(c=ArrayRef(source=frame.id))],
+                ),
+            ],
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert "np.insert(" not in script  # no lines to cut

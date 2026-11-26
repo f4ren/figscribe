@@ -174,7 +174,7 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
             key = ax.get_gid(), name
             if key in broken:
                 low, high = sorted(interval)
-                breaks, width = broken[key]
+                breaks, width, _ = broken[key]
                 visible = sum(b - a for a, b in pieces(breaks, low, high))
                 fitting = ticks_that_fit(spec, (low, low + visible))
                 broken_ticks[key] = _set_break_ticks(ax, name, fitting, breaks, width)
@@ -206,7 +206,7 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
         # Last, when everything to be clipped is there.
         for i, axes in enumerate(figure.axes):
             x_breaks, y_breaks = (
-                broken.get((axes.id, n), ([], 0))[0] for n in ("x", "y")
+                broken.get((axes.id, n), ([],))[0] for n in ("x", "y")
             )
             if x_breaks or y_breaks:
                 frame = not figure.open_frame
@@ -218,22 +218,23 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
 
 def _break_scales(
     figure: Figure, axs: dict[int, MplAxes], twins: dict[int, MplAxes]
-) -> dict[tuple[str, str], tuple[Breaks, float]]:
-    """Give each broken axis its scale; returns the breaks drawn and the width
-    of their gaps, by (gid, "x" or "y"). Panels sharing an axis have one scale
-    between them.
+) -> dict[tuple[str, str], tuple]:
+    """Give each broken axis its scale; returns (breaks drawn, width of their
+    gaps, range if it was automatic) by (gid, "x" or "y"). Panels sharing an
+    axis have one scale between them.
 
     The gap's width follows from the range the model gives, or that the data
     fill, so that zooming the preview does not change it.
     """
-    broken: dict[tuple[str, str], tuple[Breaks, float]] = {}
+    broken: dict[tuple[str, str], tuple] = {}
     for i in range(len(figure.axes)):
         for name in ("x", "y"):
             group = sharing_group(figure, i, name)
             if i != group[0] or not (breaks := effective_breaks(figure, i, name)):
                 continue
             first = axs[i]
-            if any(getattr(figure.axes[j], name).limits for j in group):
+            given = any(getattr(figure.axes[j], name).limits for j in group)
+            if given:
                 ends = list(first.get_xlim() if name == "x" else first.get_ylim())
             else:
                 drawn = [axs[j] for j in group]
@@ -253,8 +254,18 @@ def _break_scales(
                 continue
             set_scale = first.set_xscale if name == "x" else first.set_yscale
             set_scale("function", functions=squeezed(applied, width))
+            fixed = None
+            if not given:
+                # An automatic range is worked out for the squeezed scale (a
+                # reference line may have settled the linear one already) and
+                # fixed, rounded, so that the script can write it and draws
+                # with the very same numbers.
+                first.autoscale_view(scalex=name == "x", scaley=name == "y")
+                ends = first.get_xlim() if name == "x" else first.get_ylim()
+                fixed = tuple(float(f"{end:.6g}") for end in ends)
+                (first.set_xlim if name == "x" else first.set_ylim)(*fixed)
             for j in group:
-                broken[figure.axes[j].id, name] = applied, width
+                broken[figure.axes[j].id, name] = applied, width, fixed
     return broken
 
 
