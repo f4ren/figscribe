@@ -71,7 +71,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **F4** plot types (M each): hollow markers, error bar colour and caps, an
   error bar on every n-th point (3); step plot (4); points coloured by a
   third column (5); waterfall (6); contours (7); bar chart (8).
-- **F5** axes: number format and the decimal comma (1); ~~inverted axes (2)~~ done;
+- **F5** axes: ~~number format and the decimal comma (1)~~ done; ~~inverted axes (2)~~ done;
   a second x axis on top that converts (3); hiding (done) and offsetting spines
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
   **broken axes (6, wanted for a measurement at a fixed point,
@@ -1223,7 +1223,14 @@ In order of demand:
 
 1. **Number format** of tick labels: automatic, fixed decimals, scientific
    (×10ⁿ at the axis end or per tick), and the **decimal comma** for German
-   theses and journals. Per figure, overridable per axis.
+   theses and journals. Per figure, overridable per axis. **Done** (2026-11-26,
+   decision 0071; no schema bump), as the user chose from pictures: the format
+   per axis (`AxisSpec.number_format`, `decimals`), the comma per figure
+   (`Figure.decimal_comma`, off by default). Scientific is per tick. *Learned:*
+   a comma in mathtext needs `{,}`; ticks every fixed step can put zero at
+   1e-17, which a formatter of ours printed (fixed). *Follow-ups, only if
+   asked:* ×10ⁿ once at the axis end; the comma in legends, notes and fit
+   results; a format for color bars.
 2. **Invert** an axis (wavenumbers, binding energies). **Done**
    (2026-11-20, decision 0067; no schema bump): `AxisSpec.inverted`, and a
    range typed highest end first reverses an axis as before; the box

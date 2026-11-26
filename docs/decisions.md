@@ -3344,3 +3344,59 @@ dependency and a file of times to keep current. **Splitting by test number in a
 conftest:** code to maintain for what two paths do. **Fewer macOS jobs on pull
 requests:** shortens the wait for a runner, but a failure of one version would
 show only after the merge; not done.
+
+## 0071 — Number format per axis, decimal comma per figure
+
+**Date:** 2026-11-26
+**Status:** accepted (roadmap F5.1; the user saw pictures of the formats and
+chose them on 2026-11-20, the point staying the default). Where the settings
+sit, *Number format* and *Decimals* in the axis form's *Scale* (arranged by
+decision 0050) and *Decimal comma* in the figure's *Text*, the user has not
+seen yet.
+
+### Context
+
+Matplotlib chooses how tick numbers look, and has no setting for a decimal
+comma, which German theses and journals ask for.
+
+### Decision
+
+- `AxisSpec.number_format`: `"auto"`, `"fixed"` or `"scientific"`, with
+  `AxisSpec.decimals` (0 to 10, default 1). A format applies to the value as
+  shown, so with a prefix to the prefixed one. Typed `tick_labels` win.
+- `Figure.decimal_comma: bool = False`: every axis and color bar of the figure.
+  Not legends, notes, fit results or typed labels, which are text.
+- Where figscribe writes a number itself (`render.ticks.tick_text`), the comma
+  replaces the point in that text. Where Matplotlib writes it, a subclass of
+  `ScalarFormatter` or `LogFormatterSciNotation` replaces it in Matplotlib's
+  text, also in the offset at the end of an axis. Inside mathtext the comma is
+  written `{,}`, or TeX puts a space after it ("2, 5").
+- The script defines `decimal_comma`, `power_of_ten` and these classes, only
+  those it uses; renderer and script have the same text, and the equivalence
+  test compares them.
+- On a log axis spanning less than a decade Matplotlib numbers minor ticks.
+  Where figscribe writes the numbers and the user set no major ticks,
+  `MinorLogNumbers` writes those same ticks our way; before, they were silenced
+  and such an axis could be left without a number, also with a prefix.
+- "Fixed" rounds and adds 0 before formatting, so that -0.001 reads 0.0, not
+  -0.0. Not Python's `z` format: it needs 3.11, and a script runs without
+  figscribe, on 3.10 too.
+- Panels that share an axis share its ticks and numbers. A panel without a
+  format of its own sets no comma formatter over another's format or typed
+  labels. Where a shared axis is not linear, the script writes its ticks after
+  every panel has set the scale, because setting it again resets them; the
+  renderer places ticks last anyway.
+- No schema bump: the defaults draw what was drawn, and no released file has
+  the fields.
+
+### Alternatives considered
+
+**`axes.formatter.use_locale` with `locale.setlocale`**: locale names differ
+between systems, a machine may lack them, and the script would draw differently
+on its reader's computer. **A figure-wide number format, overridable per axis**
+(the roadmap's first idea): axes of one figure rarely share a format; the
+comma is what a whole document shares. **×10ⁿ once at the axis end** as a
+format: *Show values in* already puts the factor into the unit, which physics
+journals prefer; not built. **A comma setting per axis**: a figure with both
+marks would be a mistake.
+

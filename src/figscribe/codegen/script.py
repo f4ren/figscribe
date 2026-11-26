@@ -74,13 +74,16 @@ from figscribe.render.layout import (
     hidden_tick_labels,
     inset_parent,
     share_partner,
+    sharing_specs,
 )
 from figscribe.render.ticks import (
+    comma_formatter,
+    minor_numbers,
     minor_ticks,
     scaling,
-    silent_minor_labels,
     tick_style,
     ticks_that_fit,
+    zero_below,
 )
 
 WIDTH = 88
@@ -120,6 +123,13 @@ RESERVED = {
     "right_handles",
     "right_labels",
     "line",
+    "decimal_comma",
+    "power_of_ten",
+    "CommaFormatter",
+    "CommaLogFormatter",
+    "MinorLogNumbers",
+    "colorbar",
+    *(f"colorbar{i}" for i in range(2, 100)),
 }
 
 
@@ -512,6 +522,7 @@ class _Writer:
         self._allan_deviations()
         self._fit_models()
         self._fits()
+        self._tick_helpers()
         self._figure()
         self.section("Save")
         self.emit(f"fig.savefig(HERE / {_str(output)})")
@@ -548,7 +559,12 @@ class _Writer:
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
         locators = self._locators()
         if locators:
-            self.emit(f"from matplotlib.ticker import {', '.join(locators)}")
+            line = f"from matplotlib.ticker import {', '.join(locators)}"
+            if len(line) <= WIDTH:
+                self.emit(line)
+            else:
+                self.emit("from matplotlib.ticker import (")
+                self.emit(*(f"    {name}," for name in locators), ")")
         if any(getattr(a, "norm", None) == "log" for a in self.artists.values()):
             self.emit("from matplotlib.colors import LogNorm")
         if self.fits:
@@ -599,9 +615,57 @@ class _Writer:
             for s in specs
         ):
             needed.append("MultipleLocator")
-        if any(silent_minor_labels(s) for s in specs):
+        if any(minor_numbers(s) == "silent" for s in specs):
             needed.append("NullFormatter")
-        return needed
+        kinds = self._comma_kinds()
+        if "linear" in kinds:
+            needed.append("ScalarFormatter")
+        if "log" in kinds or any(minor_numbers(s) == "ours" for s in specs):
+            needed.append("LogFormatterSciNotation")
+        return sorted(needed)
+
+    def _comma_kinds(self) -> set[str]:
+        """Which of Matplotlib's formatters need a subclass with a decimal
+        comma, "linear" or "log": for axes and for color bars."""
+        comma = self.figure.decimal_comma
+        kinds = {
+            comma_formatter(
+                self.axis_specs[(axes.id, field)],
+                comma,
+                sharing_specs(self.figure, i, field),
+            )
+            for i, axes in enumerate(self.figure.axes)
+            for field in ("x", "y", "y_right")
+            if (axes.id, field) in self.axis_specs
+        }
+        if comma:
+            kinds |= {
+                "log" if artist.norm == "log" else "linear"
+                for artist in self.artists.values()
+                if getattr(artist, "colorbar", None) is not None
+                and artist.colorbar.visible
+            }
+        return kinds - {None}
+
+    def _tick_helpers(self) -> None:
+        """The functions and formatters the tick numbers are written with."""
+        own = [s for s in self.axis_specs.values() if scaling(s) is not None]
+        kinds = self._comma_kinds()
+        helpers = []
+        if kinds or (own and self.figure.decimal_comma):
+            helpers.append(DECIMAL_COMMA)
+        if any(s.number_format == "scientific" for s in own):
+            helpers.append(POWER_OF_TEN)
+        if "linear" in kinds:
+            helpers.append(COMMA_FORMATTER)
+        if "log" in kinds:
+            helpers.append(COMMA_LOG_FORMATTER)
+        if any(minor_numbers(s) == "ours" for s in own):
+            helpers.append(MINOR_LOG_NUMBERS)
+        if not helpers:
+            return
+        self.section("Tick numbers")
+        self.emit(*"\n\n\n".join(helpers).splitlines())
 
     def _data(self, script_dir: Path) -> None:
         used = [s for s in self.project.sources if self._used(s.id)]
@@ -1224,8 +1288,17 @@ class _Writer:
                 ]
             )
             self.call(f"{name} = fig.add_subplot", *where, **kwargs)
+        self._shared_ticks = []
         for i in creation_order(figure):
             self._panel(i, figure.axes[i])
+        if self._shared_ticks:
+            self.emit(
+                "",
+                "# Ticks of shared axes, now that every panel has set its scale:",
+                "# setting it again would undo them.",
+            )
+        for shared_axis in self._shared_ticks:
+            self._ticks(*shared_axis)
         hidden = hidden_tick_labels(figure)
         if any(x or y for x, y in hidden):
             self.emit(
@@ -1300,15 +1373,16 @@ class _Writer:
         if axes.title is not None:
             size = {"fontsize": _num(axes.title_size)} if axes.title_size else {}
             self.call(f"{ax}.set_title", _str(axes.title), **size)
-        self._axis(ax, "x", self.axis_specs[(axes.id, "x")])
-        self._axis(ax, "y", self.axis_specs[(axes.id, "y")])
+        for name in ("x", "y"):
+            shared = sharing_specs(self.figure, index, name)
+            self._axis(ax, name, self.axis_specs[(axes.id, name)], shared)
         right = None
         if axes.y_right is not None:
             right = f"{ax}_right"
             self.emit(f"{right} = {ax}.twinx()")
             if self.figure.open_frame:
                 self.emit(f'{right}.spines["right"].set_visible(True)')
-            self._axis(right, "y", self.axis_specs[(axes.id, "y_right")])
+            self._axis(right, "y", self.axis_specs[(axes.id, "y_right")], [])
         if axes.grid:
             kwargs = {}
             if axes.grid_which != "major":
@@ -1328,7 +1402,9 @@ class _Writer:
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)
 
-    def _axis(self, ax: str, name: str, spec: AxisSpec) -> None:
+    def _axis(self, ax: str, name: str, spec: AxisSpec, shared: list[AxisSpec]) -> None:
+        """One axis of a panel; `shared` holds the settings of the other panels'
+        axes that are one with it."""
         label = axis_label(spec, self.figure.unit_format)
         if label is not None:
             size = {"fontsize": _num(spec.label_size)} if spec.label_size else {}
@@ -1354,7 +1430,17 @@ class _Writer:
             if spec.tick_labels is not None:
                 kwargs["labels"] = _value(spec.tick_labels)
             self.call(f"{ax}.set_{name}ticks", _value(spec.ticks), **kwargs)
-        elif spec.major_step is not None:
+        # A later panel that sets the shared scale again would undo the ticks.
+        if shared and any(s.scale != "linear" for s in (spec, *shared)):
+            self._shared_ticks.append((ax, name, spec, shared))
+        else:
+            self._ticks(ax, name, spec, shared)
+
+    def _ticks(
+        self, ax: str, name: str, spec: AxisSpec, shared: list[AxisSpec]
+    ) -> None:
+        """The tick step, minor ticks and tick numbers of an axis."""
+        if spec.ticks is None and spec.major_step is not None:
             step = _num(spec.major_step)
             self.emit(f"{ax}.{name}axis.set_major_locator(MultipleLocator({step}))")
         how, value = minor_ticks(spec)
@@ -1366,20 +1452,21 @@ class _Writer:
             )
         elif how == "on":
             self.emit(f"{ax}.{name}axis.minorticks_on()")
-        elif self.figure.stylesheet is not None:
-            self.emit(f"{ax}.{name}axis.minorticks_off()")
-        scaled = scaling(spec)
-        if scaled is not None:
-            op, factor = scaled
-            number = "v" if (op, factor) == ("*", "1") else f"v {op} {factor}"
-            if spec.prefix is not None:
-                self.emit(f"# Values shown in {unit_shown(spec)}")
-            self.emit(
-                f"{ax}.{name}axis.set_major_formatter("
-                f'FuncFormatter(lambda v, _: f"{{{number}:g}}"))'
-            )
-        if silent_minor_labels(spec):
+        elif self.figure.stylesheet is not None or spec.scale != "linear":
+            self.emit(f"{ax}.{name}axis.minorticks_off()")  # a log axis has some
+        if scaling(spec) is not None:
+            self._tick_numbers(ax, name, spec)
+        elif kind := comma_formatter(spec, self.figure.decimal_comma, shared):
+            minor = spec.scale == "log" and how != "off"
+            self._comma_numbers(f"{ax}.{name}axis", kind, minor)
+        minor = minor_numbers(spec)
+        if minor == "silent":
             self.emit(f"{ax}.{name}axis.set_minor_formatter(NullFormatter())")
+        elif minor == "ours":
+            major = f"{ax}.{name}axis.get_major_formatter()"
+            self.call(
+                f"{ax}.{name}axis.set_minor_formatter", f"MinorLogNumbers({major})"
+            )
         if spec.tick_size is not None:
             self.call(
                 f"{ax}.tick_params",
@@ -1387,6 +1474,60 @@ class _Writer:
                 which='"both"',
                 labelsize=_num(spec.tick_size),
             )
+
+    def _tick_numbers(self, ax: str, name: str, spec: AxisSpec) -> None:
+        """The formatter of an axis whose numbers the script writes itself; it
+        writes what render.ticks.tick_text does."""
+        op, factor = scaling(spec)
+        value = "v"
+        if spec.prefix is not None:
+            self.emit(f"# Values shown in {unit_shown(spec)}")
+        if (zero := zero_below(spec)) is not None:
+            self.emit("# The tick at zero may come out as 1e-17: write it as 0.")
+            value = f"(v if abs(v) > {_num(zero)} else 0)"
+        number = value if (op, factor) == ("*", "1") else f"{value} {op} {factor}"
+        wrappers = ["decimal_comma"] if self.figure.decimal_comma else []
+        if spec.number_format == "scientific":
+            core = f"power_of_ten({number}, {spec.decimals})"
+        else:
+            # fix_minus writes "−" as Matplotlib does, not "-".
+            wrappers.append("FuncFormatter.fix_minus")
+            core = f'f"{{{number}:g}}"'
+        if spec.number_format == "fixed":
+            self.emit("# + 0 keeps a tiny negative value from reading -0.")
+            places = spec.decimals
+            core = f'f"{{round({number}, {places}) + 0:.{places}f}}"'
+        call = f"{ax}.{name}axis.set_major_formatter"
+        text = f"lambda v, _: {_nested(wrappers, core)}"
+        if len(f"{call}(FuncFormatter({text}))") <= WIDTH:
+            self.emit(f"{call}(FuncFormatter({text}))")
+        elif len(f"    FuncFormatter({text})") <= WIDTH:
+            self.emit(f"{call}(", f"    FuncFormatter({text})", ")")
+        else:
+            self.emit(f"{call}(", "    FuncFormatter(")
+            self._broken("lambda v, _: ", wrappers, core, indent=8)
+            self.emit("    )", ")")
+
+    def _broken(self, head: str, wrappers: list[str], core: str, indent: int) -> None:
+        """`head` and the nested calls, one call per level until the rest fits."""
+        space = " " * indent
+        line = f"{space}{head}{_nested(wrappers, core)}"
+        if len(line) <= WIDTH or not wrappers:
+            self.emit(line)
+            return
+        self.emit(f"{space}{head}{wrappers[0]}(")
+        self._broken("", wrappers[1:], core, indent + 4)
+        self.emit(f"{space})")
+
+    def _comma_numbers(self, axis: str, kind: str, minor: bool) -> None:
+        """Matplotlib's own numbers of `axis` (as the script names it), with a
+        decimal comma."""
+        if kind == "linear":
+            self.emit(f"{axis}.set_major_formatter(CommaFormatter())")
+            return
+        self.emit(f"{axis}.set_major_formatter(CommaLogFormatter())")
+        if minor:
+            self.emit(f"{axis}.set_minor_formatter(CommaLogFormatter())")
 
     def _artist(self, ax: str, artist) -> None:
         common = _common(artist, default_zorder=DEFAULT_ZORDER.get(artist.kind, 2.0))
@@ -1514,12 +1655,19 @@ class _Writer:
             self.call(call, *args, **kwargs, **common)
             return
         self._mappables += 1
-        mappable = "image" if image else "mesh"
-        if self._mappables > 1:
-            mappable += str(self._mappables)
+        number = str(self._mappables) if self._mappables > 1 else ""
+        mappable = ("image" if image else "mesh") + number
         self.call(f"{mappable} = {call}", *args, **kwargs, **common)
         label = {"label": _str(bar.label)} if bar.label is not None else {}
-        self.call("fig.colorbar", mappable, ax=ax, **label)
+        if not self.figure.decimal_comma:
+            self.call("fig.colorbar", mappable, ax=ax, **label)
+        elif artist.norm != "log":
+            comma = "CommaFormatter()"
+            self.call("fig.colorbar", mappable, ax=ax, **label, format=comma)
+        else:
+            name = f"colorbar{number}"
+            self.call(f"{name} = fig.colorbar", mappable, ax=ax, **label)
+            self._comma_numbers(f"{name}.ax.yaxis", "log", minor=True)
 
     def _all_finite(self, refs) -> bool:
         """Whether the data behind `refs` is all finite; False if unknown."""
@@ -1799,6 +1947,49 @@ def overlapping_adev(phase, tau0, m):
 does the same, step by step."""
 
 
+DECIMAL_COMMA = '''\
+def decimal_comma(text):
+    """The number with a decimal comma; in mathtext, the braces keep TeX from
+    putting a space after it."""
+    return text.replace(".", "{,}" if "$" in text else ",")'''
+
+POWER_OF_TEN = '''\
+def power_of_ten(value, decimals):
+    """A tick number as 2.5×10³, in Matplotlib's mathtext."""
+    if value == 0:
+        return "0"
+    mantissa, exponent = f"{value:.{decimals}e}".split("e")
+    return rf"$\\mathdefault{{{mantissa}\\times10^{{{int(exponent)}}}}}$"'''
+
+COMMA_FORMATTER = '''\
+class CommaFormatter(ScalarFormatter):
+    """Matplotlib's own tick numbers, with a decimal comma."""
+
+    def __call__(self, x, pos=None):
+        return decimal_comma(super().__call__(x, pos))
+
+    def get_offset(self):
+        return decimal_comma(super().get_offset())'''
+
+COMMA_LOG_FORMATTER = '''\
+class CommaLogFormatter(LogFormatterSciNotation):
+    """Matplotlib's numbers on a log axis, with a decimal comma."""
+
+    def __call__(self, x, pos=None):
+        return decimal_comma(super().__call__(x, pos))'''
+MINOR_LOG_NUMBERS = '''\
+class MinorLogNumbers(LogFormatterSciNotation):
+    """Numbers the minor ticks Matplotlib would number, as `major` writes them."""
+
+    def __init__(self, major):
+        super().__init__(labelOnlyBase=False)
+        self.major = major
+
+    def __call__(self, x, pos=None):
+        return self.major(x, pos) if super().__call__(x, pos) else ""'''
+"""What the script defines to write tick numbers; render.ticks does the same."""
+
+
 def _common(artist, default_zorder: float) -> dict[str, str]:
     """The keywords every artist takes, where they differ from Matplotlib's."""
     kwargs = {}
@@ -1889,6 +2080,11 @@ def _str(text: str) -> str:
         return repr(text)  # other control characters, rare enough to look odd
     escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
     return f'"{escaped}"'
+
+
+def _nested(wrappers: list[str], core: str) -> str:
+    """`core` inside the calls of `wrappers`, the first one outermost."""
+    return "".join(f"{call}(" for call in wrappers) + core + ")" * len(wrappers)
 
 
 def _num(value: float) -> str:

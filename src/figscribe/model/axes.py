@@ -54,6 +54,15 @@ class AxisSpec(StrictModel):
     unit as kHz. The data, limits, ticks and steps stay in the data's unit;
     None shows the values as they are."""
 
+    number_format: Literal["auto", "fixed", "scientific"] = "auto"
+    """How the tick numbers are written: "auto" as Matplotlib does, "fixed" with
+    `decimals` places after the decimal mark, "scientific" each as a power of
+    ten (2.5×10³) with `decimals` places in front of the ×. With a prefix, the
+    prefixed value is formatted. Typed `tick_labels` are shown as typed."""
+    decimals: int = Field(1, ge=0, le=10)
+    """Places after the decimal mark for `number_format` "fixed" and
+    "scientific"; "auto" ignores it."""
+
     @field_validator("limits")
     @classmethod
     def _two_ends(cls, limits):

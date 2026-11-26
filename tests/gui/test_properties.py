@@ -729,6 +729,7 @@ def test_the_basic_settings_come_first_the_rest_under_more(
     assert fields["Text"] == [
         "font_size",
         "unit_format",
+        "decimal_comma",
         "align_labels",
         "panel_labels",
     ]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -135,6 +136,27 @@ def test_an_open_frame_roundtrips_and_an_older_file_has_a_box(
     document = json.loads(dumps(project))
     del document["figures"][0]["open_frame"]
     assert loads(json.dumps(document)).figures[0].open_frame is False
+
+
+def test_number_formats_roundtrip_and_an_older_file_has_matplotlibs(
+    project: Project,
+) -> None:
+    project.figures[0].decimal_comma = True
+    project.figures[0].axes[0].x.number_format = "scientific"
+    project.figures[0].axes[0].x.decimals = 3
+    again = loads(dumps(project)).figures[0]
+    assert again.decimal_comma is True
+    assert (again.axes[0].x.number_format, again.axes[0].x.decimals) == (
+        "scientific",
+        3,
+    )
+    document = json.loads(dumps(project))
+    del document["figures"][0]["decimal_comma"]
+    for field in ("number_format", "decimals"):
+        del document["figures"][0]["axes"][0]["x"][field]
+    older = loads(json.dumps(document)).figures[0]
+    assert older.decimal_comma is False
+    assert (older.axes[0].x.number_format, older.axes[0].x.decimals) == ("auto", 1)
 
 
 def test_a_negative_label_distance_is_refused() -> None:

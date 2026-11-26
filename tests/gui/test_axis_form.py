@@ -292,6 +292,43 @@ def test_the_box_of_the_right_axis_is_its_own(panel, document) -> None:
     assert axes.y_right.inverted and not axes.y.inverted
 
 
+# --- the number format (F5.1) --------------------------------------------------
+
+
+def test_choosing_a_number_format_and_its_decimals(panel, document) -> None:
+    axes = _axes(document)
+    document.select(axis_id(axes.id, "x"))
+    form = panel.axis_form
+    assert form.number_format.currentData() == "auto"
+    assert form.decimals.isHidden()  # automatic numbers have none to set
+    _choose(form.number_format, "fixed")
+    assert axes.x.number_format == "fixed" and not form.decimals.isHidden()
+    assert _captions(panel, "Scale")[3:5] == ["Number format", "Decimals"]
+    form.decimals.setValue(3)
+    assert axes.x.decimals == 3
+    _choose(form.number_format, "scientific")
+    assert axes.x.number_format == "scientific" and axes.x.decimals == 3
+    document.undo()
+    assert (
+        axes.x.number_format == "fixed" and form.number_format.currentData() == "fixed"
+    )
+
+
+def test_typed_tick_labels_grey_the_number_format(panel, document) -> None:
+    from figscribe.model import AxisSpec
+
+    axes = _axes(document)
+    spec = AxisSpec(ticks=[1, 2], tick_labels=["a", "b"])
+    document.push(SetField(axes.id, ("x",), spec))
+    document.select(axis_id(axes.id, "x"))
+    form = panel.axis_form
+    assert not form.number_format.isEnabled() and not form.decimals.isEnabled()
+    assert "tick labels" in form.number_format.toolTip()
+    _enter(form.tick_labels, "")
+    assert form.number_format.isEnabled()
+    assert "tick labels" not in form.number_format.toolTip()
+
+
 def _enter_range(form, low: str, high: str) -> None:
     form.low.setText(low)
     form.high.setText(high)
@@ -326,6 +363,7 @@ def test_the_axis_form_is_arranged_by_what_the_settings_are_for(
         "Type",
         "From",
         "Direction",
+        "Number format",
         "Number size (pt)",
     ]
     assert _captions(panel, "Ticks") == ["Major ticks", "Minor ticks"]
@@ -362,5 +400,6 @@ def test_the_linear_zone_of_a_symmetric_log_axis_is_in_the_scale(
         "From",
         "Direction",
         "Linear within ±",
+        "Number format",
         "Number size (pt)",
     ]

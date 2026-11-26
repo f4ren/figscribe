@@ -47,6 +47,7 @@ KEYWORDS = {
     "Add Figure": "tab page",
     "Add Plot…": "chart graph curve",
     "Line": "curve trace line plot",
+    "Decimal comma": "german decimal separator mark point number format locale",
     "Points": "scatter markers dots",
     "Error bars": "errorbar uncertainty yerr sigma",
     "Histogram": "bins distribution frequency counts",
@@ -98,6 +99,9 @@ AXIS_KEYWORDS = {
     ("Scale", "Direction"): "reverse reversed invert inverted flip backwards "
     "descending highest first wavenumber binding energy",
     ("Scale", "Linear within ±"): "symlog linthresh threshold",
+    ("Scale", "Number format"): "decimals places digits precision scientific "
+    "exponent power of ten notation fixed",
+    ("Scale", "Decimals"): "places digits precision number format",
     ("Scale", "Number size (pt)"): "tick label font numbers",
     ("Ticks", "Major ticks"): "tick spacing step interval positions locator labels",
     ("Ticks", "Distance"): "tick spacing step interval",

@@ -42,6 +42,11 @@ MAJOR_MODES = [
     ("at these values", "values"),
 ]
 MINOR_MODES = [("none", "off"), ("automatically", "on"), ("between majors:", "count")]
+NUMBER_FORMATS = [
+    ("automatic", "auto"),
+    ("fixed decimals", "fixed"),
+    ("scientific", "scientific"),
+]
 SUPERSCRIPTS = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
 
 TIPS = {
@@ -57,6 +62,11 @@ TIPS = {
     "and binding energies are shown; also while the range is automatic. A range "
     "typed with the higher end first does the same.",
     "linthresh": "Around zero, a symmetric log axis is linear within ± this value.",
+    "number_format": "How the numbers are written: as Matplotlib chooses, with "
+    "a fixed number of decimals, or each as a power of ten (2.5×10³). For a "
+    "decimal comma, see the figure's settings.",
+    "decimals": "Places after the decimal mark; for scientific numbers, those "
+    "in front of the ×.",
     "major": "Where the numbered ticks go.",
     "labels": "Text for each tick value, separated by commas; empty for numbers.",
     "minor": "Unnumbered ticks between the numbered ones.",
@@ -91,6 +101,9 @@ def axis_settings(spec: AxisSpec) -> list[tuple[str, str]]:
     ]
     if spec.scale == "symlog":
         rows.append(("Scale", "Linear within ±"))
+    rows.append(("Scale", "Number format"))
+    if spec.number_format != "auto":
+        rows.append(("Scale", "Decimals"))
     rows += [("Scale", "Number size (pt)"), ("Ticks", "Major ticks")]
     if mode != "auto":
         rows.append(("Ticks", "Distance" if mode == "step" else "Values"))
@@ -164,6 +177,17 @@ class AxisForm:
         self.linthresh.editingFinished.connect(
             lambda: self._number("symlog_linthresh", self.linthresh, shown=True)
         )
+        self.number_format = self._combo(
+            form, "Number format", "number_format", NUMBER_FORMATS
+        )
+        self.number_format.activated.connect(
+            lambda i: self._set(number_format=self.number_format.itemData(i))
+        )
+        self.decimals = QSpinBox()
+        self.decimals.setRange(0, 10)
+        self.decimals.setKeyboardTracking(False)  # one change, not one per digit
+        self._add(form, "Decimals", self.decimals, "decimals")
+        self.decimals.valueChanged.connect(lambda n: self._set(decimals=n))
         self.tick_size = self._line(form, "Number size (pt)", "tick_size", "default")
         self.tick_size.editingFinished.connect(
             lambda: self._number("tick_size", self.tick_size)
@@ -216,6 +240,8 @@ class AxisForm:
             self.labelpad,
             self.label_size,
             self.tick_size,
+            self.number_format,
+            self.decimals,
         ]
         for widget in widgets:
             widget.blockSignals(True)
@@ -250,6 +276,7 @@ class AxisForm:
         self.reverse.setChecked(reversed_axis(spec))
         self._visible(self.linthresh, spec.scale == "symlog")
         _text(self.linthresh, self._shown(spec.symlog_linthresh))
+        self._show_number_format(spec)
 
         mode = major_mode(spec)
         self.major.setCurrentIndex(self.major.findData(mode))
@@ -287,6 +314,23 @@ class AxisForm:
         _text(self.labelpad, _number_text(spec.labelpad))
         _text(self.label_size, _number_text(spec.label_size))
         _text(self.tick_size, _number_text(spec.tick_size))
+
+    def _show_number_format(self, spec: AxisSpec) -> None:
+        self.number_format.setCurrentIndex(
+            self.number_format.findData(spec.number_format)
+        )
+        self.decimals.setValue(spec.decimals)
+        self._visible(self.decimals, spec.number_format != "auto")
+        typed = spec.tick_labels is not None  # they are shown as typed
+        for name, widget in (
+            ("number_format", self.number_format),
+            ("decimals", self.decimals),
+        ):
+            reason = "No effect while tick labels are typed. " if typed else ""
+            caption = self._forms[widget].labelForField(widget)
+            for part in (caption, widget):
+                part.setEnabled(not typed)
+                part.setToolTip(reason + TIPS[name])
 
     # --- changing -------------------------------------------------------------
 

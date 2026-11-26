@@ -305,6 +305,31 @@ def _figures(ref) -> dict[str, Figure]:
                 ),
             ],
         ),
+        # F5.1: fixed decimals and powers of ten, with a decimal comma
+        "number_formats": Figure(
+            dpi=100,
+            width_mm=175,
+            decimal_comma=True,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(
+                    x=AxisSpec(label="t", unit="s"),
+                    y=AxisSpec(label="U", unit="V", number_format="fixed", decimals=2),
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                ),
+                Axes(
+                    col=1,
+                    x=AxisSpec(label="t", unit="s"),
+                    y=AxisSpec(
+                        label="U",
+                        unit="V",
+                        number_format="scientific",
+                        major_step=0.5,
+                    ),
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                ),
+            ],
+        ),
         # F5.2: an automatic range drawn backwards, as a spectrum is shown
         "reversed_axis": Figure(
             dpi=100,
@@ -335,6 +360,7 @@ def _figures(ref) -> dict[str, Figure]:
         "note_background",
         "reversed_axis",
         "open_frame",
+        "number_formats",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

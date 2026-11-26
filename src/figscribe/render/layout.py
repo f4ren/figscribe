@@ -6,7 +6,7 @@ the generator writes makes exactly the calls the renderer makes.
 
 from __future__ import annotations
 
-from figscribe.model import Axes, Figure
+from figscribe.model import Axes, AxisSpec, Figure
 
 
 def share_partner(figure: Figure, index: int, axis: str) -> int | None:
@@ -27,6 +27,24 @@ def share_partner(figure: Figure, index: int, axis: str) -> int | None:
         if mode == "all" or getattr(other, along) == getattr(me, along):
             return i
     return None
+
+
+def sharing_specs(figure: Figure, index: int, field: str) -> list[AxisSpec]:
+    """The settings of the other panels' axes that are one with the `field`
+    axis of the axes `index`. They have one set of ticks and numbers between
+    them. A right y axis shares with none."""
+    if field == "y_right" or figure.axes[index].inset is not None:
+        return []
+
+    def first(i: int) -> int:
+        partner = share_partner(figure, i, field)
+        return i if partner is None else partner
+
+    return [
+        getattr(axes, field)
+        for i, axes in enumerate(figure.axes)
+        if i != index and axes.inset is None and first(i) == first(index)
+    ]
 
 
 def creation_order(figure: Figure) -> list[int]:

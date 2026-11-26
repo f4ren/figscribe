@@ -5,6 +5,12 @@ release open in every later one.
 
 ## Unreleased
 
+- **Number format and decimal comma.** In the axis form, *Scale* has *Number
+  format*: automatic, fixed decimals, or scientific (2.5×10³ at every tick),
+  with *Decimals*. The figure's *Text* settings have *Decimal comma*, which
+  writes the numbers along every axis and color bar as 1,5; legends, notes, fit
+  results and typed tick labels stay as written. The point stays the default.
+  The script defines the few lines this takes (decision 0071).
 - **Check for updates.** *Help > Check for Updates…* (and `figscribe
   check-update`) asks GitHub for the latest release and says whether it is newer.
   The installed program offers to open the release page; with `pip` it names the
@@ -35,6 +41,17 @@ release open in every later one.
 - Fixed: the first release of the installers (0.3.0) carried a fourth file, the
   tool that builds the AppImage, next to the three installers. It is removed from
   that release and no longer kept where the workflow collects installers.
+- Fixed: on an axis shown with an SI prefix and a tick step of its own, the tick
+  at zero could be written as -6.93889e-15. Negative numbers on such an axis
+  also have the minus sign Matplotlib uses now, not a hyphen.
+- Fixed: where panels share an axis, typed tick labels of one panel could
+  vanish from the preview while the script kept them.
+- Fixed: a log axis with its minor ticks switched off still had them in the
+  script.
+- Fixed: a log axis with an SI prefix spanning less than a decade, 200 to 800,
+  could have no number at all. Such an axis, up to about a decade, now numbers
+  the minor ticks Matplotlib would number, unless major ticks are set; a project
+  with such an axis can show more numbers than before.
 
 ## 0.3.0 — 2026-11-05
 
