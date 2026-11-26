@@ -1752,14 +1752,19 @@ parameters would not match the axis they are read against.
   `set_range`, so neither can change a conversion without its axis and fits.
 - **Start values** of a fit that are not held are dropped on a conversion:
   in the old units they would mislead the fit. Held values stay as typed.
-- **Panels that share an axis have one axis** (added 2026-11-26): what is
-  typed on it converts on all of them, or on none while any of them shows
-  other data against it, a residual plot of another plot included. The unit
-  text follows on each. Before, only the plot's own panel followed, so
-  residuals below kept the old unit and a range in it.
+- **Panels sharing the axis follow too** (added 2026-11-26), unless they show
+  other data against it: each panel's typed numbers are in the unit of its own
+  data. So a residual panel follows its fit's plot, while two panels with data
+  of their own each follow their own plot, and converting one back undoes just
+  that. A panel without data follows only if no panel of the axis shows other
+  data. Breaks are one between the panels, so they follow only then. Before,
+  only the plot's own panel followed, and residuals below kept the old unit.
+  Rejected: all panels or none (two data panels would block each other for
+  good), and converting once every plot has the same conversion (the numbers'
+  unit cannot be told then: A to h and back would multiply them by 3600).
 - **The y axis of a fit's residuals** follows a change of the plot's y unit
-  by the same rule (added 2026-11-26). Residuals are differences, so what is
-  typed there is scaled and never shifted.
+  the same way. Residuals are differences, so what is typed there is scaled
+  and never shifted.
 - **The unit text** follows when the axis showed the old conversion's unit,
   or the axis's own unit when the old setting gave none; taking a
   conversion with a unit back empties the axis's unit, since figscribe does

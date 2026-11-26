@@ -397,7 +397,7 @@ def test_every_panel_sharing_the_axis_follows_a_conversion() -> None:
 
 
 @pytest.mark.parametrize("shown", ["plot", "residuals of another plot"])
-def test_a_sharing_panel_with_other_data_keeps_the_axis_in_its_numbers(shown) -> None:
+def test_a_sharing_panel_with_other_data_keeps_its_own_numbers(shown) -> None:
     project = _with_residuals()
     figure = project.figures[0]
     other = LinePlot(x=col("t"), y=col("V"))
@@ -412,10 +412,62 @@ def test_a_sharing_panel_with_other_data_keeps_the_axis_in_its_numbers(shown) ->
     History(project).push(set_conversion(project, plot.id, "x", HOURS, data))
 
     above, below = project.figures[0].axes[:2]
-    for axes in (above, below):
-        assert axes.x.limits == (1000.0, 15400.0)
-    assert _parts(project)[1][2].at == 8200.0  # nor the marks
-    assert below.x.unit == "h"  # the unit's text follows still
+    assert above.x.limits == pytest.approx((0.0, 4.0))  # the plot's own panel
+    assert below.x.limits == (1000.0, 15400.0)
+    assert below.x.unit == "s"  # nor is it called what its data are not
+    assert [a for a in below.artists if isinstance(a, ReferenceLine)][0].at == 8200.0
+
+
+def _stacked() -> Project:
+    """Two panels sharing x, each with a plot of its own and a line at 8200 s."""
+    top = LinePlot(x=col("t"), y=col("U"))
+    bottom = LinePlot(x=col("t"), y=col("V"))
+    panels = [
+        Axes(
+            x=AxisSpec(label="t", unit="s"),
+            artists=[top, ReferenceLine(at=8200.0)],
+        ),
+        Axes(
+            row=1,
+            x=AxisSpec(label="t", unit="s", limits=(1000.0, 15400.0)),
+            artists=[bottom, ReferenceLine(at=8200.0)],
+        ),
+    ]
+    figure = Figure(layout=GridLayout(rows=2, share_x="col"), axes=panels)
+    return Project(sources=[SOURCE], figures=[figure])
+
+
+def test_panels_with_data_of_their_own_each_follow_their_plot() -> None:
+    project = _stacked()
+    before = dumps(project)
+    history = History(project)
+    top, bottom = (axes.artists[0] for axes in project.figures[0].axes)
+    history.push(set_conversion(project, top.id, "x", HOURS, data))
+    above, below = project.figures[0].axes
+    assert above.artists[1].at == pytest.approx(2.0)
+    assert (below.x.unit, below.x.limits) == ("s", (1000.0, 15400.0))
+    assert below.artists[1].at == 8200.0
+
+    history.push(set_conversion(project, bottom.id, "x", HOURS, data))
+    above, below = project.figures[0].axes
+    assert below.x.unit == "h"
+    assert below.x.limits == pytest.approx((0.0, 4.0))
+    assert [a.artists[1].at for a in (above, below)] == pytest.approx([2.0, 2.0])
+
+    history.undo()
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_there_and_back_leaves_the_numbers_as_they_were() -> None:
+    project = _stacked()
+    history = History(project)
+    top = project.figures[0].axes[0].artists[0]
+    history.push(set_conversion(project, top.id, "x", HOURS, data))
+    history.push(set_conversion(project, top.id, "x", None, data))
+    above, below = project.figures[0].axes
+    assert [a.artists[1].at for a in (above, below)] == pytest.approx([8200.0] * 2)
+    assert below.x.limits == (1000.0, 15400.0)
 
 
 def _with_marked_residuals() -> Project:
@@ -467,4 +519,44 @@ def test_residuals_beside_those_of_another_plot_keep_their_numbers() -> None:
 
     below = project.figures[0].axes[1]
     assert below.y.limits == (-0.01, 0.01)
-    assert below.y.unit == "mV"  # the unit's text follows still
+    assert below.y.unit == "V"  # nor renamed: the others are in V still
+
+
+def test_residuals_on_a_right_axis_that_is_not_there_stand_on_the_left() -> None:
+    """The panel has no right y axis, so they are drawn on the left one, where
+    another plot's numbers are."""
+    project = _with_marked_residuals()
+    figure = project.figures[0]
+    below = figure.axes[1]
+    below.artists[0].axis = "right"
+    below.artists.append(LinePlot(x=col("t"), y=col("V")))
+    plot = _parts(project)[1][0]
+    mV = Conversion(factor=1000.0, unit="mV")
+    History(project).push(set_conversion(project, plot.id, "y", mV, data))
+    assert project.figures[0].axes[1].y.limits == (-0.01, 0.01)
+
+
+def test_residuals_follow_a_plot_meant_for_a_right_axis_that_is_not_there() -> None:
+    project = _with_marked_residuals()
+    plot = _parts(project)[1][0]
+    plot.axis = "right"
+    mV = Conversion(factor=1000.0, unit="mV")
+    History(project).push(set_conversion(project, plot.id, "y", mV, data))
+    assert project.figures[0].axes[1].y.limits == pytest.approx((-10.0, 10.0))
+
+
+def test_residuals_that_do_not_share_x_follow_it_all_the_same() -> None:
+    """*Fit…* puts them in an empty panel below without sharing the axis."""
+    project = _project()
+    figure = project.figures[0]
+    figure.layout.rows = 2
+    figure.axes.append(Axes(row=1))
+    plot = _parts(project)[1][0]
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, data).apply(project)
+    assert project.figures[0].layout.share_x == "none"
+    History(project).push(set_conversion(project, plot.id, "x", HOURS, data))
+    below = project.figures[0].axes[1]
+    assert below.x.unit == "h"
+    assert below.x.limits == pytest.approx((0.0, 4.0))
