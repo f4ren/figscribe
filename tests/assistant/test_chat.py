@@ -493,11 +493,11 @@ def test_choosing_another_model(panel: ChatPanel) -> None:
     )
 
     def pick_lm_studio(dialog: AssistantDialog) -> bool:
-        dialog.kind.setCurrentIndex(dialog.kind.findData("openai"))
-        dialog.server.setCurrentText("LM Studio")
+        _pick(dialog.kind, dialog.kind.findData("openai"))
+        _pick(dialog.server, dialog.server.findText("LM Studio"))
         dialog.list_models = lambda provider, key: ["qwen3-30b", "gpt-oss-20b"]
         dialog.load.click()
-        dialog.model.setCurrentText("qwen3-30b")
+        _pick(dialog.model, dialog.model.findText("qwen3-30b"))
         return True
 
     panel.run_dialog = pick_lm_studio
@@ -510,6 +510,13 @@ def test_choosing_another_model(panel: ChatPanel) -> None:
     panel.send()
     panel.wait()
     assert made == [(provider, None)]
+
+
+def _pick(combo, index: int) -> None:
+    """Choose an entry of the list, as a person does."""
+    assert index >= 0, "no such entry"
+    combo.setCurrentIndex(index)
+    combo.activated.emit(index)
 
 
 def test_the_dialog_reports_an_unreachable_server(qtbot) -> None:
@@ -526,7 +533,7 @@ def test_the_dialog_reports_an_unreachable_server(qtbot) -> None:
     dialog.list_models = unreachable
     dialog.load.click()
     assert "Cannot reach http://localhost:11434/v1" in dialog.status.text()
-    dialog.kind.setCurrentIndex(dialog.kind.findData("anthropic"))
+    _pick(dialog.kind, dialog.kind.findData("anthropic"))
     assert dialog.provider() == Provider()  # Claude, with the default model
 
 
@@ -535,11 +542,11 @@ def test_choosing_gemini_in_the_dialog(qtbot) -> None:
 
     dialog = AssistantDialog(Provider("openai", "", "http://localhost:11434/v1", False))
     qtbot.addWidget(dialog)
-    dialog.server.setCurrentText("Google Gemini")
+    _pick(dialog.server, dialog.server.findText("Google Gemini"))
     assert dialog.url.text() == GEMINI
     assert dialog.vision.isChecked()
     assert "GEMINI_API_KEY" in dialog.key.placeholderText()
-    dialog.server.setCurrentText("ChatGPT (OpenAI)")
+    _pick(dialog.server, dialog.server.findText("ChatGPT (OpenAI)"))
     assert "OPENAI_API_KEY" in dialog.key.placeholderText()
 
 

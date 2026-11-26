@@ -191,7 +191,8 @@ def window(qtbot, example: Path) -> MainWindow:
 
 def test_fit_adds_curve_and_residuals_in_one_step(window: MainWindow) -> None:
     def accept(dialog: FitDialog) -> bool:
-        dialog.residuals.setChecked(True)
+        dialog.residuals.click()
+        assert dialog.residuals.isChecked()
         return True
 
     window.run_dialog = accept
