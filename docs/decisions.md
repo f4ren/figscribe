@@ -1752,6 +1752,11 @@ parameters would not match the axis they are read against.
   `set_range`, so neither can change a conversion without its axis and fits.
 - **Start values** of a fit that are not held are dropped on a conversion:
   in the old units they would mislead the fit. Held values stay as typed.
+- **Panels that share an axis have one axis** (added 2026-11-26): what is
+  typed on it converts on all of them, or on none while any of them shows
+  other data against it, a residual plot of another plot included. The unit
+  text follows on each. Before, only the plot's own panel followed, so
+  residuals below kept the old unit and a range in it.
 - **The unit text** follows when the axis showed the old conversion's unit,
   or the axis's own unit when the old setting gave none; taking a
   conversion with a unit back empties the axis's unit, since figscribe does

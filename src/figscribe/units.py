@@ -3,8 +3,9 @@
 Everything typed in a plot's shown units is converted along, so that the
 same rows stay selected and the same places marked: its range, its fits'
 ranges, and on its axis the limits, ticks, step, breaks and the reference lines,
-shaded ranges and notes, unless another data plot is drawn against that
-axis. The plot's fits are run again on the converted data, in the same step.
+shaded ranges and notes, unless other data is drawn against that axis, in
+this panel or one sharing it. The plot's fits are run again on the converted
+data, in the same step.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from figscribe.model import (
     LinePlot,
     Project,
     ReferenceLine,
+    ResidualPlot,
     ScatterPlot,
     ShadedSpan,
 )
@@ -143,54 +145,55 @@ def _mapping(plot, axis: str, old, new, data):
 def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command]:
     axes = _panel_of(project, plot.id)
     field = "x" if axis == "x" else ("y_right" if plot.axis == "right" else "y")
-    spec: AxisSpec | None = getattr(axes, field)
-    if spec is None:
+    if getattr(axes, field) is None:
         return []
     same_side = (lambda a: True) if axis == "x" else (lambda a: a.axis == plot.axis)
+    # The axis is one between the panels that share it: its text follows on each
+    # of them, and what is typed on it converts on all or on none.
+    panels = [axes] if field == "y_right" else _sharing(project, axes, field)
+    fitted = {
+        a.id: a.target
+        for figure in project.figures
+        for panel in figure.axes
+        for a in panel.artists
+        if isinstance(a, FitCurve)
+    }
+
+    def other_data(a) -> bool:
+        """Whether `a` stands against the axis in another plot's numbers."""
+        if isinstance(a, ResidualPlot):
+            return fitted.get(a.target) != plot.id
+        return isinstance(a, DATA_PLOTS) and a.id != plot.id
+
     alone = not any(
-        isinstance(a, DATA_PLOTS) and a.id != plot.id and same_side(a)
-        for a in axes.artists
+        other_data(a) and same_side(a) for panel in panels for a in panel.artists
     )
-    changes: dict = {}
-    # What the axis shows for the old setting: its unit, unless that gave one.
-    old_unit = old.unit if old is not None and old.unit is not None else spec.unit
-    if new is None:
-        if old is not None and old.unit is not None and spec.unit == old.unit:
-            changes["unit"] = None  # the file's unit is not known here
-    elif new.unit is not None and spec.unit in (None, old_unit):
-        changes["unit"] = new.unit
     steps: list[Command] = []
-    if alone:
-        if spec.limits is not None:
-            changes["limits"] = _ends(spec.limits, remap)
-        if spec.ticks is not None:
-            changes["ticks"] = [remap(t) for t in spec.ticks]
-        if spec.major_step is not None:
-            changes["major_step"] = rescale(spec.major_step)
-        if spec.symlog_linthresh is not None:
-            changes["symlog_linthresh"] = rescale(spec.symlog_linthresh)
-        steps += _marks_follow(axes, axis, same_side, remap)
-    # Breaks are one between the panels that share the axis, so they follow only
-    # while none of those shows other data against it. A conversion rises with
-    # the value, so the breaks stay in order.
-    if field != "y_right":
-        sharing = _sharing(project, axes, field)
-        if not any(
-            isinstance(a, DATA_PLOTS) and a.id != plot.id and same_side(a)
-            for panel in sharing
-            for a in panel.artists
-        ):
-            for panel in sharing:
-                breaks = getattr(panel, field).breaks
-                if not breaks:
-                    continue
-                moved = [_ends(ends, remap) for ends in breaks]
-                if panel.id == axes.id:
-                    changes["breaks"] = moved
-                else:
-                    steps.append(SetField(panel.id, (field, "breaks"), moved))
-    if changes:
-        steps.insert(0, SetField(axes.id, (field,), spec.model_copy(update=changes)))
+    for panel in panels:
+        spec: AxisSpec = getattr(panel, field)
+        changes: dict = {}
+        # What the axis shows for the old setting: its unit, unless that gave one.
+        old_unit = old.unit if old is not None and old.unit is not None else spec.unit
+        if new is None:
+            if old is not None and old.unit is not None and spec.unit == old.unit:
+                changes["unit"] = None  # the file's unit is not known here
+        elif new.unit is not None and spec.unit in (None, old_unit):
+            changes["unit"] = new.unit
+        if alone:
+            if spec.limits is not None:
+                changes["limits"] = _ends(spec.limits, remap)
+            if spec.ticks is not None:
+                changes["ticks"] = [remap(t) for t in spec.ticks]
+            if spec.major_step is not None:
+                changes["major_step"] = rescale(spec.major_step)
+            if spec.symlog_linthresh is not None:
+                changes["symlog_linthresh"] = rescale(spec.symlog_linthresh)
+            if spec.breaks:  # a conversion rises with the value: still in order
+                changes["breaks"] = [_ends(ends, remap) for ends in spec.breaks]
+        if changes:
+            steps.append(SetField(panel.id, (field,), spec.model_copy(update=changes)))
+        if alone:
+            steps += _marks_follow(panel, axis, same_side, remap)
     return steps
 
 

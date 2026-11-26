@@ -8,7 +8,7 @@ import pytest
 
 from figscribe.commands import History
 from figscribe.convert import plot_data
-from figscribe.fit import FitError, refit
+from figscribe.fit import FitError, add_fit, refit
 from figscribe.model import (
     Annotation,
     Axes,
@@ -24,6 +24,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
     ReferenceLine,
+    ResidualPlot,
     ShadedSpan,
     dumps,
 )
@@ -358,3 +359,60 @@ def test_breaks_stay_while_a_panel_sharing_the_axis_shows_other_data() -> None:
     History(project).push(set_conversion(project, plot.id, "x", HOURS, data))
     for axes in project.figures[0].axes:
         assert axes.x.breaks == [(12000.0, 13000.0), (14000.0, 15000.0)]
+
+
+# --- panels that share the axis ------------------------------------------------
+
+
+def _with_residuals() -> Project:
+    """_project with a fit's residuals below, as *Fit…* adds them: the panel
+    takes over the x axis's settings, and its label."""
+    project = _project()
+    plot = _parts(project)[1][0]
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, data).apply(project)
+    below = project.figures[0].axes[1]
+    below.artists.append(ReferenceLine(at=8200.0))
+    return project
+
+
+def test_every_panel_sharing_the_axis_follows_a_conversion() -> None:
+    project = _with_residuals()
+    before = dumps(project)
+    history = History(project)
+    plot = _parts(project)[1][0]
+    history.push(set_conversion(project, plot.id, "x", HOURS, data))
+
+    above, below = project.figures[0].axes
+    for axes in (above, below):
+        assert axes.x.limits == pytest.approx((0.0, 4.0))
+        assert axes.x.major_step == pytest.approx(1.0)
+    assert (below.x.label, below.x.unit) == ("t", "h")
+    assert above.x.label is None  # no label appears where there was none
+    assert below.artists[-1].at == pytest.approx(2.0)
+
+    history.undo()
+    assert dumps(project) == before
+
+
+@pytest.mark.parametrize("shown", ["plot", "residuals of another plot"])
+def test_a_sharing_panel_with_other_data_keeps_the_axis_in_its_numbers(shown) -> None:
+    project = _with_residuals()
+    figure = project.figures[0]
+    other = LinePlot(x=col("t"), y=col("V"))
+    if shown == "plot":
+        figure.axes[1].artists.append(other)
+    else:  # of a plot in another column: only its residuals stand against x here
+        fit = FitCurve(target=other.id, model=PredefinedFit(name="linear"))
+        figure.layout.cols = 2
+        figure.axes.append(Axes(row=0, col=1, artists=[other, fit]))
+        figure.axes[1].artists.append(ResidualPlot(target=fit.id))
+    plot = _parts(project)[1][0]
+    History(project).push(set_conversion(project, plot.id, "x", HOURS, data))
+
+    above, below = project.figures[0].axes[:2]
+    for axes in (above, below):
+        assert axes.x.limits == (1000.0, 15400.0)
+    assert _parts(project)[1][2].at == 8200.0  # nor the marks
+    assert below.x.unit == "h"  # the unit's text follows still
