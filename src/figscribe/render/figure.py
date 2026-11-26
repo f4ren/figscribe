@@ -98,6 +98,28 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
     a Matplotlib artist back to the model object. `view` shows some axes, by
     gid, at other ranges than the model's, as the preview does while zoomed.
     """
+    cuts = {
+        (axes.id, name): line_breaks(figure, i, name)
+        for i, axes in enumerate(figure.axes)
+        for name in ("x", "y")
+    }
+    drawn = _render(figure, data, view, cuts)
+    applied = {key: drawn.figscribe_breaks.get(key, ([],))[0] for key in cuts}
+    if applied == cuts:
+        return drawn
+    # Which breaks an axis is drawn with can depend on its data, which is only
+    # known once they are plotted. Plot again, cutting lines and curves at
+    # those and no others, as the script does.
+    return _render(figure, data, view, applied)
+
+
+def _render(
+    figure: Figure,
+    data: DataProvider,
+    view: View | None,
+    cuts: Mapping[tuple[str, str], Breaks],
+) -> MplFigure:
+    """`render`, with the breaks to cut the lines of each panel at."""
     with style_context(figure):
         fig = MplFigure(
             figsize=(figure.width_mm / MM_PER_INCH, figure.height_mm / MM_PER_INCH),
@@ -144,7 +166,7 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                 artists,
                 figure.open_frame,
                 figure.decimal_comma,
-                tuple(line_breaks(figure, i, name) for name in ("x", "y")),
+                tuple(cuts[axes.id, name] for name in ("x", "y")),
             )
             if len(drawn) > 2:
                 twins[i] = drawn[2][0]

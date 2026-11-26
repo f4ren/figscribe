@@ -2221,3 +2221,49 @@ def test_the_script_keeps_the_tick_step_of_a_broken_axis(tmp_path: Path) -> None
     project.figures = [Figure(dpi=110, width_mm=160, axes=[panel])]
     script = _assert_same(project, tmp_path)
     assert "if abs(v) >" in script  # zero is written as 0, as the preview does
+
+
+def _inside(folder: Path):
+    """x from 100 to 200: all of it within a break from 24 to 416."""
+    rows = "\n".join(f"{t},{t / 100}" for t in range(100, 201, 10))
+    (folder / "inside.csv").write_text(f"t,U\n{rows}\n", encoding="utf-8")
+    source = csv_source(folder / "inside.csv", folder)
+    refs = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    return Project(sources=[source]), refs
+
+
+def test_data_all_within_a_break(tmp_path: Path) -> None:
+    project, ref = _inside(tmp_path)
+    x = AxisSpec(breaks=[(24.0, 416.0)])
+    panel = Axes(x=x, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(dpi=110, width_mm=120, axes=[panel])]
+    _assert_same(project, tmp_path)
+
+
+def test_a_tick_step_too_fine_for_an_axis_drawn_whole_stays_out(tmp_path) -> None:
+    """Not run: with the step in it, the script would take minutes."""
+    project, ref = _inside(tmp_path)
+    x = AxisSpec(breaks=[(24.0, 416.0)], major_step=0.001)
+    panel = Axes(x=x, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(axes=[panel])]
+    data = load_data(project, tmp_path)
+    script = generate(project, project.figures[0], base_dir=tmp_path, data=data)
+    assert "MultipleLocator" not in script
+
+
+def test_shared_panels_with_two_ranges(tmp_path: Path) -> None:
+    """The range typed last, 140 to 160, is the one the axis has, and it lies
+    within the break."""
+    project, ref = _inside(tmp_path)
+    line = LinePlot(x=ref["t"], y=ref["U"])
+    panels = [
+        Axes(
+            row=row,
+            x=AxisSpec(breaks=[(130.0, 170.0)], limits=limits),
+            artists=[line.model_copy(update={"id": f"line{row}"})],
+        )
+        for row, limits in enumerate([(100.0, 200.0), (140.0, 160.0)])
+    ]
+    layout = GridLayout(rows=2, share_x="col")
+    project.figures = [Figure(dpi=110, layout=layout, axes=panels)]
+    _assert_same(project, tmp_path)

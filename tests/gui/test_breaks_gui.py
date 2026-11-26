@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from figscribe.commands import SetField
+from figscribe.commands import InsertItem, SetField
 from figscribe.gui import MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.axisform import axis_settings
@@ -300,3 +300,37 @@ def test_widening_the_range_counts_with_the_break_it_brings_into_view(window) ->
     form = _form(window)
     _enter(form.high, "440")
     assert _axes(window).x.limits == (0.0, 440.0), window.properties._error.text()
+
+
+def test_a_step_is_counted_over_the_whole_of_a_range_within_a_break(window) -> None:
+    panel = _axes(window).id
+    # All the data lie within it, so the axis is drawn whole.
+    window.document.push(SetField(panel, ("x", "breaks"), [(-100, 600)]))
+    form = _form(window)
+    form.major.setCurrentIndex(form.major.findData("step"))
+    form.major.activated.emit(form.major.currentIndex())
+    _enter(form.major_value, "0.001")
+    assert _axes(window).x.major_step != 0.001
+    assert "at most 50" in window.properties._error.text()
+
+
+def test_the_refusal_of_a_step_names_the_whole_range(window) -> None:
+    panel = _axes(window).id
+    window.document.push(SetField(panel, ("x", "breaks"), [(21, 418)]))
+    window.document.push(SetField(panel, ("x", "limits"), (-20.0, 440.0)))
+    form = _form(window)
+    form.major.setCurrentIndex(form.major.findData("step"))
+    form.major.activated.emit(form.major.currentIndex())
+    _enter(form.major_value, "0.1")
+    assert "from -20 to 440" in window.properties._error.text()
+
+
+def test_add_a_break_sees_the_points_of_an_allan_deviation(window) -> None:
+    from figscribe.gui.breaks import axis_values
+    from figscribe.model import AllanDeviationPlot
+
+    x = ColumnRef(source=window.document.project.sources[0].id, column="t")
+    plot = AllanDeviationPlot(values=x)
+    window.document.push(InsertItem(_axes(window).id, "artists", plot))
+    values = axis_values(window.document, _axes(window).id, "x")
+    assert values.size > 12  # the line's 12 points and the tau of the deviation

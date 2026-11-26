@@ -372,8 +372,9 @@ class Toolbox:
                     if (axes.id, field) not in ranges:
                         continue
                     counted = as_drawn(figure, index, field, spec)
-                    interval = counted_interval(counted, ranges[axes.id, field])
-                    problem = too_many_ticks(spec, interval)
+                    whole = ranges[axes.id, field]
+                    interval = counted_interval(counted, whole)
+                    problem = too_many_ticks(spec, interval, whole)
                     if problem is not None:
                         problems[axes.id, field] = f"{field} axis: {problem[1]}"
         return problems

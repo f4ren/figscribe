@@ -248,11 +248,15 @@ def counted_interval(
     if not spec.breaks:
         return interval
     low, high = sorted(interval)
-    return low, low + sum(b - a for a, b in pieces(spec.breaks, low, high))
+    visible = sum(b - a for a, b in pieces(spec.breaks, low, high))
+    # Breaks that leave nothing of the range: the axis is drawn whole.
+    return (low, low + visible) if visible else (low, high)
 
 
 def too_many_ticks(
-    spec: AxisSpec, interval: tuple[float, float]
+    spec: AxisSpec,
+    interval: tuple[float, float],
+    named: tuple[float, float] | None = None,
 ) -> tuple[str, str] | None:
     """The field to blame and why, if the axis's own tick step or divisions
     would place more ticks within `interval` than can be drawn; None if not.
@@ -260,10 +264,13 @@ def too_many_ticks(
     Matplotlib only warns about such counts and then spends minutes drawing
     them. Ticks it places on its own are never this many, so only what the
     model sets is counted, and only ticks inside the range, as the user sees.
+    `named` is the range the message names, where it is not `interval`.
     """
     low, high = sorted(interval)
     how = scaling(spec) or ("*", "1")
-    span = f"from {shown(low, how)} to {shown(high, how)}"
+    # On a broken axis the ticks are counted over less than the range shown.
+    first, last = sorted(named or interval)
+    span = f"from {shown(first, how)} to {shown(last, how)}"
     if spec.ticks is None and spec.major_step is not None:
         count = _multiples(low, high, spec.major_step)
         if count > MAX_MAJOR_TICKS:

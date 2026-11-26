@@ -56,7 +56,7 @@ from figscribe.model import (
     ScatterPlot,
     ShadedSpan,
 )
-from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
+from figscribe.model.breaks import Breaks, effective_breaks
 from figscribe.model.sharing import sharing_group
 from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
@@ -87,7 +87,6 @@ from figscribe.render.layout import (
     sharing_specs,
 )
 from figscribe.render.ticks import (
-    as_drawn,
     comma_formatter,
     counted_interval,
     minor_numbers,
@@ -249,9 +248,9 @@ class _Writer:
         that is fitted, of its τ and its errors}."""
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
-        self.axis_specs = self._ticks_that_fit()
         self.broken, self.break_ticks = self._broken_axes()
         """{(Axes.id, "x" or "y"): (breaks, gap width)} and its ticks."""
+        self.axis_specs = self._ticks_that_fit()
         self._shared_ticks: list[tuple] = []
         self._broken_later: list[tuple] = []
         self._cut: tuple[Breaks, Breaks] = ([], [])
@@ -630,20 +629,18 @@ class _Writer:
         renderer leaves out because they would give too many ticks."""
         ranges = tick_ranges(self.figure, self.data)
 
-        def counted(index: int, field: str, spec: AxisSpec, interval):
-            if self.data is None:
-                return interval  # the axes are then drawn whole
-            return counted_interval(as_drawn(self.figure, index, field, spec), interval)
+        def counted(key: tuple[str, str], spec: AxisSpec):
+            breaks = self.broken.get(key, ([],))[0]  # as the renderer drew them
+            drawn = spec.model_copy(update={"breaks": breaks})
+            return counted_interval(drawn, ranges[key])
 
         return {
             (axes.id, field): (
-                ticks_that_fit(
-                    spec, counted(index, field, spec, ranges[axes.id, field])
-                )
+                ticks_that_fit(spec, counted((axes.id, field), spec))
                 if (axes.id, field) in ranges
                 else spec
             )
-            for index, axes in enumerate(self.figure.axes)
+            for axes in self.figure.axes
             for field in ("x", "y", "y_right")
             if (spec := getattr(axes, field)) is not None
         }
@@ -1498,15 +1495,14 @@ class _Writer:
             if axes.grid_linestyle is not None:
                 kwargs["linestyle"] = _str(axes.grid_linestyle)
             self.call(f"{ax}.grid", "True", **kwargs)
+        # Those the renderer drew the panel's axes with: the script cuts there.
         x_breaks, y_breaks = (
-            line_breaks(self.figure, index, name) for name in ("x", "y")
+            self.broken.get((axes.id, name), ([],))[0] for name in ("x", "y")
         )
         for artist in axes.artists:
             on_right = artist.axis == "right" and right is not None
             # The breaks of the y axis are the left one's.
-            self._cut = (
-                (x_breaks, [] if on_right else y_breaks) if self.broken else ([], [])
-            )
+            self._cut = (x_breaks, [] if on_right else y_breaks)
             self._artist(right if on_right else ax, artist)
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)

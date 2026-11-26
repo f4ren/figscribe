@@ -35,7 +35,7 @@ from figscribe.model.artists import (
     ShadedSpan,
 )
 from figscribe.model.axes import Axes
-from figscribe.model.breaks import breaks_blocked, effective_breaks, own_breaks
+from figscribe.model.breaks import breaks_blocked, line_breaks, own_breaks
 from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource
 from figscribe.model.figure import Figure
 from figscribe.model.project import Project
@@ -310,6 +310,63 @@ def _unequal_or_unreadable(artist, data) -> str | None:
         return None  # a file that cannot be read is shown above the preview
 
 
+def axis_values(figure: Figure, index: int, field: str, data):
+    """What is drawn against the `field` axis ("x" or "y") of the panel
+    `index` and of those sharing it, in data units: where points, a histogram's
+    values and reference lines lie. Approximate: the ends of error bars, fitted
+    curves and shaded ranges are not counted."""
+    import numpy as np
+
+    from figscribe.allan import allan_points
+    from figscribe.convert import convert, plot_data
+
+    found = []
+    upright = "vertical" if field == "x" else "horizontal"
+    for i in sharing_group(figure, index, field):
+        for artist in figure.axes[i].artists:
+            if field == "y" and artist.axis == "right":
+                continue
+            try:
+                if isinstance(artist, FITTABLE):
+                    found.append(getattr(plot_data(artist, data), field))
+                elif isinstance(artist, AllanDeviationPlot):
+                    points = allan_points(artist, data)
+                    if points is not None:
+                        found.append(points["xy".index(field)])
+                elif isinstance(artist, Histogram) and field == "x":
+                    found.append(convert(data(artist.values), artist.x_conversion))
+                elif isinstance(artist, ReferenceLine):
+                    if artist.orientation == upright:
+                        found.append([artist.at])
+            except Exception:  # a plot that cannot be drawn counts for nothing
+                continue
+    if not found:
+        return np.array([])
+    return np.concatenate([np.asarray(v, dtype=float).ravel() for v in found])
+
+
+def _shown_breaks(figure: Figure, index: int, field: str, data):
+    """The breaks the axis is drawn with. With an automatic range, an axis
+    whose data all lie within one break is drawn whole."""
+    import numpy as np
+
+    breaks = line_breaks(figure, index, field)
+    group = [figure.axes[i] for i in sharing_group(figure, index, field)]
+    if not breaks or any(getattr(axes, field).limits for axes in group):
+        return breaks
+    if any(  # their extent along the axis is not among the values
+        isinstance(a, ColorMesh) or (field == "y" and isinstance(a, Histogram))
+        for axes in group
+        for a in axes.artists
+    ):
+        return breaks
+    values = axis_values(figure, index, field, data)
+    values = values[np.isfinite(values)]
+    if values.size and any(a <= values.min() and values.max() <= b for a, b in breaks):
+        return []
+    return breaks
+
+
 def _in_a_break(figure: Figure, index: int, artist, data) -> list[str]:
     """What of the plot or reference line falls into a break, where nothing is
     shown."""
@@ -317,9 +374,11 @@ def _in_a_break(figure: Figure, index: int, artist, data) -> list[str]:
 
     from figscribe.convert import plot_data
 
-    x_breaks = effective_breaks(figure, index, "x")
+    x_breaks = _shown_breaks(figure, index, "x", data)
     # The breaks of the y axis are the left one's.
-    y_breaks = [] if artist.axis == "right" else effective_breaks(figure, index, "y")
+    y_breaks = []
+    if artist.axis != "right":
+        y_breaks = _shown_breaks(figure, index, "y", data)
     if not (x_breaks or y_breaks):
         return []
     if isinstance(artist, ReferenceLine):
@@ -736,7 +795,8 @@ def _check_axis_ticks(
         # renderer falls back to automatic ticks in either case.
         if spec.limits is not None:
             counted = as_drawn(figure, index, name, spec)
-            problem = too_many_ticks(spec, counted_interval(counted, spec.limits))
+            interval = counted_interval(counted, spec.limits)
+            problem = too_many_ticks(spec, interval, spec.limits)
             if problem is not None:
                 field, message = problem
                 issues.append(

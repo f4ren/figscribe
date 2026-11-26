@@ -307,3 +307,24 @@ def test_no_allan_line_runs_across_a_break(axis) -> None:
     (ax,) = render(Figure(axes=[panel]), lambda ref: noise).axes
     drawn = _plot_line(ax).get_xydata()
     assert np.isnan(drawn).any(axis=1).sum() >= 1
+
+
+# Everything on the axis lies within the break: the axis is drawn whole.
+INSIDE = np.linspace(100.0, 200.0, 11)
+
+
+@pytest.mark.parametrize("kind", ["line", "allan"])
+def test_data_all_within_a_break_are_drawn_as_on_any_axis(kind) -> None:
+    from figscribe.model import AllanDeviationPlot, ColumnRef
+
+    noise = np.random.default_rng(1).normal(size=2000)
+    values = {"t": INSIDE, "U": INSIDE, "y": noise}
+    ref = {c: ColumnRef(source="s", column=c) for c in values}
+    if kind == "line":
+        plot, gap = LinePlot(x=ref["t"], y=ref["U"]), (24.0, 416.0)
+    else:  # tau runs from 1 to 512
+        plot, gap = AllanDeviationPlot(values=ref["y"]), (0.5, 600.0)
+    figure = Figure(axes=[Axes(x=AxisSpec(breaks=[gap]), artists=[plot])])
+    (ax,) = render(figure, lambda r: values[r.column]).axes
+    assert ax.get_xscale() == "linear"
+    assert not np.isnan(_plot_line(ax).get_xydata()).any()

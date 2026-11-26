@@ -3430,6 +3430,12 @@ temperature. Matplotlib has no broken axis.
   the data do not have. A fit's curve is sampled on each stretch. This holds
   for an Allan deviation too. A break that a typed range does not show, because
   it lies outside the range or around all of it, cuts nothing.
+- **What the renderer breaks is the one answer.** Breaks that leave nothing of
+  an axis's range, typed or filled by its data, are not drawn, and nothing is
+  then cut, hidden or left out of the tick count. The renderer finds this out
+  by plotting, and plots a second time where it had guessed otherwise; the
+  script takes its answer. The problem list and the axis form do not plot and
+  work it out from the typed range or the points, which is approximate.
 - **Ticks** are placed one by one: Matplotlib's step over what is shown, each
   stretch getting at least one, none within a break, and automatic ones clear
   of the marks. Typed ticks within a break are left out.

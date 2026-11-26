@@ -19,8 +19,10 @@ from figscribe.model import (
     Figure,
     GridLayout,
     ImagePlot,
+    LinePlot,
     NumpySource,
     Project,
+    ReferenceLine,
     dumps,
     loads,
     validate_references,
@@ -146,3 +148,15 @@ def test_the_problem_list_counts_the_points_of_an_allan_deviation() -> None:
     noise = np.random.default_rng(1).normal(size=100)  # tau = 1, 2, 4, 8, ...
     messages = [str(i) for i in validate_references(project, lambda ref: noise)]
     assert any("1 point lies in a break and is not shown" in m for m in messages)
+
+
+@pytest.mark.parametrize("limits", [(90.0, 210.0), None], ids=["typed", "automatic"])
+def test_nothing_is_hidden_on_an_axis_drawn_whole(limits) -> None:
+    ref = ColumnRef(source="s", column="y")
+    x = AxisSpec(breaks=[(24.0, 416.0)], limits=limits)
+    panel = Axes(x=x, artists=[LinePlot(x=ref, y=ref), ReferenceLine(at=150.0)])
+    source = NumpySource(id="s", path="y.npy", sha256="0" * 64, columns=["y"])
+    project = Project(sources=[source], figures=[Figure(axes=[panel])])
+    values = np.linspace(100.0, 200.0, 11)
+    messages = [str(i) for i in validate_references(project, lambda ref: values)]
+    assert not [m for m in messages if "in a break" in m], messages

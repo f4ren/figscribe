@@ -61,11 +61,9 @@ def line_breaks(figure: Figure, index: int, field: str) -> Breaks:
     ]
     if not typed:
         return breaks  # a line cannot cross a break that the data do not reach
+    low, high = typed[-1]  # the range set last is the one the axis has
     return [
         (start, end)
         for start, end in breaks
-        if any(
-            start < high and end > low and not (start <= low and high <= end)
-            for low, high in typed
-        )
+        if start < high and end > low and not (start <= low and high <= end)
     ]

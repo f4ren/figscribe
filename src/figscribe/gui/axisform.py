@@ -437,7 +437,7 @@ class AxisForm:
         if not steps:
             return
         changed = self.spec.model_copy(update=values)
-        interval = changed.limits or self.current()
+        interval = named = changed.limits or self.current()
         index = panel_index(self.panel.document, self.axes_id)
         if interval and index is not None:  # a break's stretch has no ticks
             # The figure as it would be: a wider range can bring a break into view.
@@ -447,7 +447,7 @@ class AxisForm:
             figure = figure.model_copy(update={"axes": panels})
             counted = as_drawn(figure, index, self.field, changed)
             interval = counted_interval(counted, interval)
-        problem = too_many_ticks(changed, interval) if interval else None
+        problem = too_many_ticks(changed, interval, named) if interval else None
         if problem is not None:  # left as typed, to be corrected
             message = problem[1]
             self.panel.report(f"{message[0].upper()}{message[1:]}.")
