@@ -112,6 +112,7 @@ SKIPPED = {
     "initial_values": "set in the fit dialog",
     "fit_range": "set in the fit dialog, since the fit is run again",
     "left_out": "points are left out by right-clicking them in the preview",
+    "breaks": "a row for each break in the axis form, and the preview's menu",
     "fixed": "set in the fit dialog, beside the start values",
     "parameter_bounds": "set in the fit dialog, beside the start values",
     "result": "computed by the fit and shown in the fit dialog",

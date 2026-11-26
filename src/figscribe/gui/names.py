@@ -70,6 +70,7 @@ FIELD_NAMES = {
     "unit_format": "Units in labels",
     "decimal_comma": "Decimal comma",
     "number_format": "Number format",
+    "breaks": "Breaks",
     "decimals": "Decimals",
     "stylesheet": "Style sheet",
     "font_size": "Font size (pt)",

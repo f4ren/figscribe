@@ -19,6 +19,7 @@ from matplotlib.ticker import (
 )
 
 from figscribe.model import AxisSpec, Figure
+from figscribe.render.breaks import pieces
 
 MAX_MAJOR_TICKS = 50
 """Per axis. On a 175 mm double-column axis that is one every 3.5 mm, closer
@@ -228,6 +229,17 @@ def minor_ticks(spec: AxisSpec) -> Minor:
     if spec.major_step is not None and spec.ticks is None:
         return ("step", spec.major_step / spec.minor_divisions)
     return ("on", None)
+
+
+def counted_interval(
+    spec: AxisSpec, interval: tuple[float, float]
+) -> tuple[float, float]:
+    """The interval ticks are counted over: on a broken axis only as long as
+    what the breaks leave of it."""
+    if not spec.breaks:
+        return interval
+    low, high = sorted(interval)
+    return low, low + sum(b - a for a, b in pieces(spec.breaks, low, high))
 
 
 def too_many_ticks(

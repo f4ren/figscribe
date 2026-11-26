@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from figscribe.commands import CommandError, SetField, drawing_order, find, to_front
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, axis_summary, plain, unit_shown
+from figscribe.gui.breaks import break_entries
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.figures import fill_figure_menu
 from figscribe.gui.markings import ENTRIES
@@ -61,6 +62,8 @@ class Outline(QTreeWidget):
     delete_requested = Signal(str)
     note_requested = Signal(str)
     same_range_requested = Signal(str, str)
+    breaks_requested = Signal(str, str, object)
+    """(panel id, "x" or "y", the breaks to give that axis)."""
     """Give every panel the range this panel shows on an axis: (panel id,
     "x" or "y")."""
     reveal_requested = Signal(str)
@@ -299,6 +302,7 @@ class Outline(QTreeWidget):
                         lambda f=field: self.same_range_requested.emit(oid, f),
                     )
                     action.setEnabled(others)
+            self._break_entries(menu, oid, ("x", "y"))
             menu.addSeparator()
             menu.addAction("Delete panel", lambda: self.delete_requested.emit(oid))
         elif isinstance(obj, Figure):
@@ -331,21 +335,34 @@ class Outline(QTreeWidget):
         return menu
 
     def _axis_menu(self, axes_id: str, field: str) -> QMenu | None:
-        """What can be done with one axis: give every panel its range. Nothing
-        for the right y axis or an inset, which `same_range` leaves alone."""
+        """What can be done with one axis: give every panel its range, which
+        `same_range` does not for insets, and break it. Nothing for the right
+        y axis."""
         try:
             axes = find(self.document.project, axes_id)
         except CommandError:
             return None
-        if field == "y_right" or axes.inset is not None:
+        if field == "y_right":
             return None
         menu = QMenu(self)
-        action = menu.addAction(
-            f"Same {field} range in all panels",
-            lambda: self.same_range_requested.emit(axes_id, field),
-        )
-        action.setEnabled(self._other_panels(axes))
-        return menu
+        if axes.inset is None:
+            action = menu.addAction(
+                f"Same {field} range in all panels",
+                lambda: self.same_range_requested.emit(axes_id, field),
+            )
+            action.setEnabled(self._other_panels(axes))
+        self._break_entries(menu, axes_id, (field,))
+        return menu if menu.actions() else None
+
+    def _break_entries(self, menu: QMenu, axes_id: str, fields: tuple) -> None:
+        entries = break_entries(self.document, axes_id, fields)
+        if entries and menu.actions():
+            menu.addSeparator()
+        for text, field, breaks in entries:
+            menu.addAction(
+                text,
+                lambda f=field, b=breaks: self.breaks_requested.emit(axes_id, f, b),
+            )
 
     def _other_panels(self, axes: Axes) -> bool:
         """Whether the figure of `axes` has another panel in its grid."""

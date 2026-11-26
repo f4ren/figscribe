@@ -71,6 +71,18 @@
       "project": "paper.figscribe",
       "title": "A figure for a paper",
       "detail": "175 mm, four panels, shared axes, letters, and a single-column copy."
+    },
+    {
+      "folder": "fixed-points",
+      "project": "thermometer.figscribe",
+      "title": "Up to the zinc point",
+      "detail": "A broken axis to a far point, a fit across it and residuals below."
+    },
+    {
+      "folder": "ir-spectrum",
+      "project": "spectrum.figscribe",
+      "title": "An infrared spectrum",
+      "detail": "Wavenumbers from high to low, an open frame and a decimal comma."
     }
   ]
 }

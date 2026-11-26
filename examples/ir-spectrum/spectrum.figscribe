@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "c2418c48f2c7",
+      "format": "csv",
+      "path": "spectrum.csv",
+      "sha256": "6e27df8967d78fe0d319094e292299f701098af9f6743004bdbd372b86fa9df1",
+      "delimiter": ",",
+      "decimal": ".",
+      "header_row": 1,
+      "skip_rows": 1,
+      "comment": "#",
+      "encoding": "utf-8-sig",
+      "columns": [
+        "k",
+        "T"
+      ],
+      "row_count": 901
+    }
+  ],
+  "figures": [
+    {
+      "id": "1aadab5366f3",
+      "name": "IR spectrum",
+      "width_mm": 120.0,
+      "height_mm": 75.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "decimal_comma": true,
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "open_frame": true,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "6735bf742643",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Wavenumber",
+            "unit": "cm$^{-1}$",
+            "scale": "linear",
+            "limits": [
+              400.0,
+              4000.0
+            ],
+            "inverted": true,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null,
+            "number_format": "auto",
+            "decimals": 1,
+            "breaks": []
+          },
+          "y": {
+            "label": "Transmission",
+            "unit": null,
+            "scale": "linear",
+            "limits": [
+              0.0,
+              1.0
+            ],
+            "inverted": false,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null,
+            "number_format": "fixed",
+            "decimals": 1,
+            "breaks": []
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": false,
+            "location": "best",
+            "position": null,
+            "frame": true,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "artists": [
+            {
+              "id": "0bd40f41a5b0",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "line",
+              "x": {
+                "source": "c2418c48f2c7",
+                "column": "k"
+              },
+              "y": {
+                "source": "c2418c48f2c7",
+                "column": "T"
+              },
+              "color": "black",
+              "linestyle": "-",
+              "linewidth": 0.8,
+              "marker": null,
+              "markersize": 4.0,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "70a734914f93",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "annotation",
+              "text": "C=O",
+              "position": [
+                2300.0,
+                0.17
+              ],
+              "coords": "data",
+              "arrow_to": [
+                1725.0,
+                0.21
+              ],
+              "fontsize": 8.0,
+              "color": null,
+              "background": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -257,6 +257,9 @@ class MainWindow(QMainWindow):
             lambda oid, kind, orientation: self.add_marking(kind, orientation, oid)
         )
         self.outline.same_range_requested.connect(self.same_range)
+        self.outline.breaks_requested.connect(
+            lambda oid, field, breaks: self.preview.set_axis_breaks(oid, field, breaks)
+        )
         self.outline.reveal_requested.connect(self.reveal_source)
         self.contents_dock = self._dock(
             "Contents", _side_panel(self.outline), Qt.DockWidgetArea.LeftDockWidgetArea
@@ -1105,7 +1108,7 @@ class MainWindow(QMainWindow):
             if spec is None or (axis is not None and axis == (panel.id, field)):
                 continue  # not there, or its form is open and has them
             oid = axis_id(panel.id, field)
-            for section, caption in axis_settings(spec):
+            for section, caption in axis_settings(spec, field):
                 entries.append(
                     Entry(
                         caption,

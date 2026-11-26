@@ -165,7 +165,7 @@ class StartPage(QScrollArea):
         side.setSpacing(10)
         side.addWidget(label("New to figscribe?", "sectionTitle"))
         self.try_examples = _tile(
-            "Try an example", "Twelve figures to open and change", "fit"
+            "Try an example", "Fourteen figures to open and change", "fit"
         )
         self.try_examples.clicked.connect(self.show_examples)
         side.addWidget(self.try_examples)

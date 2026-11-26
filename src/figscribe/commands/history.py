@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from figscribe.commands.core import Command, CommandError
 from figscribe.model import Project
-from figscribe.model.validate import outside_the_grid
+from figscribe.model.validate import outside_the_grid, unbreakable
 
 
 class History:
@@ -26,6 +26,7 @@ class History:
         """Apply `command` and record it. Raises, recording nothing, if it fails
         or puts a panel outside its grid."""
         before = _outside_the_grid(self.project)
+        whole = _unbreakable(self.project)
         command.apply(self.project)
         # Judged after the whole command: a macro may grow the grid first.
         added = _outside_the_grid(self.project) - before
@@ -35,6 +36,15 @@ class History:
             raise CommandError(
                 f"That would put a panel outside the grid of {grid}; make the "
                 "grid larger first, or move the panel."
+            )
+        if new := {
+            k: v for k, v in _unbreakable(self.project).items() if k not in whole
+        }:
+            command.revert(self.project)
+            why = next(iter(new.values()))
+            raise CommandError(
+                f"{why[0].upper()}{why[1:]}. Remove the breaks first, or leave "
+                "the axis as it is."
             )
         if self._clean is not None and self._clean > len(self._undo):
             self._clean = None  # the saved state was on the redo stack
@@ -89,6 +99,14 @@ class History:
 def _outside_the_grid(project: Project) -> set[str]:
     """Ids of the panels that reach beyond their grid."""
     return {issue.object_id for issue in outside_the_grid(project)}
+
+
+def _unbreakable(project: Project) -> dict[tuple[str, str], str]:
+    """The breaks that cannot be drawn: why, by (panel id, field)."""
+    return {
+        (issue.object_id, issue.location.rsplit(".", 2)[-2]): issue.message
+        for issue in unbreakable(project)
+    }
 
 
 def _grid_of(project: Project, axes_id: str) -> str:

@@ -71,7 +71,9 @@ false}; null removes them)
 `x.scale` ("linear", "log", "symlog"), `x.limits` ([min, max]), `x.major_step`, \
 `x.minor_divisions` (4 minor ticks between majors = 5), `x.prefix` ("k" \
 shows Hz values as kHz; limits and steps stay in Hz), `x.number_format` \
-("auto", "fixed", "scientific") with `x.decimals`, the same for `y`, \
+("auto", "fixed", "scientific") with `x.decimals`, `x.breaks` ([[21, 418]] \
+cuts that stretch out of a linear axis; set it on every panel sharing the \
+axis), the same for `y`, \
 `legend.location` ("upper left", "lower right", …), `legend.frame`, \
 `legend.visible`, `y_right` (an axis object such as {"label": "dU"}; null \
 removes it)

@@ -143,7 +143,7 @@ note the platform, the screen scaling and the theme in the pull request.
     and select another plot of the same kind: it stays folded.
 
 22. **The gallery**: on the start page *Recent* (when there are recent projects)
-    comes right under the drop zone, then the layouts, then the twelve example
+    comes right under the drop zone, then the layouts, then the fourteen example
     tiles, which show their pictures, titles and two lines of text in three
     columns, with nothing cut off, at the smallest window too (the page
     scrolls). *Try an example* scrolls to the gallery and *How it works* opens the
@@ -238,6 +238,13 @@ note the platform, the screen scaling and the theme in the pull request.
     a `.figscribe` file in Finder: figscribe starts and shows that project, not
     the start page. With figscribe running, double-click another project: it
     opens (after asking, when the shown one has unsaved changes).
+
+36. **A broken axis** (decision 0072): import points near 0 to 30 and one at
+    420. Right-click the empty stretch and break the x axis: ticks on both
+    sides, marks on the frame, nothing in the gap, no line across. Zoom and pan:
+    the gap and ticks follow. In the axis form change the ends, add a second
+    break, remove it. Export a PDF, and a PNG with a transparent background on a
+    coloured slide: the gap shows the slide. Export the script and run it.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

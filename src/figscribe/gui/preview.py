@@ -56,10 +56,12 @@ from figscribe.commands import (
     copy_style,
     drawing_order,
     find,
+    set_breaks,
     to_front,
 )
 from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
+from figscribe.gui.breaks import break_entries
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.inplace import Editable, open_editor
@@ -76,6 +78,7 @@ from figscribe.gui.resize import (
     ratios,
 )
 from figscribe.model import Annotation
+from figscribe.model.breaks import effective_breaks
 from figscribe.model.validate import FIT_TARGETS
 from figscribe.render import render
 from figscribe.render.figure import MM_PER_INCH, RIGHT, style_context
@@ -242,6 +245,12 @@ class Preview(QWidget):
         self._settle.start()
 
     def _ticks_hold(self, model) -> bool:
+        if any(
+            effective_breaks(model, i, name)
+            for i in range(len(model.axes))
+            for name in ("x", "y")
+        ):
+            return False  # their ticks are placed one by one: draw anew
         for axes in model.axes:
             for gid, name, spec in (
                 (axes.id, "x", axes.x),
@@ -791,6 +800,7 @@ class Preview(QWidget):
                 menu.addSeparator()
             self._marking_entries(menu, ax, point)
             self._range_entries(menu, ax)
+            self._break_entries(menu, ax, point)
         return menu if menu.actions() else None
 
     def _arrow_entries(self, menu: QMenu, point: QPointF) -> None:
@@ -953,6 +963,30 @@ class Preview(QWidget):
                 f"Same {field} range in all panels",
                 lambda f=field: self.same_range_requested.emit(panel.id, f),
             )
+
+    def _break_entries(self, menu: QMenu, ax, point: QPointF) -> None:
+        """Cut an empty stretch of the data out of an axis of the panel `ax`,
+        the one clicked in if the click is in one, or take its breaks out."""
+        axes_id = ax.get_gid()
+        spot = ax.transData.inverted().transform(self._to_display(point))
+        entries = break_entries(self.document, axes_id, spot=tuple(spot))
+        if entries:
+            menu.addSeparator()
+        for text, field, breaks in entries:
+            menu.addAction(
+                text,
+                lambda f=field, b=breaks: self.set_axis_breaks(axes_id, f, b),
+            )
+
+    def set_axis_breaks(self, axes_id: str, field: str, breaks: list) -> None:
+        """Give an axis these breaks, as a menu asks."""
+        self.drop_view([a.id for a in self.document.figure.axes])
+        try:
+            self.document.push(
+                set_breaks(self.document.project, axes_id, field, breaks)
+            )
+        except CommandError as exc:
+            self.show_error("Cannot break the axis", str(exc))
 
     def _add_marking(self, axes_id: str, made) -> None:
         self.document.push(add(axes_id, made))

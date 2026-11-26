@@ -22,7 +22,13 @@ import numpy as np
 from figscribe import __version__
 from figscribe.allan import samples
 from figscribe.convert import expression, plot_data, scale_expression
-from figscribe.fit import fitted_points, free_parameters, numpy_source, parameter_names
+from figscribe.fit import (
+    fitted_points,
+    free_parameters,
+    numpy_source,
+    parameter_names,
+)
+from figscribe.io import load_data
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
 from figscribe.model import (
@@ -50,6 +56,9 @@ from figscribe.model import (
     ScatterPlot,
     ShadedSpan,
 )
+from figscribe.model.breaks import Breaks, effective_breaks
+from figscribe.model.sharing import sharing_group
+from figscribe.render.breaks import curve_parts
 from figscribe.render.figure import (
     COORDS,
     CURVE_POINTS,
@@ -61,6 +70,7 @@ from figscribe.render.figure import (
     band_options,
     banded,
     like_the_plot,
+    render,
     tick_ranges,
 )
 from figscribe.render.labels import (
@@ -130,6 +140,11 @@ RESERVED = {
     "MinorLogNumbers",
     "colorbar",
     *(f"colorbar{i}" for i in range(2, 100)),
+    "squeezed",
+    "across_breaks",
+    "cut_out",
+    "Shape",
+    "PathCollection",
 }
 
 
@@ -170,6 +185,12 @@ def generate(
     as filtering out non-finite values before a fit.
     """
     figure = figure or project.figures[0]
+    if data is None and _breaks_set(figure):
+        # Where a broken axis puts its ticks is only known by drawing.
+        try:
+            data = load_data(project, Path(base_dir))
+        except (DataError, OSError):
+            data = None  # the script then draws the axes whole
     writer = _Writer(project, figure, Path(base_dir), data)
     return writer.write(
         Path(script_dir) if script_dir is not None else Path(base_dir),
@@ -223,6 +244,12 @@ class _Writer:
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
         self.axis_specs = self._ticks_that_fit()
+        self.broken, self.break_ticks = self._broken_axes()
+        """{(Axes.id, "x" or "y"): (breaks, gap width)} and its ticks."""
+        self._shared_ticks: list[tuple] = []
+        self._broken_later: list[tuple] = []
+        self._cut: tuple[Breaks, Breaks] = ([], [])
+        """The breaks of the panel whose plots are being written, x and y."""
 
     # --- naming -----------------------------------------------------------------
 
@@ -567,6 +594,11 @@ class _Writer:
                 self.emit(*(f"    {name}," for name in locators), ")")
         if any(getattr(a, "norm", None) == "log" for a in self.artists.values()):
             self.emit("from matplotlib.colors import LogNorm")
+        if self.broken:
+            self.emit(
+                "from matplotlib.collections import PathCollection",
+                "from matplotlib.path import Path as Shape",
+            )
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
         if self._grouped():
@@ -602,17 +634,28 @@ class _Writer:
             if (spec := getattr(axes, field)) is not None
         }
 
+    def _broken_axes(self) -> tuple[dict, dict]:
+        """The broken axes and their ticks, as the renderer draws them."""
+        if self.data is None or not _breaks_set(self.figure):
+            return {}, {}
+        drawn = render(self.figure, self.data)
+        return drawn.figscribe_breaks, drawn.figscribe_break_ticks
+
     def _locators(self) -> list[str]:
         """The tick locators and formatters the script needs to import."""
         specs = list(self.axis_specs.values())
+        # A broken axis places each of its ticks itself.
+        placed = [
+            s for key, s in self.axis_specs.items() if key not in self.break_ticks
+        ]
         needed = []
-        if any(minor_ticks(s)[0] == "parts" for s in specs):
+        if any(minor_ticks(s)[0] == "parts" for s in placed):
             needed.append("AutoMinorLocator")
         if any(scaling(s) is not None for s in specs):
             needed.append("FuncFormatter")
         if any(
             (s.ticks is None and s.major_step) or minor_ticks(s)[0] == "step"
-            for s in specs
+            for s in placed
         ):
             needed.append("MultipleLocator")
         if any(minor_numbers(s) == "silent" for s in specs):
@@ -662,6 +705,9 @@ class _Writer:
             helpers.append(COMMA_LOG_FORMATTER)
         if any(minor_numbers(s) == "ours" for s in own):
             helpers.append(MINOR_LOG_NUMBERS)
+        if self.broken:
+            self.section("Broken axes")
+            self.emit(*BROKEN_AXES.splitlines())
         if not helpers:
             return
         self.section("Tick numbers")
@@ -1288,7 +1334,6 @@ class _Writer:
                 ]
             )
             self.call(f"{name} = fig.add_subplot", *where, **kwargs)
-        self._shared_ticks = []
         for i in creation_order(figure):
             self._panel(i, figure.axes[i])
         if self._shared_ticks:
@@ -1299,6 +1344,16 @@ class _Writer:
             )
         for shared_axis in self._shared_ticks:
             self._ticks(*shared_axis)
+        if self._broken_later:
+            self.emit(
+                "",
+                "# Broken axes, now that everything is plotted: their scale, which",
+                "# squeezes each break, their range and every tick.",
+            )
+        for scale, axis in self._broken_later:
+            if scale is not None:
+                self._broken_scale(axis[0], axis[1], *scale)
+            self._ticks(*axis)
         hidden = hidden_tick_labels(figure)
         if any(x or y for x, y in hidden):
             self.emit(
@@ -1317,6 +1372,29 @@ class _Writer:
         labels = panel_labels(figure)
         if labels:
             self._panel_labels(labels)
+        self._cut_breaks()
+
+    def _cut_breaks(self) -> None:
+        """Last, when everything to be clipped is there."""
+        calls = []
+        for i, axes in enumerate(self.figure.axes):
+            kwargs = {
+                f"{name}_breaks": _value(self.broken[axes.id, name][0])
+                for name in ("x", "y")
+                if (axes.id, name) in self.broken
+            }
+            if not kwargs:
+                continue
+            ax = self.axes_names[i]
+            if axes.y_right is not None:
+                kwargs["twin"] = f"{ax}_right"
+            if self.figure.open_frame:
+                kwargs["frame"] = "False"
+            calls.append((ax, kwargs))
+        if calls:
+            self.emit("", "# Nothing is drawn within a break; marks stand at its ends.")
+        for ax, kwargs in calls:
+            self.call("cut_out", ax, **kwargs)
 
     def _align_labels(self) -> None:
         """Line up the axis labels of the panels, as the renderer does: the
@@ -1375,14 +1453,14 @@ class _Writer:
             self.call(f"{ax}.set_title", _str(axes.title), **size)
         for name in ("x", "y"):
             shared = sharing_specs(self.figure, index, name)
-            self._axis(ax, name, self.axis_specs[(axes.id, name)], shared)
+            self._axis(ax, name, (index, name), shared)
         right = None
         if axes.y_right is not None:
             right = f"{ax}_right"
             self.emit(f"{right} = {ax}.twinx()")
             if self.figure.open_frame:
                 self.emit(f'{right}.spines["right"].set_visible(True)')
-            self._axis(right, "y", self.axis_specs[(axes.id, "y_right")], [])
+            self._axis(right, "y", (index, "y_right"), [])
         if axes.grid:
             kwargs = {}
             if axes.grid_which != "major":
@@ -1396,15 +1474,28 @@ class _Writer:
             if axes.grid_linestyle is not None:
                 kwargs["linestyle"] = _str(axes.grid_linestyle)
             self.call(f"{ax}.grid", "True", **kwargs)
+        x_breaks, y_breaks = (
+            effective_breaks(self.figure, index, name) for name in ("x", "y")
+        )
         for artist in axes.artists:
             on_right = artist.axis == "right" and right is not None
+            # The breaks of the y axis are the left one's.
+            self._cut = (
+                (x_breaks, [] if on_right else y_breaks) if self.broken else ([], [])
+            )
             self._artist(right if on_right else ax, artist)
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)
 
-    def _axis(self, ax: str, name: str, spec: AxisSpec, shared: list[AxisSpec]) -> None:
-        """One axis of a panel; `shared` holds the settings of the other panels'
-        axes that are one with it."""
+    def _axis(
+        self, ax: str, name: str, which: tuple[int, str], shared: list[AxisSpec]
+    ) -> None:
+        """The axis `which`, (panel index, field), of the panel `ax`; `shared`
+        holds the settings of the other panels' axes that are one with it."""
+        index, field = which
+        key = self.figure.axes[index].id, field
+        spec = self.axis_specs[key]
+        broken = self.broken.get(key)
         label = axis_label(spec, self.figure.unit_format)
         if label is not None:
             size = {"fontsize": _num(spec.label_size)} if spec.label_size else {}
@@ -1425,35 +1516,58 @@ class _Writer:
             self.emit(f"{ax}.set_{name}lim({_num(low)}, {_num(high)})")
         elif spec.inverted:
             self.emit(f"{ax}.{name}axis.set_inverted(True)")
-        if spec.ticks is not None:
+        if spec.ticks is not None and broken is None:
             kwargs = {}
             if spec.tick_labels is not None:
                 kwargs["labels"] = _value(spec.tick_labels)
             self.call(f"{ax}.set_{name}ticks", _value(spec.ticks), **kwargs)
         # A later panel that sets the shared scale again would undo the ticks.
-        if shared and any(s.scale != "linear" for s in (spec, *shared)):
-            self._shared_ticks.append((ax, name, spec, shared))
+        if broken is not None:  # once everything is plotted
+            first = index == sharing_group(self.figure, index, field)[0]
+            scale = broken if first else None  # shared panels have one
+            self._broken_later.append((scale, (ax, name, spec, shared, key)))
+        elif shared and any(s.scale != "linear" for s in (spec, *shared)):
+            self._shared_ticks.append((ax, name, spec, shared, key))
         else:
-            self._ticks(ax, name, spec, shared)
+            self._ticks(ax, name, spec, shared, key)
+
+    def _broken_scale(
+        self, ax: str, name: str, breaks: Breaks, width: float, fixed: tuple | None
+    ) -> None:
+        """The scale of a broken axis, and its range if that was automatic."""
+        self.call(
+            f"{ax}.set_{name}scale",
+            '"function"',
+            functions=f"squeezed({_value(breaks)}, {_num(width)})",
+        )
+        if fixed is not None:
+            self.emit(f"{ax}.set_{name}lim({_num(fixed[0])}, {_num(fixed[1])})")
 
     def _ticks(
-        self, ax: str, name: str, spec: AxisSpec, shared: list[AxisSpec]
+        self,
+        ax: str,
+        name: str,
+        spec: AxisSpec,
+        shared: list[AxisSpec],
+        key: tuple[str, str],
     ) -> None:
         """The tick step, minor ticks and tick numbers of an axis."""
-        if spec.ticks is None and spec.major_step is not None:
-            step = _num(spec.major_step)
-            self.emit(f"{ax}.{name}axis.set_major_locator(MultipleLocator({step}))")
         how, value = minor_ticks(spec)
-        if how == "parts":
-            self.emit(f"{ax}.{name}axis.set_minor_locator(AutoMinorLocator({value}))")
-        elif how == "step":
-            self.emit(
-                f"{ax}.{name}axis.set_minor_locator(MultipleLocator({_num(value)}))"
-            )
-        elif how == "on":
-            self.emit(f"{ax}.{name}axis.minorticks_on()")
-        elif self.figure.stylesheet is not None or spec.scale != "linear":
-            self.emit(f"{ax}.{name}axis.minorticks_off()")  # a log axis has some
+        if key in self.break_ticks:
+            self._placed_ticks(ax, name, self.break_ticks[key])
+        else:
+            if spec.ticks is None and spec.major_step is not None:
+                step = _num(spec.major_step)
+                self.emit(f"{ax}.{name}axis.set_major_locator(MultipleLocator({step}))")
+            axis = f"{ax}.{name}axis"
+            if how == "parts":
+                self.emit(f"{axis}.set_minor_locator(AutoMinorLocator({value}))")
+            elif how == "step":
+                self.emit(f"{axis}.set_minor_locator(MultipleLocator({_num(value)}))")
+            elif how == "on":
+                self.emit(f"{axis}.minorticks_on()")
+            elif self.figure.stylesheet is not None or spec.scale != "linear":
+                self.emit(f"{axis}.minorticks_off()")  # a log axis has some
         if scaling(spec) is not None:
             self._tick_numbers(ax, name, spec)
         elif kind := comma_formatter(spec, self.figure.decimal_comma, shared):
@@ -1474,6 +1588,61 @@ class _Writer:
                 which='"both"',
                 labelsize=_num(spec.tick_size),
             )
+
+    def _placed_ticks(self, ax: str, name: str, ticks: tuple) -> None:
+        """The ticks of a broken axis, each written out: Matplotlib would put
+        some into the gaps."""
+        major, labels, minor = ticks
+        kwargs = {} if labels is None else {"labels": _value(labels)}
+        self._tick_list(f"{ax}.set_{name}ticks", major, kwargs)
+        if minor:
+            self._tick_list(f"{ax}.set_{name}ticks", minor, {"minor": "True"})
+        elif self.figure.stylesheet is not None:
+            self.emit(f"{ax}.{name}axis.minorticks_off()")
+
+    def _tick_list(self, call: str, ticks: list[float], kwargs: dict[str, str]) -> None:
+        """`call`(ticks, …), the list over several lines if it is long."""
+        if len(f"    {_value(ticks)},") <= WIDTH:
+            self.call(call, _value(ticks), **kwargs)
+            return
+        numbers = ", ".join(_num(t) for t in ticks) + ","
+        self.emit(f"{call}(", "    [")
+        self.emit(
+            *textwrap.wrap(
+                numbers, WIDTH, initial_indent=" " * 8, subsequent_indent=" " * 8
+            )
+        )
+        self.emit("    ],")
+        self.emit(*(f"    {k}={v}," for k, v in kwargs.items()), ")")
+
+    def _free(self, base: str) -> str:
+        """`base`, or `base2`, `base3`…: a name nothing else has, now taken."""
+        name, n = base, 2
+        while name in {*self._taken(), *self._masks}:
+            name, n = f"{base}{n}", n + 1
+        self._masks.add(name)
+        return name
+
+    def _cuts(self, x: str, y: str) -> str:
+        """Define where the line through `x` and `y` crosses a break, found by
+        the script from its own data; returns the name."""
+        name = self._free("cuts")
+        kwargs = {
+            f"{axis}_breaks": _value(breaks)
+            for axis, breaks in zip(("x", "y"), self._cut, strict=True)
+            if breaks
+        }
+        self.call(f"{name} = across_breaks", x, y, **kwargs)
+        return name
+
+    def _apart(self, cuts: str, base: str, expression: str, source) -> str:
+        """Define `base`, or a free name like it: `expression` with a NaN at the
+        positions `cuts`; `source` the values, whole numbers or not."""
+        name = self._free(base)
+        if np.asarray(source).dtype.kind != "f":
+            expression = f"np.asarray({expression}, dtype=float)"
+        self.call(f"{name} = np.insert", expression, cuts, "np.nan")
+        return name
 
     def _tick_numbers(self, ax: str, name: str, spec: AxisSpec) -> None:
         """The formatter of an axis whose numbers the script writes itself; it
@@ -1691,9 +1860,36 @@ class _Writer:
         # The band takes the line's color; one from the color cycle is known
         # only once the line is drawn.
         named = spread is not None and artist.band.color is artist.color is None
-        self._part(ax, artist, x, shown, errors, {}, common, "line" if named else None)
+        broken = self._cut != ([], [])
+        has_line = getattr(artist, "linestyle", "none") not in NO_LINE
+        left_line = like_the_plot(artist, "linestyle") not in NO_LINE
+        apart_rows = mask is not None and mask != used and left_line
+        cuts, values = None, None
+        if broken and (has_line or spread is not None or apart_rows):
+            values = plot_data(artist, self.data)
+            self.emit("# No line across a break: a NaN between the points beside it.")
+            cuts = self._cuts(x, y)
+        line = (x, shown, errors)
+        if cuts is not None and has_line:
+            line = (
+                self._apart(cuts, "line_x", x, values.x),
+                self._apart(cuts, "line_y", shown, values.y),
+                {
+                    k: self._apart(cuts, f"line_{k}", v, getattr(values, k))
+                    for k, v in errors.items()
+                },
+            )
+        self._part(ax, artist, *line, {}, common, "line" if named else None)
         if spread is not None:
-            self._band(ax, artist, x, y, spread, mask)
+            band = (x, y, spread, mask)
+            if cuts is not None:
+                band = (
+                    self._apart(cuts, "band_x", x, values.x),
+                    self._apart(cuts, "band_y", y, values.y),
+                    self._apart(cuts, "band_spread", spread, values.yerr),
+                    mask and self._apart_mask(cuts, mask),
+                )
+            self._band(ax, artist, *band)
         if mask is None or mask == used:
             return  # no row is drawn apart
         color = _str(artist.left_out_color or LEFT_OUT_COLOR)
@@ -1706,6 +1902,8 @@ class _Writer:
                 "# The line runs on through the rows left out, in their color.",
                 f"{steps} = ~({mask}[:-1] & {mask}[1:]){within}",
             )
+            if cuts is not None:
+                self.emit(f"{steps}[{cuts} - 1] = False  # not across a break")
             pieces = [
                 f"np.column_stack([{v}[:-1], {v}[1:], np.full({v}.size - 1, np.nan)])"
                 f"[{steps}].ravel()"
@@ -1722,6 +1920,11 @@ class _Writer:
         out = {name: f"{column}[{rows}]" for name, column in errors.items()}
         style = {"color": color, "marker": _str(marker or "none")}
         self._part(ax, artist, f"{x}[{rows}]", f"{y}[{rows}]", out, style, apart)
+
+    def _apart_mask(self, cuts: str, mask: str) -> str:
+        name = self._free("band_shown")
+        self.call(f"{name} = np.insert", mask, cuts, "False")
+        return name
 
     def _band(self, ax: str, artist, x: str, y: str, spread: str, mask) -> None:
         """The y errors as a band, just behind the points and their line."""
@@ -1846,12 +2049,49 @@ class _Writer:
         if isinstance(target, AllanDeviationPlot):  # even in log τ on a log axis
             panel = next(a for a in self.figure.axes if fit in a.artists)
             space = "geomspace" if panel.x.scale == "log" else "linspace"
-        self.emit(f"{xs} = np.{space}({low}, {high}, {CURVE_POINTS})")
         kwargs = _some(color=fit.color) | {
             "linestyle": _str(fit.linestyle),
             "linewidth": _num(fit.linewidth),
         }
-        self.call(f"{ax}.plot", xs, f"{function}({xs}, *{popt})", **kwargs, **common)
+        curve = f"{function}({xs}, *{popt})"
+        if self._cut == ([], []):
+            self.emit(f"{xs} = np.{space}({low}, {high}, {CURVE_POINTS})")
+        elif (curve := self._broken_curve(fit, xs, curve)) is None:
+            self.emit(f"# {_describe(fit)} lies within a break, so it is not drawn.")
+            return
+        self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
+
+    def _broken_curve(self, fit: FitCurve, xs: str, curve: str) -> str | None:
+        """Define `xs` and, if need be, the curve of a fit on a broken axis, as
+        the renderer samples it: on each stretch, and no line across a break.
+        Returns the y expression to plot; None if nothing is left."""
+        shown = plot_data(self.artists[fit.target], self.data)
+        x = shown.x[np.isfinite(shown.x) & shown.used]
+        low, high = float(x.min()), float(x.max())
+        if fit.fit_range is not None and not fit.extend_curve:
+            low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
+        parts = (
+            curve_parts(low, high, self._cut[0], CURVE_POINTS) if self._cut[0] else None
+        )
+        if parts == []:
+            return None
+        if parts is None:
+            parts = [(low, high, CURVE_POINTS)]
+        self.emit("# Sampled on each stretch of the broken axis, from the data's ends.")
+        spans = [f"np.linspace({float(a)!r}, {float(b)!r}, {n})" for a, b, n in parts]
+        if len(spans) == 1:
+            self.emit(f"{xs} = {spans[0]}")
+        else:
+            self.call(f"{xs} = np.concatenate", f"[{', '.join(spans)}]")
+        # A line can cross a break only between two stretches, or in y.
+        if len(parts) == 1 and not self._cut[1]:
+            return curve
+        values = f"{xs}_y"
+        self.emit(f"{values} = {curve}")
+        cuts = self._cuts(xs, values)
+        self.call(f"{xs} = np.insert", xs, cuts, "np.nan")
+        self.call(f"{values} = np.insert", values, cuts, "np.nan")
+        return values
 
     def _residuals(
         self, ax: str, residuals: ResidualPlot, common: dict[str, str]
@@ -1903,9 +2143,26 @@ class _Writer:
         }
         if residuals.linewidth is not None:
             kwargs["linewidth"] = _num(residuals.linewidth)
-        self.call(
-            f"{ax}.errorbar", x, f"{y} - {function}({x}, *{popt})", **kwargs, **common
-        )
+        left = f"{y} - {function}({x}, *{popt})"
+        if self._cut != ([], []) and residuals.linestyle not in NO_LINE:
+            x, left, kwargs = self._broken_residuals(fit, x, left, kwargs)
+        self.call(f"{ax}.errorbar", x, left, **kwargs, **common)
+
+    def _broken_residuals(
+        self, fit: FitCurve, x: str, left: str, kwargs: dict[str, str]
+    ) -> tuple[str, str, dict[str, str]]:
+        """The residuals' columns with no line across a break."""
+        shown = plot_data(self.artists[fit.target], self.data)
+        self.emit("# No line across a break.")
+        residual = self._free("residual")
+        self.emit(f"{residual} = {left}")
+        cuts = self._cuts(x, residual)
+        new_x = self._apart(cuts, "line_x", x, shown.x)
+        new_y = self._apart(cuts, "line_y", residual, shown.y)
+        if "yerr" in kwargs:
+            yerr = self._apart(cuts, "line_yerr", kwargs["yerr"], shown.y)
+            kwargs = {**kwargs, "yerr": yerr}
+        return new_x, new_y, kwargs
 
     def _legend(self, ax: str, legend: Legend, right: str | None = None) -> None:
         args = []
@@ -1988,6 +2245,132 @@ class MinorLogNumbers(LogFormatterSciNotation):
     def __call__(self, x, pos=None):
         return self.major(x, pos) if super().__call__(x, pos) else ""'''
 """What the script defines to write tick numbers; render.ticks does the same."""
+
+
+BROKEN_AXES = '''\
+# The widths of the gaps, the automatic ranges, the ticks and the stretches fits
+# are sampled on are as figscribe drew them for this data. For other data,
+# generate the script again.
+
+
+def squeezed(breaks, width):
+    """The two functions of a "function" scale that is linear, except that
+    each (start, end) of `breaks` takes only `width` of the axis."""
+
+    def forward(values):
+        values = np.asarray(values, dtype=float)
+        shown = values.copy()
+        for start, end in breaks:
+            part = np.clip((values - start) / (end - start), 0, 1)
+            shown = shown - part * (end - start - width)
+        return shown
+
+    def inverse(shown):
+        shown = np.asarray(shown, dtype=float)
+        values = shown.copy()
+        removed = 0.0
+        for start, end in breaks:
+            part = np.clip((shown - (start - removed)) / width, 0, 1)
+            values = values + part * (end - start - width)
+            removed += end - start - width
+        return values
+
+    return forward, inverse
+
+
+def across_breaks(x, y, x_breaks=(), y_breaks=()):
+    """Where the line from one point to the next would cross a break: the
+    positions at which np.insert puts a NaN, so that none is drawn there."""
+    x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+    crossing = np.zeros(max(x.size - 1, 0), dtype=bool)
+    for values, breaks in ((x, x_breaks), (y, y_breaks)):
+        low = np.minimum(values[:-1], values[1:])
+        high = np.maximum(values[:-1], values[1:])
+        for start, end in breaks:
+            crossing |= (high > start) & (low < end)
+    return np.flatnonzero(crossing) + 1
+
+
+def cut_out(ax, x_breaks=(), y_breaks=(), twin=None, frame=True):
+    """Leave the breaks of `ax` blank, with slanted marks at their ends; `twin`
+    is its right y axis, and without `frame` there are no top and right lines."""
+
+    def hide_markers(axes, x_breaks, y_breaks):
+        """A marker within a break would reach out of the gap: take it out."""
+
+        def outside(points):
+            inside = np.zeros(len(points), dtype=bool)
+            for values, breaks in zip(points.T, (x_breaks, y_breaks)):
+                for start, end in breaks:
+                    inside |= (values > start) & (values < end)
+            return np.where(inside[:, None], np.nan, points)
+
+        for line in axes.lines:
+            if line.get_marker() not in ("None", "none", "", " ", None):
+                points = outside(line.get_xydata())
+                line.set_data(points[:, 0], points[:, 1])
+        for scatter in axes.collections:
+            if isinstance(scatter, PathCollection):
+                points = np.ma.filled(scatter.get_offsets().astype(float), np.nan)
+                scatter.set_offsets(outside(points))
+
+    def stretches(breaks, limits):
+        low, high = sorted(limits)
+        low, high = 2 * low - high, 2 * high - low  # well past the axes
+        ends = [low, *np.clip(np.ravel(breaks), low, high), high]
+        return list(zip(ends[::2], ends[1::2]))
+
+    def visible(x_breaks, y_breaks, xs, ys):
+        corners = (
+            [(a, c), (b, c), (b, d), (a, d), (a, c)]
+            for a, b in stretches(x_breaks, xs)
+            for c, d in stretches(y_breaks, ys)
+        )
+        return Shape.make_compound_path(*(Shape(c, closed=True) for c in corners))
+
+    xs, ys = ax.get_xlim(), ax.get_ylim()
+    hide_markers(ax, x_breaks, y_breaks)
+    if twin is not None:
+        hide_markers(twin, x_breaks, [])
+    shown = visible(x_breaks, y_breaks, xs, ys)
+    for artist in [*ax.lines, *ax.collections, *ax.patches]:
+        artist.set_clip_path(shown, ax.transData)
+    for line in [*ax.get_xgridlines(), *ax.get_ygridlines()]:
+        line.set_clip_path(shown, ax.transData)
+    for each in [ax] if twin is None else [ax, twin]:
+        for spine in each.spines.values():
+            spine.set_clip_path(shown, ax.transData)
+            spine.set_clip_on(True)
+    if twin is not None:  # its y values are its own: only x cuts it
+        along = visible(x_breaks, [], xs, (0.0, 1.0))
+        for artist in [*twin.lines, *twin.collections, *twin.patches]:
+            artist.set_clip_path(along, ax.get_xaxis_transform())
+        twin.spines["right"].set_clip_path(along, ax.get_xaxis_transform())
+
+    marks = {
+        "linestyle": "none",
+        "color": plt.rcParams["axes.edgecolor"],
+        "markeredgewidth": plt.rcParams["axes.linewidth"],
+        "markersize": 7,
+        "clip_on": False,
+        "scalex": False,
+        "scaley": False,
+    }
+    ends = [e for e in np.ravel(x_breaks) if min(xs) < e < max(xs)]
+    if ends:
+        sides = [0, 1] if frame else [0]
+        slant = [(-0.5, -1), (0.5, 1)]
+        at = np.repeat(sides, len(ends))
+        transform = ax.get_xaxis_transform()
+        ax.plot(ends * len(sides), at, marker=slant, transform=transform, **marks)
+    ends = [e for e in np.ravel(y_breaks) if min(ys) < e < max(ys)]
+    if ends:
+        sides = [0, 1] if frame and twin is None else [0]
+        slant = [(-1, -0.5), (1, 0.5)]
+        at = np.repeat(sides, len(ends))
+        transform = ax.get_yaxis_transform()
+        ax.plot(at, ends * len(sides), marker=slant, transform=transform, **marks)'''
+"""What the script draws broken axes with; render.breaks does the same."""
 
 
 def _common(artist, default_zorder: float) -> dict[str, str]:
@@ -2080,6 +2463,15 @@ def _str(text: str) -> str:
         return repr(text)  # other control characters, rare enough to look odd
     escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
     return f'"{escaped}"'
+
+
+def _breaks_set(figure: Figure) -> bool:
+    """Whether any axis of the figure is drawn broken."""
+    return any(
+        effective_breaks(figure, i, name)
+        for i in range(len(figure.axes))
+        for name in ("x", "y")
+    )
 
 
 def _nested(wrappers: list[str], core: str) -> str:

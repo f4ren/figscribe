@@ -1,4 +1,4 @@
-"""Finding what the examples use (U12): every kind of element in the twelve
+"""Finding what the examples use (U12): every kind of element in the
 examples is found in the command palette under words a person would try, and
 the empty property panel says where to look."""
 

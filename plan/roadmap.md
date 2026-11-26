@@ -74,9 +74,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **F5** axes: ~~number format and the decimal comma (1)~~ done; ~~inverted axes (2)~~ done;
   a second x axis on top that converts (3); hiding (done) and offsetting spines
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
-  **broken axes (6, wanted for a measurement at a fixed point,
-  `[decide]`)**; minor grid lines of their own, thinner than the major ones
-  (10).
+  ~~broken axes (6)~~ done; minor grid lines of their own, thinner than the
+  major ones (10).
 - **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
   check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
@@ -1248,7 +1247,13 @@ In order of demand:
    marks standing in the empty, and a style sheet such as `classic` turns them
    on again unless they are written off. *Open:* offsetting the spines.
 5. `[decide]` **Date and time** axes for logged data.
-6. **Broken axes.** No longer later: asked for by a lab user (2026-11-04),
+6. **Broken axes.** **Done** (2026-11-26, decision 0072; no schema bump):
+   `AxisSpec.breaks`, one Matplotlib axis with a squeezed scale and clipping
+   instead of the separate axes sketched below. *Learned:* `set_xscale` does
+   not redo a range that `axhline` has settled; a script must find the cuts
+   from its own data. *Follow-ups, only if asked:* log axes; notes within a
+   break; a magnified stretch; images.
+   Before it was built: No longer later: asked for by a lab user (2026-11-04),
    who will add a measurement at the zinc point to a diagram after a break
    in an axis. `[decide]` before building; this is an L. Matplotlib has no
    broken axis, so it is drawn as two or more axes side by side (or one
@@ -1963,7 +1968,7 @@ answer in `docs/decisions.md` when the task is started.
 | U6 | Gaps between panels in mm: new model fields in mm (schema bump), converted by the renderer and the code generator? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
 | F5.5 | Date and time axes? |
-| F5.6 | Broken axes: one break or several, x and y, how ranges are given, what happens to fits, notes, lines and the legend at a break? |
+| F5.6 | answered 2026-11-26: x and y, several breaks; the rest decided and built (0072) |
 | F5.10 | Minor grid lines: thinner by default when both kinds are shown? |
 | F1.9 | The curve beyond the data: a typed range, or also "to the axis limits"? |
 | E4 | A source's file: what did the user mean by changing the name of the .csv in the template? |

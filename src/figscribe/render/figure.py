@@ -45,7 +45,19 @@ from figscribe.model import (
     ShadedSpan,
 )
 from figscribe.model.artists import LIKE_THE_PLOT
+from figscribe.model.breaks import Breaks, effective_breaks
+from figscribe.model.sharing import sharing_group
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
+from figscribe.render.breaks import (
+    break_ticks,
+    crossings,
+    curve_parts,
+    cut_out,
+    gap_width,
+    overlapping,
+    pieces,
+    squeezed,
+)
 from figscribe.render.labels import axis_label, panel_label_options, panel_labels
 from figscribe.render.layout import (
     creation_order,
@@ -107,6 +119,7 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
         ticked: list[tuple[MplAxes, str, AxisSpec]] = []
         # By (gid, "x" or "y"): the other panels' settings for the same axis.
         shared: dict[tuple[str, str], list[AxisSpec]] = {}
+        twins: dict[int, MplAxes] = {}
         for i in creation_order(figure):
             axes = figure.axes[i]
             if axes.inset is not None:
@@ -131,12 +144,17 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                 artists,
                 figure.open_frame,
                 figure.decimal_comma,
+                tuple(effective_breaks(figure, i, name) for name in ("x", "y")),
             )
+            if len(drawn) > 2:
+                twins[i] = drawn[2][0]
             for part, name, _ in drawn:
                 field = "y_right" if part.get_gid().endswith(RIGHT) else name
                 shared[part.get_gid(), name] = sharing_specs(figure, i, field)
             ticked += drawn
             axs[i] = ax
+
+        broken = _break_scales(figure, axs, twins)
 
         # Only now are the automatic ranges known that decide whether a tick
         # step fits. A style with axes.autolimit_mode "round_numbers" rounds
@@ -149,11 +167,22 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                 ax.set_xlim(xlim)
                 ax.set_ylim(ylim)
         rounded = matplotlib.rcParams["axes.autolimit_mode"] == "round_numbers"
+        # The ticks of broken axes, for the script, which writes them out.
+        broken_ticks: dict[tuple[str, str], tuple] = {}
         for ax, name, spec in ticked:
             interval = ax.get_xlim() if name == "x" else ax.get_ylim()
-            fitting = ticks_that_fit(spec, interval)
-            others = shared[ax.get_gid(), name]
-            _apply_ticks(ax, name, fitting, figure.decimal_comma, others)
+            key = ax.get_gid(), name
+            if key in broken:
+                low, high = sorted(interval)
+                breaks, width, _ = broken[key]
+                visible = sum(b - a for a, b in pieces(breaks, low, high))
+                fitting = ticks_that_fit(spec, (low, low + visible))
+                broken_ticks[key] = _set_break_ticks(ax, name, fitting, breaks, width)
+            else:
+                fitting = ticks_that_fit(spec, interval)
+            others = shared[key]
+            comma = figure.decimal_comma
+            _apply_ticks(ax, name, fitting, comma, others, key in broken)
             if rounded:
                 ax.autoscale_view(scalex=name == "x", scaley=name == "y")
 
@@ -170,18 +199,101 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
 
         aligned = aligned_axes(figure)
         if figure.align_labels and aligned:
-            twins = {
-                ax.get_gid(): ax for ax, _, _ in ticked if ax.get_gid().endswith(RIGHT)
-            }
             fig.align_labels(
-                [
-                    ax
-                    for i in aligned
-                    for ax in (axs[i], twins.get(f"{figure.axes[i].id}{RIGHT}"))
-                    if ax is not None
-                ]
+                [ax for i in aligned for ax in (axs[i], twins.get(i)) if ax is not None]
             )
+
+        # Last, when everything to be clipped is there.
+        for i, axes in enumerate(figure.axes):
+            x_breaks, y_breaks = (
+                broken.get((axes.id, n), ([],))[0] for n in ("x", "y")
+            )
+            if x_breaks or y_breaks:
+                frame = not figure.open_frame
+                cut_out(axs[i], x_breaks, y_breaks, twins.get(i), frame)
+    fig.figscribe_breaks = broken
+    fig.figscribe_break_ticks = broken_ticks
     return fig
+
+
+def _break_scales(
+    figure: Figure, axs: dict[int, MplAxes], twins: dict[int, MplAxes]
+) -> dict[tuple[str, str], tuple]:
+    """Give each broken axis its scale; returns (breaks drawn, width of their
+    gaps, range if it was automatic) by (gid, "x" or "y"). Panels sharing an
+    axis have one scale between them.
+
+    The gap's width follows from the range the model gives, or that the data
+    fill, so that zooming the preview does not change it.
+    """
+    broken: dict[tuple[str, str], tuple] = {}
+    for i in range(len(figure.axes)):
+        for name in ("x", "y"):
+            group = sharing_group(figure, i, name)
+            if i != group[0] or not (breaks := effective_breaks(figure, i, name)):
+                continue
+            first = axs[i]
+            given = any(getattr(figure.axes[j], name).limits for j in group)
+            if given:
+                ends = list(first.get_xlim() if name == "x" else first.get_ylim())
+            else:
+                drawn = [axs[j] for j in group]
+                if name == "x":
+                    drawn += [twins[j] for j in group if j in twins]
+                ends = [
+                    end
+                    for ax in drawn
+                    for end in getattr(ax.dataLim, f"interval{name}")
+                    if np.isfinite(end)
+                ]
+            if not ends:
+                continue
+            low, high = float(min(ends)), float(max(ends))
+            applied = overlapping(breaks, low, high)
+            if not applied or not (width := gap_width(applied, low, high)) > 0:
+                continue
+            set_scale = first.set_xscale if name == "x" else first.set_yscale
+            set_scale("function", functions=squeezed(applied, width))
+            fixed = None
+            if not given:
+                # An automatic range is worked out for the squeezed scale (a
+                # reference line may have settled the linear one already) and
+                # fixed, rounded, so that the script can write it and draws
+                # with the very same numbers.
+                first.autoscale_view(scalex=name == "x", scaley=name == "y")
+                ends = first.get_xlim() if name == "x" else first.get_ylim()
+                fixed = tuple(float(f"{end:.6g}") for end in ends)
+                (first.set_xlim if name == "x" else first.set_ylim)(*fixed)
+            for j in group:
+                broken[figure.axes[j].id, name] = applied, width, fixed
+    return broken
+
+
+def _set_break_ticks(
+    ax: MplAxes, name: str, spec: AxisSpec, breaks: Breaks, width: float
+) -> tuple:
+    """Place the ticks of a broken axis, each one itself: Matplotlib would put
+    them into the gaps. Returns (major, typed labels, minor)."""
+    axis = ax.xaxis if name == "x" else ax.yaxis
+    low, high = ax.get_xlim() if name == "x" else ax.get_ylim()
+    major, labels, minor = break_ticks(
+        breaks,
+        low,
+        high,
+        axis.get_tick_space(),
+        ticks=spec.ticks,
+        labels=spec.tick_labels,
+        step=spec.major_step,
+        parts=spec.minor_divisions,
+        minor=spec.minor_ticks,
+        clear=width,
+    )
+    axis.set_ticks(major, labels=labels)
+    if minor:
+        axis.set_ticks(minor, minor=True)
+    else:
+        axis.minorticks_off()
+    return major, labels, minor
 
 
 def aligned_axes(figure: Figure) -> list[int]:
@@ -261,6 +373,7 @@ def _draw_axes(
     artists: Mapping[str, Artist],
     open_frame: bool = False,
     comma: bool = False,
+    breaks: tuple[Breaks, Breaks] = ([], []),
 ) -> list[tuple[MplAxes, str, AxisSpec]]:
     """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
@@ -291,7 +404,9 @@ def _draw_axes(
         # Without a right axis, a plot meant for it is drawn against the left
         # one; validate_references reports it.
         target = right if artist.axis == "right" and right is not None else ax
-        _draw_artist(artist, target, data, artists, comma)
+        # The breaks of the y axis are the left one's.
+        cut = breaks if target is ax else (breaks[0], [])
+        _draw_artist(artist, target, data, artists, comma, cut)
 
     if axes.legend.visible:
         _draw_legend(axes.legend, ax, right).set_gid(axes.id)
@@ -330,11 +445,8 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
 
 
-def _apply_ticks(
-    ax: MplAxes, name: str, spec: AxisSpec, comma: bool, shared: list[AxisSpec]
-) -> None:
-    """The tick step, minor ticks and tick numbers, once the range is known."""
-    axis = ax.xaxis if name == "x" else ax.yaxis
+def _locate_ticks(axis, spec: AxisSpec) -> None:
+    """Where the major and minor ticks of an axis go."""
     if spec.ticks is None and spec.major_step is not None:
         axis.set_major_locator(MultipleLocator(spec.major_step))
     how, value = minor_ticks(spec)
@@ -346,6 +458,23 @@ def _apply_ticks(
         axis.minorticks_on()
     else:
         axis.minorticks_off()
+
+
+def _apply_ticks(
+    ax: MplAxes,
+    name: str,
+    spec: AxisSpec,
+    comma: bool,
+    shared: list[AxisSpec],
+    broken: bool = False,
+) -> None:
+    """The tick step, minor ticks and tick numbers, once the range is known; on
+    a broken axis the ticks are placed already, and only their numbers are
+    left."""
+    axis = ax.xaxis if name == "x" else ax.yaxis
+    if not broken:
+        _locate_ticks(axis, spec)
+    how, _ = minor_ticks(spec)
     if scaling(spec) is not None:
         axis.set_major_formatter(
             FuncFormatter(lambda value, _: tick_text(value, spec, comma))
@@ -379,6 +508,7 @@ def _draw_artist(
     data: DataProvider,
     artists: Mapping[str, Artist],
     comma: bool = False,
+    cut: tuple[Breaks, Breaks] = ([], []),
 ) -> None:
     """Draw one artist; `artists` finds the plots that fits and residuals
     refer to, wherever in the figure they are."""
@@ -394,7 +524,7 @@ def _draw_artist(
         raise DataError(f"{artist.label or artist.kind}: {why}")
 
     if isinstance(artist, FITTABLE):
-        _draw_points(artist, ax, data, common, artists)
+        _draw_points(artist, ax, data, common, artists, cut)
     elif isinstance(artist, Histogram):
         values = convert(data(artist.values), artist.x_conversion)
         # np.histogram cannot place NaN or inf; they are left out, like in a fit.
@@ -431,9 +561,9 @@ def _draw_artist(
     elif isinstance(artist, AllanDeviationPlot):
         _draw_allan(artist, ax, data, common)
     elif isinstance(artist, FitCurve):
-        _draw_fit(artist, ax, data, artists, common)
+        _draw_fit(artist, ax, data, artists, common, cut)
     elif isinstance(artist, ResidualPlot):
-        _draw_residuals(artist, ax, data, artists, common)
+        _draw_residuals(artist, ax, data, artists, common, cut)
     else:
         raise NotImplementedError(
             f"rendering {artist.kind!r} artists is not implemented yet"
@@ -445,7 +575,12 @@ LEFT_OUT_COLOR = "0.7"
 
 
 def _draw_points(
-    artist, ax: MplAxes, data: DataProvider, common: dict, artists: Mapping
+    artist,
+    ax: MplAxes,
+    data: DataProvider,
+    common: dict,
+    artists: Mapping,
+    cut: tuple[Breaks, Breaks],
 ) -> None:
     """A line, scatter or error bar plot. With rows left out: the kept rows as
     styled, the line broken at the left-out ones; the line running on through
@@ -480,10 +615,22 @@ def _draw_points(
     y = columns["y"]
     if not shown.all():
         columns["y"] = np.where(shown, y, np.nan)
-    part = _draw_part(artist, ax, columns, {}, common)
-    part.rows = np.arange(count) if converted.rows is None else converted.rows
+    # Where a line or band would cross a break; none is drawn there.
+    at = crossings(columns["x"], y, *cut)
+    rows = np.arange(count) if converted.rows is None else converted.rows
+    drawn = columns
+    if at.size and getattr(artist, "linestyle", "none") not in NO_LINE:
+        drawn = {name: _apart(values, at) for name, values in columns.items()}
+        rows = np.insert(rows, at, -1)
+    part = _draw_part(artist, ax, drawn, {}, common)
+    part.rows = rows
     if spread is not None:
-        _draw_band(artist, ax, columns["x"], y, spread, shown, part.get_color())
+        x, mid, half, kept_rows = columns["x"], y, spread, shown
+        where = None if shown.all() else shown
+        if at.size:
+            x, mid, half = (_apart(v, at) for v in (x, mid, half))
+            where = None if where is None else np.insert(kept_rows, at, False)
+        _draw_band(artist, ax, x, mid, half, where, part.get_color())
     if shown.all():
         return
     color = artist.left_out_color or LEFT_OUT_COLOR
@@ -492,6 +639,7 @@ def _draw_points(
     if linestyle not in NO_LINE:
         x = columns["x"]
         touching = ~(shown[:-1] & shown[1:]) & used[:-1] & used[1:]
+        touching[at - 1] = False
         width = {"linewidth": artist.linewidth} if hasattr(artist, "linewidth") else {}
         ax.plot(
             _segments(x)[touching].ravel(),
@@ -509,6 +657,11 @@ def _draw_points(
     values["y"] = y[out]
     style = {"color": color, "marker": marker or "none", "linestyle": "none"}
     _draw_part(artist, ax, values, style, apart).rows = np.flatnonzero(out)
+
+
+def _apart(values: np.ndarray, at: np.ndarray) -> np.ndarray:
+    """The values with a NaN before each position of `at`."""
+    return np.insert(np.asarray(values, dtype=float), at, np.nan)
 
 
 def banded(artist) -> bool:
@@ -529,14 +682,14 @@ def band_options(artist) -> dict[str, float]:
     }
 
 
-def _draw_band(artist, ax: MplAxes, x, y, spread, shown, color) -> None:
+def _draw_band(artist, ax: MplAxes, x, y, spread, where, color) -> None:
     """The band of y ± spread, in the plot's color unless it has its own, with
     a gap at the rows not shown."""
     ax.fill_between(
         x,
         y - spread,
         y + spread,
-        where=None if shown.all() else shown,
+        where=where,
         color=artist.band.color or color,
         linewidth=0,
         visible=artist.visible,
@@ -761,6 +914,7 @@ def _draw_fit(
     data: DataProvider,
     artists: Mapping[str, Artist],
     common: dict,
+    cut: tuple[Breaks, Breaks],
 ) -> None:
     """The fitted model across its fit range, where there is data, or across
     all the data; nothing before a fit."""
@@ -781,8 +935,17 @@ def _draw_fit(
         if not low < high:
             return
     log = isinstance(target, AllanDeviationPlot) and ax.get_xscale() == "log"
-    xs = (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
+    if cut[0]:  # sampled on each stretch, so that a short one stays smooth
+        parts = curve_parts(low, high, cut[0], CURVE_POINTS)
+        if not parts:
+            return
+        xs = np.concatenate([np.linspace(*part) for part in parts])
+    else:
+        xs = (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
     ys = evaluate(fit.model, fit.result.parameters, xs)
+    at = crossings(xs, ys, *cut)
+    if at.size:
+        xs, ys = _apart(xs, at), _apart(ys, at)
     ax.plot(
         xs,
         ys,
@@ -799,6 +962,7 @@ def _draw_residuals(
     data: DataProvider,
     artists: Mapping[str, Artist],
     common: dict,
+    cut: tuple[Breaks, Breaks],
 ) -> None:
     """Data minus fit at every fitted point, with the data's y errors, around
     a dashed zero line."""
@@ -824,9 +988,14 @@ def _draw_residuals(
     if not used.all():
         x, y = x[used], y[used]
         yerr = None if yerr is None else yerr[used]
+    left = y - evaluate(fit.model, fit.result.parameters, x)
+    at = crossings(x, left, *cut)
+    if at.size and residuals.linestyle not in NO_LINE:
+        x, left = _apart(x, at), _apart(left, at)
+        yerr = None if yerr is None else _apart(yerr, at)
     container = ax.errorbar(
         x,
-        y - evaluate(fit.model, fit.result.parameters, x),
+        left,
         yerr=yerr,
         color=residuals.color,
         marker=residuals.marker,
