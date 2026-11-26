@@ -115,6 +115,20 @@ def _fitted(**fields):
     return make
 
 
+def _fitted_across(**fields):
+    """A fit in a panel whose x range is typed, wider than the data."""
+
+    def make():
+        data, fit = _fit(**fields)
+        return Axes(x=AxisSpec(limits=(-5.0, 15.0)), artists=[data, fit]), fit
+
+    return make
+
+
+def _type_the_limits(axes: Axes, fit: FitCurve) -> None:
+    axes.x.limits = (-5.0, 15.0)
+
+
 def _fitted_to_fewer_points():
     data, fit = _fit(fit_range=(2.0, 6.0))
     data.reduction = Reduction(count=3)
@@ -219,6 +233,30 @@ CASES: dict[tuple, Case] = {
         4.0,
         ("linestyle",),
         "-",
+    ),
+    ("FitCurve", ("extend_curve",), "typed ends"): (
+        _fitted(fit_range=(2.0, 6.0), curve_range=(0.0, 20.0)),
+        True,
+        ("curve_range",),
+        None,
+    ),
+    ("FitCurve", ("extend_curve",), "to the limits"): (
+        _fitted_across(fit_range=(2.0, 6.0), curve_to_limits=True),
+        True,
+        ("curve_to_limits",),
+        False,
+    ),
+    ("FitCurve", ("curve_range",)): (
+        _fitted_across(curve_to_limits=True),
+        (1.0, 3.0),
+        ("curve_to_limits",),
+        False,
+    ),
+    ("FitCurve", ("curve_to_limits",)): (
+        _fitted(),
+        True,
+        _type_the_limits,
+        None,
     ),
     ("LinePlot", ("markersize",)): (
         _alone(lambda: _line(marker=None)),

@@ -73,6 +73,19 @@ _FIT_FIELDS = {
         "description": "[lower, upper] of x: only the points within are fitted; "
         "omitted fits all",
     },
+    "curve_range": {
+        "type": ["array", "null"],
+        "items": {"type": "number"},
+        "minItems": 2,
+        "maxItems": 2,
+        "description": "[lower, upper] of x the curve is drawn over, which may "
+        "reach beyond the data to extrapolate; omitted follows the data",
+    },
+    "curve_to_limits": {
+        "type": "boolean",
+        "description": "Draw the curve across the range typed on the x axis "
+        "(x.limits); without one it has no effect",
+    },
     "bounds": {
         "type": "object",
         "additionalProperties": {

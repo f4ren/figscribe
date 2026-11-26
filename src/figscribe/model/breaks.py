@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from figscribe.model.artists import ImagePlot
 from figscribe.model.figure import Figure
-from figscribe.model.sharing import sharing_group
+from figscribe.model.sharing import sharing_group, typed_limits
 
 Breaks = list[tuple[float, float]]
 
@@ -54,14 +54,10 @@ def line_breaks(figure: Figure, index: int, field: str) -> Breaks:
     breaks = effective_breaks(figure, index, field)
     if not breaks:
         return []
-    typed = [
-        sorted(spec.limits)
-        for i in sharing_group(figure, index, field)
-        if (spec := getattr(figure.axes[i], field)).limits
-    ]
-    if not typed:
+    typed = typed_limits(figure, index, field)
+    if typed is None:
         return breaks  # a line cannot cross a break that the data do not reach
-    low, high = typed[-1]  # the range set last is the one the axis has
+    low, high = typed
     return [
         (start, end)
         for start, end in breaks

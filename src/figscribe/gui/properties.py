@@ -444,6 +444,8 @@ BASIC = {
         "linestyle",
         "linewidth",
         "extend_curve",
+        "curve_range",
+        "curve_to_limits",
         "outside_as_left_out",
     ),
     "ResidualPlot": (
@@ -566,6 +568,7 @@ PLACEHOLDERS = {
     "grid_color": "automatic",
     "grid_linewidth": "default",
     "grid_minor_color": "as the major lines",
+    "curve_range": "as the data",
     "grid_minor_linewidth": "default",
     "linewidth": "default",
     "frame_width": "default",
@@ -613,6 +616,9 @@ TIPS = {
     "none.",
     "left_out_linestyle": "How the line runs on through the rows left out, in "
     "their color: like the plot's, another style, or none for a gap.",
+    "curve_range": "Draw the fitted curve from one x to another, which may reach "
+    "beyond the data to extrapolate; the fit does not change.",
+    "curve_to_limits": "Draw the curve across the range typed on the x axis.",
     "extend_curve": "Draw the fitted curve across all the data, not only over the "
     "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",
@@ -993,6 +999,8 @@ ELEMENT_SECTIONS = {
         "linestyle": "Look",
         "linewidth": "Look",
         "extend_curve": "Look",
+        "curve_range": "Look",
+        "curve_to_limits": "Look",
         "outside_as_left_out": "Look",
     },
     "Histogram": {

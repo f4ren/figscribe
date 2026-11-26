@@ -433,6 +433,14 @@ class FitCurve(ArtistBase):
     outside_as_left_out: bool = False
     """Draw the plot's points outside the fit range like its left-out points;
     they are not left out of the plot."""
+    curve_range: tuple[float, float] | None = None
+    """(lower, upper) of x the curve is drawn over, which may reach beyond the
+    data to extrapolate, in the units the plot shows; None leaves the ends to
+    the data, as `extend_curve` says. The fit itself is not changed."""
+    curve_to_limits: bool = False
+    """Draw the curve across the range typed on the x axis, instead of over
+    `curve_range` or the data. It waits for a typed range: with an automatic
+    one the curve would move the limit it is to reach."""
     result: FitResult | None = None
     """The outcome of the last fit; None before the first."""
     color: Color | None = None
@@ -448,6 +456,35 @@ class FitCurve(ArtistBase):
         if fit_range is not None and not fit_range[0] < fit_range[1]:
             raise ValueError("the lower end of the fit range is not below the upper")
         return fit_range
+
+    @field_validator("curve_range")
+    @classmethod
+    def _curve_ordered(cls, curve_range):
+        if curve_range is not None and not curve_range[0] < curve_range[1]:
+            raise ValueError("the lower end of the curve is not below the upper")
+        return curve_range
+
+    def given_ends(
+        self, x_limits: tuple[float, float] | None
+    ) -> tuple[float, float] | None:
+        """The ends the user gave the curve, where `x_limits` is the range typed
+        on its x axis, lowest first; None where the data give them."""
+        if self.curve_to_limits and x_limits is not None:
+            return x_limits
+        return self.curve_range
+
+    def curve_ends(
+        self, low: float, high: float, x_limits: tuple[float, float] | None
+    ) -> tuple[float, float] | None:
+        """From where to where the curve is drawn for data from `low` to `high`;
+        None if nowhere."""
+        if (given := self.given_ends(x_limits)) is not None:
+            return given
+        if self.fit_range is not None and not self.extend_curve:
+            low, high = max(self.fit_range[0], low), min(self.fit_range[1], high)
+            if not low < high:
+                return None
+        return low, high
 
     @field_validator("parameter_bounds")
     @classmethod

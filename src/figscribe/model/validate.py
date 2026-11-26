@@ -39,7 +39,7 @@ from figscribe.model.breaks import breaks_blocked, line_breaks, own_breaks
 from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource
 from figscribe.model.figure import Figure
 from figscribe.model.project import Project
-from figscribe.model.sharing import sharing_group
+from figscribe.model.sharing import sharing_group, typed_limits
 from figscribe.model.styles import style_problems
 
 FITTABLE = (LinePlot, ScatterPlot, ErrorbarPlot)
@@ -151,6 +151,13 @@ def validate_references(
                         why = _nothing_to_fit(artist, artists_by_id, data)
                         if why is not None:
                             issues.append(ReferenceIssue(tpath, artist.id, why))
+
+                if isinstance(artist, FitCurve):
+                    for field, why in _curve_problems(
+                        figure, ai, artist, artists_by_id, data
+                    ):
+                        where = f"{tpath}.{field}"
+                        issues.append(ReferenceIssue(where, artist.id, why))
 
                 for field, ref in data_refs(artist):
                     if ref not in source_ids:
@@ -313,8 +320,9 @@ def _unequal_or_unreadable(artist, data) -> str | None:
 def axis_values(figure: Figure, index: int, field: str, data):
     """What is drawn against the `field` axis ("x" or "y") of the panel
     `index` and of those sharing it, in data units: where points, a histogram's
-    values and reference lines lie. Approximate: the ends of error bars, fitted
-    curves and shaded ranges are not counted."""
+    values, reference lines and curves with ends of their own lie.
+    Approximate: the ends of error bars, curves along the data and shaded
+    ranges are not counted."""
     import numpy as np
 
     from figscribe.allan import allan_points
@@ -323,6 +331,7 @@ def axis_values(figure: Figure, index: int, field: str, data):
     found = []
     upright = "vertical" if field == "x" else "horizontal"
     for i in sharing_group(figure, index, field):
+        x_limits = typed_limits(figure, i, "x")
         for artist in figure.axes[i].artists:
             if field == "y" and artist.axis == "right":
                 continue
@@ -338,11 +347,80 @@ def axis_values(figure: Figure, index: int, field: str, data):
                 elif isinstance(artist, ReferenceLine):
                     if artist.orientation == upright:
                         found.append([artist.at])
+                elif isinstance(artist, FitCurve):
+                    found.append(_curve_values(artist, field, x_limits))
             except Exception:  # a plot that cannot be drawn counts for nothing
                 continue
     if not found:
         return np.array([])
     return np.concatenate([np.asarray(v, dtype=float).ravel() for v in found])
+
+
+def _curve_values(fit: FitCurve, field: str, x_limits):
+    """Samples of a fitted curve whose ends the user gave, which may reach
+    beyond the data; none of one that lies along them."""
+    import numpy as np
+
+    from figscribe.fit import evaluate
+
+    ends = fit.given_ends(x_limits)
+    if ends is None or fit.result is None:
+        return []
+    xs = np.linspace(*ends, 100)
+    return xs if field == "x" else evaluate(fit.model, fit.result.parameters, xs)
+
+
+def _curve_problems(
+    figure: Figure, index: int, fit: FitCurve, artists: dict, data
+) -> list[tuple[str, str]]:
+    """(field, why) for the ends given to a fitted curve."""
+    import numpy as np
+
+    from figscribe.convert import plot_data
+    from figscribe.fit import FitError, fitted_points
+    from figscribe.io.errors import DataError
+
+    found = []
+    x_limits = typed_limits(figure, index, "x")
+    if fit.curve_to_limits and x_limits is None:
+        found.append(
+            (
+                "curve_to_limits",
+                "draws its curve to the axis limits, but the x axis has no range "
+                "typed; type one in the axis",
+            )
+        )
+    ends = fit.given_ends(x_limits)
+    if ends is None:
+        return found
+    to_limits = fit.curve_to_limits and x_limits is not None
+    field = "curve_to_limits" if to_limits else "curve_range"
+    low, high = ends
+    if figure.axes[index].x.scale == "log" and low <= 0:
+        found.append(
+            (
+                field,
+                f"its curve starts at {low:g}, which a logarithmic axis cannot show",
+            )
+        )
+    target = artists.get(fit.target)
+    if to_limits or data is None or not isinstance(target, FIT_TARGETS):
+        return found
+    try:
+        shown = plot_data(target, data)
+        used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)
+        x = np.asarray(shown.x, dtype=float)[used]
+    except (DataError, FitError, KeyError, ValueError, IndexError):
+        return found  # said elsewhere
+    if x.size and (high < x.min() or low > x.max()):
+        found.append(
+            (
+                field,
+                f"draws its curve from {low:g} to {high:g}, away from the data "
+                f"(x from {x.min():g} to {x.max():g})",
+            )
+        )
+    return found
 
 
 def _shown_breaks(figure: Figure, index: int, field: str, data):

@@ -57,7 +57,7 @@ from figscribe.model import (
     ShadedSpan,
 )
 from figscribe.model.breaks import Breaks, effective_breaks
-from figscribe.model.sharing import sharing_group
+from figscribe.model.sharing import sharing_group, typed_limits
 from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
@@ -2059,7 +2059,14 @@ class _Writer:
         target = self.artists[fit.target]
         x = self.shown(target, "x")
         xs = f"{x}_fit" if f"{x}_fit" not in self._taken() else f"{x}_fit_"
-        if target.id in self.used:  # NaN lies outside the range too
+        index, panel = next(
+            (i, a) for i, a in enumerate(self.figure.axes) if fit in a.artists
+        )
+        x_limits = typed_limits(self.figure, index, "x")
+        given = fit.given_ends(x_limits)
+        if given is not None:
+            low, high = (repr(float(end)) for end in given)
+        elif target.id in self.used:  # NaN lies outside the range too
             low = f"{x}[{self.used[target.id]}].min()"
             high = f"{x}[{self.used[target.id]}].max()"
         elif self._finite(fit) or target.id in self.reduced:
@@ -2067,14 +2074,19 @@ class _Writer:
         else:
             low = f"{x}[np.isfinite({x})].min()"
             high = f"{x}[np.isfinite({x})].max()"
-        if fit.fit_range is not None and not fit.extend_curve:
+        if given is None and fit.fit_range is not None and not fit.extend_curve:
             # Over the fit range, where there is data.
             low = f"max({fit.fit_range[0]!r}, {low})"
             high = f"min({fit.fit_range[1]!r}, {high})"
-        space = "linspace"
-        if isinstance(target, AllanDeviationPlot):  # even in log τ on a log axis
-            panel = next(a for a in self.figure.axes if fit in a.artists)
-            space = "geomspace" if panel.x.scale == "log" else "linspace"
+        # Evenly in log x for an Allan deviation, and over ends of the user's.
+        log = panel.x.scale == "log" and (
+            isinstance(target, AllanDeviationPlot) if given is None else given[0] > 0
+        )
+        space = "geomspace" if log else "linspace"
+        if given is not None:
+            to_limits = fit.curve_to_limits and x_limits is not None
+            what = "axis limits" if to_limits else "given ends"
+            self.emit(f"# The curve reaches to the {what}, not to the data's.")
         kwargs = _some(color=fit.color) | {
             "linestyle": _str(fit.linestyle),
             "linewidth": _num(fit.linewidth),
@@ -2082,33 +2094,42 @@ class _Writer:
         curve = f"{function}({xs}, *{popt})"
         if self._cut == ([], []):
             self.emit(f"{xs} = np.{space}({low}, {high}, {CURVE_POINTS})")
-        elif (curve := self._broken_curve(fit, xs, curve, space)) is None:
+        elif (curve := self._broken_curve(fit, xs, curve, space, x_limits)) is None:
             self.emit(f"# {_describe(fit)} lies within a break, so it is not drawn.")
             return
         self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
 
     def _broken_curve(
-        self, fit: FitCurve, xs: str, curve: str, space: str
+        self,
+        fit: FitCurve,
+        xs: str,
+        curve: str,
+        space: str,
+        x_limits: tuple[float, float] | None,
     ) -> str | None:
         """Define `xs` and, if need be, the curve of a fit on a broken axis, as
         the renderer samples it: on each stretch, and no line across a break.
         Returns the y expression to plot; None if nothing is left."""
         shown = plot_data(self.artists[fit.target], self.data)
         x = shown.x[np.isfinite(shown.x) & shown.used]
-        low, high = float(x.min()), float(x.max())
-        if fit.fit_range is not None and not fit.extend_curve:
-            low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
+        ends = fit.curve_ends(float(x.min()), float(x.max()), x_limits)
+        if ends is None:
+            return None
+        low, high = ends
+        given = fit.given_ends(x_limits) is not None
         if overlapping(self._cut[0], low, high):
             parts = curve_parts(low, high, self._cut[0], CURVE_POINTS)
             if not parts:
                 return None
             space = "linspace"  # a broken x axis is linear
             self.emit(
-                "# Sampled on each stretch of the broken axis, from the data's ends."
+                "# Sampled on each stretch of the broken axis"
+                + ("." if given else ", from the data's ends.")
             )
         else:  # only y is broken: x as on any axis
             parts = [(low, high, CURVE_POINTS)]
-            self.emit("# From the data's ends.")
+            if not given:
+                self.emit("# From the data's ends.")
         spans = [f"np.{space}({float(a)!r}, {float(b)!r}, {n})" for a, b, n in parts]
         if len(spans) == 1:
             self.emit(f"{xs} = {spans[0]}")

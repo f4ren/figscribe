@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from figscribe.model.axes import AxisSpec
 from figscribe.model.figure import Figure
+
+if TYPE_CHECKING:
+    from figscribe.model.project import Project
 
 
 def share_partner(figure: Figure, index: int, axis: str) -> int | None:
@@ -52,3 +57,26 @@ def sharing_specs(figure: Figure, index: int, field: str) -> list[AxisSpec]:
         for i in sharing_group(figure, index, field)
         if i != index
     ]
+
+
+def typed_limits(figure: Figure, index: int, field: str) -> tuple[float, float] | None:
+    """The range typed for the `field` axis of the panel `index`, there or on a
+    panel that shares the axis, lowest end first; None while it is automatic."""
+    typed = [
+        spec.limits
+        for i in sharing_group(figure, index, field)
+        if (spec := getattr(figure.axes[i], field)) is not None and spec.limits
+    ]
+    if not typed:
+        return None
+    low, high = sorted(typed[-1])  # the range set last is the one the axis has
+    return low, high
+
+
+def x_limits_of(project: Project, artist_id: str) -> tuple[float, float] | None:
+    """`typed_limits` of the x axis the artist `artist_id` is drawn on."""
+    for figure in project.figures:
+        for index, axes in enumerate(figure.axes):
+            if any(artist.id == artist_id for artist in axes.artists):
+                return typed_limits(figure, index, "x")
+    return None

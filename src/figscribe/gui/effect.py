@@ -32,6 +32,7 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
 )
+from figscribe.model.sharing import x_limits_of
 from figscribe.render.figure import NO_LINE, aligned_axes
 
 Path = tuple[str, ...]
@@ -233,6 +234,26 @@ RULES: list[Rule] = [
         (("extend_curve",), ("outside_as_left_out",)),
         "the fit uses all the data: set a range in the fit dialog",
         lambda fit, _: fit.fit_range is None,
+    ),
+    Rule(
+        (FitCurve,),
+        (("extend_curve",),),
+        "the curve's ends are given",
+        lambda fit, project: fit.given_ends(x_limits_of(project, fit.id)) is not None,
+    ),
+    Rule(
+        (FitCurve,),
+        (("curve_range",),),
+        "the curve goes to the axis limits",
+        lambda fit, project: (
+            fit.curve_to_limits and x_limits_of(project, fit.id) is not None
+        ),
+    ),
+    Rule(
+        (FitCurve,),
+        (("curve_to_limits",),),
+        "the x axis has no typed range",
+        lambda fit, project: x_limits_of(project, fit.id) is None,
     ),
     Rule(
         (FitCurve,),

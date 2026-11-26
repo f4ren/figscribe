@@ -46,7 +46,7 @@ from figscribe.model import (
 )
 from figscribe.model.artists import LIKE_THE_PLOT
 from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
-from figscribe.model.sharing import sharing_group
+from figscribe.model.sharing import sharing_group, typed_limits
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
 from figscribe.render.breaks import (
     break_ticks,
@@ -168,6 +168,7 @@ def _render(
                 figure.open_frame,
                 figure.decimal_comma,
                 tuple(cuts[axes.id, name] for name in ("x", "y")),
+                typed_limits(figure, i, "x"),
             )
             if len(drawn) > 2:
                 twins[i] = drawn[2][0]
@@ -397,6 +398,7 @@ def _draw_axes(
     open_frame: bool = False,
     comma: bool = False,
     breaks: tuple[Breaks, Breaks] = ([], []),
+    x_limits: tuple[float, float] | None = None,
 ) -> list[tuple[MplAxes, str, AxisSpec]]:
     """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
@@ -422,7 +424,7 @@ def _draw_axes(
         target = right if artist.axis == "right" and right is not None else ax
         # The breaks of the y axis are the left one's.
         cut = breaks if target is ax else (breaks[0], [])
-        _draw_artist(artist, target, data, artists, comma, cut)
+        _draw_artist(artist, target, data, artists, comma, cut, x_limits)
 
     if axes.legend.visible:
         _draw_legend(axes.legend, ax, right).set_gid(axes.id)
@@ -525,6 +527,7 @@ def _draw_artist(
     artists: Mapping[str, Artist],
     comma: bool = False,
     cut: tuple[Breaks, Breaks] = ([], []),
+    x_limits: tuple[float, float] | None = None,
 ) -> None:
     """Draw one artist; `artists` finds the plots that fits and residuals
     refer to, wherever in the figure they are."""
@@ -577,7 +580,7 @@ def _draw_artist(
     elif isinstance(artist, AllanDeviationPlot):
         _draw_allan(artist, ax, data, common, cut)
     elif isinstance(artist, FitCurve):
-        _draw_fit(artist, ax, data, artists, common, cut)
+        _draw_fit(artist, ax, data, artists, common, cut, x_limits)
     elif isinstance(artist, ResidualPlot):
         _draw_residuals(artist, ax, data, artists, common, cut)
     else:
@@ -941,9 +944,10 @@ def _draw_fit(
     artists: Mapping[str, Artist],
     common: dict,
     cut: tuple[Breaks, Breaks],
+    x_limits: tuple[float, float] | None,
 ) -> None:
-    """The fitted model across its fit range, where there is data, or across
-    all the data; nothing before a fit."""
+    """The fitted model across the ends given to it, else across its fit range,
+    where there is data, or across all the data; nothing before a fit."""
     from figscribe.fit import evaluate, fitted_points
 
     target = _referenced(artists, fit.target, FIT_TARGETS, "fit")
@@ -955,12 +959,20 @@ def _draw_fit(
     x = shown.x[np.isfinite(shown.x) & shown.used]
     if x.size == 0:
         return
-    low, high = float(x.min()), float(x.max())
-    if fit.fit_range is not None and not fit.extend_curve:
-        low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
-        if not low < high:
-            return
-    log = isinstance(target, AllanDeviationPlot) and ax.get_xscale() == "log"
+    ends = fit.curve_ends(float(x.min()), float(x.max()), x_limits)
+    if ends is None:
+        return
+    low, high = ends
+    # Evenly in log x for an Allan deviation, and over ends of the user's, which
+    # may reach across decades.
+    log = (
+        ax.get_xscale() == "log"
+        and low > 0
+        and (
+            isinstance(target, AllanDeviationPlot)
+            or fit.given_ends(x_limits) is not None
+        )
+    )
     # Sampled on each stretch, so that a short one stays smooth.
     if overlapping(cut[0], low, high):
         parts = curve_parts(low, high, cut[0], CURVE_POINTS)

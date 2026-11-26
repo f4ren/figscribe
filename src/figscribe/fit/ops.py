@@ -82,6 +82,8 @@ EDITABLE = (
     "parameter_bounds",
     "fit_range",
     "extend_curve",
+    "curve_range",
+    "curve_to_limits",
     "outside_as_left_out",
     "result",
     "label",

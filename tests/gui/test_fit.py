@@ -349,6 +349,68 @@ def test_a_fit_range_is_shown_when_the_fit_is_changed(
     assert dialog.fit().fit_range == (3.0, 7.0)
 
 
+def test_the_curve_range_is_typed_in_the_dialog(dialog: FitDialog) -> None:
+    assert dialog.fit().curve_range is None
+    assert not dialog.to_limits.isEnabled()  # the x axis has no typed range
+    assert "typed" in dialog.to_limits.toolTip()
+    dialog.curve_low.setText("0")
+    dialog.curve_low.editingFinished.emit()
+    assert "both ends" in dialog.error.text() and not _ok(dialog)
+    dialog.curve_high.setText("15")
+    dialog.curve_high.editingFinished.emit()
+    assert _ok(dialog) and dialog.fit().curve_range == (0.0, 15.0)
+    assert not dialog.extend.isEnabled()  # the typed ends say where
+    dialog.curve_low.setText("20")
+    dialog.curve_low.editingFinished.emit()
+    assert "lower end" in dialog.error.text() and not _ok(dialog)
+
+
+def test_the_curve_can_go_to_the_typed_axis_limits(qtbot, document: Document) -> None:
+    dialog = FitDialog(_data(document), document.data, x_limits=(-2.0, 14.0))
+    qtbot.addWidget(dialog)
+    assert dialog.to_limits.isEnabled() and "-2 to 14" in dialog.to_limits.toolTip()
+    dialog.to_limits.click()
+    assert dialog.fit().curve_to_limits
+    assert not dialog.curve_low.isEnabled() and not dialog.extend.isEnabled()
+    dialog.to_limits.click()
+    assert dialog.curve_low.isEnabled() and not dialog.fit().curve_to_limits
+
+
+def test_the_curve_range_is_shown_when_the_fit_is_changed(
+    qtbot, document: Document
+) -> None:
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        curve_range=(0.0, 15.0),
+        curve_to_limits=True,
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    assert (dialog.curve_low.text(), dialog.curve_high.text()) == ("0", "15")
+    # Kept ticked, though no limits are typed now: it is the user's setting.
+    assert dialog.to_limits.isChecked() and dialog.to_limits.isEnabled()
+    assert dialog.curve_low.isEnabled()  # the range serves meanwhile
+    changed = dialog.fit()
+    assert (changed.curve_range, changed.curve_to_limits) == ((0.0, 15.0), True)
+
+
+def test_the_fit_dialog_knows_the_typed_x_range(window: MainWindow) -> None:
+    document = window.document
+    document.push(SetField(document.figure.axes[0].id, ("x", "limits"), (-2.0, 14.0)))
+    seen = []
+
+    def run(dialog: FitDialog) -> bool:
+        seen.append(dialog.to_limits.isEnabled())
+        return False
+
+    window.run_dialog = run
+    window.add_fit()
+    assert seen == [True]
+
+
 # --- left-out points and outliers ---------------------------------------------------
 
 

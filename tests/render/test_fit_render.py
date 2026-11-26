@@ -139,3 +139,64 @@ def test_the_zero_line_can_be_left_out(figure: Figure, data) -> None:
     ax = render(figure, data).axes[1]
     zero = [line for line in ax.get_lines() if tuple(line.get_ydata()) == (0.0, 0.0)]
     assert zero == []
+
+
+# --- the curve beyond the data (F1.9) ----------------------------------------
+
+
+def _curve(figure: Figure, data) -> np.ndarray:
+    """Where the fitted curve of the first panel was sampled."""
+    fit = figure.axes[0].artists[1]
+    (line,) = _lines(render(figure, data).axes[0], fit.id)
+    return np.asarray(line.get_xdata())
+
+
+def test_a_given_range_draws_the_curve_there(figure: Figure, data) -> None:
+    figure.axes[0].artists[1].curve_range = (-5.0, 25.0)
+    xs = _curve(figure, data)
+    assert (len(xs), xs[0], xs[-1]) == (400, -5.0, 25.0)
+    low, high = render(figure, data).axes[0].get_xlim()
+    assert low < -5.0 and high > 25.0  # the automatic range follows the curve
+
+
+@pytest.mark.parametrize("limits", [(-2.0, 20.0), (20.0, -2.0)])
+def test_the_curve_goes_to_the_typed_axis_limits(figure, data, limits) -> None:
+    figure.axes[0].x.limits = limits
+    figure.axes[0].artists[1].curve_to_limits = True
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (-2.0, 20.0)
+
+
+def test_the_limits_of_a_panel_that_shares_x_count(figure: Figure, data) -> None:
+    figure.layout.share_x = "col"
+    figure.axes[1].x.limits = (-2.0, 20.0)
+    figure.axes[0].artists[1].curve_to_limits = True
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (-2.0, 20.0)
+
+
+def test_to_the_limits_waits_for_typed_ones(figure, data, columns) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.curve_to_limits = True
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (columns["t"].min(), columns["t"].max())
+    fit.curve_range = (1.0, 30.0)  # the range typed serves meanwhile
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (1.0, 30.0)
+
+
+def test_typed_limits_win_over_a_typed_range(figure: Figure, data) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.curve_range, fit.curve_to_limits = (1.0, 30.0), True
+    figure.axes[0].x.limits = (0.0, 12.0)
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (0.0, 12.0)
+
+
+def test_on_a_log_axis_a_given_range_is_sampled_in_log(figure, data) -> None:
+    figure.axes[0].x.scale = "log"
+    even = np.diff(_curve(figure, data))
+    assert even == pytest.approx([even[0]] * len(even))  # as before
+    figure.axes[0].artists[1].curve_range = (0.1, 100.0)
+    ratios = np.diff(np.log(_curve(figure, data)))
+    assert ratios == pytest.approx([ratios[0]] * len(ratios))
