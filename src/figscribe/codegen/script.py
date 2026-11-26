@@ -2360,8 +2360,9 @@ def cut_out(ax, x_breaks=(), y_breaks=(), twin=None, frame=True):
     shown = visible(x_breaks, y_breaks, xs, ys)
     for artist in [*ax.lines, *ax.collections, *ax.patches]:
         artist.set_clip_path(shown, ax.transData)
-    for line in [*ax.get_xgridlines(), *ax.get_ygridlines()]:
-        line.set_clip_path(shown, ax.transData)
+    for axis in (ax.xaxis, ax.yaxis):  # the minor grid lines too
+        for tick in [*axis.get_major_ticks(), *axis.get_minor_ticks()]:
+            tick.gridline.set_clip_path(shown, ax.transData)
     for each in [ax] if twin is None else [ax, twin]:
         for spine in each.spines.values():
             spine.set_clip_path(shown, ax.transData)

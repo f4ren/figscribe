@@ -147,6 +147,15 @@ def test_the_gap_stays_cut_when_drawn_again_at_another_size(ref) -> None:
     assert (inside == 255).all()
 
 
+def test_minor_grid_lines_stop_at_a_break_too(ref) -> None:
+    spec = AxisSpec(breaks=[(24.0, 416.0)])
+    panel = _panel(ref, x=spec, grid=True, grid_which="both")
+    figure = Figure(dpi=150, ticks_all_sides=False, axes=[panel])
+    column, top, bottom = _gap_column(figure)
+    pixels = _pixels(figure, transparent=True)
+    assert pixels[top - 2 : bottom + 2, column, 3].max() == 0
+
+
 def test_a_y_break_and_both_directions(ref) -> None:
     panel = _panel(ref, x=X_BREAK, y=AxisSpec(breaks=[(4.0, 8.0)]))
     (ax,) = _drawn(Figure(axes=[panel])).axes
