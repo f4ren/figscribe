@@ -6,45 +6,16 @@ the generator writes makes exactly the calls the renderer makes.
 
 from __future__ import annotations
 
-from figscribe.model import Axes, AxisSpec, Figure
+from figscribe.model import Axes, Figure
+from figscribe.model.sharing import share_partner, sharing_specs
 
-
-def share_partner(figure: Figure, index: int, axis: str) -> int | None:
-    """Index of the axes that axes `index` shares `axis` ("x" or "y") with.
-
-    The first axes, or the first in the same column (x, "col") or row (y,
-    "row"), counted by where an axes starts; None when nothing is shared or
-    the axes is the first of its group.
-    """
-    mode = figure.layout.share_x if axis == "x" else figure.layout.share_y
-    me = figure.axes[index]
-    if mode == "none" or me.inset is not None:
-        return None
-    along = "col" if axis == "x" else "row"
-    for i, other in enumerate(figure.axes[:index]):
-        if other.inset is not None:
-            continue
-        if mode == "all" or getattr(other, along) == getattr(me, along):
-            return i
-    return None
-
-
-def sharing_specs(figure: Figure, index: int, field: str) -> list[AxisSpec]:
-    """The settings of the other panels' axes that are one with the `field`
-    axis of the axes `index`. They have one set of ticks and numbers between
-    them. A right y axis shares with none."""
-    if field == "y_right" or figure.axes[index].inset is not None:
-        return []
-
-    def first(i: int) -> int:
-        partner = share_partner(figure, i, field)
-        return i if partner is None else partner
-
-    return [
-        getattr(axes, field)
-        for i, axes in enumerate(figure.axes)
-        if i != index and axes.inset is None and first(i) == first(index)
-    ]
+__all__ = [
+    "creation_order",
+    "hidden_tick_labels",
+    "inset_parent",
+    "share_partner",
+    "sharing_specs",
+]
 
 
 def creation_order(figure: Figure) -> list[int]:

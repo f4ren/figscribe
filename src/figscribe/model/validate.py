@@ -35,9 +35,11 @@ from figscribe.model.artists import (
     ShadedSpan,
 )
 from figscribe.model.axes import Axes
+from figscribe.model.breaks import breaks_blocked, own_breaks
 from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource
 from figscribe.model.figure import Figure
 from figscribe.model.project import Project
+from figscribe.model.sharing import sharing_group
 from figscribe.model.styles import style_problems
 
 FITTABLE = (LinePlot, ScatterPlot, ErrorbarPlot)
@@ -69,7 +71,7 @@ def validate_references(
 
     With `data`, the columns of each plot are also checked for equal length.
     """
-    issues: list[ReferenceIssue] = []
+    issues: list[ReferenceIssue] = unbreakable(project)
     source_ids = {s.id for s in project.sources}
     sources = {s.id: s for s in project.sources}
 
@@ -88,6 +90,7 @@ def validate_references(
     for fi, figure in enumerate(project.figures):
         fpath = f"figures[{fi}]"
         _check_grid(figure, fpath, issues)
+        _check_breaks(figure, fpath, issues)
         for field, why in style_problems(figure):
             issues.append(ReferenceIssue(f"{fpath}.{field}", figure.id, why))
 
@@ -580,6 +583,44 @@ def _check_grid(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None
                 )
             )
     _check_spans(figure, path, issues)
+
+
+def unbreakable(project: Project) -> list[ReferenceIssue]:
+    """Breaks set on axes that cannot be broken, which are drawn whole."""
+    issues: list[ReferenceIssue] = []
+    for fi, figure in enumerate(project.figures):
+        for ai, axes in enumerate(figure.axes):
+            for field in ("x", "y", "y_right"):
+                spec = getattr(axes, field)
+                # Where panels share the axis, each break blocked is named at
+                # the panel that has it.
+                if spec is None or not spec.breaks:
+                    continue
+                if (why := breaks_blocked(figure, ai, field)) is not None:
+                    path = f"figures[{fi}].axes[{ai}].{field}.breaks"
+                    issues.append(ReferenceIssue(path, axes.id, why))
+    return issues
+
+
+def _check_breaks(figure: Figure, path: str, issues: list[ReferenceIssue]) -> None:
+    """Panels sharing an axis that are given different breaks: one set is
+    drawn for all."""
+    said = set()
+    for ai, axes in enumerate(figure.axes):
+        for field in ("x", "y"):
+            found = own_breaks(figure, ai, field)
+            group = (field, tuple(sharing_group(figure, ai, field)))
+            if group in said or all(b == found[0] for b in found):
+                continue
+            said.add(group)
+            issues.append(
+                ReferenceIssue(
+                    f"{path}.axes[{ai}].{field}.breaks",
+                    axes.id,
+                    f"panels sharing the {field} axis have different breaks; "
+                    "those of the first are drawn",
+                )
+            )
 
 
 def outside_the_grid(project: Project) -> list[ReferenceIssue]:

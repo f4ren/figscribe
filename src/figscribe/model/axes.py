@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -62,6 +63,24 @@ class AxisSpec(StrictModel):
     decimals: int = Field(1, ge=0, le=10)
     """Places after the decimal mark for `number_format` "fixed" and
     "scientific"; "auto" ignores it."""
+
+    breaks: list[tuple[float, float]] = Field(default_factory=list)
+    """Stretches cut out of the axis, each (start, end) in the data's unit, in
+    rising order and apart from each other: the axis is drawn with a narrow gap
+    and break marks there, and nothing is shown within. For a measurement far
+    from the rest. Only a linear x or left y axis can be broken; panels that
+    share the axis share its breaks."""
+
+    @field_validator("breaks")
+    @classmethod
+    def _apart(cls, breaks):
+        for start, end in breaks:
+            if not start < end:
+                raise ValueError("a break needs a start below its end")
+        for (_, end), (start, _) in pairwise(breaks):
+            if not end < start:
+                raise ValueError("breaks must be in rising order and apart")
+        return breaks
 
     @field_validator("limits")
     @classmethod
