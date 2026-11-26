@@ -58,7 +58,7 @@ from figscribe.model import (
 )
 from figscribe.model.breaks import Breaks, effective_breaks
 from figscribe.model.sharing import sharing_group
-from figscribe.render.breaks import curve_parts
+from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
     CURVE_POINTS,
@@ -88,6 +88,7 @@ from figscribe.render.layout import (
 )
 from figscribe.render.ticks import (
     comma_formatter,
+    counted_interval,
     minor_numbers,
     minor_ticks,
     scaling,
@@ -185,17 +186,21 @@ def generate(
     as filtering out non-finite values before a fit.
     """
     figure = figure or project.figures[0]
+    target = Path(script_dir) if script_dir is not None else Path(base_dir)
+    saved = output or f"{_slug(figure.name) or 'figure'}.pdf"
+
+    def written(data: DataProvider | None) -> str:
+        return _Writer(project, figure, Path(base_dir), data).write(target, saved)
+
     if data is None and _breaks_set(figure):
-        # Where a broken axis puts its ticks is only known by drawing.
+        # Where a broken axis puts its ticks is only known by drawing. The
+        # files are read on first use, so any step of the writing can find
+        # one that is missing or has changed.
         try:
-            data = load_data(project, Path(base_dir))
+            return written(load_data(project, Path(base_dir)))
         except (DataError, OSError):
-            data = None  # the script then draws the axes whole
-    writer = _Writer(project, figure, Path(base_dir), data)
-    return writer.write(
-        Path(script_dir) if script_dir is not None else Path(base_dir),
-        output or f"{_slug(figure.name) or 'figure'}.pdf",
-    )
+            pass  # the script then draws the axes whole, and says so
+    return written(data)
 
 
 class _Writer:
@@ -243,9 +248,9 @@ class _Writer:
         that is fitted, of its τ and its errors}."""
         self.fits = self._name_fits()
         self.axes_names = self._name_axes()
-        self.axis_specs = self._ticks_that_fit()
         self.broken, self.break_ticks = self._broken_axes()
         """{(Axes.id, "x" or "y"): (breaks, gap width)} and its ticks."""
+        self.axis_specs = self._ticks_that_fit()
         self._shared_ticks: list[tuple] = []
         self._broken_later: list[tuple] = []
         self._cut: tuple[Breaks, Breaks] = ([], [])
@@ -623,9 +628,15 @@ class _Writer:
         """Every axis by (Axes.id, field), without a tick step or divisions the
         renderer leaves out because they would give too many ticks."""
         ranges = tick_ranges(self.figure, self.data)
+
+        def counted(key: tuple[str, str], spec: AxisSpec):
+            breaks = self.broken.get(key, ([],))[0]  # as the renderer drew them
+            drawn = spec.model_copy(update={"breaks": breaks})
+            return counted_interval(drawn, ranges[key])
+
         return {
             (axes.id, field): (
-                ticks_that_fit(spec, ranges[axes.id, field])
+                ticks_that_fit(spec, counted((axes.id, field), spec))
                 if (axes.id, field) in ranges
                 else spec
             )
@@ -1180,6 +1191,14 @@ class _Writer:
             taus = f"{m} * {tau0}"
             if plot.x_conversion:
                 taus = scale_expression(taus, plot.x_conversion)
+        if self._cut != ([], []) and plot.linestyle not in NO_LINE:
+            self.emit("# No line across a break: a NaN between the points beside it.")
+            cuts = self._cuts(taus, adev)
+            floats = np.zeros(0)
+            if "yerr" in kwargs:
+                kwargs["yerr"] = self._apart(cuts, "line_yerr", kwargs["yerr"], floats)
+            taus = self._apart(cuts, "line_x", taus, floats)
+            adev = self._apart(cuts, "line_y", adev, floats)
         self.call(f"{ax}.errorbar", taus, adev, **kwargs, **common)
 
     def _fits(self) -> None:
@@ -1391,6 +1410,8 @@ class _Writer:
             if self.figure.open_frame:
                 kwargs["frame"] = "False"
             calls.append((ax, kwargs))
+        if self.data is None and _breaks_set(self.figure):
+            self.emit("", "# The axis breaks are left out: the data could not be read.")
         if calls:
             self.emit("", "# Nothing is drawn within a break; marks stand at its ends.")
         for ax, kwargs in calls:
@@ -1474,15 +1495,14 @@ class _Writer:
             if axes.grid_linestyle is not None:
                 kwargs["linestyle"] = _str(axes.grid_linestyle)
             self.call(f"{ax}.grid", "True", **kwargs)
+        # Those the renderer drew the panel's axes with: the script cuts there.
         x_breaks, y_breaks = (
-            effective_breaks(self.figure, index, name) for name in ("x", "y")
+            self.broken.get((axes.id, name), ([],))[0] for name in ("x", "y")
         )
         for artist in axes.artists:
             on_right = artist.axis == "right" and right is not None
             # The breaks of the y axis are the left one's.
-            self._cut = (
-                (x_breaks, [] if on_right else y_breaks) if self.broken else ([], [])
-            )
+            self._cut = (x_breaks, [] if on_right else y_breaks)
             self._artist(right if on_right else ax, artist)
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)
@@ -2056,12 +2076,14 @@ class _Writer:
         curve = f"{function}({xs}, *{popt})"
         if self._cut == ([], []):
             self.emit(f"{xs} = np.{space}({low}, {high}, {CURVE_POINTS})")
-        elif (curve := self._broken_curve(fit, xs, curve)) is None:
+        elif (curve := self._broken_curve(fit, xs, curve, space)) is None:
             self.emit(f"# {_describe(fit)} lies within a break, so it is not drawn.")
             return
         self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
 
-    def _broken_curve(self, fit: FitCurve, xs: str, curve: str) -> str | None:
+    def _broken_curve(
+        self, fit: FitCurve, xs: str, curve: str, space: str
+    ) -> str | None:
         """Define `xs` and, if need be, the curve of a fit on a broken axis, as
         the renderer samples it: on each stretch, and no line across a break.
         Returns the y expression to plot; None if nothing is left."""
@@ -2070,15 +2092,18 @@ class _Writer:
         low, high = float(x.min()), float(x.max())
         if fit.fit_range is not None and not fit.extend_curve:
             low, high = max(fit.fit_range[0], low), min(fit.fit_range[1], high)
-        parts = (
-            curve_parts(low, high, self._cut[0], CURVE_POINTS) if self._cut[0] else None
-        )
-        if parts == []:
-            return None
-        if parts is None:
+        if overlapping(self._cut[0], low, high):
+            parts = curve_parts(low, high, self._cut[0], CURVE_POINTS)
+            if not parts:
+                return None
+            space = "linspace"  # a broken x axis is linear
+            self.emit(
+                "# Sampled on each stretch of the broken axis, from the data's ends."
+            )
+        else:  # only y is broken: x as on any axis
             parts = [(low, high, CURVE_POINTS)]
-        self.emit("# Sampled on each stretch of the broken axis, from the data's ends.")
-        spans = [f"np.linspace({float(a)!r}, {float(b)!r}, {n})" for a, b, n in parts]
+            self.emit("# From the data's ends.")
+        spans = [f"np.{space}({float(a)!r}, {float(b)!r}, {n})" for a, b, n in parts]
         if len(spans) == 1:
             self.emit(f"{xs} = {spans[0]}")
         else:
@@ -2160,7 +2185,7 @@ class _Writer:
         new_x = self._apart(cuts, "line_x", x, shown.x)
         new_y = self._apart(cuts, "line_y", residual, shown.y)
         if "yerr" in kwargs:
-            yerr = self._apart(cuts, "line_yerr", kwargs["yerr"], shown.y)
+            yerr = self._apart(cuts, "line_yerr", kwargs["yerr"], shown.yerr)
             kwargs = {**kwargs, "yerr": yerr}
         return new_x, new_y, kwargs
 

@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from figscribe.commands import SetField
+from figscribe.commands import InsertItem, SetField
 from figscribe.gui import MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.axisform import axis_settings
@@ -264,3 +264,73 @@ def test_the_outline_offers_to_break_a_panel_and_an_axis(window) -> None:
         window.outline.context_menu(panel), "Remove the breaks of the x axis"
     ).trigger()
     assert _axes(window).x.breaks == []
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_a_tick_step_counts_only_what_a_broken_axis_shows(
+    qtbot, tmp_path, shared
+) -> None:
+    """From -20 to 440 every 2 would be 231 ticks; shown are about 20. With
+    `shared`, the break is set on the other panel."""
+    window = _open(qtbot, tmp_path, panels=2 if shared else 1)
+    window.document.push(SetField(_axes(window).id, ("x", "breaks"), [(21, 418)]))
+    form = _form(window, i=1 if shared else 0)
+    form.major.setCurrentIndex(form.major.findData("step"))
+    form.major.activated.emit(form.major.currentIndex())
+    _enter(form.major_value, "2")
+    assert _axes(window, 1 if shared else 0).x.major_step == 2.0
+    assert window.properties._error.isHidden()
+
+
+def test_the_menu_names_a_break_in_the_unit_the_axis_shows(window) -> None:
+    window.document.push(SetField(_axes(window).id, ("x", "prefix"), "k"))
+    entry = _entry(window.outline.context_menu(_axes(window).id), "Break the x axis")
+    assert entry.text() == "Break the x axis (cut out 0.021 to 0.418)"
+    entry.trigger()
+    assert _axes(window).x.breaks == [(21.0, 418.0)]
+
+
+def test_widening_the_range_counts_with_the_break_it_brings_into_view(window) -> None:
+    """From 0 to 22 the break is not shown; up to 440 it is, and every 2 over
+    the two stretches is about 24 ticks."""
+    panel = _axes(window).id
+    window.document.push(SetField(panel, ("x", "breaks"), [(23, 416)]))
+    window.document.push(SetField(panel, ("x", "limits"), (0.0, 22.0)))
+    window.document.push(SetField(panel, ("x", "major_step"), 2.0))
+    form = _form(window)
+    _enter(form.high, "440")
+    assert _axes(window).x.limits == (0.0, 440.0), window.properties._error.text()
+
+
+def test_a_step_is_counted_over_the_whole_of_a_range_within_a_break(window) -> None:
+    panel = _axes(window).id
+    # All the data lie within it, so the axis is drawn whole.
+    window.document.push(SetField(panel, ("x", "breaks"), [(-100, 600)]))
+    form = _form(window)
+    form.major.setCurrentIndex(form.major.findData("step"))
+    form.major.activated.emit(form.major.currentIndex())
+    _enter(form.major_value, "0.001")
+    assert _axes(window).x.major_step != 0.001
+    assert "at most 50" in window.properties._error.text()
+
+
+def test_the_refusal_of_a_step_names_the_whole_range(window) -> None:
+    panel = _axes(window).id
+    window.document.push(SetField(panel, ("x", "breaks"), [(21, 418)]))
+    window.document.push(SetField(panel, ("x", "limits"), (-20.0, 440.0)))
+    form = _form(window)
+    form.major.setCurrentIndex(form.major.findData("step"))
+    form.major.activated.emit(form.major.currentIndex())
+    _enter(form.major_value, "0.1")
+    assert "from -20 to 440" in window.properties._error.text()
+
+
+def test_add_a_break_sees_the_points_of_an_allan_deviation(window) -> None:
+    from figscribe.gui.breaks import axis_values
+    from figscribe.model import AllanDeviationPlot
+
+    x = ColumnRef(source=window.document.project.sources[0].id, column="t")
+    plot = AllanDeviationPlot(values=x)
+    window.document.push(InsertItem(_axes(window).id, "artists", plot))
+    values = axis_values(window.document, _axes(window).id, "x")
+    assert values.size > 12  # the line's 12 points and the tau of the deviation

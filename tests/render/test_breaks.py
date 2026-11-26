@@ -276,3 +276,55 @@ def test_which_steps_cross_a_break() -> None:
     x = np.array([0.0, 1.0, 5.0, np.nan, 9.0])
     assert list(crossings(x, x, [(2, 4)], [])) == [2]
     assert list(crossings(x, x, [], [(0.2, 0.8)])) == [1]
+
+
+def _plot_line(ax):
+    return next(line for line in ax.lines if line.get_gid() is not None)
+
+
+@pytest.mark.parametrize("limits", [(0.0, 21.0), (40.0, 400.0)])
+def test_a_break_the_typed_range_does_not_show_cuts_no_line(ref, limits) -> None:
+    """Outside the range, or around all of it, the break is not drawn: the line
+    runs on to the frame as on any axis."""
+    x = AxisSpec(breaks=[(24.0, 416.0)], limits=limits)
+    (ax,) = _drawn(Figure(axes=[_panel(ref, x=x)])).axes
+    assert ax.get_xscale() == "linear"
+    assert not np.isnan(_plot_line(ax).get_xdata()).any()
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_no_allan_line_runs_across_a_break(axis) -> None:
+    from figscribe.model import AllanDeviationPlot, ColumnRef
+
+    noise = np.random.default_rng(1).normal(size=2000)
+    plot = AllanDeviationPlot(values=ColumnRef(source="s", column="y"))
+    whole = render(Figure(axes=[Axes(artists=[plot])]), lambda ref: noise)
+    tau, adev = _plot_line(whole.axes[0]).get_xydata().T
+    # Between two neighbouring points.
+    low, high = (tau[6], tau[7]) if axis == "x" else (adev[3], adev[2])
+    breaks = [(low + 0.2 * (high - low), high - 0.2 * (high - low))]
+    panel = Axes(artists=[plot], **{axis: AxisSpec(breaks=breaks)})
+    (ax,) = render(Figure(axes=[panel]), lambda ref: noise).axes
+    drawn = _plot_line(ax).get_xydata()
+    assert np.isnan(drawn).any(axis=1).sum() >= 1
+
+
+# Everything on the axis lies within the break: the axis is drawn whole.
+INSIDE = np.linspace(100.0, 200.0, 11)
+
+
+@pytest.mark.parametrize("kind", ["line", "allan"])
+def test_data_all_within_a_break_are_drawn_as_on_any_axis(kind) -> None:
+    from figscribe.model import AllanDeviationPlot, ColumnRef
+
+    noise = np.random.default_rng(1).normal(size=2000)
+    values = {"t": INSIDE, "U": INSIDE, "y": noise}
+    ref = {c: ColumnRef(source="s", column=c) for c in values}
+    if kind == "line":
+        plot, gap = LinePlot(x=ref["t"], y=ref["U"]), (24.0, 416.0)
+    else:  # tau runs from 1 to 512
+        plot, gap = AllanDeviationPlot(values=ref["y"]), (0.5, 600.0)
+    figure = Figure(axes=[Axes(x=AxisSpec(breaks=[gap]), artists=[plot])])
+    (ax,) = render(figure, lambda r: values[r.column]).axes
+    assert ax.get_xscale() == "linear"
+    assert not np.isnan(_plot_line(ax).get_xydata()).any()

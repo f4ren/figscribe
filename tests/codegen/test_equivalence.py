@@ -23,12 +23,14 @@ from figscribe.fit import add_fit, refit
 from figscribe.io import load_data
 from figscribe.io.csvfile import csv_source
 from figscribe.model import (
+    AllanDeviationPlot,
     Axes,
     AxisSpec,
     ColumnRef,
     Conversion,
     ErrorBand,
     ErrorbarPlot,
+    ExpressionFit,
     Figure,
     FitCurve,
     GridLayout,
@@ -2138,3 +2140,130 @@ def test_the_script_cuts_other_data_where_its_breaks_are(tmp_path: Path) -> None
         'fig.savefig(HERE / "from_script.png")',
     )
     _run(unchecked, tmp_path)
+
+
+def _with_a_near_point(folder: Path):
+    """_far with a point past 29, so that a line leaves a range ending at 22."""
+    project, _ = _far(folder)
+    path = folder / "far.csv"
+    text = path.read_text(encoding="utf-8") + "29.760,3.5000,0.25,35.0000,29\n"
+    rows = text.splitlines()
+    rows[-2], rows[-1] = rows[-1], rows[-2]  # in the order of t
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    source = csv_source(path, folder)
+    refs = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    return Project(sources=[source]), refs
+
+
+@pytest.mark.parametrize("limits", [(0.0, 22.0), (40.0, 400.0)])
+@pytest.mark.parametrize("beside", [False, True])
+def test_a_break_the_typed_range_does_not_show(tmp_path, limits, beside) -> None:
+    """Also beside a panel whose axis is broken, which makes the script cut."""
+    project, ref = _with_a_near_point(tmp_path)
+    line = LinePlot(x=ref["t"], y=ref["U"], marker="o")
+    panels = [Axes(x=AxisSpec(breaks=_BROKEN, limits=limits), artists=[line])]
+    if beside:
+        other = LinePlot(x=ref["t"], y=ref["U"])
+        panels.append(Axes(col=1, x=AxisSpec(breaks=_BROKEN), artists=[other]))
+    layout = GridLayout(cols=len(panels))
+    project.figures = [Figure(dpi=110, width_mm=160, layout=layout, axes=panels)]
+    _assert_same(project, tmp_path)
+
+
+def _noise(folder: Path):
+    values = np.random.default_rng(1).normal(size=2000)
+    rows = "\n".join(f"{v:.6f}" for v in values)
+    (folder / "noise.csv").write_text(f"y\n{rows}\n", encoding="utf-8")
+    source = csv_source(folder / "noise.csv", folder)
+    return Project(sources=[source]), ColumnRef(source=source.id, column="y")
+
+
+@pytest.mark.parametrize(
+    ("x", "y"),
+    [
+        (AxisSpec(breaks=[(70.0, 120.0)]), AxisSpec()),
+        (AxisSpec(), AxisSpec(breaks=[(0.12, 0.2)])),
+    ],
+    ids=["x", "y"],
+)
+def test_an_allan_deviation_on_a_broken_axis(tmp_path: Path, x, y) -> None:
+    project, values = _noise(tmp_path)
+    panel = Axes(x=x, y=y, artists=[AllanDeviationPlot(values=values)])
+    project.figures = [Figure(dpi=110, width_mm=120, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert "= across_breaks(" in script
+
+
+@pytest.mark.parametrize("gap", [(0.081, 0.108), (2.0, 3.0)], ids=["cuts", "above"])
+def test_an_allan_fit_with_only_y_broken(tmp_path: Path, gap) -> None:
+    """The curve is sampled evenly in log τ, as on a whole axis."""
+    project, values = _noise(tmp_path)
+    plot = AllanDeviationPlot(values=values)
+    fit = FitCurve(
+        target=plot.id,
+        model=ExpressionFit(expression="a / sqrt(x)", parameters=["a"]),
+    )
+    panel = Axes(
+        x=AxisSpec(scale="log"),
+        y=AxisSpec(breaks=[gap]),
+        artists=[plot, fit],
+    )
+    project.figures = [Figure(dpi=110, width_mm=120, axes=[panel])]
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "np.geomspace(" in script
+
+
+def test_the_script_keeps_the_tick_step_of_a_broken_axis(tmp_path: Path) -> None:
+    project, ref = _far(tmp_path)
+    x = AxisSpec(prefix="m", breaks=_BROKEN, major_step=2.0)
+    panel = Axes(x=x, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(dpi=110, width_mm=160, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert "if abs(v) >" in script  # zero is written as 0, as the preview does
+
+
+def _inside(folder: Path):
+    """x from 100 to 200: all of it within a break from 24 to 416."""
+    rows = "\n".join(f"{t},{t / 100}" for t in range(100, 201, 10))
+    (folder / "inside.csv").write_text(f"t,U\n{rows}\n", encoding="utf-8")
+    source = csv_source(folder / "inside.csv", folder)
+    refs = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    return Project(sources=[source]), refs
+
+
+def test_data_all_within_a_break(tmp_path: Path) -> None:
+    project, ref = _inside(tmp_path)
+    x = AxisSpec(breaks=[(24.0, 416.0)])
+    panel = Axes(x=x, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(dpi=110, width_mm=120, axes=[panel])]
+    _assert_same(project, tmp_path)
+
+
+def test_a_tick_step_too_fine_for_an_axis_drawn_whole_stays_out(tmp_path) -> None:
+    """Not run: with the step in it, the script would take minutes."""
+    project, ref = _inside(tmp_path)
+    x = AxisSpec(breaks=[(24.0, 416.0)], major_step=0.001)
+    panel = Axes(x=x, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(axes=[panel])]
+    data = load_data(project, tmp_path)
+    script = generate(project, project.figures[0], base_dir=tmp_path, data=data)
+    assert "MultipleLocator" not in script
+
+
+def test_shared_panels_with_two_ranges(tmp_path: Path) -> None:
+    """The range typed last, 140 to 160, is the one the axis has, and it lies
+    within the break."""
+    project, ref = _inside(tmp_path)
+    line = LinePlot(x=ref["t"], y=ref["U"])
+    panels = [
+        Axes(
+            row=row,
+            x=AxisSpec(breaks=[(130.0, 170.0)], limits=limits),
+            artists=[line.model_copy(update={"id": f"line{row}"})],
+        )
+        for row, limits in enumerate([(100.0, 200.0), (140.0, 160.0)])
+    ]
+    layout = GridLayout(rows=2, share_x="col")
+    project.figures = [Figure(dpi=110, layout=layout, axes=panels)]
+    _assert_same(project, tmp_path)

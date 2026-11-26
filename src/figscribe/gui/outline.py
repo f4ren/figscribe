@@ -62,10 +62,10 @@ class Outline(QTreeWidget):
     delete_requested = Signal(str)
     note_requested = Signal(str)
     same_range_requested = Signal(str, str)
-    breaks_requested = Signal(str, str, object)
-    """(panel id, "x" or "y", the breaks to give that axis)."""
     """Give every panel the range this panel shows on an axis: (panel id,
     "x" or "y")."""
+    breaks_requested = Signal(str, str, object)
+    """(panel id, "x" or "y", the breaks to give that axis)."""
     reveal_requested = Signal(str)
     """Show the data file with this id in the file manager."""
     marking_requested = Signal(str, str, str)

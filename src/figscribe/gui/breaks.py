@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from figscribe.convert import convert, plot_data
 from figscribe.gui.document import Document
-from figscribe.model import Histogram, ReferenceLine
 from figscribe.model.breaks import breaks_blocked, own_breaks
-from figscribe.model.sharing import sharing_group
-from figscribe.model.validate import FITTABLE
+from figscribe.model.validate import axis_values as drawn_values
 from figscribe.render.breaks import widest_gap
+from figscribe.render.ticks import PREFIXES
 
 WORTH = 0.2
 """The share of the data's span an empty stretch must have to be offered."""
@@ -33,32 +31,11 @@ def current_breaks(document: Document, axes_id: str, field: str) -> list:
 
 
 def axis_values(document: Document, axes_id: str, field: str) -> np.ndarray:
-    """What is drawn against the axis, in data units: where a plot's points and
-    the reference lines lie."""
+    """What is drawn against the axis, in data units."""
     index = panel_index(document, axes_id)
     if index is None:
         return np.array([])
-    found: list[np.ndarray] = []
-    upright = "vertical" if field == "x" else "horizontal"
-    for i in sharing_group(document.figure, index, field):
-        for artist in document.figure.axes[i].artists:
-            if field == "y" and artist.axis == "right":
-                continue
-            try:
-                if isinstance(artist, FITTABLE):
-                    found.append(getattr(plot_data(artist, document.data), field))
-                elif isinstance(artist, Histogram) and field == "x":
-                    found.append(
-                        convert(document.data(artist.values), artist.x_conversion)
-                    )
-                elif isinstance(artist, ReferenceLine):
-                    if artist.orientation == upright:
-                        found.append([artist.at])
-            except Exception:  # a plot that cannot be drawn proposes nothing
-                continue
-    if not found:
-        return np.array([])
-    return np.concatenate([np.asarray(v, dtype=float).ravel() for v in found])
+    return drawn_values(document.figure, index, field, document.data)
 
 
 def break_entries(
@@ -80,8 +57,10 @@ def break_entries(
             at = None if spot is None else float(spot["xy".index(field)])
             found = proposed_break(document, axes_id, field, at)
             if found is not None:
-                start, end = found
-                text = f"Break the {field} axis (cut out {start:g} to {end:g})"
+                prefix = getattr(document.figure.axes[index], field).prefix
+                factor = 10.0 ** PREFIXES[prefix] if prefix else 1.0
+                start, end = (f"{end / factor:.6g}" for end in found)  # as shown
+                text = f"Break the {field} axis (cut out {start} to {end})"
                 entries.append((text, field, sorted([*breaks, found])))
         if breaks:
             entries.append((f"Remove the breaks of the {field} axis", field, []))

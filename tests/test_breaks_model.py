@@ -5,18 +5,24 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
 import pytest
 from pydantic import ValidationError
 
 from figscribe.commands import CommandError, History, InsertItem, SetField
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     Axes,
     AxisSpec,
+    ColumnRef,
     Figure,
     GridLayout,
     ImagePlot,
+    LinePlot,
+    NumpySource,
     Project,
+    ReferenceLine,
     dumps,
     loads,
     validate_references,
@@ -132,3 +138,25 @@ def test_the_problem_list_says_when_shared_panels_disagree(project: Project) -> 
     figure.axes[1].x.breaks = [(4.0, 5.0)]
     messages = [str(issue) for issue in validate_references(project)]
     assert any("different breaks" in m for m in messages)
+
+
+def test_the_problem_list_counts_the_points_of_an_allan_deviation() -> None:
+    plot = AllanDeviationPlot(values=ColumnRef(source="s", column="y"))
+    panel = Axes(x=AxisSpec(breaks=[(3.0, 5.0)]), artists=[plot])
+    source = NumpySource(id="s", path="y.npy", sha256="0" * 64, columns=["y"])
+    project = Project(sources=[source], figures=[Figure(axes=[panel])])
+    noise = np.random.default_rng(1).normal(size=100)  # tau = 1, 2, 4, 8, ...
+    messages = [str(i) for i in validate_references(project, lambda ref: noise)]
+    assert any("1 point lies in a break and is not shown" in m for m in messages)
+
+
+@pytest.mark.parametrize("limits", [(90.0, 210.0), None], ids=["typed", "automatic"])
+def test_nothing_is_hidden_on_an_axis_drawn_whole(limits) -> None:
+    ref = ColumnRef(source="s", column="y")
+    x = AxisSpec(breaks=[(24.0, 416.0)], limits=limits)
+    panel = Axes(x=x, artists=[LinePlot(x=ref, y=ref), ReferenceLine(at=150.0)])
+    source = NumpySource(id="s", path="y.npy", sha256="0" * 64, columns=["y"])
+    project = Project(sources=[source], figures=[Figure(axes=[panel])])
+    values = np.linspace(100.0, 200.0, 11)
+    messages = [str(i) for i in validate_references(project, lambda ref: values)]
+    assert not [m for m in messages if "in a break" in m], messages

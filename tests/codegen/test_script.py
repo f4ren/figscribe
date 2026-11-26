@@ -142,6 +142,34 @@ def test_the_command_line_writes_the_script_without_unreadable_data(
     assert "writing the script without it" in printed.err
 
 
+@pytest.mark.parametrize("problem", ["changed", "missing"])
+def test_a_broken_axis_does_not_keep_the_command_line_from_writing(
+    example: Path, tmp_path: Path, capsys, problem: str
+) -> None:
+    """Where the ticks of a broken axis go is only known from the data."""
+    from figscribe.cli import _script
+    from figscribe.model import dumps
+
+    folder = tmp_path / "copy"
+    shutil.copytree(example.parent, folder)
+    project = loads(example.read_text(encoding="utf-8"))
+    project.figures[0].axes[0].x.breaks = [(2.0, 3.0)]
+    path = folder / example.name
+    path.write_text(dumps(project), encoding="utf-8")
+    source = folder / project.sources[0].path
+    if problem == "changed":
+        source.write_text(source.read_text(encoding="utf-8") + "99,1,1\n", "utf-8")
+    else:
+        source.unlink()
+
+    assert _script([str(path)]) == 0
+    printed = capsys.readouterr()
+    assert "writing the script without it" in printed.err
+    assert "fig.savefig(" in printed.out
+    assert "# The axis breaks are left out" in printed.out
+    compile(printed.out, "scan.py", "exec")
+
+
 def _two_figures(example: Path, tmp_path: Path) -> Path:
     """The example with a second figure, "Fig. 2", saved next to its data."""
     from figscribe.commands import duplicate_figure
