@@ -185,17 +185,21 @@ def generate(
     as filtering out non-finite values before a fit.
     """
     figure = figure or project.figures[0]
+    target = Path(script_dir) if script_dir is not None else Path(base_dir)
+    saved = output or f"{_slug(figure.name) or 'figure'}.pdf"
+
+    def written(data: DataProvider | None) -> str:
+        return _Writer(project, figure, Path(base_dir), data).write(target, saved)
+
     if data is None and _breaks_set(figure):
-        # Where a broken axis puts its ticks is only known by drawing.
+        # Where a broken axis puts its ticks is only known by drawing. The
+        # files are read on first use, so any step of the writing can find
+        # one that is missing or has changed.
         try:
-            data = load_data(project, Path(base_dir))
+            return written(load_data(project, Path(base_dir)))
         except (DataError, OSError):
-            data = None  # the script then draws the axes whole
-    writer = _Writer(project, figure, Path(base_dir), data)
-    return writer.write(
-        Path(script_dir) if script_dir is not None else Path(base_dir),
-        output or f"{_slug(figure.name) or 'figure'}.pdf",
-    )
+            pass  # the script then draws the axes whole, and says so
+    return written(data)
 
 
 class _Writer:
@@ -1391,6 +1395,8 @@ class _Writer:
             if self.figure.open_frame:
                 kwargs["frame"] = "False"
             calls.append((ax, kwargs))
+        if self.data is None and _breaks_set(self.figure):
+            self.emit("", "# The axis breaks are left out: the data could not be read.")
         if calls:
             self.emit("", "# Nothing is drawn within a break; marks stand at its ends.")
         for ax, kwargs in calls:
@@ -2160,7 +2166,7 @@ class _Writer:
         new_x = self._apart(cuts, "line_x", x, shown.x)
         new_y = self._apart(cuts, "line_y", residual, shown.y)
         if "yerr" in kwargs:
-            yerr = self._apart(cuts, "line_yerr", kwargs["yerr"], shown.y)
+            yerr = self._apart(cuts, "line_yerr", kwargs["yerr"], shown.yerr)
             kwargs = {**kwargs, "yerr": yerr}
         return new_x, new_y, kwargs
 
