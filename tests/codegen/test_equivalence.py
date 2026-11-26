@@ -883,7 +883,7 @@ def test_ticks_inside_on_all_sides_with_prefixes(tmp_path: Path) -> None:
     ]
     script = _assert_same(project, tmp_path)
     assert '"xtick.direction": "in"' in script and '"ytick.right": True' in script
-    assert 'f"{(v if abs(v) > 1.25 else 0) * 1e3:g}"' in script
+    assert 'f"{(v if abs(v) > 2.5e-06 else 0) * 1e3:g}"' in script
     assert 'f"{v / 1e3:g}"' in script
     assert '"t (ms)"' in script
 
@@ -897,7 +897,7 @@ def test_a_prefixed_axis_with_negative_ticks_and_a_step(tmp_path: Path) -> None:
     )
     project.figures = [Figure(dpi=110, width_mm=175, axes=[axes])]
     script = _assert_same(project, tmp_path)
-    assert "abs(v) > 0.005 else 0" in script
+    assert "abs(v) > 1e-08 else 0" in script
     assert "FuncFormatter.fix_minus" in script
 
 
@@ -928,7 +928,8 @@ def test_number_formats_with_a_decimal_comma(tmp_path: Path) -> None:
     script = _assert_same(project, tmp_path)
     assert "def decimal_comma(text):" in script
     assert "def power_of_ten(value, decimals):" in script
-    assert 'f"{v:z.2f}"' in script
+    assert 'f"{round(v, 2) + 0:.2f}"' in script
+    assert ":z." not in script  # needs Python 3.11, which the script must not
     assert "CommaFormatter" not in script  # no axis keeps Matplotlib's numbers
 
 
@@ -1021,6 +1022,135 @@ def test_shared_axes_with_different_number_formats(tmp_path: Path, formatted) ->
             ],
         )
     ]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("comma", [False, True])
+@pytest.mark.parametrize("formatted", [0, 1])
+def test_shared_log_axes_with_different_number_formats(
+    tmp_path: Path, formatted, comma
+) -> None:
+    """Setting a shared log scale again resets its formatters; the script must
+    not do that after it has set them."""
+    project, ref = _scan(tmp_path)
+    specs = [AxisSpec(scale="log"), AxisSpec(scale="log")]
+    specs[formatted] = AxisSpec(scale="log", number_format="fixed", major_step=2)
+    project.figures = [
+        Figure(
+            dpi=110,
+            decimal_comma=comma,
+            layout=GridLayout(rows=2, share_x="col"),
+            axes=[
+                Axes(row=i, x=specs[i], artists=[LinePlot(x=ref["t"], y=ref["U"])])
+                for i in range(2)
+            ],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("comma", [False, True])
+@pytest.mark.parametrize("typed_on", [0, 1])
+def test_typed_labels_on_a_shared_axis(tmp_path: Path, typed_on, comma) -> None:
+    project, ref = _scan(tmp_path)
+    specs = [AxisSpec(), AxisSpec()]
+    specs[typed_on] = AxisSpec(ticks=[1, 3], tick_labels=["one", "three"])
+    project.figures = [
+        Figure(
+            dpi=110,
+            decimal_comma=comma,
+            layout=GridLayout(rows=2, share_x="col"),
+            axes=[
+                Axes(row=i, x=specs[i], artists=[LinePlot(x=ref["t"], y=ref["U"])])
+                for i in range(2)
+            ],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("spec", "comma"),
+    [
+        (AxisSpec(scale="log", prefix="k", limits=(0.2, 0.8)), False),
+        (AxisSpec(scale="log", limits=(0.2, 0.8)), True),
+        (AxisSpec(scale="log", limits=(0.2, 0.8)), False),
+        (AxisSpec(scale="symlog", limits=(-3, 30)), True),
+    ],
+    ids=["prefix", "comma", "plain", "symlog"],
+)
+def test_a_log_axis_without_minor_ticks(tmp_path: Path, spec, comma) -> None:
+    project, ref = _scan(tmp_path)
+    x = spec.model_copy(update={"minor_ticks": False})
+    project.figures = [
+        Figure(
+            dpi=110,
+            decimal_comma=comma,
+            axes=[Axes(x=x, artists=[LinePlot(x=ref["t"], y=ref["U"])])],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
+def test_the_longest_tick_formatter_stays_within_the_width(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    spec = AxisSpec(prefix="m", major_step=0.00001, limits=(-0.00003, 0.00003))
+    panel = Axes(x=spec, y=spec, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    panel.y_right = spec
+    project.figures = [Figure(dpi=110, width_mm=175, decimal_comma=True, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert [line for line in script.splitlines() if len(line) > 88] == []
+
+
+def test_columns_named_like_the_tick_helpers(tmp_path: Path) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ColorMesh
+
+    names = [
+        "decimal_comma",
+        "power_of_ten",
+        "CommaFormatter",
+        "CommaLogFormatter",
+        "MinorLogNumbers",
+        "colorbar",
+    ]
+    rows = "\n".join(",".join(str(i + k) for k in range(6)) for i in range(1, 6))
+    (tmp_path / "t.csv").write_text(
+        ",".join(names) + "\n" + rows + "\n", encoding="utf-8"
+    )
+    table = csv_source(tmp_path / "t.csv", tmp_path)
+    np.save(tmp_path / "z.npy", np.arange(1.0, 21.0).reshape(4, 5))
+    frame = numpy_source(tmp_path / "z.npy", tmp_path)
+
+    def ref(name: str) -> ColumnRef:
+        return ColumnRef(source=table.id, column=name)
+
+    plots = Axes(
+        x=AxisSpec(number_format="scientific"),
+        y=AxisSpec(scale="log", prefix="m"),
+        artists=[
+            LinePlot(x=ref(names[i]), y=ref(names[i + 1])) for i in range(0, 6, 2)
+        ],
+    )
+    mesh = Axes(
+        col=1,
+        x=AxisSpec(scale="log", limits=(1, 5)),
+        artists=[
+            ColorMesh(c=ArrayRef(source=frame.id), norm="log", colorbar=Colorbar())
+        ],
+    )
+    project = Project(
+        sources=[table, frame],
+        figures=[
+            Figure(
+                dpi=110,
+                width_mm=175,
+                decimal_comma=True,
+                layout=GridLayout(cols=2),
+                axes=[plots, mesh],
+            )
+        ],
+    )
     _assert_same(project, tmp_path)
 
 

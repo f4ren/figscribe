@@ -52,6 +52,7 @@ from figscribe.render.layout import (
     hidden_tick_labels,
     inset_parent,
     share_partner,
+    sharing_specs,
 )
 from figscribe.render.ticks import (
     CommaFormatter,
@@ -104,6 +105,8 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
         artists = {a.id: a for axes in figure.axes for a in axes.artists}
         axs: dict[int, MplAxes] = {}
         ticked: list[tuple[MplAxes, str, AxisSpec]] = []
+        # By (gid, "x" or "y"): the other panels' settings for the same axis.
+        shared: dict[tuple[str, str], list[AxisSpec]] = {}
         for i in creation_order(figure):
             axes = figure.axes[i]
             if axes.inset is not None:
@@ -120,7 +123,7 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                     sharey=axs[partners[1]] if partners[1] is not None else None,
                 )
             ax.set_gid(axes.id)
-            ticked += _draw_axes(
+            drawn = _draw_axes(
                 axes,
                 ax,
                 data,
@@ -129,6 +132,10 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                 figure.open_frame,
                 figure.decimal_comma,
             )
+            for part, name, _ in drawn:
+                field = "y_right" if part.get_gid().endswith(RIGHT) else name
+                shared[part.get_gid(), name] = sharing_specs(figure, i, field)
+            ticked += drawn
             axs[i] = ax
 
         # Only now are the automatic ranges known that decide whether a tick
@@ -145,7 +152,8 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
         for ax, name, spec in ticked:
             interval = ax.get_xlim() if name == "x" else ax.get_ylim()
             fitting = ticks_that_fit(spec, interval)
-            _apply_ticks(ax, name, fitting, figure.decimal_comma)
+            others = shared[ax.get_gid(), name]
+            _apply_ticks(ax, name, fitting, figure.decimal_comma, others)
             if rounded:
                 ax.autoscale_view(scalex=name == "x", scaley=name == "y")
 
@@ -306,9 +314,11 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
     set_scale, set_lim = (
         (ax.set_xscale, ax.set_xlim) if name == "x" else (ax.set_yscale, ax.set_ylim)
     )
+    # A new axis is linear, and the script says nothing then either. Setting
+    # "linear" on a shared axis would reset the ticks a panel sharing it has set.
     if spec.scale == "symlog" and spec.symlog_linthresh is not None:
         set_scale("symlog", linthresh=spec.symlog_linthresh)
-    else:
+    elif spec.scale != "linear":
         set_scale(spec.scale)
 
     if spec.limits is not None:
@@ -320,7 +330,9 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
 
 
-def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec, comma: bool) -> None:
+def _apply_ticks(
+    ax: MplAxes, name: str, spec: AxisSpec, comma: bool, shared: list[AxisSpec]
+) -> None:
     """The tick step, minor ticks and tick numbers, once the range is known."""
     axis = ax.xaxis if name == "x" else ax.yaxis
     if spec.ticks is None and spec.major_step is not None:
@@ -338,7 +350,7 @@ def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec, comma: bool) -> None:
         axis.set_major_formatter(
             FuncFormatter(lambda value, _: tick_text(value, spec, comma))
         )
-    elif kind := comma_formatter(spec, comma):
+    elif kind := comma_formatter(spec, comma, shared):
         _comma_numbers(axis, kind, minor=spec.scale == "log" and how != "off")
     minor = minor_numbers(spec)
     if minor == "silent":

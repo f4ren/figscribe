@@ -15,6 +15,7 @@ from figscribe.model import (
     Colorbar,
     ColorMesh,
     Figure,
+    GridLayout,
 )
 from figscribe.render import render
 
@@ -174,6 +175,43 @@ def test_the_comma_on_both_y_axes() -> None:
     panel = Axes(y=AxisSpec(limits=(0, 1)), y_right=AxisSpec(limits=(0, 0.5)))
     left, right = _drawn(Figure(axes=[panel], decimal_comma=True)).axes
     assert _texts(left.yaxis)[1] == "0,2" and _texts(right.yaxis)[1] == "0,1"
+
+
+# --- panels that share an axis -------------------------------------------------
+
+
+def _shared_x(first: AxisSpec, second: AxisSpec, **figure_fields) -> list[str]:
+    """The x numbers of two panels, one above the other, sharing x; only the
+    lower one shows them."""
+    figure = Figure(
+        layout=GridLayout(rows=2, share_x="col"),
+        axes=[Axes(row=0, x=first), Axes(row=1, x=second)],
+        **figure_fields,
+    )
+    return _texts(_drawn(figure).axes[1].xaxis)
+
+
+@pytest.mark.parametrize("formatted", [0, 1])
+def test_the_comma_does_not_replace_the_format_of_a_shared_axis(formatted) -> None:
+    specs = [AxisSpec(limits=(0, 1)), AxisSpec(limits=(0, 1))]
+    specs[formatted] = AxisSpec(limits=(0, 1), number_format="fixed", decimals=3)
+    assert _shared_x(*specs, decimal_comma=True)[:2] == ["0,000", "0,200"]
+
+
+@pytest.mark.parametrize("typed_on", [0, 1])
+def test_the_comma_does_not_replace_the_typed_labels_of_a_shared_axis(
+    typed_on,
+) -> None:
+    specs = [AxisSpec(), AxisSpec()]
+    specs[typed_on] = AxisSpec(ticks=[0, 1], tick_labels=["a", "b"])
+    assert _shared_x(*specs, decimal_comma=True) == ["a", "b"]
+
+
+def test_a_finer_step_on_a_shared_axis_is_not_written_as_zero() -> None:
+    coarse = AxisSpec(prefix="m", major_step=100, limits=(0, 100))
+    fine = AxisSpec(major_step=25, limits=(0, 100))
+    numbers = _shared_x(coarse, fine)
+    assert numbers == ["0", "25000", "50000", "75000", "100000"]
 
 
 @pytest.mark.parametrize("norm", ["linear", "log"])

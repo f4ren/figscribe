@@ -44,6 +44,10 @@ release open in every later one.
 - Fixed: on an axis shown with an SI prefix and a tick step of its own, the tick
   at zero could be written as -6.93889e-15. Negative numbers on such an axis
   also have the minus sign Matplotlib uses now, not a hyphen.
+- Fixed: where panels share an axis, typed tick labels of one panel could
+  vanish from the preview while the script kept them.
+- Fixed: a log axis with its minor ticks switched off still had them in the
+  script.
 - Fixed: a log axis with an SI prefix spanning less than a decade, 200 to 800,
   could have no number at all. Such an axis, up to about a decade, now numbers
   the minor ticks Matplotlib would number, unless major ticks are set; a project

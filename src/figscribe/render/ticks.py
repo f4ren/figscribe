@@ -8,6 +8,7 @@ Matplotlib calls.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Literal
 
 from matplotlib.ticker import (
@@ -107,9 +108,13 @@ def tick_text(value: float, spec: AxisSpec, comma: bool) -> str:
     if spec.number_format == "scientific":
         text = power_of_ten(number, spec.decimals)
     else:
-        # "z" writes -0.001 with one decimal as 0.0, not -0.0.
-        form = f"z.{spec.decimals}f" if spec.number_format == "fixed" else "g"
-        text = FuncFormatter.fix_minus(format(number, form))  # "−", not "-"
+        if spec.number_format == "fixed":
+            # + 0 turns the -0.0 of rounding -0.001 into 0.0. Python's "z"
+            # format would need 3.11, which the script must not.
+            plain = f"{round(number, spec.decimals) + 0:.{spec.decimals}f}"
+        else:
+            plain = f"{number:g}"
+        text = FuncFormatter.fix_minus(plain)  # "−", not "-"
     return decimal_comma(text) if comma else text
 
 
@@ -144,11 +149,19 @@ class CommaLogFormatter(LogFormatterSciNotation):
         return decimal_comma(super().__call__(x, pos))
 
 
-def comma_formatter(spec: AxisSpec, comma: bool) -> Literal["linear", "log"] | None:
+def comma_formatter(
+    spec: AxisSpec, comma: bool, shared: Sequence[AxisSpec] = ()
+) -> Literal["linear", "log"] | None:
     """Which of the two formatters above gives the axis its decimal comma; None
     without the comma, for typed tick labels, and where figscribe writes the
-    numbers itself."""
-    if not comma or spec.tick_labels is not None or scaling(spec) is not None:
+    numbers itself.
+
+    `shared` holds the settings of the other panels' axes that are one with this
+    one: labels or numbers of their own there are not to be replaced.
+    """
+    if not comma or any(
+        s.tick_labels is not None or scaling(s) is not None for s in (spec, *shared)
+    ):
         return None
     return "linear" if spec.scale == "linear" else "log"
 
@@ -157,12 +170,16 @@ def zero_below(spec: AxisSpec) -> float | None:
     """Tick values smaller than this are the tick at zero; None where nothing
     has to be done. Ticks every `major_step` can put it at 1e-17, which
     Matplotlib's own labels hide and a formatter of ours would print; fixed
-    decimals round it away."""
+    decimals round it away.
+
+    A millionth of the step is far above that noise, and far below the step of
+    a panel that shares the axis and sets a finer one.
+    """
     if spec.number_format == "fixed" or spec.scale == "log":
         return None
     if spec.ticks is not None or spec.major_step is None:
         return None
-    return spec.major_step / 2
+    return float(f"{spec.major_step * 1e-6:.3g}")  # as the script writes it
 
 
 def minor_numbers(spec: AxisSpec) -> Literal["silent", "ours"] | None:

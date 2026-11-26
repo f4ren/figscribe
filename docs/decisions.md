@@ -3378,7 +3378,14 @@ comma, which German theses and journals ask for.
   Where figscribe writes the numbers and the user set no major ticks,
   `MinorLogNumbers` writes those same ticks our way; before, they were silenced
   and such an axis could be left without a number, also with a prefix.
-- "Fixed" uses Python's `z` format, so that -0.001 reads 0.0, not -0.0.
+- "Fixed" rounds and adds 0 before formatting, so that -0.001 reads 0.0, not
+  -0.0. Not Python's `z` format: it needs 3.11, and a script runs without
+  figscribe, on 3.10 too.
+- Panels that share an axis share its ticks and numbers. A panel without a
+  format of its own sets no comma formatter over another's format or typed
+  labels. Where a shared axis is not linear, the script writes its ticks after
+  every panel has set the scale, because setting it again resets them; the
+  renderer places ticks last anyway.
 - No schema bump: the defaults draw what was drawn, and no released file has
   the fields.
 

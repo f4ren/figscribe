@@ -74,6 +74,7 @@ from figscribe.render.layout import (
     hidden_tick_labels,
     inset_parent,
     share_partner,
+    sharing_specs,
 )
 from figscribe.render.ticks import (
     comma_formatter,
@@ -122,6 +123,13 @@ RESERVED = {
     "right_handles",
     "right_labels",
     "line",
+    "decimal_comma",
+    "power_of_ten",
+    "CommaFormatter",
+    "CommaLogFormatter",
+    "MinorLogNumbers",
+    "colorbar",
+    *(f"colorbar{i}" for i in range(2, 100)),
 }
 
 
@@ -620,7 +628,16 @@ class _Writer:
         """Which of Matplotlib's formatters need a subclass with a decimal
         comma, "linear" or "log": for axes and for color bars."""
         comma = self.figure.decimal_comma
-        kinds = {comma_formatter(s, comma) for s in self.axis_specs.values()}
+        kinds = {
+            comma_formatter(
+                self.axis_specs[(axes.id, field)],
+                comma,
+                sharing_specs(self.figure, i, field),
+            )
+            for i, axes in enumerate(self.figure.axes)
+            for field in ("x", "y", "y_right")
+            if (axes.id, field) in self.axis_specs
+        }
         if comma:
             kinds |= {
                 "log" if artist.norm == "log" else "linear"
@@ -1271,8 +1288,17 @@ class _Writer:
                 ]
             )
             self.call(f"{name} = fig.add_subplot", *where, **kwargs)
+        self._shared_ticks = []
         for i in creation_order(figure):
             self._panel(i, figure.axes[i])
+        if self._shared_ticks:
+            self.emit(
+                "",
+                "# Ticks of shared axes, now that every panel has set its scale:",
+                "# setting it again would undo them.",
+            )
+        for shared_axis in self._shared_ticks:
+            self._ticks(*shared_axis)
         hidden = hidden_tick_labels(figure)
         if any(x or y for x, y in hidden):
             self.emit(
@@ -1347,15 +1373,16 @@ class _Writer:
         if axes.title is not None:
             size = {"fontsize": _num(axes.title_size)} if axes.title_size else {}
             self.call(f"{ax}.set_title", _str(axes.title), **size)
-        self._axis(ax, "x", self.axis_specs[(axes.id, "x")])
-        self._axis(ax, "y", self.axis_specs[(axes.id, "y")])
+        for name in ("x", "y"):
+            shared = sharing_specs(self.figure, index, name)
+            self._axis(ax, name, self.axis_specs[(axes.id, name)], shared)
         right = None
         if axes.y_right is not None:
             right = f"{ax}_right"
             self.emit(f"{right} = {ax}.twinx()")
             if self.figure.open_frame:
                 self.emit(f'{right}.spines["right"].set_visible(True)')
-            self._axis(right, "y", self.axis_specs[(axes.id, "y_right")])
+            self._axis(right, "y", self.axis_specs[(axes.id, "y_right")], [])
         if axes.grid:
             kwargs = {}
             if axes.grid_which != "major":
@@ -1375,7 +1402,9 @@ class _Writer:
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)
 
-    def _axis(self, ax: str, name: str, spec: AxisSpec) -> None:
+    def _axis(self, ax: str, name: str, spec: AxisSpec, shared: list[AxisSpec]) -> None:
+        """One axis of a panel; `shared` holds the settings of the other panels'
+        axes that are one with it."""
         label = axis_label(spec, self.figure.unit_format)
         if label is not None:
             size = {"fontsize": _num(spec.label_size)} if spec.label_size else {}
@@ -1401,7 +1430,17 @@ class _Writer:
             if spec.tick_labels is not None:
                 kwargs["labels"] = _value(spec.tick_labels)
             self.call(f"{ax}.set_{name}ticks", _value(spec.ticks), **kwargs)
-        elif spec.major_step is not None:
+        # A later panel that sets the shared scale again would undo the ticks.
+        if shared and any(s.scale != "linear" for s in (spec, *shared)):
+            self._shared_ticks.append((ax, name, spec, shared))
+        else:
+            self._ticks(ax, name, spec, shared)
+
+    def _ticks(
+        self, ax: str, name: str, spec: AxisSpec, shared: list[AxisSpec]
+    ) -> None:
+        """The tick step, minor ticks and tick numbers of an axis."""
+        if spec.ticks is None and spec.major_step is not None:
             step = _num(spec.major_step)
             self.emit(f"{ax}.{name}axis.set_major_locator(MultipleLocator({step}))")
         how, value = minor_ticks(spec)
@@ -1413,11 +1452,11 @@ class _Writer:
             )
         elif how == "on":
             self.emit(f"{ax}.{name}axis.minorticks_on()")
-        elif self.figure.stylesheet is not None:
-            self.emit(f"{ax}.{name}axis.minorticks_off()")
+        elif self.figure.stylesheet is not None or spec.scale != "linear":
+            self.emit(f"{ax}.{name}axis.minorticks_off()")  # a log axis has some
         if scaling(spec) is not None:
             self._tick_numbers(ax, name, spec)
-        elif kind := comma_formatter(spec, self.figure.decimal_comma):
+        elif kind := comma_formatter(spec, self.figure.decimal_comma, shared):
             minor = spec.scale == "log" and how != "off"
             self._comma_numbers(f"{ax}.{name}axis", kind, minor)
         minor = minor_numbers(spec)
@@ -1447,23 +1486,38 @@ class _Writer:
             self.emit("# The tick at zero may come out as 1e-17: write it as 0.")
             value = f"(v if abs(v) > {_num(zero)} else 0)"
         number = value if (op, factor) == ("*", "1") else f"{value} {op} {factor}"
+        wrappers = ["decimal_comma"] if self.figure.decimal_comma else []
         if spec.number_format == "scientific":
-            text = f"power_of_ten({number}, {spec.decimals})"
+            core = f"power_of_ten({number}, {spec.decimals})"
         else:
-            form = f"z.{spec.decimals}f" if spec.number_format == "fixed" else "g"
             # fix_minus writes "−" as Matplotlib does, not "-".
-            text = f'FuncFormatter.fix_minus(f"{{{number}:{form}}}")'
-        if self.figure.decimal_comma:
-            text = f"decimal_comma({text})"
+            wrappers.append("FuncFormatter.fix_minus")
+            core = f'f"{{{number}:g}}"'
+        if spec.number_format == "fixed":
+            self.emit("# + 0 keeps a tiny negative value from reading -0.")
+            places = spec.decimals
+            core = f'f"{{round({number}, {places}) + 0:.{places}f}}"'
         call = f"{ax}.{name}axis.set_major_formatter"
-        lambda_ = f"lambda v, _: {text}"
-        if len(f"{call}(FuncFormatter({lambda_}))") <= WIDTH:
-            self.emit(f"{call}(FuncFormatter({lambda_}))")
-        elif len(f"    FuncFormatter({lambda_})") < WIDTH:
-            self.emit(f"{call}(", f"    FuncFormatter({lambda_})", ")")
+        text = f"lambda v, _: {_nested(wrappers, core)}"
+        if len(f"{call}(FuncFormatter({text}))") <= WIDTH:
+            self.emit(f"{call}(FuncFormatter({text}))")
+        elif len(f"    FuncFormatter({text})") <= WIDTH:
+            self.emit(f"{call}(", f"    FuncFormatter({text})", ")")
         else:
-            self.emit(f"{call}(", "    FuncFormatter(", f"        {lambda_}")
+            self.emit(f"{call}(", "    FuncFormatter(")
+            self._broken("lambda v, _: ", wrappers, core, indent=8)
             self.emit("    )", ")")
+
+    def _broken(self, head: str, wrappers: list[str], core: str, indent: int) -> None:
+        """`head` and the nested calls, one call per level until the rest fits."""
+        space = " " * indent
+        line = f"{space}{head}{_nested(wrappers, core)}"
+        if len(line) <= WIDTH or not wrappers:
+            self.emit(line)
+            return
+        self.emit(f"{space}{head}{wrappers[0]}(")
+        self._broken("", wrappers[1:], core, indent + 4)
+        self.emit(f"{space})")
 
     def _comma_numbers(self, axis: str, kind: str, minor: bool) -> None:
         """Matplotlib's own numbers of `axis` (as the script names it), with a
@@ -2026,6 +2080,11 @@ def _str(text: str) -> str:
         return repr(text)  # other control characters, rare enough to look odd
     escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
     return f'"{escaped}"'
+
+
+def _nested(wrappers: list[str], core: str) -> str:
+    """`core` inside the calls of `wrappers`, the first one outermost."""
+    return "".join(f"{call}(" for call in wrappers) + core + ")" * len(wrappers)
 
 
 def _num(value: float) -> str:
