@@ -76,6 +76,7 @@ from figscribe.render.layout import (
     share_partner,
 )
 from figscribe.render.ticks import (
+    comma_formatter,
     minor_ticks,
     scaling,
     silent_minor_labels,
@@ -513,6 +514,7 @@ class _Writer:
         self._allan_deviations()
         self._fit_models()
         self._fits()
+        self._tick_helpers()
         self._figure()
         self.section("Save")
         self.emit(f"fig.savefig(HERE / {_str(output)})")
@@ -549,7 +551,12 @@ class _Writer:
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
         locators = self._locators()
         if locators:
-            self.emit(f"from matplotlib.ticker import {', '.join(locators)}")
+            line = f"from matplotlib.ticker import {', '.join(locators)}"
+            if len(line) <= WIDTH:
+                self.emit(line)
+            else:
+                self.emit("from matplotlib.ticker import (")
+                self.emit(*(f"    {name}," for name in locators), ")")
         if any(getattr(a, "norm", None) == "log" for a in self.artists.values()):
             self.emit("from matplotlib.colors import LogNorm")
         if self.fits:
@@ -602,7 +609,44 @@ class _Writer:
             needed.append("MultipleLocator")
         if any(silent_minor_labels(s) for s in specs):
             needed.append("NullFormatter")
-        return needed
+        kinds = self._comma_kinds()
+        if "linear" in kinds:
+            needed.append("ScalarFormatter")
+        if "log" in kinds:
+            needed.append("LogFormatterSciNotation")
+        return sorted(needed)
+
+    def _comma_kinds(self) -> set[str]:
+        """Which of Matplotlib's formatters need a subclass with a decimal
+        comma, "linear" or "log": for axes and for color bars."""
+        comma = self.figure.decimal_comma
+        kinds = {comma_formatter(s, comma) for s in self.axis_specs.values()}
+        if comma:
+            kinds |= {
+                "log" if artist.norm == "log" else "linear"
+                for artist in self.artists.values()
+                if getattr(artist, "colorbar", None) is not None
+                and artist.colorbar.visible
+            }
+        return kinds - {None}
+
+    def _tick_helpers(self) -> None:
+        """The functions and formatters the tick numbers are written with."""
+        own = [s for s in self.axis_specs.values() if scaling(s) is not None]
+        kinds = self._comma_kinds()
+        helpers = []
+        if kinds or (own and self.figure.decimal_comma):
+            helpers.append(DECIMAL_COMMA)
+        if any(s.number_format == "scientific" for s in own):
+            helpers.append(POWER_OF_TEN)
+        if "linear" in kinds:
+            helpers.append(COMMA_FORMATTER)
+        if "log" in kinds:
+            helpers.append(COMMA_LOG_FORMATTER)
+        if not helpers:
+            return
+        self.section("Tick numbers")
+        self.emit(*"\n\n\n".join(helpers).splitlines())
 
     def _data(self, script_dir: Path) -> None:
         used = [s for s in self.project.sources if self._used(s.id)]
@@ -1371,6 +1415,9 @@ class _Writer:
             self.emit(f"{ax}.{name}axis.minorticks_off()")
         if scaling(spec) is not None:
             self._tick_numbers(ax, name, spec)
+        elif kind := comma_formatter(spec, self.figure.decimal_comma):
+            minor = spec.scale == "log" and how != "off"
+            self._comma_numbers(f"{ax}.{name}axis", kind, minor)
         if silent_minor_labels(spec):
             self.emit(f"{ax}.{name}axis.set_minor_formatter(NullFormatter())")
         if spec.tick_size is not None:
@@ -1382,7 +1429,8 @@ class _Writer:
             )
 
     def _tick_numbers(self, ax: str, name: str, spec: AxisSpec) -> None:
-        """The formatter of an axis whose numbers the script writes itself."""
+        """The formatter of an axis whose numbers the script writes itself; it
+        writes what render.ticks.tick_text does."""
         op, factor = scaling(spec)
         value = "v"
         if spec.prefix is not None:
@@ -1391,11 +1439,33 @@ class _Writer:
             self.emit("# The tick at zero may come out as 1e-17: write it as 0.")
             value = f"(v if abs(v) > {_num(zero)} else 0)"
         number = value if (op, factor) == ("*", "1") else f"{value} {op} {factor}"
-        text = f'FuncFormatter.fix_minus(f"{{{number}:g}}")'  # "−", not "-"
-        self.call(
-            f"{ax}.{name}axis.set_major_formatter",
-            f"FuncFormatter(lambda v, _: {text})",
-        )
+        if spec.number_format == "scientific":
+            text = f"power_of_ten({number}, {spec.decimals})"
+        else:
+            form = f"z.{spec.decimals}f" if spec.number_format == "fixed" else "g"
+            # fix_minus writes "−" as Matplotlib does, not "-".
+            text = f'FuncFormatter.fix_minus(f"{{{number}:{form}}}")'
+        if self.figure.decimal_comma:
+            text = f"decimal_comma({text})"
+        call = f"{ax}.{name}axis.set_major_formatter"
+        lambda_ = f"lambda v, _: {text}"
+        if len(f"{call}(FuncFormatter({lambda_}))") <= WIDTH:
+            self.emit(f"{call}(FuncFormatter({lambda_}))")
+        elif len(f"    FuncFormatter({lambda_})") < WIDTH:
+            self.emit(f"{call}(", f"    FuncFormatter({lambda_})", ")")
+        else:
+            self.emit(f"{call}(", "    FuncFormatter(", f"        {lambda_}")
+            self.emit("    )", ")")
+
+    def _comma_numbers(self, axis: str, kind: str, minor: bool) -> None:
+        """Matplotlib's own numbers of `axis` (as the script names it), with a
+        decimal comma."""
+        if kind == "linear":
+            self.emit(f"{axis}.set_major_formatter(CommaFormatter())")
+            return
+        self.emit(f"{axis}.set_major_formatter(CommaLogFormatter())")
+        if minor:
+            self.emit(f"{axis}.set_minor_formatter(CommaLogFormatter())")
 
     def _artist(self, ax: str, artist) -> None:
         common = _common(artist, default_zorder=DEFAULT_ZORDER.get(artist.kind, 2.0))
@@ -1523,12 +1593,19 @@ class _Writer:
             self.call(call, *args, **kwargs, **common)
             return
         self._mappables += 1
-        mappable = "image" if image else "mesh"
-        if self._mappables > 1:
-            mappable += str(self._mappables)
+        number = str(self._mappables) if self._mappables > 1 else ""
+        mappable = ("image" if image else "mesh") + number
         self.call(f"{mappable} = {call}", *args, **kwargs, **common)
         label = {"label": _str(bar.label)} if bar.label is not None else {}
-        self.call("fig.colorbar", mappable, ax=ax, **label)
+        if not self.figure.decimal_comma:
+            self.call("fig.colorbar", mappable, ax=ax, **label)
+        elif artist.norm != "log":
+            comma = "CommaFormatter()"
+            self.call("fig.colorbar", mappable, ax=ax, **label, format=comma)
+        else:
+            name = f"colorbar{number}"
+            self.call(f"{name} = fig.colorbar", mappable, ax=ax, **label)
+            self._comma_numbers(f"{name}.ax.yaxis", "log", minor=True)
 
     def _all_finite(self, refs) -> bool:
         """Whether the data behind `refs` is all finite; False if unknown."""
@@ -1806,6 +1883,39 @@ def overlapping_adev(phase, tau0, m):
     return sigma'''
 """The function the script computes Allan deviations with; figscribe.allan
 does the same, step by step."""
+
+
+DECIMAL_COMMA = '''\
+def decimal_comma(text):
+    """The number with a decimal comma; in mathtext, the braces keep TeX from
+    putting a space after it."""
+    return text.replace(".", "{,}" if "$" in text else ",")'''
+
+POWER_OF_TEN = '''\
+def power_of_ten(value, decimals):
+    """A tick number as 2.5×10³, in Matplotlib's mathtext."""
+    if value == 0:
+        return "0"
+    mantissa, exponent = f"{value:.{decimals}e}".split("e")
+    return rf"$\\mathdefault{{{mantissa}\\times10^{{{int(exponent)}}}}}$"'''
+
+COMMA_FORMATTER = '''\
+class CommaFormatter(ScalarFormatter):
+    """Matplotlib's own tick numbers, with a decimal comma."""
+
+    def __call__(self, x, pos=None):
+        return decimal_comma(super().__call__(x, pos))
+
+    def get_offset(self):
+        return decimal_comma(super().get_offset())'''
+
+COMMA_LOG_FORMATTER = '''\
+class CommaLogFormatter(LogFormatterSciNotation):
+    """Matplotlib's numbers on a log axis, with a decimal comma."""
+
+    def __call__(self, x, pos=None):
+        return decimal_comma(super().__call__(x, pos))'''
+"""What the script defines to write tick numbers; render.ticks does the same."""
 
 
 def _common(artist, default_zorder: float) -> dict[str, str]:

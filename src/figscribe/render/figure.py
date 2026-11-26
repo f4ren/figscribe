@@ -54,13 +54,15 @@ from figscribe.render.layout import (
     share_partner,
 )
 from figscribe.render.ticks import (
+    CommaFormatter,
+    CommaLogFormatter,
+    comma_formatter,
     minor_ticks,
     scaling,
-    shown,
     silent_minor_labels,
     tick_style,
+    tick_text,
     ticks_that_fit,
-    zero_below,
 )
 
 DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
@@ -118,7 +120,13 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
                 )
             ax.set_gid(axes.id)
             ticked += _draw_axes(
-                axes, ax, data, figure.unit_format, artists, figure.open_frame
+                axes,
+                ax,
+                data,
+                figure.unit_format,
+                artists,
+                figure.open_frame,
+                figure.decimal_comma,
             )
             axs[i] = ax
 
@@ -135,7 +143,8 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
         rounded = matplotlib.rcParams["axes.autolimit_mode"] == "round_numbers"
         for ax, name, spec in ticked:
             interval = ax.get_xlim() if name == "x" else ax.get_ylim()
-            _apply_ticks(ax, name, ticks_that_fit(spec, interval))
+            fitting = ticks_that_fit(spec, interval)
+            _apply_ticks(ax, name, fitting, figure.decimal_comma)
             if rounded:
                 ax.autoscale_view(scalex=name == "x", scaley=name == "y")
 
@@ -242,6 +251,7 @@ def _draw_axes(
     unit_format: str,
     artists: Mapping[str, Artist],
     open_frame: bool = False,
+    comma: bool = False,
 ) -> list[tuple[MplAxes, str, AxisSpec]]:
     """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
@@ -272,7 +282,7 @@ def _draw_axes(
         # Without a right axis, a plot meant for it is drawn against the left
         # one; validate_references reports it.
         target = right if artist.axis == "right" and right is not None else ax
-        _draw_artist(artist, target, data, artists)
+        _draw_artist(artist, target, data, artists, comma)
 
     if axes.legend.visible:
         _draw_legend(axes.legend, ax, right).set_gid(axes.id)
@@ -309,7 +319,7 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
         axis.set_ticks(spec.ticks, labels=spec.tick_labels)
 
 
-def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec) -> None:
+def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec, comma: bool) -> None:
     """The tick step, minor ticks and tick numbers, once the range is known."""
     axis = ax.xaxis if name == "x" else ax.yaxis
     if spec.ticks is None and spec.major_step is not None:
@@ -324,27 +334,35 @@ def _apply_ticks(ax: MplAxes, name: str, spec: AxisSpec) -> None:
     else:
         axis.minorticks_off()
     if scaling(spec) is not None:
-        axis.set_major_formatter(_tick_numbers(spec))
+        axis.set_major_formatter(
+            FuncFormatter(lambda value, _: tick_text(value, spec, comma))
+        )
+    elif kind := comma_formatter(spec, comma):
+        _comma_numbers(axis, kind, minor=spec.scale == "log" and how != "off")
     if silent_minor_labels(spec):
         axis.set_minor_formatter(NullFormatter())
     if spec.tick_size is not None:
         ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
 
 
-def _tick_numbers(spec: AxisSpec) -> FuncFormatter:
-    """The formatter of an axis whose numbers figscribe writes itself."""
-    how, zero = scaling(spec), zero_below(spec)
-
-    def text(value: float, _) -> str:
-        if zero is not None and abs(value) < zero:
-            value = 0
-        return FuncFormatter.fix_minus(shown(value, how))  # "−", not "-"
-
-    return FuncFormatter(text)
+def _comma_numbers(axis, kind: str, minor: bool) -> None:
+    """Matplotlib's own numbers of `axis`, with a decimal comma; `kind` as
+    comma_formatter gives it. `minor` for a log axis, which labels minor ticks
+    too when it spans less than a decade."""
+    if kind == "linear":
+        axis.set_major_formatter(CommaFormatter())
+        return
+    axis.set_major_formatter(CommaLogFormatter())
+    if minor:
+        axis.set_minor_formatter(CommaLogFormatter())
 
 
 def _draw_artist(
-    artist: Artist, ax: MplAxes, data: DataProvider, artists: Mapping[str, Artist]
+    artist: Artist,
+    ax: MplAxes,
+    data: DataProvider,
+    artists: Mapping[str, Artist],
+    comma: bool = False,
 ) -> None:
     """Draw one artist; `artists` finds the plots that fits and residuals
     refer to, wherever in the figure they are."""
@@ -393,7 +411,7 @@ def _draw_artist(
         # No edge: in the band's own color it would draw a darker outline.
         draw(artist.start, artist.end, color=artist.color, linewidth=0, **common)
     elif isinstance(artist, ImagePlot | ColorMesh):
-        _draw_2d(artist, ax, data, common)
+        _draw_2d(artist, ax, data, common, comma)
     elif isinstance(artist, AllanDeviationPlot):
         _draw_allan(artist, ax, data, common)
     elif isinstance(artist, FitCurve):
@@ -628,7 +646,9 @@ def _draw_annotation(note: Annotation, ax: MplAxes, common: dict) -> None:
     )
 
 
-def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
+def _draw_2d(
+    artist, ax: MplAxes, data: DataProvider, common: dict, comma: bool
+) -> None:
     """An image (pixels on a grid) or a colour mesh (cells at given x and y),
     with its colour bar."""
     values = np.asarray(
@@ -668,7 +688,11 @@ def _draw_2d(artist, ax: MplAxes, data: DataProvider, common: dict) -> None:
     bar = artist.colorbar
     if bar is not None and bar.visible:
         label = {"label": bar.label} if bar.label is not None else {}
-        ax.figure.colorbar(mappable, ax=ax, **label).ax.set_gid(artist.id)
+        colorbar = ax.figure.colorbar(mappable, ax=ax, **label)
+        colorbar.ax.set_gid(artist.id)
+        if comma:
+            kind = "log" if artist.norm == "log" else "linear"
+            _comma_numbers(colorbar.ax.yaxis, kind, minor=True)
 
 
 def _draw_allan(artist: AllanDeviationPlot, ax: MplAxes, data, common) -> None:

@@ -901,6 +901,129 @@ def test_a_prefixed_axis_with_negative_ticks_and_a_step(tmp_path: Path) -> None:
     assert "FuncFormatter.fix_minus" in script
 
 
+def test_number_formats_with_a_decimal_comma(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    panel = Axes(
+        x=AxisSpec(
+            label="t",
+            number_format="fixed",
+            decimals=2,
+            limits=(-0.0533, 0.0533),
+            major_step=0.02,
+        ),
+        y=AxisSpec(
+            label="U",
+            prefix="m",
+            number_format="scientific",
+            limits=(-1.2, 1.2),
+            major_step=0.4,
+        ),
+        y_right=AxisSpec(label="P", prefix="k"),
+        artists=[
+            LinePlot(x=ref["t"], y=ref["U"]),
+            ScatterPlot(x=ref["t"], y=ref["dU"], axis="right"),
+        ],
+    )
+    project.figures = [Figure(dpi=110, width_mm=175, decimal_comma=True, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert "def decimal_comma(text):" in script
+    assert "def power_of_ten(value, decimals):" in script
+    assert 'f"{v:z.2f}"' in script
+    assert "CommaFormatter" not in script  # no axis keeps Matplotlib's numbers
+
+
+@pytest.mark.parametrize("number_format", ["fixed", "scientific"])
+def test_a_number_format_with_the_point(tmp_path: Path, number_format) -> None:
+    project, ref = _scan(tmp_path)
+    panel = Axes(
+        x=AxisSpec(label="t", number_format=number_format, limits=(-5, 5)),
+        y=AxisSpec(label="U", scale="log", number_format=number_format),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    project.figures = [Figure(dpi=110, width_mm=175, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert "decimal_comma" not in script
+    assert ("power_of_ten" in script) == (number_format == "scientific")
+
+
+def test_matplotlibs_own_numbers_with_a_decimal_comma(tmp_path: Path) -> None:
+    """An offset at the end of an axis, minor numbers on a log axis spanning
+    less than a decade, a symmetric log axis, an inset and typed labels."""
+    from figscribe.model import Inset
+
+    project, ref = _scan(tmp_path)
+    first = Axes(
+        x=AxisSpec(label="t", limits=(1000.15, 1000.55)),
+        y=AxisSpec(label="U", scale="log", limits=(0.2, 0.75)),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    second = Axes(
+        col=1,
+        x=AxisSpec(
+            label="t", scale="symlog", symlog_linthresh=0.5, ticks=[0, 0.5, 2.5]
+        ),
+        y=AxisSpec(label="U", ticks=[0.25, 0.75], tick_labels=["0.25 V", "max."]),
+        artists=[LinePlot(x=ref["t"], y=ref["U"])],
+    )
+    inset = Axes(
+        inset=Inset(parent=second.id), artists=[LinePlot(x=ref["t"], y=ref["dU"])]
+    )
+    project.figures = [
+        Figure(
+            dpi=110,
+            width_mm=175,
+            decimal_comma=True,
+            layout=GridLayout(cols=2),
+            axes=[first, second, inset],
+        )
+    ]
+    script = _assert_same(project, tmp_path)
+    assert "class CommaFormatter(ScalarFormatter):" in script
+    assert "class CommaLogFormatter(LogFormatterSciNotation):" in script
+    assert "set_minor_formatter(CommaLogFormatter())" in script
+    assert '"0.25 V"' in script
+
+
+@pytest.mark.parametrize("norm", ["linear", "log"])
+@pytest.mark.parametrize("top", [4.5, 4000.0])
+def test_a_color_bar_with_a_decimal_comma(tmp_path: Path, norm, top) -> None:
+    from figscribe.io import numpy_source
+    from figscribe.model import ArrayRef, Colorbar, ColorMesh
+
+    z = np.linspace(2.0, top, 20).reshape(4, 5)
+    np.save(tmp_path / "z.npy", z)
+    source = numpy_source(tmp_path / "z.npy", tmp_path)
+    mesh = ColorMesh(
+        c=ArrayRef(source=source.id), norm=norm, colorbar=Colorbar(label="I")
+    )
+    project = Project(
+        sources=[source],
+        figures=[Figure(dpi=110, decimal_comma=True, axes=[Axes(artists=[mesh])])],
+    )
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("formatted", [0, 1])
+def test_shared_axes_with_different_number_formats(tmp_path: Path, formatted) -> None:
+    """Panels that share an axis share its formatter: the script must end up
+    with the same one as the renderer."""
+    project, ref = _scan(tmp_path)
+    specs = [AxisSpec(), AxisSpec()]
+    specs[formatted] = AxisSpec(number_format="fixed", decimals=3)
+    project.figures = [
+        Figure(
+            dpi=110,
+            decimal_comma=True,
+            layout=GridLayout(rows=2, share_x="col"),
+            axes=[
+                Axes(row=i, x=specs[i], artists=[LinePlot(x=ref["t"], y=ref["U"])])
+                for i in range(2)
+            ],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
 def test_a_stepped_log_axis_keeps_its_minor_ticks(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     axes = Axes(

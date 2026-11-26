@@ -71,6 +71,10 @@ class Figure(Identified):
 
     Per figure because journals disagree; a style template sets it.
     """
+    decimal_comma: bool = False
+    """Writes the numbers along every axis and color bar with a decimal comma,
+    1,5 instead of 1.5, as German theses and journals do. Legends, notes, fit
+    results and typed tick labels stay as they are written."""
     stylesheet: str | None = None
     """Name of a bundled style or a path to an .mplstyle file."""
     font_size: float | None = Field(None, gt=0.0)

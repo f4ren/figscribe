@@ -248,6 +248,7 @@ SECTIONS = {
     "height_mm": "Format",
     "dpi": "Format",
     "unit_format": "Text",
+    "decimal_comma": "Text",
     "stylesheet": "Format",
     "title": "Title and axes",
     "title_size": "Title and axes",
@@ -502,6 +503,7 @@ BASIC = {
         "stylesheet",
         "font_size",
         "unit_format",
+        "decimal_comma",
         "align_labels",
         "panel_labels",
         "tick_direction",
@@ -609,6 +611,9 @@ TIPS = {
     "height_mm": "Height of the whole figure as printed.",
     "dpi": "Resolution of PNG exports; PDF and SVG stay sharp at any size.",
     "unit_format": "How a unit is joined to an axis label.",
+    "decimal_comma": "Write the numbers along every axis and color bar with a "
+    "decimal comma, 1,5 instead of 1.5. Legends, notes, fit results and typed "
+    "tick labels stay as written.",
     "stylesheet": "A Matplotlib style sheet the figure starts from.",
     "font_size": "Base font size; labels, numbers and legend scale with it.",
     "tick_direction": "Whether tick marks point into the plot, out of it, or both.",

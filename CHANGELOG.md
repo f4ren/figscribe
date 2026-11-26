@@ -5,6 +5,12 @@ release open in every later one.
 
 ## Unreleased
 
+- **Number format and decimal comma.** In the axis form, *Scale* has *Number
+  format*: automatic, fixed decimals, or scientific (2.5×10³ at every tick),
+  with *Decimals*. The figure's *Text* settings have *Decimal comma*, which
+  writes the numbers along every axis and color bar as 1,5; legends, notes, fit
+  results and typed tick labels stay as written. The point stays the default.
+  The script defines the few lines this takes (decision 0071).
 - **Check for updates.** *Help > Check for Updates…* (and `figscribe
   check-update`) asks GitHub for the latest release and says whether it is newer.
   The installed program offers to open the release page; with `pip` it names the

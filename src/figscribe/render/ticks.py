@@ -10,7 +10,12 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from matplotlib.ticker import AutoLocator
+from matplotlib.ticker import (
+    AutoLocator,
+    FuncFormatter,
+    LogFormatterSciNotation,
+    ScalarFormatter,
+)
 
 from figscribe.model import AxisSpec, Figure
 
@@ -65,14 +70,18 @@ def reversed_axis(spec: AxisSpec) -> bool:
 
 
 def scaling(spec: AxisSpec) -> tuple[str, str] | None:
-    """How tick values are turned into the numbers shown, as the script writes
-    it: ("/", "1e3") for kHz, ("*", "1e3") for mV, ("*", "1") for plain
-    numbers on a stepped log axis; None when Matplotlib's own labels stay."""
+    """Whether figscribe writes the numbers of the axis itself, and the factor
+    between the tick value and the number shown, as the script writes it:
+    ("/", "1e3") for kHz, ("*", "1e3") for mV, ("*", "1") for a number format
+    of its own and for plain numbers on a stepped log axis; None when
+    Matplotlib's own labels stay."""
     if spec.tick_labels is not None:
         return None
     if spec.prefix is not None:
         power = PREFIXES[spec.prefix]
         return ("/", f"1e{power}") if power > 0 else ("*", f"1e{-power}")
+    if spec.number_format != "auto":
+        return ("*", "1")
     if spec.scale == "log" and spec.major_step is not None and spec.ticks is None:
         # Matplotlib would write 1350 as 1.35×10³ on a log axis.
         return ("*", "1")
@@ -81,16 +90,77 @@ def scaling(spec: AxisSpec) -> tuple[str, str] | None:
 
 def shown(value: float, how: tuple[str, str]) -> str:
     """A tick value as the axis shows it; the script's formatter does the same."""
+    return f"{_scaled(value, how):g}"
+
+
+def _scaled(value: float, how: tuple[str, str]) -> float:
     op, factor = how
-    number = value / float(factor) if op == "/" else value * float(factor)
-    return f"{number:g}"
+    return value / float(factor) if op == "/" else value * float(factor)
+
+
+def tick_text(value: float, spec: AxisSpec, comma: bool) -> str:
+    """The number at one tick of an axis whose numbers figscribe writes itself;
+    the script's formatter does the same."""
+    if (zero := zero_below(spec)) is not None and abs(value) < zero:
+        value = 0.0
+    number = _scaled(value, scaling(spec))
+    if spec.number_format == "scientific":
+        text = power_of_ten(number, spec.decimals)
+    else:
+        # "z" writes -0.001 with one decimal as 0.0, not -0.0.
+        form = f"z.{spec.decimals}f" if spec.number_format == "fixed" else "g"
+        text = FuncFormatter.fix_minus(format(number, form))  # "−", not "-"
+    return decimal_comma(text) if comma else text
+
+
+def power_of_ten(value: float, decimals: int) -> str:
+    """A tick number as 2.5×10³, in Matplotlib's mathtext."""
+    if value == 0:
+        return "0"
+    mantissa, exponent = f"{value:.{decimals}e}".split("e")
+    return rf"$\mathdefault{{{mantissa}\times10^{{{int(exponent)}}}}}$"
+
+
+def decimal_comma(text: str) -> str:
+    """The number with a decimal comma; in mathtext, the braces keep TeX from
+    putting a space after it."""
+    return text.replace(".", "{,}" if "$" in text else ",")
+
+
+class CommaFormatter(ScalarFormatter):
+    """Matplotlib's own tick numbers, with a decimal comma."""
+
+    def __call__(self, x, pos=None):
+        return decimal_comma(super().__call__(x, pos))
+
+    def get_offset(self):
+        return decimal_comma(super().get_offset())
+
+
+class CommaLogFormatter(LogFormatterSciNotation):
+    """Matplotlib's numbers on a log axis, with a decimal comma."""
+
+    def __call__(self, x, pos=None):
+        return decimal_comma(super().__call__(x, pos))
+
+
+def comma_formatter(spec: AxisSpec, comma: bool) -> Literal["linear", "log"] | None:
+    """Which of the two formatters above gives the axis its decimal comma; None
+    without the comma, for typed tick labels, and where figscribe writes the
+    numbers itself."""
+    if not comma or spec.tick_labels is not None or scaling(spec) is not None:
+        return None
+    return "linear" if spec.scale == "linear" else "log"
 
 
 def zero_below(spec: AxisSpec) -> float | None:
-    """Tick values smaller than this are the tick at zero; None where Matplotlib
-    places it exactly. Ticks every `major_step` can put it at 1e-17, which
-    Matplotlib's own labels hide and a formatter of ours would print."""
-    if spec.scale == "log" or spec.ticks is not None or spec.major_step is None:
+    """Tick values smaller than this are the tick at zero; None where nothing
+    has to be done. Ticks every `major_step` can put it at 1e-17, which
+    Matplotlib's own labels hide and a formatter of ours would print; fixed
+    decimals round it away."""
+    if spec.number_format == "fixed" or spec.scale == "log":
+        return None
+    if spec.ticks is not None or spec.major_step is None:
         return None
     return spec.major_step / 2
 
