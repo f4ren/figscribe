@@ -908,3 +908,13 @@ def test_the_assistant_opens_the_frame(tools, workspace) -> None:
         "set_field", {"object_id": figure, "path": ["open_frame"], "value": True}
     )
     assert workspace.project.figures[0].open_frame is True
+
+
+def test_a_tick_step_for_what_a_broken_axis_shows_is_taken(tools, workspace) -> None:
+    axes = workspace.project.figures[0].axes[0]
+    axes.x.limits = (0.0, 1000.0)
+    axes.x.breaks = [(10.0, 990.0)]
+    tools.call(
+        "set_field", {"object_id": axes.id, "path": ["x", "major_step"], "value": 2}
+    )
+    assert workspace.project.figures[0].axes[0].x.major_step == 2.0

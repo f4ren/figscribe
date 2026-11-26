@@ -19,6 +19,7 @@ from matplotlib.ticker import (
 )
 
 from figscribe.model import AxisSpec, Figure
+from figscribe.model.breaks import line_breaks
 from figscribe.render.breaks import pieces
 
 MAX_MAJOR_TICKS = 50
@@ -229,6 +230,14 @@ def minor_ticks(spec: AxisSpec) -> Minor:
     if spec.major_step is not None and spec.ticks is None:
         return ("step", spec.major_step / spec.minor_divisions)
     return ("on", None)
+
+
+def as_drawn(figure: Figure, index: int, field: str, spec: AxisSpec) -> AxisSpec:
+    """`spec` with the breaks its axis is drawn with, which may be set on a
+    panel sharing it: what `counted_interval` counts the ticks with."""
+    if field == "y_right":
+        return spec
+    return spec.model_copy(update={"breaks": line_breaks(figure, index, field)})
 
 
 def counted_interval(

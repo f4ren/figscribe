@@ -2212,3 +2212,12 @@ def test_an_allan_fit_with_only_y_broken(tmp_path: Path, gap) -> None:
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     script = _assert_same(project, tmp_path)
     assert "np.geomspace(" in script
+
+
+def test_the_script_keeps_the_tick_step_of_a_broken_axis(tmp_path: Path) -> None:
+    project, ref = _far(tmp_path)
+    x = AxisSpec(prefix="m", breaks=_BROKEN, major_step=2.0)
+    panel = Axes(x=x, artists=[LinePlot(x=ref["t"], y=ref["U"])])
+    project.figures = [Figure(dpi=110, width_mm=160, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    assert "if abs(v) >" in script  # zero is written as 0, as the preview does

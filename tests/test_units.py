@@ -19,6 +19,7 @@ from figscribe.model import (
     ErrorbarPlot,
     Figure,
     FitCurve,
+    GridLayout,
     LinePlot,
     PredefinedFit,
     Project,
@@ -304,3 +305,56 @@ def test_a_formula_on_y_scales_the_errors_but_does_not_shift_them() -> None:
     shown = plot_data(_parts(project)[1][0], data)
     assert np.allclose(shown.y, COLUMNS["U"] * 1000 + 5)
     assert np.allclose(shown.yerr, 50.0)  # 0.05 V
+
+
+# --- broken axes ---------------------------------------------------------------
+
+
+def _broken(*below) -> Project:
+    """_project with a break, and a second panel that shares x and its break."""
+    project = _project()
+    figure = project.figures[0]
+    figure.layout = GridLayout(rows=2, share_x="col")
+    figure.axes[0].x.breaks = [(12000.0, 13000.0), (14000.0, 15000.0)]
+    figure.axes.append(
+        Axes(
+            row=1,
+            x=AxisSpec(breaks=[(12000.0, 13000.0), (14000.0, 15000.0)]),
+            artists=list(below),
+        )
+    )
+    return project
+
+
+@pytest.mark.parametrize(
+    ("conversion", "expected"),
+    [
+        (HOURS, [(11 / 3.6, 12 / 3.6), (13 / 3.6, 14 / 3.6)]),
+        (
+            KELVIN_TO_CELSIUS,
+            [(12000 - 273.15, 13000 - 273.15), (14000 - 273.15, 15000 - 273.15)],
+        ),
+    ],
+    ids=["factor", "formula"],
+)
+def test_breaks_follow_a_conversion_on_every_panel_sharing_the_axis(
+    conversion, expected
+) -> None:
+    project = _broken()
+    before = dumps(project)
+    history = History(project)
+    plot = _parts(project)[1][0]
+    history.push(set_conversion(project, plot.id, "x", conversion, data))
+
+    for axes in project.figures[0].axes:
+        assert np.array(axes.x.breaks) == pytest.approx(np.array(expected))
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_breaks_stay_while_a_panel_sharing_the_axis_shows_other_data() -> None:
+    project = _broken(LinePlot(x=col("t"), y=col("V")))
+    plot = _parts(project)[1][0]
+    History(project).push(set_conversion(project, plot.id, "x", HOURS, data))
+    for axes in project.figures[0].axes:
+        assert axes.x.breaks == [(12000.0, 13000.0), (14000.0, 15000.0)]

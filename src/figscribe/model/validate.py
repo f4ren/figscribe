@@ -103,7 +103,7 @@ def validate_references(
 
         for ai, axes in enumerate(figure.axes):
             apath = f"{fpath}.axes[{ai}]"
-            _check_axis_ticks(axes, apath, issues)
+            _check_axis_ticks(figure, ai, apath, issues)
             _check_minor_grid(axes, apath, issues)
 
             artists_by_id = {a.id: a for a in axes.artists}
@@ -719,11 +719,14 @@ def _check_minor_grid(axes: Axes, path: str, issues: list[ReferenceIssue]) -> No
         )
 
 
-def _check_axis_ticks(axes: Axes, path: str, issues: list[ReferenceIssue]) -> None:
+def _check_axis_ticks(
+    figure: Figure, index: int, path: str, issues: list[ReferenceIssue]
+) -> None:
     # Imported here: the renderer imports the model, and listing the assistant
     # tools must not load Matplotlib.
-    from figscribe.render.ticks import counted_interval, too_many_ticks
+    from figscribe.render.ticks import as_drawn, counted_interval, too_many_ticks
 
+    axes = figure.axes[index]
     for name in ("x", "y", "y_right"):
         spec = getattr(axes, name)
         if spec is None:
@@ -731,7 +734,8 @@ def _check_axis_ticks(axes: Axes, path: str, issues: list[ReferenceIssue]) -> No
         # An automatic range depends on the data, which is not known here; the
         # renderer falls back to automatic ticks in either case.
         if spec.limits is not None:
-            problem = too_many_ticks(spec, counted_interval(spec, spec.limits))
+            counted = as_drawn(figure, index, name, spec)
+            problem = too_many_ticks(spec, counted_interval(counted, spec.limits))
             if problem is not None:
                 field, message = problem
                 issues.append(

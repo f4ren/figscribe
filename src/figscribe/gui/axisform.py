@@ -35,7 +35,13 @@ from figscribe.gui.widgets import label
 from figscribe.model import AxisSpec
 from figscribe.model.breaks import breaks_blocked
 from figscribe.render.labels import unit_shown
-from figscribe.render.ticks import PREFIXES, reversed_axis, too_many_ticks
+from figscribe.render.ticks import (
+    PREFIXES,
+    as_drawn,
+    counted_interval,
+    reversed_axis,
+    too_many_ticks,
+)
 
 if TYPE_CHECKING:
     from figscribe.gui.properties import PropertyPanel
@@ -432,6 +438,11 @@ class AxisForm:
             return
         changed = self.spec.model_copy(update=values)
         interval = changed.limits or self.current()
+        index = panel_index(self.panel.document, self.axes_id)
+        if interval and index is not None:  # a break's stretch has no ticks
+            figure = self.panel.document.figure
+            counted = as_drawn(figure, index, self.field, changed)
+            interval = counted_interval(counted, interval)
         problem = too_many_ticks(changed, interval) if interval else None
         if problem is not None:  # left as typed, to be corrected
             message = problem[1]

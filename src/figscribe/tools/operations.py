@@ -59,7 +59,7 @@ from figscribe.model import (
 from figscribe.model.artists import Artist
 from figscribe.render import render
 from figscribe.render.figure import style_context, tick_ranges
-from figscribe.render.ticks import too_many_ticks
+from figscribe.render.ticks import as_drawn, counted_interval, too_many_ticks
 from figscribe.tools.workspace import Workspace, column_choices
 from figscribe.units import CONVERTIBLE, set_conversion, set_range
 
@@ -366,12 +366,14 @@ class Toolbox:
                 ranges = tick_ranges(figure, self.workspace.data)
             except Exception:  # what cannot be drawn cannot freeze either
                 continue
-            for axes in figure.axes:
+            for index, axes in enumerate(figure.axes):
                 for field in ("x", "y", "y_right"):
                     spec = getattr(axes, field)
                     if (axes.id, field) not in ranges:
                         continue
-                    problem = too_many_ticks(spec, ranges[axes.id, field])
+                    counted = as_drawn(figure, index, field, spec)
+                    interval = counted_interval(counted, ranges[axes.id, field])
+                    problem = too_many_ticks(spec, interval)
                     if problem is not None:
                         problems[axes.id, field] = f"{field} axis: {problem[1]}"
         return problems

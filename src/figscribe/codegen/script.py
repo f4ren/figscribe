@@ -87,7 +87,9 @@ from figscribe.render.layout import (
     sharing_specs,
 )
 from figscribe.render.ticks import (
+    as_drawn,
     comma_formatter,
+    counted_interval,
     minor_numbers,
     minor_ticks,
     scaling,
@@ -627,13 +629,21 @@ class _Writer:
         """Every axis by (Axes.id, field), without a tick step or divisions the
         renderer leaves out because they would give too many ticks."""
         ranges = tick_ranges(self.figure, self.data)
+
+        def counted(index: int, field: str, spec: AxisSpec, interval):
+            if self.data is None:
+                return interval  # the axes are then drawn whole
+            return counted_interval(as_drawn(self.figure, index, field, spec), interval)
+
         return {
             (axes.id, field): (
-                ticks_that_fit(spec, ranges[axes.id, field])
+                ticks_that_fit(
+                    spec, counted(index, field, spec, ranges[axes.id, field])
+                )
                 if (axes.id, field) in ranges
                 else spec
             )
-            for axes in self.figure.axes
+            for index, axes in enumerate(self.figure.axes)
             for field in ("x", "y", "y_right")
             if (spec := getattr(axes, field)) is not None
         }

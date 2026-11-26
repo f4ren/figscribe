@@ -2,7 +2,7 @@
 
 Everything typed in a plot's shown units is converted along, so that the
 same rows stay selected and the same places marked: its range, its fits'
-ranges, and on its axis the limits, ticks, step and the reference lines,
+ranges, and on its axis the limits, ticks, step, breaks and the reference lines,
 shaded ranges and notes, unless another data plot is drawn against that
 axis. The plot's fits are run again on the converted data, in the same step.
 """
@@ -35,6 +35,7 @@ from figscribe.model import (
     ScatterPlot,
     ShadedSpan,
 )
+from figscribe.model.sharing import sharing_group
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
 
@@ -169,9 +170,37 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
         if spec.symlog_linthresh is not None:
             changes["symlog_linthresh"] = rescale(spec.symlog_linthresh)
         steps += _marks_follow(axes, axis, same_side, remap)
+    # Breaks are one between the panels that share the axis, so they follow only
+    # while none of those shows other data against it. A conversion rises with
+    # the value, so the breaks stay in order.
+    if field != "y_right":
+        sharing = _sharing(project, axes, field)
+        if not any(
+            isinstance(a, DATA_PLOTS) and a.id != plot.id and same_side(a)
+            for panel in sharing
+            for a in panel.artists
+        ):
+            for panel in sharing:
+                breaks = getattr(panel, field).breaks
+                if not breaks:
+                    continue
+                moved = [_ends(ends, remap) for ends in breaks]
+                if panel.id == axes.id:
+                    changes["breaks"] = moved
+                else:
+                    steps.append(SetField(panel.id, (field, "breaks"), moved))
     if changes:
         steps.insert(0, SetField(axes.id, (field,), spec.model_copy(update=changes)))
     return steps
+
+
+def _sharing(project: Project, axes: Axes, field: str) -> list[Axes]:
+    """The panels whose `field` axis is one with that of `axes`, itself too."""
+    for figure in project.figures:
+        for i, panel in enumerate(figure.axes):
+            if panel.id == axes.id:
+                return [figure.axes[j] for j in sharing_group(figure, i, field)]
+    return [axes]
 
 
 def _marks_follow(axes: Axes, axis: str, same_side, remap) -> list[Command]:

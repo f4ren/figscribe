@@ -264,3 +264,19 @@ def test_the_outline_offers_to_break_a_panel_and_an_axis(window) -> None:
         window.outline.context_menu(panel), "Remove the breaks of the x axis"
     ).trigger()
     assert _axes(window).x.breaks == []
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_a_tick_step_counts_only_what_a_broken_axis_shows(
+    qtbot, tmp_path, shared
+) -> None:
+    """From -20 to 440 every 2 would be 231 ticks; shown are about 20. With
+    `shared`, the break is set on the other panel."""
+    window = _open(qtbot, tmp_path, panels=2 if shared else 1)
+    window.document.push(SetField(_axes(window).id, ("x", "breaks"), [(21, 418)]))
+    form = _form(window, i=1 if shared else 0)
+    form.major.setCurrentIndex(form.major.findData("step"))
+    form.major.activated.emit(form.major.currentIndex())
+    _enter(form.major_value, "2")
+    assert _axes(window, 1 if shared else 0).x.major_step == 2.0
+    assert window.properties._error.isHidden()

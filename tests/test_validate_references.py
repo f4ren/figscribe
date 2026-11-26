@@ -335,3 +335,11 @@ def test_a_formula_that_shifts_tau_set_on_the_conversion_alone_is_a_problem() ->
     History(project).push(SetField(allan.id, ("x_conversion", "formula"), "x + 1"))
     issues = validate_references(project, data)
     assert any("a duration" in i.message for i in issues)
+
+
+def test_a_break_set_on_a_shared_panel_counts_for_the_ticks(project: Project) -> None:
+    figure = project.figures[0]
+    figure.layout.share_x = "col"
+    figure.axes[0].x = AxisSpec(breaks=[(10.0, 990.0)])
+    figure.axes[1].x = AxisSpec(limits=(0.0, 1000.0), major_step=2.0)
+    assert not [i for i in validate_references(project) if "major ticks" in i.message]
