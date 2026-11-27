@@ -3792,3 +3792,51 @@ Agreed with the user (2026-11-27, as recommended):
 **Named constants only** or **numbers in the formula only**: both are allowed.
 **Extending the axes to a typed range**: not done, the user agreed that a
 function moves no limits; the axis limits can be typed.
+
+---
+
+## 0079 — Excel and LibreOffice Calc files (F7.3)
+
+2026-11-27. Accepted (the user: more formats now, Excel and Calc, "build it" to
+the proposal).
+
+### Context
+
+Lab data often lives in spreadsheets, some columns computed from raw ones.
+Saving each as CSV first is a step that is forgotten, and the copy goes stale.
+
+### Decision
+
+- `.xlsx` (and `.xlsm`), `.ods` and the old `.xls` are read as they are.
+- **A new dependency, `python-calamine` (>= 0.5.4, MIT)**, a binding of the Rust
+  library calamine: one compiled package without dependencies of its own that
+  reads all three, with wheels for every Python and system figscribe supports,
+  and its license in it for the installers' notices. A fixed dependency, so that
+  a spreadsheet opens wherever figscribe is installed. 0.5.4 is the first with
+  wheels for Python 3.14.
+- **A source is one sheet**, with the row of the column names and rows skipped
+  below it, as for CSV; rows are numbered as the spreadsheet numbers them. The
+  table starts at the first column with something in it. A column without a
+  name is called after its letter. Wholly empty rows are left out.
+- **A column is made into numbers when it is used**, so that notes and dates in
+  other columns do no harm. An empty cell is a gap. Text that reads as a number
+  with the file's decimal mark is that number. Any other text, TRUE and FALSE,
+  and a date or time are refused, naming the cell; date axes are not decided
+  (F5.5).
+- **A formula's stored result is read**, as saved by the program that wrote the
+  file; nothing is calculated again. A formula error (`#DIV/0!`) and a formula
+  without a stored result read as empty cells, which the library does not tell
+  apart; the import dialog says how many empty cells a column has.
+- **The script reads the file itself** with `python-calamine` and two short
+  functions of its own, and says that it needs the package.
+- The hash is of the whole file, so saving the workbook again, with a change on
+  another sheet too, is a changed file.
+- A new kind of source with defaults: no schema bump.
+
+### Alternatives considered
+
+**pandas** `read_excel`: better known, but large, and it needs a reader package
+per format besides. **openpyxl and odfpy**: two packages, no `.xls`, and odfpy
+is slow. **An optional extra** or **"save as CSV"**: the user wants the files
+to open. **Converting to CSV on import**: the script and the figure would no
+longer follow the file that is edited.

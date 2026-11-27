@@ -13,11 +13,15 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sys
 import uuid
+import zipfile
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NamedTuple
+from xml.sax.saxutils import escape, quoteattr
 
 import numpy as np
 from PIL import Image
@@ -104,6 +108,88 @@ def write_csv(
         folder,
         header_row=1 if comment else 0,
         skip_rows=1 if units else 0,
+    )
+
+
+class Formula(NamedTuple):
+    """A computed cell: the formula, written as A1 references, and the number
+    the spreadsheet stores for it (None: stored without one)."""
+
+    text: str
+    value: float | None
+
+
+def write_ods(path: Path, sheets: dict[str, list[list[object]]]) -> None:
+    """A LibreOffice Calc file of the sheets' rows, written with the standard
+    library so that the examples need no further package. Cells are numbers,
+    text, True or False, datetimes, `Formula`s or None for empty. The bytes are
+    the same on every run, so the hash in the project holds."""
+    tables = []
+    for name, rows in sheets.items():
+        lines = [
+            "<table:table-row>"
+            + "".join(map(_ods_cell, row or [None]))
+            + "</table:table-row>"
+            for row in rows
+        ]
+        tables.append(
+            f"<table:table table:name={quoteattr(name)}>{''.join(lines)}</table:table>"
+        )
+    spaces = " ".join(
+        f'xmlns:{prefix}="urn:oasis:names:tc:opendocument:xmlns:{what}:1.0"'
+        for prefix, what in (("office", "office"), ("table", "table"), ("text", "text"))
+    )
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f"<office:document-content {spaces} "
+        'xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" '
+        'office:version="1.2"><office:body><office:spreadsheet>'
+        f"{''.join(tables)}"
+        "</office:spreadsheet></office:body></office:document-content>"
+    )
+    kind = "application/vnd.oasis.opendocument.spreadsheet"
+    manifest = (
+        '<?xml version="1.0" encoding="UTF-8"?><manifest:manifest '
+        'xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" '
+        'manifest:version="1.2">'
+        f'<manifest:file-entry manifest:full-path="/" manifest:media-type="{kind}"/>'
+        '<manifest:file-entry manifest:full-path="content.xml" '
+        'manifest:media-type="text/xml"/></manifest:manifest>'
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        # "mimetype" comes first and uncompressed, so that the file is known.
+        for name, text, how in (
+            ("mimetype", kind, zipfile.ZIP_STORED),
+            ("content.xml", content, zipfile.ZIP_DEFLATED),
+            ("META-INF/manifest.xml", manifest, zipfile.ZIP_DEFLATED),
+        ):
+            entry = zipfile.ZipInfo(name, date_time=(2026, 11, 1, 0, 0, 0))
+            entry.compress_type = how
+            entry.create_system = 3  # the same bytes written on Windows
+            entry.external_attr = 0o644 << 16
+            archive.writestr(entry, text)
+
+
+def _ods_cell(value: object) -> str:
+    formula = ""
+    if isinstance(value, Formula):
+        inner = re.sub(r"\b([A-Z]+[0-9]+)\b", r"[.\1]", value.text)
+        formula = f" table:formula={quoteattr('of:=' + inner)}"
+        value = value.value
+    if value is None:
+        return f"<table:table-cell{formula}/>"
+    if isinstance(value, bool):
+        kind, attribute, shown = "boolean", "boolean-value", str(value).lower()
+    elif isinstance(value, datetime):
+        kind, attribute, shown = "date", "date-value", value.isoformat()
+    elif isinstance(value, str):
+        kind, attribute, shown = "string", None, value
+    else:
+        kind, attribute, shown = "float", "value", repr(float(value))
+    number = f' office:{attribute}="{shown}"' if attribute else ""
+    return (
+        f'<table:table-cell{formula} office:value-type="{kind}"{number}>'
+        f"<text:p>{escape(shown)}</text:p></table:table-cell>"
     )
 
 

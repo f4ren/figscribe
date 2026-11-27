@@ -12,6 +12,7 @@ from figscribe.io.csvfile import read_csv
 from figscribe.io.errors import DataChangedError, DataError
 from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import read_numpy
+from figscribe.io.sheetfile import SheetTable, read_sheet
 from figscribe.model import (
     ArrayRef,
     ColumnRef,
@@ -19,6 +20,7 @@ from figscribe.model import (
     DataSource,
     NumpySource,
     Project,
+    SheetSource,
 )
 
 if TYPE_CHECKING:  # the renderer raises DataError, so it imports this package
@@ -38,6 +40,8 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
     """
     sources = {s.id: s for s in project.sources}
     tables: dict[tuple[str, str | None], np.ndarray] = {}
+    sheets: dict[str, SheetTable] = {}
+    columns: dict[tuple[str, int], np.ndarray] = {}
 
     def table(source: DataSource, key: str | None = None) -> np.ndarray:
         if (source.id, key) not in tables:
@@ -46,10 +50,28 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
             tables[source.id, key] = loaded
         return tables[source.id, key]
 
+    def sheet(source: SheetSource) -> SheetTable:
+        if source.id not in sheets:
+            raw, name = _checked_bytes(source, base_dir)
+            sheets[source.id] = read_sheet(source, raw, name)
+        return sheets[source.id]
+
     def resolve(ref: ColumnRef | ArrayRef) -> np.ndarray:
         source = sources.get(ref.source)
         if source is None:
             raise DataError(f"unknown data source {ref.source!r}")
+        if isinstance(source, SheetSource):
+            # Column by column: only what is plotted has to be numbers.
+            if isinstance(ref, ArrayRef):
+                values = sheet(source).array()
+            else:
+                found = sheet(source)
+                index = _column_index(source, ref.column, found.width)
+                if (source.id, index) not in columns:
+                    columns[source.id, index] = found.column(index)
+                values = columns[source.id, index]
+            values.flags.writeable = False
+            return values
         if isinstance(ref, ArrayRef):
             return table(source, ref.key)
         values = table(source)
@@ -66,6 +88,14 @@ def _load(source: DataSource, base_dir: str | Path, key: str | None) -> np.ndarr
             f"reading {source.format!r} sources is not implemented yet"
         )
 
+    raw, name = _checked_bytes(source, base_dir)
+    if isinstance(source, NumpySource):
+        return read_numpy(source, raw, name, key)
+    return read_csv(source, raw, name)
+
+
+def _checked_bytes(source: DataSource, base_dir: str | Path) -> tuple[bytes, str]:
+    """(the file's contents, its path): the bytes that were imported."""
     path = resolve_path(source.path, base_dir)
     try:
         raw = path.read_bytes()
@@ -74,9 +104,7 @@ def _load(source: DataSource, base_dir: str | Path, key: str | None) -> np.ndarr
 
     if hashlib.sha256(raw).hexdigest() != source.sha256:
         raise DataChangedError(f"{path} has changed since it was imported")
-    if isinstance(source, NumpySource):
-        return read_numpy(source, raw, str(path), key)
-    return read_csv(source, raw, str(path))
+    return raw, str(path)
 
 
 def _column_index(source: DataSource, column: str | int, width: int) -> int:
