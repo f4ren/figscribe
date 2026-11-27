@@ -20,6 +20,16 @@ analysis = Analysis(  # noqa: F821
     + [(os.environ["FIGSCRIBE_LICENSES"], "licenses")],
     excludes=["tkinter", "pytest"],
 )
+# Copyleft libraries that PyInstaller finds on the build machine, for Pillow to
+# load at run time (its text layout, which figscribe does not use: Matplotlib
+# sets the text). Left out; smoke.py checks that neither is in the program.
+LEFT_OUT = ("libfribidi", "fribidi", "libimagequant")
+analysis.binaries = [
+    entry
+    for entry in analysis.binaries
+    if not Path(entry[0]).name.lower().startswith(LEFT_OUT)
+]
+
 archive = PYZ(analysis.pure)  # noqa: F821
 
 

@@ -2023,7 +2023,9 @@ Waits for the user's word (2026-11-27). It carries everything under
    number format and decimal comma, minor grid lines, a curve beyond the data,
    *Use another file…* with other column names, a changed file with a fit,
    *Check for Updates…*, a sheet from a real Excel and LibreOffice. Then go
-   through the checklist (B7.5), on macOS at least.
+   through the checklist (B7.5), on macOS at least. *Open:* the AppImage also
+   takes system libraries from the Linux build machine (so did 0.3.0); no list
+   names their licenses. Check what is in it before releasing.
 2. Version 0.4.0; date the changelog's section, and say first that a project
    saved with 0.3.0 after a change of a fit's data may hold an old curve:
    *Fit again with the current data*.

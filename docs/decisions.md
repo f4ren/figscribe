@@ -3869,7 +3869,9 @@ or with one that has no text there, stops the build.
 The lists also name C libraries. Those are decided one by one
 (`notices.PARTS`), since a list may name what is not shipped: Pillow's names
 libimagequant (GPL) and FriBiDi (LGPL), neither of which is in its wheels, and
-the installer test fails if either is collected. OpenSSL (in cryptography) and
+the installer test fails if either is collected. PyInstaller did collect
+FriBiDi from the Linux build machine; the spec now leaves it out. OpenSSL (in
+cryptography) and
 libXau (in Pillow's wheels) were named by no file and are added. A part not
 decided yet stops the build.
 
