@@ -5,6 +5,8 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed: *Change the fit…* no longer rounds the fit range's ends to six digits
+  when you press *Update fit*.
 - **Use another file.** Draw a figure, such as an example, with your own data:
   right-click the data file in *Contents* and *Use another file…*. The file is
   read like the old one, the fits are run again and left-out rows are taken

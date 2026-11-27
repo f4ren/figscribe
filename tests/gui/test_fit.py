@@ -411,6 +411,45 @@ def test_the_fit_dialog_knows_the_typed_x_range(window: MainWindow) -> None:
     assert seen == [True]
 
 
+@pytest.mark.parametrize("name", ["fit_range", "curve_range"])
+def test_an_untouched_range_is_kept_exactly(
+    qtbot, document: Document, name: str
+) -> None:
+    """The dialog shows six digits; OK must not write the rounded ends back."""
+    ends = (2.123456789, 8.000000012)
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        **{name: ends},
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    dialog.label.setText("another name")
+    assert getattr(dialog.fit(), name) == ends
+    low = dialog.range_low if name == "fit_range" else dialog.curve_low
+    low.setText("3")
+    low.editingFinished.emit()
+    assert getattr(dialog.fit(), name) == (3.0, ends[1])
+
+
+def test_ends_that_look_alike_when_rounded_are_no_error(
+    qtbot, document: Document
+) -> None:
+    ends = (10000000.5, 10000001.5)
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        curve_range=ends,
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    dialog = FitDialog(_data(document), document.data, fit=fit)
+    qtbot.addWidget(dialog)
+    assert _ok(dialog) and dialog.fit().curve_range == ends
+
+
 # --- left-out points and outliers ---------------------------------------------------
 
 
