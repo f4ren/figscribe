@@ -1794,6 +1794,12 @@ is: the file has what it has). The program's own defaults stay as decision
   decision 0076; in 0.3.0 too). It was wider than found first: any change of
   what a fit is run on left the old result unless its command fitted again.
   Now one rule where changes are applied.
+- **Follow-ups on fits** (found in review, 2026-11-27, both in 0.3.0):
+  leaving rows out, a range or a unit change still stores a fit that did not
+  converge, whose start values the window then draws while the script fails
+  (0076 leaves such a fit unfitted only where the rule fits it). And *Change
+  the fit…* rounds start values, held values and bounds to six digits on
+  *Update fit*, which can change the result.
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,

@@ -79,20 +79,27 @@ OWN_FIELDS = tuple(name for name in FitCurve.model_fields if name not in INPUTS)
 
 def fits_follow(project: Project, command: Command, base_dir: str | Path) -> Command:
     """`command`, and after it each fit run again whose inputs it changes and
-    whose result it does not set itself: one step. `command` unchanged where
-    there is none."""
-    before = {
+    whose result it does not set itself afterwards: one step. `command`
+    unchanged where there is none."""
+    parts = list(_parts(copy.deepcopy(command)))
+    if not _fits(project) and not any(_result_of(part) for part in parts):
+        return command
+    # By fit, its inputs and file paths as its result was last seen to.
+    seen = {
         fit.id: (_inputs(project, fit), _paths(project, fit)) for fit in _fits(project)
     }
-    if not before:
-        return command
     staging = project.model_copy(deep=True)
-    copy.deepcopy(command).apply(staging)
+    for part in parts:
+        part.apply(staging)
+        if fit_id := _result_of(part):
+            # Seen to as the inputs are now; a later part may change them yet.
+            fit = next(f for f in _fits(staging) if f.id == fit_id)
+            seen[fit_id] = (_inputs(staging, fit), _paths(staging, fit))
     steps: list[Command] = []
     for fit in _fits(staging):
-        if fit.id not in before or _sets_result(command, fit.id):
-            continue
-        inputs, paths = before[fit.id]
+        if fit.id not in seen:
+            continue  # new, and not fitted by the command
+        inputs, paths = seen[fit.id]
         new = _inputs(staging, fit)
         # One left not fitted is tried again once its file is found elsewhere,
         # too: Locate may change nothing but the path.
@@ -144,12 +151,21 @@ def run_again(
     return [], why
 
 
-def _sets_result(command: Command, fit_id: str) -> bool:
-    """Whether `command` itself sets the result of the fit. Asked of the
-    command, not of the values: a fit run again may come out as before."""
-    if isinstance(command, SetField):
-        return command.target == fit_id and command.path == ("result",)
-    return any(_sets_result(step, fit_id) for step in getattr(command, "steps", ()))
+def _parts(command: Command):
+    """The single changes `command` is made of, in order."""
+    if isinstance(command, Macro):
+        for step in command.steps:
+            yield from _parts(step)
+    else:
+        yield command
+
+
+def _result_of(part: Command) -> str | None:
+    """The fit whose result `part` sets; None for any other change. Asked of
+    the command, not of the values: a fit run again may come out as before."""
+    if isinstance(part, SetField) and part.path == ("result",):
+        return part.target
+    return None
 
 
 def _fits(project: Project) -> list[FitCurve]:

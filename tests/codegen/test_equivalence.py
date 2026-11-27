@@ -267,6 +267,26 @@ def test_columns_named_like_the_scripts_own_variables(tmp_path: Path, x_breaks) 
     _assert_same(project, tmp_path)
 
 
+def test_the_names_of_a_curve_beyond_the_data_read_plainly(tmp_path: Path) -> None:
+    """On a broken axis the curve's values are a variable already, and a second
+    fit uses the same names again."""
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"], linestyle="none", marker="o")
+    panel = Axes(x=AxisSpec(breaks=[(11.0, 12.0)]), artists=[data])
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    for _ in range(2):
+        fit = FitCurve(
+            target=data.id,
+            model=PredefinedFit(name="linear"),
+            curve_range=(0.0, 15.0),
+        )
+        add_fit(project, fit, residuals=False).apply(project)
+        refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "t_fit_y2" not in script and "t_fit2" not in script
+    assert "t_fit_y = t_fit_y" not in script
+
+
 def test_a_curve_beyond_the_data_with_residuals_sharing_x(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")

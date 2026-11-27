@@ -3656,8 +3656,9 @@ it again in the same undo step** (`refits.fits_follow`).
   range; the fields of its plot that decide the points; and the files they are
   in, by their hash and reading options, not their path. Every field of a plot
   and of a fit is listed as one or the other, which a test holds.
-- A command that sets the result itself is left alone, told by what the
-  command contains, not by whether the value changed.
+- A fit whose result the command sets is left alone, unless a later change in
+  the same command alters its inputs again. This is told by what the command
+  contains, not by whether the value changed.
 - Where the points or the model changed, a predefined model is guessed anew
   first and the stored start values are tried second; else the other way
   round. An own formula starts from its values only: ones never take their

@@ -335,9 +335,11 @@ class _Writer:
             *getattr(self, "_retired", ()),
         }
 
-    def _free(self, name: str) -> str:
-        """`name`, or with underscores after it where a column has it."""
-        taken = self._taken()
+    def _beside(self, name: str) -> str:
+        """`name`, or with underscores after it where a column or a mask has it.
+        The name is not used up, unlike with `_free`: each fit of a plot writes
+        the same names again."""
+        taken = {*self._taken(), *getattr(self, "_masks", ())}
         while name in taken:
             name += "_"
         return name
@@ -2065,7 +2067,7 @@ class _Writer:
         function, popt = self.fits[fit.id]
         target = self.artists[fit.target]
         x = self.shown(target, "x")
-        xs = self._free(f"{x}_fit")
+        xs = self._beside(f"{x}_fit")
         index, panel = next(
             (i, a) for i, a in enumerate(self.figure.axes) if fit in a.artists
         )
@@ -2104,7 +2106,7 @@ class _Writer:
         curve = f"{function}({xs}, *{popt})"
         joined = None  # the data's ends, to be sampled where the style changes
         if look:
-            names = self._free(f"{x}_first"), self._free(f"{x}_last")
+            names = self._beside(f"{x}_first"), self._beside(f"{x}_last")
             self.emit(
                 "# Drawn differently beyond the data: no points back the curve there.",
                 f"{names[0]} = {first}",
@@ -2128,12 +2130,12 @@ class _Writer:
         if not look:
             self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
             return
-        values = self._free(f"{xs}_y")
+        values = self._beside(f"{xs}_y")
         if curve != values:  # a break may have made the variable already
             self.emit(f"{values} = {curve}")
         measured, beyond = (
-            self._free(f"{xs}_measured"),
-            self._free(f"{xs}_beyond"),
+            self._beside(f"{xs}_measured"),
+            self._beside(f"{xs}_beyond"),
         )
         for name, where in (
             (measured, f"({xs} >= {first}) & ({xs} <= {last})"),
@@ -2142,7 +2144,7 @@ class _Writer:
             self.call(f"{name} = np.where", where, values, "np.nan")
         plot, color = f"{ax}.plot", look["color"]
         if color is None:  # the curve's, which may come from the color cycle
-            line = self._free(f"{xs}_line")
+            line = self._beside(f"{xs}_line")
             plot, color = f"{line}, = {plot}", f"{line}.get_color()"
         else:
             color = _str(color)
@@ -2208,7 +2210,7 @@ class _Writer:
         # A line can cross a break only between two stretches, or in y.
         if len(parts) == 1 and not self._cut[1]:
             return curve
-        values = self._free(f"{xs}_y")
+        values = self._beside(f"{xs}_y")
         self.emit(f"{values} = {curve}")
         cuts = self._cuts(xs, values)
         self.call(f"{xs} = np.insert", xs, cuts, "np.nan")

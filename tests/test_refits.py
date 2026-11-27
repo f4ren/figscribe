@@ -319,6 +319,83 @@ def test_an_unfitted_fit_does_not_refuse_an_edit(tmp_path: Path, edit: str) -> N
     assert _parts(ws)[2].result is None
 
 
+def _same_as_fitting_now(ws: ProjectWorkspace, fit) -> None:
+    again = ws.project.model_copy(deep=True)
+    refit(again, fit.id, load_data(again, ws.base_dir)).apply(again)
+    new = next(a for a in again.figures[0].axes[0].artists if a.id == fit.id).result
+    assert fit.result.parameters == pytest.approx(new.parameters, rel=1e-6)
+
+
+def test_a_change_after_a_refit_in_the_same_batch_counts(tmp_path: Path) -> None:
+    """One step of a batch fits again, a later one changes what it ran on."""
+    ws = _workspace(tmp_path)
+    _, plot, fit = _parts(ws)
+    ws.push(SetField(fit.id, ("fit_range",), (1.0, 7.0)))
+    Toolbox(ws).call(
+        "apply_changes",
+        {
+            "description": "two changes",
+            "operations": [
+                {
+                    "op": "set_field",
+                    "object_id": plot.id,
+                    "path": ["left_out"],
+                    "value": [40],  # outside the range: the same result
+                },
+                {
+                    "op": "set_field",
+                    "object_id": fit.id,
+                    "path": ["fit_range"],
+                    "value": [2.0, 6.0],
+                },
+            ],
+        },
+    )
+    _same_as_fitting_now(ws, _parts(ws)[2])
+    _assert_the_script_draws_the_same(ws)
+
+
+def test_a_fit_made_in_a_batch_follows_a_later_step(tmp_path: Path) -> None:
+    ws = _workspace(tmp_path)
+    plot = _parts(ws)[1]
+    Toolbox(ws).call(
+        "apply_changes",
+        {
+            "description": "fit, then change what it ran on",
+            "operations": [
+                {
+                    "op": "fit",
+                    "target_id": plot.id,
+                    "model": {"kind": "predefined", "name": "linear"},
+                },
+                {
+                    "op": "set_field",
+                    "object_id": plot.id,
+                    "path": ["yerr"],
+                    "value": None,
+                },
+            ],
+        },
+    )
+    new = ws.project.figures[0].axes[0].artists[2]
+    _same_as_fitting_now(ws, new)
+
+
+def test_a_unit_change_keeps_the_values_of_a_formula_that_cannot_be_fitted(
+    tmp_path: Path,
+) -> None:
+    ws = _workspace(tmp_path)
+    _, plot, fit = _parts(ws)
+    fit.model = ExpressionFit(expression="a * x + b", parameters=["a", "b"])
+    fit.initial_values = {"a": 2.0, "b": 1.0}
+    fit.result = None
+    fit.fit_range = (0.0, 0.1)  # one point
+    mV = Conversion(factor=1000.0, unit="mV")
+    ws.push(set_conversion(ws.project, plot.id, "y", mV, ws.data))
+    fit = _parts(ws)[2]
+    assert fit.result is None and fit.initial_values == {"a": 2.0, "b": 1.0}
+
+
 def test_every_field_is_known_to_matter_to_a_fit_or_not() -> None:
     """A new field has to be put in one list or the other."""
     for kind in (LinePlot, ScatterPlot, ErrorbarPlot, AllanDeviationPlot):
