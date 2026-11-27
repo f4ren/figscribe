@@ -7,6 +7,10 @@ release open in every later one.
 
 - Fixed: *Change the fit…* no longer rounds the fit range's ends to six digits
   when you press *Update fit*.
+- **Use another file.** Draw a figure, such as an example, with your own data:
+  right-click the data file in *Contents* and *Use another file…*. The file is
+  read like the old one, the fits are run again and left-out rows are taken
+  back in (decision 0075).
 - **A fit beyond the data.** To extrapolate, type *Draw curve from … to …* in
   the fit dialog or *Curve from, to* in the panel, or tick *To the axis limits*
   where the x range is typed. Beyond the data the curve is dashed, as no
