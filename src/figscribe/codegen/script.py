@@ -661,12 +661,12 @@ class _Writer:
             )
         if any(self.places[oid][1] != "both" for oid in self.functions):
             self.emit("from matplotlib.lines import Line2D")
+        if self._sheets():
+            self.emit("from python_calamine import CalamineWorkbook")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
         if self._grouped():
             self.emit("from scipy.stats import binned_statistic")
-        if self._sheets():
-            self.emit("from python_calamine import CalamineWorkbook")
         self.emit("", "HERE = Path(__file__).resolve().parent")
         if self.figure.stylesheet is not None:
             self.emit(f"plt.style.use({_str(self.figure.stylesheet)})")

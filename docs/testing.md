@@ -246,5 +246,12 @@ note the platform, the screen scaling and the theme in the pull request.
     break, remove it. Export a PDF, and a PNG with a transparent background on a
     coloured slide: the gap shows the slide. Export the script and run it.
 
+37. **A spreadsheet** (decision 0079): in Excel and in LibreOffice Calc, make a
+    sheet with a title row, names, units, a column computed by a formula, an
+    empty cell, a notes column and a second sheet; save as `.xlsx`, `.xls` and
+    `.ods`. Import each: the sheet, rows and units are proposed, the computed
+    values show, the notes column is named as not numbers. Change a value, save,
+    come back: the bar offers the new version. Export the script and run it.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

@@ -27,6 +27,8 @@ from make_installer import FROZEN, OUT, frozen_program, version
 
 REPO = Path(__file__).resolve().parents[1]
 EXAMPLE = REPO / "examples" / "beam-profile" / "beam.figscribe"
+SHEET_EXAMPLE = REPO / "examples" / "pendulum" / "pendulum.figscribe"
+"""Its data is a spreadsheet, which a compiled library of its own reads."""
 WINDOW_SECONDS = 15
 
 
@@ -125,6 +127,16 @@ def main(argv: list[str]) -> int:
         )
         if ran.returncode or not list(Path(folder).glob("*.pdf")):
             return fail(f"the script did not draw: {ran.stdout} {ran.stderr}")
+        sheet = Path(folder) / "sheet.py"
+        read = subprocess.run(
+            [program, "script", SHEET_EXAMPLE, "-o", sheet],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=300,
+        )
+        if read.returncode or "rows_of_sheet" not in sheet.read_text("utf-8"):
+            return fail(f"the spreadsheet was not read: {read.stdout} {read.stderr}")
     print("script ok", flush=True)
 
     # A frozen program may not find the certificates of the system. A runner may

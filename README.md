@@ -103,7 +103,8 @@ To add an extra later, install again with `--force`. To update:
 
 Start `figscribe`. The start page offers four ways in:
 
-- **Open a data file** (CSV, `.npy`, `.npz`). The import dialog detects
+- **Open a data file** (CSV, Excel, LibreOffice Calc, `.npy`, `.npz`). The
+  import dialog detects
   delimiter, decimal comma, header and unit rows, shows a preview and suggests
   a first plot, e.g. *U against t with error bars dU*.
 - **Pick a layout**: single column (85 × 60 mm), double column
@@ -111,7 +112,7 @@ Start `figscribe`. The start page offers four ways in:
   16:9 slide.
 - **Open an example** from the gallery: a Gaussian scan, a noisy sensor
   with its means over the raw line, an RC discharge with fit and residuals,
-  a resonance, a broken axis up to the zinc point and more, fourteen in all. Each is a copy in a
+  a resonance, a broken axis up to the zinc point and more, fifteen in all. Each is a copy in a
   folder you choose, with its data, ready to change.
 
 Then click anything in the figure or in the contents list to select it, and
@@ -126,6 +127,8 @@ script.
   unit rows, and of the text encoding (UTF-8, or cp1252 and Latin-1 as older
   Windows programs write them); NumPy `.npy` and `.npz` files (read without pickles, so a data
   file cannot run code).
+- Excel (`.xlsx`, `.xls`) and LibreOffice Calc (`.ods`) files as they are: one
+  sheet per data file, computed columns with the results saved in the file.
 - A data file is removed with the plots that draw from it, in one undo step;
   figscribe asks first and names them.
 - Each data file is recorded with its SHA-256. If it changes later,
@@ -223,8 +226,8 @@ script.
 ## The generated code
 
 *File > Export Python Script…* (or `figscribe script PROJECT.figscribe -o
-plot.py`) writes a script that needs only NumPy, Matplotlib and, for fits and
-for fewer points drawn, SciPy. It is written the way a person would write it:
+plot.py`) writes a script that needs only NumPy, Matplotlib, for fits and for
+fewer points drawn SciPy, and for spreadsheets python-calamine. It is written the way a person would write it:
 no figscribe helpers, named variables, comments where they help. From the
 example project's script (shortened):
 
