@@ -8,7 +8,7 @@ import pytest
 from PySide6.QtWidgets import QDialogButtonBox, QLabel
 
 from figscribe.commands import InsertItem, SetField
-from figscribe.fit import FitError, add_fit, parameter_names, refit
+from figscribe.fit import FitError, add_fit, parameter_names, refit, update_fit
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
@@ -448,6 +448,36 @@ def test_ends_that_look_alike_when_rounded_are_no_error(
     dialog = FitDialog(_data(document), document.data, fit=fit)
     qtbot.addWidget(dialog)
     assert _ok(dialog) and dialog.fit().curve_range == ends
+
+
+def test_untouched_start_values_and_bounds_are_kept_exactly(
+    qtbot, document: Document
+) -> None:
+    """Shown with six digits; OK must not write the rounded values back, which
+    for a held value changes the result."""
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"a": 1.0, "mu": 5.000000123, "sigma": 1.2, "c": 0.0123456789},
+        fixed=["c"],
+        parameter_bounds={"sigma": (0.100000009, 5.00000001)},
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    before = document.figure.axes[0].artists[1]
+    dialog = FitDialog(_data(document), document.data, fit=before)
+    qtbot.addWidget(dialog)
+    dialog.label.setText("another name")
+    changed = dialog.fit()
+    assert changed.initial_values == before.initial_values
+    assert changed.parameter_bounds == before.parameter_bounds
+    steps = update_fit(document.project, fit.id, changed).steps
+    assert [step.path for step in steps] == [("label",)]
+    # A value that is typed over counts as typed.
+    dialog.start["mu"].setText("4.5")
+    dialog.start["mu"].setModified(True)
+    dialog.start["mu"].editingFinished.emit()
+    assert dialog.fit().initial_values["mu"] == 4.5
 
 
 # --- left-out points and outliers ---------------------------------------------------

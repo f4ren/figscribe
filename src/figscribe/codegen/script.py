@@ -463,7 +463,9 @@ class _Writer:
         fits = [
             a
             for a in self.artists.values()
-            if isinstance(a, FitCurve) and a.result and self._points_to_fit(a) != 0
+            if isinstance(a, FitCurve)
+            and a.drawn_result()
+            and self._points_to_fit(a) != 0
         ]
         taken = self._taken()
         found = {}
@@ -1282,6 +1284,8 @@ class _Writer:
     def _why_not_drawn(self, fit: FitCurve) -> str:
         if fit.result and self._points_to_fit(fit) == 0:
             return "has no point left to run on"
+        if fit.result and not fit.result.converged:
+            return "did not converge"
         return "is not fitted yet"
 
     def _points_to_fit(self, fit: FitCurve) -> int | None:

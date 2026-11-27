@@ -484,6 +484,12 @@ class FitCurve(ArtistBase):
             return x_limits
         return self.curve_range
 
+    def drawn_result(self) -> FitResult | None:
+        """The result to draw: none before a fit, nor one that did not converge.
+        Its parameters are only where the fit started, and curve_fit stops there
+        with an error, so the script could not run it."""
+        return self.result if self.result and self.result.converged else None
+
     def looks_alike_beyond(self) -> bool:
         """Whether the part beyond the data would be drawn as the rest."""
         return (

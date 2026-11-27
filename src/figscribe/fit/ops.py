@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -140,23 +141,38 @@ def set_left_out(
 
 
 def refit_in_edit(
-    project: Project, staging: Project, fit: FitCurve, data: DataProvider
+    project: Project,
+    staging: Project,
+    fit: FitCurve,
+    data: DataProvider,
+    may_fail: bool = False,
 ) -> list:
     """Fit `fit` again as part of an edit of `project` that `staging` holds
-    already, apply the fit to `staging` and return its steps. A FitError
-    refuses the edit; but a fit that has no result and could not be fitted
-    before the edit either has nothing to lose, and refuses nothing."""
+    already, apply the change to `staging` and return its steps. A FitError
+    refuses the edit, unless the fit `may_fail`; a fit that has no result and
+    could not be fitted before the edit either refuses nothing. Where it fails
+    or does not converge, it is left not fitted with the start values it had.
+
+    A fit that `may_fail` starts from values of before the edit. It also counts
+    as failed where the data then do not decide its parameters: curve_fit may
+    stop where it started and call that converged."""
+    left_unfitted = [] if fit.result is None else [SetField(fit.id, ("result",), None)]
     try:
         again = refit(staging, fit.id, data)
     except FitError:
-        if fit.result is not None or _can_be_fitted(project, fit.id, data):
+        refuses = fit.result is not None or _can_be_fitted(project, fit.id, data)
+        if refuses and not may_fail:
             raise
-        return []
-    result = next(step for step in again.steps if step.path == ("result",)).value
-    if fit.result is None and not result.converged:
-        return []
-    again.apply(staging)
-    return again.steps
+        again = None
+    if again is not None:
+        result = next(s for s in again.steps if s.path == ("result",)).value
+        decided = all(map(math.isfinite, result.uncertainties.values()))
+        if result.converged and (decided or not may_fail):
+            again.apply(staging)
+            return again.steps
+    for step in left_unfitted:
+        step.apply(staging)
+    return left_unfitted
 
 
 def _can_be_fitted(project: Project, fit_id: str, data: DataProvider) -> bool:

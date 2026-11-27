@@ -3694,3 +3694,41 @@ it again in the same undo step** (`refits.fits_follow`).
 setting or way in could forget it. **Only say that a fit is old**: the window
 and the script would still disagree. **Check every fit when a project is
 opened**: changes a file without being asked.
+
+## 0077 — A fit that did not converge is drawn nowhere; own formulas keep their start values
+
+2026-11-27. Roadmap B10, items 1 to 4.
+
+### Context
+
+Where `curve_fit` gives up, the stored parameters are the start values. The
+window drew a curve from them, while the script, which runs the same
+`curve_fit`, stopped with an error. A unit change dropped an own formula's
+start values, so it started from ones.
+
+### Decision
+
+- A result that did not converge is **drawn nowhere**: not the curve, not its
+  residuals, in the window and in the script alike (`FitCurve.drawn_result`).
+  This covers every way it gets there, saved projects included. The result card
+  keeps its warning and the problem list says that no curve is drawn.
+- Where an edit fits again (left-out rows, ranges, units) and it does not
+  converge, the fit is left not fitted with the start values it had, as the
+  rule of 0076 does.
+- **A unit change keeps an own formula's start values** (the user, 2026-11-27,
+  taking the recommendation): nothing can be guessed for it. Where it cannot be
+  fitted from them, or the data then do not decide its parameters, it is left
+  not fitted. The unit change is never refused for it. A predefined model drops
+  what it can guess anew, as before (0041).
+- Breaks are converted **panel by panel**, like the range typed on an axis,
+  also beside data in other units; so once every dataset on a shared axis is
+  converted, its breaks are too (0072 kept them while any panel showed other
+  data, and they then stayed in the old numbers).
+- The fit dialog keeps every stored number it shows rounded, unless its text
+  is changed.
+
+### Alternatives considered
+
+**Draw a fit that gave up, marked as such**: the script cannot draw it without
+code that no person would write. **Convert a formula's start values**: not
+possible for a formula in general.

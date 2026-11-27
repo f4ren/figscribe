@@ -5,6 +5,14 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed (in 0.3.0 too): a fit that did not converge was drawn from its start
+  values while the Python script stopped with an error. It is now drawn by
+  neither and listed among the problems.
+- Fixed (in 0.3.0 too): a unit change no longer restarts an own formula from
+  ones, which could "converge" to nonsense. It starts from the values it had,
+  and is left not fitted where that fails.
+- Fixed (in 0.3.0 too): *Change the fit…* rounded start values and bounds to
+  six digits on *Update fit*.
 - Fixed: when the assistant changed how a file is read and fitted or edited in
   the same batch, the fit was run on the data as read before.
 - **Fixed: a fit kept its old curve over new data**, in 0.3.0 too. The window

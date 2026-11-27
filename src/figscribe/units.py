@@ -84,12 +84,19 @@ def set_conversion(
             steps.append(SetField(fit.id, ("curve_range",), ends))
         # Start values in the old units would mislead the fit; held ones are
         # the user's and stay as typed. A fit without a result keeps them all:
-        # they change only where a fit succeeds.
+        # they change only where a fit succeeds. So does an own formula, for
+        # which nothing can be guessed: from ones it can "converge" to nonsense.
         held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
-        if fit.result is not None and held != fit.initial_values:
+        guessed = fit.model.kind == "predefined" and fit.result is not None
+        if guessed and held != fit.initial_values:
             steps.append(SetField(fit.id, ("initial_values",), held))
     steps += _axis_follows(project, plot, axis, old, conversion, remap, rescale)
-    return _with_fits_again(project, plot_id, _describe(axis, conversion), steps, data)
+    # An own formula keeps start values in the old units; where it cannot be
+    # fitted from them it is left not fitted rather than keep the units.
+    own = {f.id for f in _fits_of(project, plot_id) if f.model.kind != "predefined"}
+    return _with_fits_again(
+        project, plot_id, _describe(axis, conversion), steps, data, may_fail=own
+    )
 
 
 def set_range(
@@ -208,10 +215,11 @@ def _axis_follows(project, plot, axis, old, new, remap, rescale) -> list[Command
                     changes["major_step"] = rescale(spec.major_step)
                 if spec.symlog_linthresh is not None:
                     changes["symlog_linthresh"] = rescale(spec.symlog_linthresh)
-            # Breaks are one between the panels that share the axis. A
-            # conversion rises with the value, so they stay in order.
-            if group_alone and spec.breaks:
-                changes["breaks"] = [_ends(ends, move) for ends in spec.breaks]
+                # A conversion rises with the value, so breaks stay in order.
+                # Panel by panel, like the range: beside data in other units
+                # no numbers suit the axis, and once each is converted all do.
+                if spec.breaks:
+                    changes["breaks"] = [_ends(ends, move) for ends in spec.breaks]
             planned.append((panel, spec, changes, follows))
         _drop_prefix(planned, None if new is None else new.unit)
         steps: list[Command] = []
@@ -309,13 +317,13 @@ def _marks_follow(axes: Axes, axis: str, same_side, remap) -> list[Command]:
     return steps
 
 
-def _with_fits_again(project, plot_id, text, steps, data) -> Macro:
+def _with_fits_again(project, plot_id, text, steps, data, may_fail=()) -> Macro:
     """`steps`, then each fit of the plot run again on the changed project."""
     staging = project.model_copy(deep=True)
     for step in steps:
         step.apply(staging)
     for fit in _fits_of(staging, plot_id):
-        steps += refit_in_edit(project, staging, fit, data)
+        steps += refit_in_edit(project, staging, fit, data, fit.id in may_fail)
     return Macro(text, steps)
 
 

@@ -108,7 +108,7 @@ def fits_follow(project: Project, command: Command, base_dir: str | Path) -> Com
         new = _inputs(staging, fit)
         # One left not fitted is tried again once its file is found elsewhere,
         # too: Locate may change nothing but the path.
-        moved = fit.result is None and _paths(staging, fit) != paths
+        moved = fit.drawn_result() is None and _paths(staging, fit) != paths
         if new == inputs and not moved:
             continue
         again, why = [], "the files cannot be read"
