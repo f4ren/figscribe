@@ -3767,9 +3767,9 @@ Agreed with the user (2026-11-27, as recommended):
 - **It moves no limits of a panel that shows data**, whatever it reaches and
   wherever it stands in the order of drawing: the line is added as it is
   (`add_artist`; `plot(scaley=False)` does not hold, as the next plot scales to
-  it after all). A panel of functions alone is scaled by them. A y axis with
-  no data of its own beside data on x (a right axis, a panel below sharing x)
-  is scaled in y only.
+  it after all). A panel of functions alone is scaled by them. An axis with no
+  data of its own beside data on the other is scaled by the function alone: y
+  for a right axis or a panel below sharing x, x for a panel that shares only y.
 - It has **a color of its own** (black), taking none of the color cycle, so
   adding one recolors no plot.
 - Sampled as a fit curve: evenly in log x on a log axis, on each stretch of a

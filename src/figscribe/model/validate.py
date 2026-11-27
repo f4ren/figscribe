@@ -396,8 +396,8 @@ def _function_values(figure: Figure, index: int, artist, field: str, data):
     f = evaluator(artist)
     if f is None:
         return []
-    sets = sets_limits(figure, index, artist)
-    if sets == "none" or (field == "x" and sets != "both"):
+    own = "x" if field == "x" else "y"
+    if sets_limits(figure, index, artist) not in (own, "both"):
         return []
     span = x_span(figure, index, artist, data)
     if span is None:

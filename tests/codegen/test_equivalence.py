@@ -2703,3 +2703,23 @@ def test_a_log_x_axis_from_a_shared_panel(tmp_path: Path) -> None:
     add_fit(project, fit).apply(project)
     refit(project, fit.id, load_data(project, tmp_path)).apply(project)
     _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("share_x", ["none", "col"], ids=["y-only", "grid"])
+def test_a_panel_of_functions_beside_data_on_y_alone(tmp_path: Path, share_x) -> None:
+    """It shares y with the data and has no x of its own to follow: the
+    functions set x, and leave the data's y alone."""
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    wide = _guide("100 * sin(x)", curve_range=(0.0, 30.0))
+    axes = [Axes(artists=[data]), Axes(col=1, artists=[wide])]
+    if share_x == "col":
+        axes.append(Axes(row=1, artists=[data.model_copy(update={"id": "o"})]))
+    layout = GridLayout(rows=len(axes) - 1, cols=2, share_x=share_x, share_y="row")
+    project.figures = [Figure(dpi=100, layout=layout, axes=axes)]
+    _assert_same(project, tmp_path)
+    drawn = render(project.figures[0], load_data(project, tmp_path))
+    drawn.draw_without_rendering()
+    first, second = drawn.axes[0], drawn.axes[1]
+    assert second.get_xlim()[1] > 29 and second.get_xlim()[0] < 1
+    assert first.get_ylim()[1] < 2  # the data's, not 100

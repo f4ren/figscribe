@@ -1191,7 +1191,7 @@ class _Writer:
         if sets == "both":
             self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
             return
-        if sets == "y" and curve.endswith(")"):
+        if sets != "none" and curve.endswith(")"):
             values = self._free(f"{name}_values")
             self.emit(f"{values} = {curve}")
             curve = values
@@ -1199,14 +1199,17 @@ class _Writer:
         kwargs |= common | {"transform": f"{ax}.transData"}
         self.call(f"{line} = Line2D", xs, curve, **kwargs)
         self.emit(f"{ax}.add_artist({line})  # leaves the limits to the data")
-        if sets == "y":
-            self.emit("# Nothing else scales this y axis; x stays the data's.")
+        if sets != "none":
+            other = "x" if sets == "y" else "y"
+            self.emit(
+                f"# Nothing else scales this {sets} axis; {other} stays the data's."
+            )
             self.call(
                 f"{ax}.update_datalim",
                 f"np.column_stack([{xs}, {curve}])",
-                updatex="False",
+                **{f"update{other}": "False"},
             )
-            self.emit(f"{ax}.autoscale_view(scalex=False)")
+            self.emit(f"{ax}.autoscale_view(scale{other}=False)")
 
     def _fit_models(self) -> None:
         if not self.fits:

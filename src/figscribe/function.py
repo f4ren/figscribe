@@ -168,25 +168,29 @@ def _x_of(artist, data):
 
 
 def sets_limits(figure: Figure, index: int, function: FunctionPlot) -> str:
-    """Which limits the function sets: "both" in a panel without data, "y" where
-    the data on its x axis are all against the other y axis or in other panels,
-    "none" beside data on its own y axis."""
+    """Which limits the function sets, those no data set: "both" in a panel
+    without data on either axis, "y" for a y axis of its own beside data on x,
+    "x" for an x axis of its own beside data on y, "none" beside both."""
     axes = figure.axes[index]
     right = function.axis == "right" and axes.y_right is not None
     group = [index] if right else sharing_group(figure, index, "y")
-    if any(
+    data_y = any(
         isinstance(artist, DATA)
         and (artist.axis == "right" and figure.axes[i].y_right is not None) == right
         for i in group
         for artist in figure.axes[i].artists
-    ):
-        return "none"
-    shares_x = any(
+    )
+    data_x = any(
         isinstance(artist, DATA)
         for i in sharing_group(figure, index, "x")
         for artist in figure.axes[i].artists
     )
-    return "y" if shares_x else "both"
+    return {
+        (False, False): "both",
+        (True, False): "y",  # data on x: only y is the function's
+        (False, True): "x",
+        (True, True): "none",
+    }[data_x, data_y]
 
 
 def new_function(expression: str) -> FunctionPlot:

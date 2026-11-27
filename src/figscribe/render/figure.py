@@ -997,9 +997,10 @@ def _draw_function(
         return
     # Added as it is: Matplotlib then leaves the limits to the data.
     ax.add_artist(Line2D(xs, ys, transform=ax.transData, **style, **common))
-    if sets == "y":  # but nothing else scales this y axis
-        ax.update_datalim(np.column_stack([xs, ys]), updatex=False)
-        ax.autoscale_view(scalex=False)
+    if sets != "none":  # but nothing else scales this one axis
+        x = sets == "x"
+        ax.update_datalim(np.column_stack([xs, ys]), updatex=x, updatey=not x)
+        ax.autoscale_view(scalex=x, scaley=not x)
 
 
 def _draw_fit(
