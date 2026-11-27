@@ -71,6 +71,7 @@ from figscribe.commands.core import noun, walk
 from figscribe.datafile import columns_to_choose, use_another_file
 from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
+from figscribe.function import new_function
 from figscribe.gui import clipboard, markings, recovery, reveal, theme
 from figscribe.gui.about import about_text
 from figscribe.gui.axisform import AXIS_TITLES, axis_settings
@@ -265,6 +266,8 @@ class MainWindow(QMainWindow):
         self.outline.delete_requested.connect(self._delete)
         self.outline.figure_requested.connect(self.figure_action)
         self.outline.note_requested.connect(self.add_note)
+        self.outline.function_requested.connect(self.add_function)
+        self.preview.function_requested.connect(self.add_function)
         self.outline.marking_requested.connect(
             lambda oid, kind, orientation: self.add_marking(kind, orientation, oid)
         )
@@ -998,6 +1001,29 @@ class MainWindow(QMainWindow):
         self._push(markings.add(axes.id, made))
         self.document.select(made.id)
 
+    def add_function(self, oid: str | None = None) -> None:
+        """Draw a function given by its formula in a panel; its numbers are
+        then typed in the property panel."""
+        figure = self.document.figure
+        if figure is None:
+            return
+        target = oid if oid is not None else self._target_axes(figure)
+        if not any(a.id == target for a in figure.axes):
+            self.show_error("No panel", "Add a panel or a plot first.")
+            return
+        expression = self.ask_name(
+            "Draw a function", "A formula in x, such as a * exp(-x / tau)", ""
+        )
+        if not expression:
+            return
+        try:
+            made = new_function(expression)
+        except CommandError as exc:
+            self.show_error("Cannot draw the function", str(exc))
+            return
+        self._push(InsertItem(target, "artists", made))
+        self.document.select(made.id)
+
     def _ask_text(self, title: str, prompt: str) -> str | None:
         """Several lines of text; None if cancelled."""
         text, ok = QInputDialog.getMultiLineText(self, title, prompt)
@@ -1698,6 +1724,10 @@ class MainWindow(QMainWindow):
             action.triggered.connect(
                 lambda _=False, k=kind, o=orientation: self.add_marking(k, o)
             )
+        self.function_action = self.marking_menu.addAction(
+            theme.icon("function"), "Function…"
+        )
+        self.function_action.triggered.connect(lambda _=False: self.add_function())
         self.note_action = self._action(insert, "Add &Note…", lambda: self.add_note())
 
         view = self.menuBar().addMenu("&View")

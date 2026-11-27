@@ -25,6 +25,7 @@ from figscribe.model import (
     ErrorbarPlot,
     Figure,
     FitCurve,
+    FunctionPlot,
     GridLayout,
     Histogram,
     ImagePlot,
@@ -129,6 +130,12 @@ def build(folder: Path) -> Path:
             AllanDeviationPlot(values=col("U"), label="stability"),
             ReferenceLine(at=5.0, label="mean"),
             ShadedSpan(start=3.0, end=4.0, label="band"),
+            FunctionPlot(
+                expression="a * x",
+                parameters={"a": 2.0},
+                curve_range=(1.0, 4.0),
+                label="theory",
+            ),
         ],
     )
     c = Axes(

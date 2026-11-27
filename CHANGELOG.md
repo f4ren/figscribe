@@ -5,6 +5,9 @@ release open in every later one.
 
 ## Unreleased
 
+- **Draw a function.** *Insert > Add Reference > Function…*: a formula such as
+  `a * exp(-x / tau)` as a theory curve or a guide, with a field in the panel
+  for each name. It moves no axis limits beside data (decision 0078).
 - Fixed (in 0.3.0 too): a fit that did not converge was drawn from its start
   values while the Python script stopped with an error. It is now drawn by
   neither and listed among the problems.

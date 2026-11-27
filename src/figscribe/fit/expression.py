@@ -276,7 +276,10 @@ def _build(node: ast.AST, index: dict[str, int], used: set[str]) -> Node:
 
     if isinstance(node, ast.Constant) and type(node.value) in (int, float):
         # Float, so that 9**9**9 overflows to inf instead of computing a huge int.
-        value = np.float64(node.value)
+        try:
+            value = np.float64(node.value)
+        except OverflowError:  # a whole number beyond what a float holds
+            raise ExpressionError("a number in the formula is too large") from None
         return lambda x, p: value
 
     if isinstance(node, ast.Name):

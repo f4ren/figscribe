@@ -26,6 +26,7 @@ from figscribe.model.artists import (
     ColorMesh,
     ErrorbarPlot,
     FitCurve,
+    FunctionPlot,
     Histogram,
     ImagePlot,
     LinePlot,
@@ -161,6 +162,10 @@ def validate_references(
                         if why is not None:
                             issues.append(ReferenceIssue(tpath, artist.id, why))
 
+                if isinstance(artist, FunctionPlot):
+                    for field, why in _function_problems(figure, ai, artist, data):
+                        where = f"{tpath}.{field}"
+                        issues.append(ReferenceIssue(where, artist.id, why))
                 if isinstance(artist, FitCurve):
                     for field, why in _curve_problems(
                         figure, ai, artist, artists_by_id, data
@@ -326,7 +331,7 @@ def _unequal_or_unreadable(artist, data) -> str | None:
         return None  # a file that cannot be read is shown above the preview
 
 
-def axis_values(figure: Figure, index: int, field: str, data):
+def axis_values(figure: Figure, index: int, field: str, data, functions=True):
     """What is drawn against the `field` axis ("x" or "y") of the panel
     `index` and of those sharing it, in data units: where points, a histogram's
     values, reference lines and curves with ends of their own lie.
@@ -358,6 +363,8 @@ def axis_values(figure: Figure, index: int, field: str, data):
                         found.append([artist.at])
                 elif isinstance(artist, FitCurve):
                     found.append(_curve_values(artist, field, x_limits))
+                elif isinstance(artist, FunctionPlot) and functions:
+                    found.append(_function_values(figure, i, artist, field, data))
             except Exception:  # a plot that cannot be drawn counts for nothing
                 continue
     if not found:
@@ -377,6 +384,52 @@ def _curve_values(fit: FitCurve, field: str, x_limits):
         return []
     xs = np.linspace(*ends, 100)
     return xs if field == "x" else evaluate(fit.model, fit.result.parameters, xs)
+
+
+def _function_values(figure: Figure, index: int, artist, field: str, data):
+    """Samples of a function, where it scales the axis: none beside data, whose
+    limits it does not move."""
+    import numpy as np
+
+    from figscribe.function import evaluator, sets_limits, x_span
+
+    f = evaluator(artist)
+    if f is None:
+        return []
+    own = "x" if field == "x" else "y"
+    if sets_limits(figure, index, artist) not in (own, "both"):
+        return []
+    span = x_span(figure, index, artist, data)
+    if span is None:
+        return []
+    xs = np.linspace(*span, 100)
+    return xs if field == "x" else f(xs)
+
+
+def _function_problems(figure: Figure, index: int, artist, data) -> list:
+    """(field, why) for a function that draws nothing, or not all of itself."""
+    from figscribe.function import log_x, problem, x_span
+    from figscribe.render.breaks import curve_parts, overlapping
+
+    if (why := problem(artist)) is not None:
+        return [("expression", why)]
+    span = x_span(figure, index, artist, data)
+    if span is None:
+        if data is None:
+            return []
+        why = (
+            "has no x range to be drawn over; type one for the function, or "
+            "limits for the x axis"
+        )
+        return [("curve_range", why)]
+    low, high = span
+    if low <= 0 and log_x(figure, index):
+        why = f"starts at {low:g}, which a logarithmic axis cannot show"
+        return [("curve_range", why)]
+    breaks = line_breaks(figure, index, "x")
+    if overlapping(breaks, low, high) and not curve_parts(low, high, breaks, 2):
+        return [("curve_range", "lies within a break, so it is not drawn")]
+    return []
 
 
 def _curve_problems(

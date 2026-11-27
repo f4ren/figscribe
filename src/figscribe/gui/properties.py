@@ -51,6 +51,8 @@ from PySide6.QtWidgets import (
 from figscribe.commands import CommandError, Macro, SetField, find
 from figscribe.convert import linear, scaled
 from figscribe.fit import FitError, refit, residuals
+from figscribe.function import names as formula_names
+from figscribe.function import set_expression
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
@@ -85,6 +87,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     FitResult,
+    FunctionPlot,
     NumpySource,
     PanelLabels,
     PredefinedFit,
@@ -215,6 +218,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         return Spec("float", optional)
     if annotation is str:
         return Spec("color" if name in COLOR_FIELDS else "text", optional)
+    if name == "parameters" and annotation == dict[str, float]:
+        return Spec("values", optional)
     if origin is tuple and args == (float,) * 4:
         return Spec("quad", optional)
     if origin is tuple and args == (float, float):
@@ -488,6 +493,16 @@ BASIC = {
         "linestyle",
         "linewidth",
     ),
+    "FunctionPlot": (
+        "label",
+        "expression",
+        "parameters",
+        "curve_range",
+        "axis",
+        "color",
+        "linestyle",
+        "linewidth",
+    ),
     "ShadedSpan": (
         "label",
         "orientation",
@@ -709,6 +724,14 @@ TIPS = {
     "empty draws none.",
     "ReferenceLine.color": "A name such as gray or tab:orange, or a code such as "
     "#1f77b4.",
+    "FunctionPlot.expression": "A formula in x as for an own fit, such as "
+    "a * exp(-x / tau), in the numbers the axes show: a unit change does not "
+    "change it.",
+    "FunctionPlot.parameters": "The value of every other name in the formula.",
+    "FunctionPlot.curve_range": "Draw it from one x to another; empty takes the "
+    "x range typed on the axis, or else that of the data.",
+    "FunctionPlot.color": "A name such as gray or tab:orange, or a code such as "
+    "#1f77b4.",
     "ShadedSpan.color": "A name such as gray or tab:orange, or a code such as "
     "#1f77b4; the opacity keeps it light.",
     "ReferenceLine.orientation": "Vertical: at an x value, from bottom to top. "
@@ -892,6 +915,7 @@ CAPTIONS = {
     ("ErrorbarPlot", "label"): "Legend entry",
     ("ReferenceLine", "label"): "Legend entry",
     ("ShadedSpan", "label"): "Legend entry",
+    ("FunctionPlot", "label"): "Legend entry",
     ("FitCurve", "label"): "Legend entry",
     ("Histogram", "label"): "Legend entry",
     ("AllanDeviationPlot", "label"): "Legend entry",
@@ -994,6 +1018,16 @@ ELEMENT_SECTIONS = {
         "label": "Label and data",
         "orientation": "Label and data",
         "at": "Label and data",
+        "axis": "Label and data",
+        "color": "Look",
+        "linestyle": "Look",
+        "linewidth": "Look",
+    },
+    "FunctionPlot": {
+        "label": "Label and data",
+        "expression": "Label and data",
+        "parameters": "Label and data",
+        "curve_range": "Label and data",
         "axis": "Label and data",
         "color": "Look",
         "linestyle": "Look",
@@ -1449,6 +1483,8 @@ class PropertyPanel(QScrollArea):
             data = self.document.data
             axis = path[0][0]
             return set_conversion(self.document.project, obj.id, axis, conversion, data)
+        if path == ("expression",) and isinstance(obj, FunctionPlot):
+            return set_expression(self.document.project, obj.id, value)
         if path == ("x_range",) and isinstance(obj, CONVERTIBLE):
             return set_range(self.document.project, obj.id, value, self.document.data)
         if (
@@ -1965,6 +2001,47 @@ class PartEditor(CheckEditor):
         super().show(value is not None)
 
 
+class ValuesEditor(Editor):
+    """A number for every name in a function's formula, under its name."""
+
+    def __init__(self, spec, path, panel):
+        super().__init__(spec, path, panel)
+        function = find(panel.document.project, self.oid)
+        empty = "none: the formula has its numbers"
+        try:
+            found = formula_names(function.expression)
+        except CommandError:
+            found, empty = [], "the formula cannot be read"
+        self.widget = QWidget()
+        form = QFormLayout(self.widget)
+        form.setContentsMargins(0, 0, 0, 0)
+        self.lines: dict[str, QLineEdit] = {}
+        for name in found:
+            line = QLineEdit()
+            line.editingFinished.connect(lambda n=name: self._finish(n))
+            form.addRow(label(name, "value"), line)
+            self.lines[name] = line
+        if not found:
+            form.addRow(label(empty, "hint"))
+
+    def show(self, value: Any) -> None:
+        self.value = dict(value)
+        for name, line in self.lines.items():
+            line.setText(f"{self.value.get(name, 1.0):g}")
+
+    def _finish(self, name: str) -> None:
+        text = self.lines[name].text().strip()
+        if text == f"{self.value.get(name, 1.0):g}":
+            return
+        try:
+            typed = number(text)
+        except ValueError as exc:
+            self.panel.report(f"{name}: {exc}")
+            self.show(self.value)
+            return
+        self.commit({**self.value, name: typed})
+
+
 class ChoiceEditor(Editor):
     """A fixed set of values: literals, or the columns of the data sources."""
 
@@ -2008,6 +2085,8 @@ class TextEditor(Editor):
     def show(self, value: Any) -> None:
         self.value = value
         self.line.setText(self._text(value))
+        if self.path == ("expression",):
+            self.line.setCursorPosition(0)  # a long formula from its start
 
     def _text(self, value: Any) -> str:
         return "" if value is None or value is SEVERAL else self.format(value)
@@ -2431,6 +2510,8 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return CheckEditor(spec, path, panel)
     if spec.kind == "part":
         return PartEditor(spec, path, panel)
+    if spec.kind == "values":
+        return ValuesEditor(spec, path, panel)
     if name in ("marker", "left_out_marker"):
         return _marker_list(spec, path, panel)
     if name == "text":
@@ -2586,7 +2667,8 @@ def _shape(obj: BaseModel) -> tuple:
         "none" if (c := getattr(obj, name, None)) is None else _kind_of_conversion(c)
         for name in CONVERSIONS
     )
-    return (obj.id, type(obj), parts, grid, units)
+    formula = obj.expression if isinstance(obj, FunctionPlot) else None
+    return (obj.id, type(obj), parts, grid, units, formula)
 
 
 def _axes_of(project, artist_id: str) -> Axes | None:

@@ -3741,3 +3741,54 @@ start values, so it started from ones.
 **Draw a fit that gave up, marked as such**: the script cannot draw it without
 code that no person would write. **Convert a formula's start values**: not
 possible for a formula in general.
+
+## 0078 — Draw a function
+
+2026-11-27. Roadmap F15.
+
+### Context
+
+Suggested by the user (2026-11-03): a theory curve beside the data, or on an
+Allan plot the line of slope −1/2 for white noise. A fit curve is such a curve,
+but needs data and a fit.
+
+### Decision
+
+Agreed with the user (2026-11-27, as recommended):
+- **A new artist `FunctionPlot`**: a formula in x in the safe language of own
+  fit formulas, a value for every other name (a field each in the panel;
+  numbers may stand in the formula too), a color, line style and width, a
+  legend entry. *Insert > Add Reference > Function…*, a panel's context menus,
+  the search, and the assistant.
+- **It is not fitted.** *Fit…* with an own formula does that.
+- **Where:** its own range if typed, else the x range typed on the axis, else
+  that of the data on it; worked out from the model, never from what is on the
+  axes so far. Without any, the problem list asks for one.
+- **It moves no limits of a panel that shows data**, whatever it reaches and
+  wherever it stands in the order of drawing: the line is added as it is
+  (`add_artist`; `plot(scaley=False)` does not hold, as the next plot scales to
+  it after all). A panel of functions alone is scaled by them. An axis with no
+  data of its own beside data on the other is scaled by the function alone: y
+  for a right axis or a panel below sharing x, x for a panel that shares only y.
+- It has **a color of its own** (black), taking none of the color cycle, so
+  adding one recolors no plot.
+- Sampled as a fit curve: evenly in log x on a log axis, on each stretch of a
+  broken one, no line across a break.
+- **The formula is in the numbers the axes show.** A unit change cannot
+  rewrite it; a range typed for the function moves with the axis.
+- A formula that cannot be read opens with the file, draws nothing and is
+  listed. Changing it keeps the values of names that remain, in one step.
+- "The data" are the points the plots use ("Use only values"), a color mesh's
+  or image's x, and for residuals their data's.
+- The script defines a function per formula from the checked tree, never from
+  the text, named after its legend entry and ending in `_function`, so that it
+  takes no name the script needs, and calls it with the numbers. Where the
+  formula divides or takes powers, the numbers are made NumPy's, so that 1 / 0
+  is inf as drawn and no error.
+- A new kind with defaults: no schema bump.
+
+### Alternatives considered
+
+**Named constants only** or **numbers in the formula only**: both are allowed.
+**Extending the axes to a typed range**: not done, the user agreed that a
+function moves no limits; the axis limits can be typed.

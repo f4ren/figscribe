@@ -28,6 +28,16 @@ from figscribe.fit import (
     numpy_source,
     parameter_names,
 )
+from figscribe.fit.expression import numpy_source as numpy_code
+from figscribe.function import (
+    divides,
+    log_x,
+    problem,
+    sets_limits,
+    uses_x,
+    x_span,
+)
+from figscribe.function import values as function_values
 from figscribe.io import load_data
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
@@ -45,6 +55,7 @@ from figscribe.model import (
     ExpressionFit,
     Figure,
     FitCurve,
+    FunctionPlot,
     Histogram,
     ImagePlot,
     Legend,
@@ -251,6 +262,15 @@ class _Writer:
         self.axes_names = self._name_axes()
         self.broken, self.break_ticks = self._broken_axes()
         """{(Axes.id, "x" or "y"): (breaks, gap width)} and its ticks."""
+        self.places = {
+            a.id: (x_span(figure, i, a, data), sets_limits(figure, i, a))
+            for i, axes in enumerate(figure.axes)
+            for a in axes.artists
+            if isinstance(a, FunctionPlot)
+        }
+        """{function id: (its x range or None, which limits it sets)}."""
+        self.functions = self._name_functions()
+        """{function id: name of the def} of the functions that are drawn."""
         self.axis_specs = self._ticks_that_fit()
         self._shared_ticks: list[tuple] = []
         self._broken_later: list[tuple] = []
@@ -565,6 +585,7 @@ class _Writer:
         self._reduce()
         self._allan_deviations()
         self._fit_models()
+        self._function_defs()
         self._fits()
         self._tick_helpers()
         self._figure()
@@ -616,6 +637,8 @@ class _Writer:
                 "from matplotlib.collections import PathCollection",
                 "from matplotlib.path import Path as Shape",
             )
+        if any(self.places[oid][1] != "both" for oid in self.functions):
+            self.emit("from matplotlib.lines import Line2D")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
         if self._grouped():
@@ -1091,6 +1114,102 @@ class _Writer:
                     own = f"np.where({taken(measured)}, {own}, np.nan)"
                 lines.append((out[field], own))
         self.emit(*(f"{name} = {text}" for name, text in lines))
+
+    def _name_functions(self) -> dict[str, str]:
+        """A name for each function that is drawn: from its legend entry where
+        that makes one, which no builtin has."""
+        found = {}
+        for oid, (span, _) in self.places.items():
+            function = self.artists[oid]
+            if span is None or problem(function) is not None:
+                continue
+            # Ending in "function", it takes no name of a fit model, an axes or
+            # a helper of the script.
+            slug = _slug(function.label or "")
+            base = f"{slug}_function" if slug else "function"
+            if not base.isidentifier():
+                base = "function"
+            found[oid] = self._free(base)
+        return found
+
+    def _function_defs(self) -> None:
+        """Each function as a def of its own, from the checked formula: the
+        text in the project file is never written out."""
+        if not self.functions:
+            return
+        self.section("Functions")
+        for oid, name in self.functions.items():
+            function = self.artists[oid]
+            expression = function.expression
+            body = numpy_code(expression)
+            if not uses_x(expression):  # one number: a value for every x
+                body = f"{body} + np.zeros_like(x)"
+            names = list(function_values(function))
+            self.emit("", f"def {name}({', '.join(['x', *names])}):")
+            if names and divides(expression):
+                # Python's numbers stop at 1 / 0; NumPy's give inf, as drawn.
+                values = ", ".join(f"np.float64({n})" for n in names)
+                self.emit(f"    {', '.join(names)} = {values}")
+            self.emit(f"    return {body}", "")
+
+    def _function(self, ax: str, function: FunctionPlot, common: dict) -> None:
+        span, sets = self.places[function.id]
+        name = self.functions.get(function.id)
+        if name is None:
+            why = "has no x range"
+            if problem(function) is not None:
+                why = "has a formula that cannot be read"
+            elif self.data is None:
+                why = "has an x range that comes from the data, which could not be read"
+            self.emit(f"# {_describe(function)} {why}, so it is not drawn.")
+            return
+        index, panel = next(
+            (i, a) for i, a in enumerate(self.figure.axes) if function in a.artists
+        )
+        low, high = (float(end) for end in span)
+        if function.curve_range is None:
+            if typed_limits(self.figure, index, "x") is None:
+                self.emit("# Over the x range of the data, as figscribe drew it.")
+        xs = self._free(f"x_{name}")
+        space = "geomspace" if log_x(self.figure, index) and low > 0 else "linspace"
+        arguments = [xs, *(repr(float(v)) for v in function_values(function).values())]
+        curve = f"{name}({', '.join(arguments)})"
+        if self._cut == ([], []):
+            self.emit(f"{xs} = np.{space}({low!r}, {high!r}, {CURVE_POINTS})")
+        else:
+            curve = self._broken_curve(xs, curve, space, (low, high), False, None)
+            if curve is None:
+                self.emit(
+                    f"# {_describe(function)} lies within a break, so it is not drawn."
+                )
+                return
+        kwargs = {
+            "color": _str(function.color),
+            "linestyle": _str(function.linestyle),
+            "linewidth": _num(function.linewidth),
+        }
+        if sets == "both":
+            self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
+            return
+        if sets != "none" and curve.endswith(")"):
+            values = self._free(f"{name}_values")
+            self.emit(f"{values} = {curve}")
+            curve = values
+        line = self._free(f"{name}_line")
+        kwargs |= common | {"transform": f"{ax}.transData"}
+        self.call(f"{line} = Line2D", xs, curve, **kwargs)
+        self.emit(f"{ax}.add_artist({line})  # leaves the limits to the data")
+        if sets != "none":
+            other = "x" if sets == "y" else "y"
+            self.emit(
+                f"# Nothing else scales this {sets} axis; {other} stays the data's."
+            )
+            self.call(
+                f"{ax}.update_datalim",
+                f"np.column_stack([{xs}, {curve}])",
+                **{f"update{other}": "False"},
+            )
+            self.emit(f"{ax}.autoscale_view(scale{other}=False)")
 
     def _fit_models(self) -> None:
         if not self.fits:
@@ -1784,6 +1903,8 @@ class _Writer:
             self._two_d(ax, artist, common)
         elif isinstance(artist, AllanDeviationPlot):
             self._allan_plot(ax, artist, common)
+        elif isinstance(artist, FunctionPlot):
+            self._function(ax, artist, common)
         elif isinstance(artist, FitCurve):
             self._fit_curve(ax, artist, common)
         elif isinstance(artist, ResidualPlot):
@@ -2095,7 +2216,7 @@ class _Writer:
             high = f"min({fit.fit_range[1]!r}, {high})"
         look = None if given is None else self._extrapolated(fit, given)
         # Evenly in log x for an Allan deviation, and over ends of the user's.
-        log = panel.x.scale == "log" and (
+        log = log_x(self.figure, index) and (
             isinstance(target, AllanDeviationPlot) if given is None else given[0] > 0
         )
         space = "geomspace" if log else "linspace"
@@ -2125,7 +2246,13 @@ class _Writer:
             else:
                 self.emit(f"{xs} = {sampled}")
         else:
-            curve = self._broken_curve(fit, xs, curve, space, x_limits, joined)
+            shown = plot_data(self.artists[fit.target], self.data)
+            measured = shown.x[np.isfinite(shown.x) & shown.used]
+            ends = fit.curve_ends(
+                float(measured.min()), float(measured.max()), x_limits
+            )
+            from_data = fit.given_ends(x_limits) is None
+            curve = self._broken_curve(xs, curve, space, ends, from_data, joined)
             if curve is None:
                 self.emit(
                     f"# {_describe(fit)} lies within a break, so it is not drawn."
@@ -2174,23 +2301,20 @@ class _Writer:
 
     def _broken_curve(
         self,
-        fit: FitCurve,
         xs: str,
         curve: str,
         space: str,
-        x_limits: tuple[float, float] | None,
+        ends: tuple[float, float] | None,
+        from_data: bool,
         joined: str | None,
     ) -> str | None:
-        """Define `xs` and, if need be, the curve of a fit on a broken axis, as
-        the renderer samples it: on each stretch, and no line across a break.
-        Returns the y expression to plot; None if nothing is left."""
-        shown = plot_data(self.artists[fit.target], self.data)
-        x = shown.x[np.isfinite(shown.x) & shown.used]
-        ends = fit.curve_ends(float(x.min()), float(x.max()), x_limits)
+        """Define `xs` and, if need be, the values of a curve on a broken axis,
+        from `ends`, as the renderer samples it: on each stretch, and no line
+        across a break. Returns the y expression to plot; None if nothing is
+        left. `from_data` says the ends are the data's."""
         if ends is None:
             return None
         low, high = ends
-        given = fit.given_ends(x_limits) is not None
         if overlapping(self._cut[0], low, high):
             parts = curve_parts(low, high, self._cut[0], CURVE_POINTS)
             if not parts:
@@ -2198,11 +2322,11 @@ class _Writer:
             space = "linspace"  # a broken x axis is linear
             self.emit(
                 "# Sampled on each stretch of the broken axis"
-                + ("." if given else ", from the data's ends.")
+                + (", from the data's ends." if from_data else ".")
             )
         else:  # only y is broken: x as on any axis
             parts = [(low, high, CURVE_POINTS)]
-            if not given:
+            if from_data:
                 self.emit("# From the data's ends.")
         spans = [f"np.{space}({float(a)!r}, {float(b)!r}, {n})" for a, b, n in parts]
         if len(spans) == 1:

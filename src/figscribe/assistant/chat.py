@@ -66,6 +66,8 @@ Common set_field paths (get_schema has all of them):
 `decimal_comma` (1,5 along every axis and color bar), \
 `panel_labels` (letters (a), (b) on the panels: {"style": "(a)", "bold": \
 false}; null removes them)
+- function (insert an artist of kind "function"): `expression` (a formula \
+in x), `parameters` (a value for each other name), `curve_range`
 - fit: `curve_range` ([lower, upper] of x, may reach beyond the data), \
 `curve_to_limits` (the curve reaches to the typed `x.limits`), \
 `mark_extrapolated` (on: drawn differently beyond the data), \

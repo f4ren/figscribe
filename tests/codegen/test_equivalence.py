@@ -47,7 +47,7 @@ from figscribe.model import (
     ShadedSpan,
     loads,
 )
-from figscribe.render import export
+from figscribe.render import export, render
 
 EXAMPLES = sorted((Path(__file__).parents[2] / "examples").glob("*/*.figscribe"))
 
@@ -2520,3 +2520,206 @@ def test_a_fit_that_did_not_converge_is_drawn_by_neither(tmp_path: Path) -> None
     stored.result = stored.result.model_copy(update={"converged": False})
     script = _assert_same(project, tmp_path)
     assert "curve_fit(" not in script
+
+
+def _guide(expression="a * exp(-(x - m)**2 / 3)", values=None, **fields):
+    from figscribe.function import new_function
+
+    made = new_function(expression)
+    made.parameters |= values or {}
+    for name, value in fields.items():
+        setattr(made, name, value)
+    return made
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "function"),
+    [
+        ({}, {}, {"values": {"a": 1.0, "m": 5.0}, "label": "theory"}),
+        ({"scale": "log"}, {}, {"expression": "a / sqrt(x)", "curve_range": (0.1, 9)}),
+        ({"breaks": [(4.0, 6.0)]}, {}, {"expression": "x / 10"}),
+        ({}, {"breaks": [(0.4, 0.6)]}, {"expression": "x / 10"}),
+        ({"limits": (-3.0, 15.0)}, {}, {"expression": "1 / (x - 4)"}),
+        ({}, {}, {"expression": "x**2", "curve_range": (-4.0, 14.0)}),
+        ({}, {}, {"expression": "100 * x", "linestyle": ":", "color": "tab:red"}),
+        ({}, {}, {"expression": "log(x - 5)"}),
+    ],
+    ids=["plain", "log", "x-break", "y-break", "limits", "beyond", "above", "nan"],
+)
+@pytest.mark.parametrize("first", [False, True], ids=["after", "before"])
+def test_a_function(tmp_path: Path, x, y, function, first) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    later = LinePlot(x=ref["t"], y=ref["dU"])  # in the cycle's next color
+    artists = [data, _guide(**function), later]
+    if first:
+        artists = [artists[1], data, later]
+    panel = Axes(
+        x=AxisSpec(**x), y=AxisSpec(**y), artists=artists, legend=Legend(visible=True)
+    )
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    lines = script.splitlines()
+    assert any(line.startswith("def ") and "(x" in line for line in lines)
+    assert [line for line in lines if len(line) > 88] == []
+
+
+def test_functions_on_a_right_axis_shared_axes_and_alone(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    right = _guide("100 * x", axis="right")  # the right axis has nothing else
+    top = Axes(y_right=AxisSpec(label="f"), artists=[data, right])
+    below = Axes(row=1, artists=[_guide("sin(x)")])  # x shared with the data
+    alone = Axes(
+        row=2, x=AxisSpec(limits=(0.0, 5.0)), artists=[_guide("x"), _guide("2 * x")]
+    )
+    project.figures = [
+        Figure(
+            dpi=100,
+            height_mm=150,
+            layout=GridLayout(rows=3, share_x="col"),
+            axes=[top, below, alone],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
+def test_a_formula_that_cannot_be_read_is_drawn_by_neither(tmp_path: Path) -> None:
+    from figscribe.model import FunctionPlot
+
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    bad = FunctionPlot(expression="__import__('os').system('x')")
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data, bad])])]
+    script = _assert_same(project, tmp_path)
+    assert "__import__" not in script and "cannot be read" in script
+
+
+@pytest.mark.parametrize(
+    ("label", "name"),
+    [
+        ("theory", "def theory_function("),
+        ("1/x guide", "def function("),
+        ("max", "def max_function("),
+        ("t", "def t_function("),
+        ("lambda", "def lambda_function("),
+    ],
+)
+def test_a_function_is_named_after_its_legend_entry(
+    tmp_path: Path, label, name
+) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    made = _guide("0 * x + 0.5", label=label)
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data, made])])]
+    assert name in _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "label", ["Gaussian", "gaussian", "Linear", "model", "ax", "ax_right", "scan"]
+)
+def test_a_function_takes_no_name_the_script_needs(tmp_path: Path, label) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    other = LinePlot(x=ref["t"], y=ref["t2"], axis="right")
+    panel = Axes(y_right=AxisSpec(), artists=[data, other])
+    project.figures = [Figure(dpi=100, axes=[panel])]
+    for name in ("gaussian", "linear"):
+        fit = FitCurve(target=data.id, model=PredefinedFit(name=name))
+        add_fit(project, fit).apply(project)
+        refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    project.figures[0].axes[0].artists.append(_guide("0 * x + 0.5", label=label))
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("expression", "values"),
+    [
+        ("x + a / b", {"a": 1.0, "b": 0.0}),
+        ("x + a**0.5", {"a": -4.0}),
+        ("x * a**b", {"a": 0.0, "b": -1.0}),
+        ("x * a**b", {"a": 1e200, "b": 2.0}),
+        (" a * x", {"a": 0.1}),
+    ],
+    ids=["zero", "root", "pole", "overflow", "space"],
+)
+def test_a_function_whose_numbers_python_would_refuse(
+    tmp_path: Path, expression, values
+) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    made = _guide(expression, values=values)
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data, made])])]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("where", ["right", "below", "inset"])
+def test_a_function_moves_no_x_limits(tmp_path: Path, where) -> None:
+    """On an axis without data of its own in y, whose x is the data's."""
+    from figscribe.model import Inset
+
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    wide = _guide("x", curve_range=(-40.0, 60.0))
+    layout = GridLayout()
+    if where == "right":
+        wide.axis = "right"
+        axes = [Axes(y_right=AxisSpec(), artists=[data, wide])]
+    elif where == "below":
+        layout = GridLayout(rows=2, share_x="col")
+        axes = [Axes(artists=[data]), Axes(row=1, artists=[wide])]
+    else:
+        top = Axes(artists=[data])
+        axes = [
+            top,
+            Axes(inset=Inset(parent=top.id, bounds=(0.5, 0.5, 0.4, 0.4))),
+        ]
+        axes[1].artists = [data.model_copy(update={"id": "other"}), wide]
+    project.figures = [Figure(dpi=100, layout=layout, axes=axes)]
+    _assert_same(project, tmp_path)
+    drawn = render(project.figures[0], load_data(project, tmp_path))
+    drawn.draw_without_rendering()
+    for ax in drawn.axes:
+        for each in [ax, *ax.child_axes]:
+            assert each.get_xlim()[1] < 20, where
+
+
+def test_a_log_x_axis_from_a_shared_panel(tmp_path: Path) -> None:
+    """Matplotlib draws both logarithmic; both sample the curves so."""
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t2"], y=ref["U"])
+    made = _guide("1 / (1 + x)", curve_range=(0.01, 90.0))
+    below = Axes(row=1, artists=[data.model_copy(update={"id": "b"}), made])
+    project.figures = [
+        Figure(
+            dpi=100,
+            layout=GridLayout(rows=2, share_x="col"),
+            axes=[Axes(x=AxisSpec(scale="log"), artists=[data]), below],
+        )
+    ]
+    fit = FitCurve(
+        target="b", model=PredefinedFit(name="linear"), curve_range=(0.01, 90.0)
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("share_x", ["none", "col"], ids=["y-only", "grid"])
+def test_a_panel_of_functions_beside_data_on_y_alone(tmp_path: Path, share_x) -> None:
+    """It shares y with the data and has no x of its own to follow: the
+    functions set x, and leave the data's y alone."""
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    wide = _guide("100 * sin(x)", curve_range=(0.0, 30.0))
+    axes = [Axes(artists=[data]), Axes(col=1, artists=[wide])]
+    if share_x == "col":
+        axes.append(Axes(row=1, artists=[data.model_copy(update={"id": "o"})]))
+    layout = GridLayout(rows=len(axes) - 1, cols=2, share_x=share_x, share_y="row")
+    project.figures = [Figure(dpi=100, layout=layout, axes=axes)]
+    _assert_same(project, tmp_path)
+    drawn = render(project.figures[0], load_data(project, tmp_path))
+    drawn.draw_without_rendering()
+    first, second = drawn.axes[0], drawn.axes[1]
+    assert second.get_xlim()[1] > 29 and second.get_xlim()[0] < 1
+    assert first.get_ylim()[1] < 2  # the data's, not 100

@@ -633,6 +633,35 @@ class ShadedSpan(ArtistBase):
         return self
 
 
+class FunctionPlot(ArtistBase):
+    """A function of x drawn from its formula: a theory curve to compare with
+    the data, a guide to the eye. It is not fitted; *Fit…* with an own formula
+    does that. It moves no axis limits of a panel that shows data."""
+
+    kind: Literal["function"] = "function"
+    expression: str = Field(min_length=1)
+    """A formula in x as an own fit formula, such as "a * exp(-x / tau)", in
+    the numbers the axes show: a unit change does not change it."""
+    parameters: dict[str, float] = Field(default_factory=dict)
+    """The value of every other name in the formula; one without is 1."""
+    curve_range: tuple[float, float] | None = None
+    """(lower, upper) of x it is drawn over; None takes the x range typed on
+    the axis, or else the x range of the data."""
+    color: Color = "black"
+    """A Matplotlib color; it takes none of the color cycle."""
+    linestyle: str = "-"
+    """"-", "--", "-." or ":"."""
+    linewidth: float = Field(1.5, gt=0.0)
+    """Line width in pt."""
+
+    @field_validator("curve_range")
+    @classmethod
+    def _curve_ordered(cls, curve_range):
+        if curve_range is not None and not curve_range[0] < curve_range[1]:
+            raise ValueError("the lower end of the curve is not below the upper")
+        return curve_range
+
+
 Artist = Annotated[
     LinePlot
     | ScatterPlot
@@ -645,6 +674,7 @@ Artist = Annotated[
     | ResidualPlot
     | Annotation
     | ReferenceLine
-    | ShadedSpan,
+    | ShadedSpan
+    | FunctionPlot,
     Field(discriminator="kind"),
 ]

@@ -63,6 +63,17 @@ EXPECTED = {
         "Look": ["color", "linestyle", "linewidth"],
         "More": ["alpha", "visible", "zorder"],
     },
+    "FunctionPlot": {
+        "Label and data": [
+            "label",
+            "expression",
+            "parameters",
+            "curve_range",
+            "axis",
+        ],
+        "Look": ["color", "linestyle", "linewidth"],
+        "More": ["alpha", "visible", "zorder"],
+    },
     "ShadedSpan": {
         "Label and data": ["label", "orientation", "start", "end", "axis"],
         "Look": ["color", "alpha"],
@@ -164,6 +175,7 @@ def test_a_legend_entry_is_called_that_everywhere(qtbot, project_file) -> None:
     for name in (
         "ReferenceLine",
         "ShadedSpan",
+        "FunctionPlot",
         "FitCurve",
         "Histogram",
         "AllanDeviationPlot",
