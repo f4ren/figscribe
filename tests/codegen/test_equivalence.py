@@ -237,6 +237,36 @@ def test_the_extrapolated_part_of_a_curve(tmp_path: Path, curve, known) -> None:
         )
 
 
+@pytest.mark.parametrize("x_breaks", [[], [(11.0, 12.0)]], ids=["whole", "broken"])
+def test_columns_named_like_the_scripts_own_variables(tmp_path: Path, x_breaks) -> None:
+    """The names the script makes for a curve beyond the data must not take a
+    column's."""
+    names = ["t", "U", "t_first", "t_last", "t_fit", "t_fit_y", "t_fit_measured"]
+    names += ["t_fit_beyond", "t_fit_line"]
+    t = np.linspace(0.0, 10.0, 21)
+    rows = [
+        ",".join(f"{v:.4f}" for v in (a, 0.1 * a, *(0.1 * a + k for k in range(7))))
+        for a in t
+    ]
+    (tmp_path / "d.csv").write_text("\n".join([",".join(names), *rows]) + "\n")
+    source = csv_source(tmp_path / "d.csv", tmp_path)
+    ref = {c: ColumnRef(source=source.id, column=c) for c in names}
+    project = Project(figscribe_version="test", sources=[source])
+    data = LinePlot(x=ref["t"], y=ref["U"], linestyle="none", marker="o")
+    fit = FitCurve(
+        target=data.id, model=PredefinedFit(name="linear"), curve_range=(0.0, 15.0)
+    )
+    panel = Axes(x=AxisSpec(breaks=x_breaks), artists=[data])
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    add_fit(project, fit, residuals=False).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    # Drawn after the fit: each would show what the fit had written over it.
+    project.figures[0].axes[0].artists += [
+        LinePlot(x=ref["t"], y=ref[name]) for name in names[2:]
+    ]
+    _assert_same(project, tmp_path)
+
+
 def test_a_curve_beyond_the_data_with_residuals_sharing_x(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")

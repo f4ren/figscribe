@@ -14,6 +14,8 @@ release open in every later one.
   left not fitted and listed among the problems. A project saved after one of
   those changes still has the old curve: select the fit and *Fit again with the
   current data* (decision 0076).
+- Fixed: *Change the fit…* no longer rounds the fit range's ends to six digits
+  when you press *Update fit*.
 - **Use another file.** Draw a figure, such as an example, with your own data:
   right-click the data file in *Contents* and *Use another file…*. The file is
   read like the old one, the fits are run again and left-out rows are taken
