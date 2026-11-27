@@ -23,6 +23,7 @@ from figscribe.fit import add_fit, refit
 from figscribe.io import load_data
 from figscribe.io.csvfile import csv_source
 from figscribe.io.numpyfile import numpy_source
+from figscribe.io.sheetfile import sheet_source
 from figscribe.model import (
     AllanDeviationPlot,
     ArrayRef,
@@ -51,6 +52,7 @@ from figscribe.model import (
     loads,
 )
 from figscribe.render import export, render
+from tests.sheetfiles import Formula, write_ods, write_xlsx
 
 EXAMPLES = sorted((Path(__file__).parents[2] / "examples").glob("*/*.figscribe"))
 
@@ -2726,6 +2728,133 @@ def test_a_panel_of_functions_beside_data_on_y_alone(tmp_path: Path, share_x) ->
     first, second = drawn.axes[0], drawn.axes[1]
     assert second.get_xlim()[1] > 29 and second.get_xlim()[0] < 1
     assert first.get_ylim()[1] < 2  # the data's, not 100
+
+
+# --- spreadsheets (decision 0079) ---------------------------------------------
+
+
+def _sheet_rows(comma: bool = False) -> list[list[object]]:
+    """A title, names, units, then t, a raw value, a computed column with its
+    stored result, an error, and notes; one gap and one empty row."""
+    t = np.linspace(0.0, 10.0, 21)
+    rng = np.random.default_rng(3)
+    raw = 3.0 * t + 1 + rng.normal(0, 0.4, t.size)
+    rows: list[list[object]] = [
+        ["Sensor test"],
+        [],
+        [None, "t", "raw", "U", "dU", "note"],
+        [None, "s", "mV", "V", "V"],
+    ]
+    for i, (a, b) in enumerate(zip(t, raw, strict=True)):
+        number = float(b)
+        rows.append(
+            [
+                None,
+                f"{a:.1f}".replace(".", ",") if comma else float(a),
+                number,
+                None if i == 7 else Formula(f"C{i + 5}/1000", number / 1000),
+                0.0004,
+                "ok" if i % 5 == 0 else None,
+            ]
+        )
+    rows.insert(12, [])
+    return rows
+
+
+@pytest.mark.parametrize("kind", ["xlsx", "ods"])
+@pytest.mark.parametrize("comma", [False, True], ids=["point", "comma"])
+def test_a_sheet(tmp_path: Path, kind: str, comma: bool) -> None:
+    writer = write_xlsx if kind == "xlsx" else write_ods
+    writer(tmp_path / f"run.{kind}", {"run 'A'": _sheet_rows(comma)})
+    source = sheet_source(
+        tmp_path / f"run.{kind}",
+        tmp_path,
+        header_row=2,
+        skip_rows=1,
+        decimal="," if comma else ".",
+    )
+    ref = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    plot = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="U")
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"), label="fit")
+    panel = Axes(artists=[plot], legend=Legend())
+    project = Project(sources=[source], figures=[Figure(dpi=100, axes=[panel])])
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "from python_calamine import CalamineWorkbook" in script
+    assert "needs NumPy, Matplotlib, SciPy and python-calamine" in script
+    assert "# column D" in script
+
+
+def test_the_old_excel_format_in_the_script(tmp_path: Path) -> None:
+    shutil.copy(Path(__file__).parents[1] / "dataio" / "old.xls", tmp_path)
+    source = sheet_source(tmp_path / "old.xls", tmp_path, header_row=1, skip_rows=1)
+    t = ColumnRef(source=source.id, column="t")
+    panel = Axes(artists=[LinePlot(x=t, y=t)])
+    _assert_same(
+        Project(sources=[source], figures=[Figure(dpi=100, axes=[panel])]), tmp_path
+    )
+
+
+def test_two_sheets_columns_by_number_and_names_the_script_uses(tmp_path) -> None:
+    path = tmp_path / "two.ods"
+    write_ods(
+        path,
+        {
+            "named": [
+                ["sheet_column", "rows_of_sheet", "two_rows"],
+                [1, 2, 3],
+                [4, 5, 6],
+            ],
+            "bare": [[None, 1, 2], [None, 2, 8]],
+        },
+    )
+    named = sheet_source(path, tmp_path, sheet="named")
+    bare = sheet_source(path, tmp_path, sheet="bare", header_row=None)
+    lines = [
+        LinePlot(
+            x=ColumnRef(source=named.id, column="sheet_column"),
+            y=ColumnRef(source=named.id, column=name),
+        )
+        for name in ("rows_of_sheet", "two_rows")
+    ]
+    lines.append(
+        ScatterPlot(
+            x=ColumnRef(source=bare.id, column=0),
+            y=ColumnRef(source=bare.id, column=1),
+        )
+    )
+    figure = Figure(dpi=100, axes=[Axes(artists=lines)])
+    _assert_same(Project(sources=[named, bare], figures=[figure]), tmp_path)
+
+
+def test_a_sheet_as_an_image_and_a_single_row(tmp_path: Path) -> None:
+    write_xlsx(tmp_path / "map.xlsx", {"m": [["a", "b"], [1, 2], [3, None], [5, 6]]})
+    write_xlsx(tmp_path / "one.xlsx", {"m": [["a", "b"], [1, 2]]})
+    table = sheet_source(tmp_path / "map.xlsx", tmp_path)
+    one = sheet_source(tmp_path / "one.xlsx", tmp_path)
+    image = ImagePlot(data=ArrayRef(source=table.id))
+    point = ScatterPlot(
+        x=ColumnRef(source=one.id, column="a"), y=ColumnRef(source=one.id, column="b")
+    )
+    column = LinePlot(
+        x=ColumnRef(source=table.id, column="a"),
+        y=ColumnRef(source=table.id, column="b"),
+    )
+    figure = Figure(
+        dpi=100,
+        layout=GridLayout(rows=1, cols=2),
+        axes=[Axes(artists=[image, column]), Axes(col=1, artists=[point])],
+    )
+    _assert_same(Project(sources=[table, one], figures=[figure]), tmp_path)
+
+
+def test_a_file_whose_ending_does_not_tell_its_format(tmp_path: Path) -> None:
+    write_ods(tmp_path / "really_ods.xlsx", {"m": [["a"], [1], [3]]})
+    source = sheet_source(tmp_path / "really_ods.xlsx", tmp_path)
+    a = ColumnRef(source=source.id, column="a")
+    figure = Figure(dpi=100, axes=[Axes(artists=[LinePlot(x=a, y=a)])])
+    _assert_same(Project(sources=[source], figures=[figure]), tmp_path)
 
 
 @pytest.mark.parametrize("stem", ["2026-11-27 run", "lambda", "---"])
