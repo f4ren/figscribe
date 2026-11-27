@@ -323,7 +323,7 @@ def test_openssl_is_named_with_its_license(site: Site) -> None:
 def test_parts_a_package_names_itself_or_does_not_ship_are_not_repeated(
     site: Site,
 ) -> None:
-    parts = [_part("FreeType"), _part("libimagequant"), _part("PIL._imaging")]
+    parts = [_part("FreeType"), _part("libimagequant")]
     site.add("pillow", files={"LICENSE": "P."}, sbom=parts)
 
     text = notices.render(notices.closure(["pillow"], find=site), python_license="x")
@@ -351,3 +351,14 @@ def test_a_library_no_list_names_is_found_by_its_file(site: Site) -> None:
     text = notices.render(dists, python_license="x")
 
     assert "libXau (MIT-open-group)" in text and "The Open Group" in text
+
+
+def test_a_package_may_list_itself(site: Site) -> None:
+    """As the lists auditwheel adds to Linux wheels do."""
+    own = _part("Pillow", purl="pkg:pypi/pillow@13.0.0?file_name=pillow.whl")
+    module = _part("PIL._webp", purl="pkg:pypi/pillow@13.0.0#c-ext/PIL._webp")
+    site.add("pillow", files={"LICENSE": "P."}, sbom=[own, module, _part("libXau")])
+    site.add("scipy", files={"LICENSE": "S."}, sbom=[_part("libgfortran")])
+    site.add("app", requires=("pillow", "scipy"), files={"LICENSE": "A."})
+
+    assert notices.other_parts(notices.closure(["app"], find=site)) == []

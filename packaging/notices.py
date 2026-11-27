@@ -95,8 +95,12 @@ PARTS: dict[str, dict[str, str | None]] = {
             # left out for its license; smoke.py checks that neither is frozen
             "FriBiDi",
             "libimagequant",
+            # in the Linux wheels, added from UNLISTED where the file is
+            "libXau",
         ]
     ),
+    # copied into the Linux wheels, named in SciPy's license files
+    "scipy": {"libgfortran": None, "libquadmath": None},
 }
 
 # Libraries a package ships that neither its license files nor its list name,
@@ -273,10 +277,11 @@ def other_parts(dists: dict[str, metadata.Distribution]) -> list[tuple[str, str]
                 continue
             path = Path(dist.locate_file(file))
             for part in json.loads(path.read_text("utf-8")).get("components", []):
-                if part.get("purl", "").startswith("pkg:cargo/"):
-                    continue
-                if part["name"].startswith("PIL."):
-                    continue  # Pillow's own modules
+                purl = part.get("purl", "").lower()
+                if purl.startswith("pkg:cargo/") or purl.startswith(
+                    f"pkg:pypi/{name}@"
+                ):
+                    continue  # a crate, or the package itself and its modules
                 if part["name"] not in known:
                     raise SystemExit(
                         f"{name} has a part the notices do not know: "
