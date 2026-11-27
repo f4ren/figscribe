@@ -5,6 +5,15 @@ release open in every later one.
 
 ## Unreleased
 
+- **Fixed: a fit kept its old curve over new data**, in 0.3.0 too. The window
+  and its export drew the old fit while the Python script fitted again, after
+  any of these: *Use the new version* or *Locate file…* for a changed file,
+  another column, the y errors switched off, *Draw fewer points*, another way
+  of reading the file, or a fit's range, model or held values changed by the
+  assistant. The fit is now run again in the same step; one that cannot be is
+  left not fitted and listed among the problems. A project saved after one of
+  those changes still has the old curve: select the fit and *Fit again with the
+  current data* (decision 0076).
 - Fixed: *Change the fit…* no longer rounds the fit range's ends to six digits
   when you press *Update fit*.
 - **Use another file.** Draw a figure, such as an example, with your own data:

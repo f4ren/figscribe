@@ -1790,13 +1790,22 @@ is: the file has what it has). The program's own defaults stay as decision
   same figure"): *Use another file…*, fits run again, left-out rows taken back
   in. *Follow-ups, only if asked:* choosing the reading options in the same
   step. *Open:* ask whether this is what was meant.
-- **Bug: fits after a new version of a file** (found while building the above,
-  2026-11-27; in 0.3.0 too). *Use the new version* and *Locate file…* keep the
-  fit results of the file as it was. The window and its export then draw the
-  old curve over the new data, while the generated script fits again and draws
-  another one: the two no longer match, and nothing says so. Reproduced with the
-  example's peak doubled (stored amplitude 1.01, the script's 2.02). The fix
-  that is there for *Use another file…*: fit again in the same step.
+- ~~**Bug: fits after a new version of a file**~~ **fixed** (2026-11-27,
+  decision 0076; in 0.3.0 too). It was wider than found first: any change of
+  what a fit is run on left the old result unless its command fitted again.
+  Now one rule where changes are applied.
+- **Follow-ups on fits** (found in review, 2026-11-27, both in 0.3.0):
+  leaving rows out, a range or a unit change still stores a fit that did not
+  converge, whose start values the window then draws while the script fails
+  (0076 leaves such a fit unfitted only where the rule fits it). And *Change
+  the fit…* rounds start values, held values and bounds to six digits on
+  *Update fit*, which can change the result. A unit change drops an own
+  formula's start values, so it starts from ones and may converge to nonsense
+  (0041, 0076). And the assistant may set a fit's `result` itself, or insert a
+  fit that has one, which nothing computed: make `result` read-only there. The
+  assistant's check for too many ticks judges the changed project with the data
+  from before the change, so a change of how a file is read can be refused or
+  let through wrongly (`Toolbox._refuse_too_many_ticks`).
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,

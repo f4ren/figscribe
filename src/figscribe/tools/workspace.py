@@ -15,6 +15,7 @@ import numpy as np
 from figscribe.commands import Command, History
 from figscribe.io import DataError, load_data
 from figscribe.model import ArrayRef, ColumnRef, Figure, Project
+from figscribe.refits import fits_follow
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
 
@@ -63,7 +64,7 @@ class ProjectWorkspace:
         return self.project.figures[0] if self.project.figures else None
 
     def push(self, command: Command) -> None:
-        self.history.push(command)
+        self.history.push(fits_follow(self.project, command, self.base_dir))
 
     def undo(self) -> None:
         self.history.undo()

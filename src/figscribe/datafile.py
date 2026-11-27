@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from figscribe.commands import Command, CommandError, Macro, SetField, find
-from figscribe.fit import FitError, refit
 from figscribe.io import DataError, load_data
 from figscribe.io.files import resolve_path
 from figscribe.io.refresh import RECORDED, reread
@@ -24,12 +23,12 @@ from figscribe.model import (
     ArtistBase,
     CsvSource,
     DataSource,
-    ExpressionFit,
     FitCurve,
     NumpySource,
     Project,
 )
 from figscribe.model.validate import data_refs, missing_columns
+from figscribe.refits import guess_first, run_again
 
 
 @dataclass
@@ -106,31 +105,15 @@ def use_another_file(
             continue
         if fit.result is None:
             continue
-        why = _fit_again(staging, fit, base_dir, change)
+        data = load_data(staging, base_dir)
+        again, why = run_again(staging, fit, data, guess_first(fit))
         if why is not None:
             change(SetField(fit.id, ("result",), None))
             subject = fit.label or "The fit"
             notes.append(f"{subject} is not fitted on the new data: {why}.")
+        for step in again:
+            change(step)
     return Swap(Macro(f"Use another file for {old}", steps), notes)
-
-
-def _fit_again(staging: Project, fit: FitCurve, base_dir, change) -> str | None:
-    """Run `fit` on the new data; why it could not be, or None."""
-    # What a predefined model guessed from the old data would mislead it; the
-    # values of an own formula cannot be guessed, and held ones are the user's.
-    if not isinstance(fit.model, ExpressionFit):
-        held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
-        change(SetField(fit.id, ("initial_values",), held))
-    try:
-        again = refit(staging, fit.id, load_data(staging, base_dir))
-    except (FitError, DataError, ValueError, KeyError, IndexError) as exc:
-        return str(exc).strip("'\"").rstrip(".")
-    result = next(step for step in again.steps if step.path == ("result",)).value
-    if not result.converged:
-        return "the fit did not converge"
-    for step in again.steps:
-        change(step)
-    return None
 
 
 def _read(source: DataSource, base_dir: str | Path, path: Path) -> DataSource:

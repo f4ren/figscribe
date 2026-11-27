@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pytest
 from PySide6.QtWidgets import QLabel, QPushButton
 
 from figscribe.gui import MainWindow
@@ -117,3 +118,34 @@ def test_several_files_share_one_bar(qtbot, example: Path) -> None:
     _click(window, "Use the new version", row=1)
     assert "second.csv" not in _texts(window)
     assert "scan.csv has changed" in _texts(window)
+
+
+def test_a_fit_follows_the_new_version(qtbot, example: Path) -> None:
+    """The window must not keep the old curve over the new data."""
+    from figscribe.fit import add_fit, refit
+    from figscribe.model import FitCurve, PredefinedFit
+
+    window = _open(qtbot, example)
+    document = window.document
+    plot = document.figure.axes[0].artists[0]
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="gaussian"))
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    height = document.figure.axes[0].artists[1].result.parameters["a"]
+
+    path = example.parent / "scan.csv"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for i, line in enumerate(lines):
+        if line[:1].isdigit():
+            t, u, du = line.split(",")
+            lines[i] = f"{t},{2 * float(u):.5f},{du}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    window.data_bar.rebuild()
+    _click(window, "Use the new version")
+
+    new = document.figure.axes[0].artists[1].result.parameters["a"]
+    assert new == pytest.approx(2 * height, rel=0.05)
+    assert document.history.undo_text == "Use the new version of scan.csv"
+    document.undo()
+    old = document.figure.axes[0].artists[1].result.parameters["a"]
+    assert old == pytest.approx(height)

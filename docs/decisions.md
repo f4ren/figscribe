@@ -3609,9 +3609,10 @@ panel and in the search (Ctrl+K). One undo step.
   over together (the arrays of an `.npz`), and an array must be there under its
   name.
 - **Fits are run again**: a different file under an old fit curve would be a
-  wrong figure. A predefined model guesses its start values anew; an own
-  formula keeps the ones it had, since nothing can be guessed for it; held
-  values and bounds stay. A fit that fails or does not converge is left **not
+  wrong figure. A predefined model guesses its start values anew, and where
+  that fails tries the ones it had; an own formula starts from those only,
+  since nothing can be guessed for it. They change only where the fit
+  succeeds; held values and bounds stay. A fit that fails or does not converge is left **not
   fitted**, so it draws nothing, and is named.
 - **Left-out rows are taken back in**, with a message: their numbers meant the
   old file.
@@ -3630,3 +3631,58 @@ version* does: for a different file the curve would belong to other data.
 then point the plots at the new columns. **Choose the reading options in the
 same step**, through the import dialog: not built; a follow-up if files differ
 in their separator or header.
+
+## 0076 — A fit follows what it was fitted to
+
+2026-11-27.
+
+### Context
+
+A fit's result is stored. The window and its export draw it, while the
+generated script runs `curve_fit` again. Only some changes fitted again: the
+units, the x range, left-out rows, the Allan settings and the fit dialog.
+After *Use the new version* or *Locate file…*, another column, a reduction,
+the y errors switched off, a file read differently, or a fit's range or model
+set by the assistant, the window kept the old curve over the new data and the
+script drew another one. All of these were so in 0.3.0.
+
+### Decision
+
+One rule, where changes are applied (`Document.push` and the assistant's
+workspace), not in each command: **whatever changes what a fit is run on runs
+it again in the same undo step** (`refits.fits_follow`).
+
+- What a fit is run on: its model, start values, held values, bounds and
+  range; the fields of its plot that decide the points; and the files they are
+  in, by their hash and reading options, not their path. Every field of a plot
+  and of a fit is listed as one or the other, which a test holds.
+- A fit whose result the command sets is left alone, unless a later change in
+  the same command alters its inputs again. This is told by what the command
+  contains, not by whether the value changed.
+- A fit is run again from the start values it has, which may have been typed;
+  a predefined model is guessed only where that fails. Where the model is
+  another, the guess goes first. Start values set by the same command are the
+  only ones tried. An own formula starts from its values only. They change only
+  where a fit succeeds. (A unit change drops the start values of a fit with a
+  result, as before, since they are in the old units: 0041. For an own formula
+  that means ones; a follow-up.)
+- A fit that cannot be run or does not converge is left **not fitted**: it
+  draws nothing, and the problem list says so. The change itself is kept. The
+  commands that refused before (units, x range) still do, but not for a fit
+  that has no result and could not be fitted before the edit either.
+- Where a fit's inputs change while its files cannot be read, it is left not
+  fitted too: no result is better than one of other inputs.
+- A fit without a result is tried again whenever its inputs or the path of its
+  file change, so it fills in once what was wrong is put right. That includes
+  one added without a result, when its plot's data changes. A file put back at
+  the same place outside figscribe changes nothing it is told of; the problem
+  list still names the fit.
+- A project saved with an old result stays as it is until something its fit
+  uses changes, or *Fit again with the current data* is pressed.
+
+### Alternatives considered
+
+**Fit again in each command that needs it**: what was there, and each new
+setting or way in could forget it. **Only say that a fit is old**: the window
+and the script would still disagree. **Check every fit when a project is
+opened**: changes a file without being asked.
