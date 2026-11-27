@@ -170,7 +170,7 @@ def run_again(
             why = why or str(text).rstrip(".")
             continue
         result = next(s for s in again.steps if s.path == ("result",)).value
-        if keeps(fit.drawn_result(), result):
+        if keeps(fit.model, fit.drawn_result(), result):
             return again.steps, None
         why = why or (
             "the data do not decide its parameters"

@@ -85,10 +85,10 @@ def set_conversion(
             ends = _ends(fit.curve_range, remap)
             steps.append(SetField(fit.id, ("curve_range",), ends))
         # Start values in the old units would mislead the fit, with a result or
-        # without; held ones are the user's and stay as typed. Where the fit
-        # then fails, all of them come back (refit_in_edit). An own formula
-        # keeps them: nothing can be guessed for it, and from ones it can
-        # "converge" to nonsense.
+        # without, also where it then fails: they are not left lying for a
+        # later fit to start from. Held ones are the user's and stay as typed.
+        # An own formula keeps them all: nothing can be guessed for it, and
+        # from ones it can "converge" to nonsense.
         held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
         if fit.model.kind == "predefined" and held != fit.initial_values:
             steps.append(SetField(fit.id, ("initial_values",), held))

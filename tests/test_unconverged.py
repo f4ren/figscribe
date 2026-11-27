@@ -222,18 +222,57 @@ def test_an_unfitted_predefined_model_is_guessed_after_a_unit_change(
     assert fit.result.parameters["mu"] == pytest.approx(4 * factor, rel=1e-3)
 
 
-def test_a_predefined_model_left_unfitted_keeps_its_start_values(
+def test_a_unit_change_leaves_no_start_values_of_the_old_units(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """Where the guess fails, the values of before must not be tried in their
+    stead: they are in the old units. Only held ones stay (0041)."""
     project = _project(tmp_path)
     plot, fit = _parts(project)
-    typed = {"a": 0.4, "b": 0.9}
-    fit.initial_values = dict(typed)
-    monkeypatch.setattr(figscribe.fit.run, "curve_fit", _gives_up)
+    old = {"a": 0.4, "b": 0.9}
+    fit.initial_values = dict(old)
+    fit.result = None
+    real = figscribe.fit.run.curve_fit
+
+    def only_from_the_old(*args, **kwargs):
+        if np.allclose(kwargs["p0"], list(old.values())):
+            return real(*args, **kwargs)
+        raise RuntimeError("Optimal parameters not found")
+
+    monkeypatch.setattr(figscribe.fit.run, "curve_fit", only_from_the_old)
     ws = _workspace(project, tmp_path)
     _ms(ws, plot, ws.data)
     fit = _parts(ws.project)[1]
-    assert fit.result is None and fit.initial_values == typed
+    assert fit.result is None and fit.initial_values == {}
+    ws.undo()
+    assert _parts(ws.project)[1].initial_values == old
+
+
+@pytest.mark.parametrize("degree", [3, None])
+def test_a_predefined_model_is_kept_though_its_parameters_depend(
+    tmp_path: Path, monkeypatch, degree
+) -> None:
+    """A polynomial in kelvin: fitted well, but its uncertainties unknown."""
+    model = (
+        PredefinedFit(name="polynomial", degree=degree)
+        if degree
+        else PredefinedFit(name="linear")
+    )
+    project = _project(tmp_path, model=model)
+    plot, fit = _parts(project)
+    known = dict.fromkeys(fit.result.uncertainties, 0.1)  # decided before
+    fit.result = fit.result.model_copy(update={"uncertainties": known})
+    real = figscribe.fit.run.curve_fit
+
+    def unknown(*args, **kwargs):
+        popt, pcov = real(*args, **kwargs)
+        return popt, np.full_like(pcov, np.inf)
+
+    monkeypatch.setattr(figscribe.fit.run, "curve_fit", unknown)
+    ws = _workspace(project, tmp_path)
+    kelvin = Conversion(formula="x + 273.15", unit="K")
+    ws.push(set_conversion(ws.project, plot.id, "x", kelvin, ws.data))
+    assert _parts(ws.project)[1].result is not None
 
 
 def test_a_result_drawn_nowhere_refuses_no_edit(tmp_path: Path) -> None:

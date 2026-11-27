@@ -26,6 +26,7 @@ from figscribe.model import (
     ExpressionFit,
     Figure,
     FitCurve,
+    FitModel,
     FitResult,
     Project,
     ResidualPlot,
@@ -141,14 +142,18 @@ def set_left_out(
     return Macro(description, steps)
 
 
-def keeps(before: FitResult | None, result: FitResult) -> bool:
-    """Whether a fit run again on its own, not asked for, may keep `result`
-    after having had `before`: it must have converged, and the data must decide
-    its parameters as much as they did. From start values of before a change,
-    curve_fit may stop where it started and call that converged."""
+def keeps(model: FitModel, before: FitResult | None, result: FitResult) -> bool:
+    """Whether a fit of `model` run again on its own, not asked for, may keep
+    `result` after having had `before`: it must have converged.
+
+    An own formula starts from values of before the change, from which
+    curve_fit may stop where it started and call that converged: the data must
+    also decide its parameters as much as before. A predefined model is guessed
+    from the data, and its parameters may depend on each other so strongly that
+    they have no uncertainties, though the curve fits."""
     if not result.converged:
         return False
-    if _decided(result):
+    if model.kind == "predefined" or _decided(result):
         return True
     return before is not None and before.converged and not _decided(before)
 
@@ -168,10 +173,9 @@ def refit_in_edit(
     already, apply the change to `staging` and return its steps. A FitError
     refuses the edit, unless the fit `may_fail`, or draws nothing anyway: it
     did not converge, or has no result and could not be fitted before the edit
-    either. Where it fails,
-    or its result may not be kept, it is left not fitted, with the start values
-    it had before the edit."""
-    original = _get(project, fit.id)
+    either. Where it fails, or its result may not be kept, it is left not
+    fitted."""
+    original = _get(project, fit.id)  # for the result it drew before the edit
     try:
         again = refit(staging, fit.id, data)
     except FitError:
@@ -184,17 +188,14 @@ def refit_in_edit(
         again = None
     if again is not None:
         result = next(s for s in again.steps if s.path == ("result",)).value
-        if keeps(original.drawn_result(), result):
+        if keeps(fit.model, original.drawn_result(), result):
             again.apply(staging)
             return again.steps
-    undo = []
-    if fit.initial_values != original.initial_values:
-        undo.append(SetField(fit.id, ("initial_values",), original.initial_values))
-    if fit.result is not None:
-        undo.append(SetField(fit.id, ("result",), None))
-    for step in undo:
-        step.apply(staging)
-    return undo
+    if fit.result is None:
+        return []
+    step = SetField(fit.id, ("result",), None)
+    step.apply(staging)
+    return [step]
 
 
 def _can_be_fitted(project: Project, fit_id: str, data: DataProvider) -> bool:

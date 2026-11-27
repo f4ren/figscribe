@@ -55,7 +55,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
   grid; a lower bound for font sizes and the figure size; marking columns of
   another length.
 - **B10** faults found in the reviews of 2026-11-26 and 27: items 1 to 4 are
-  done; open are two on the assistant (5 and 6).
+  done but for what is left of 3 (`[decide]`); open are also two on the
+  assistant (5 and 6).
 
 **Phase 1 — The settings** (U1 to U5 and U7 to U12 are done)
 - **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
@@ -2039,6 +2040,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.6 | answered 2026-11-26: x and y, several breaks; the rest decided and built (0072) |
 | F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
+| B10.3 | A panel with two datasets or none keeps its breaks and range across units: store the unit typed numbers are in, or leave it? |
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | answered 2026-11-26: another file for the same figure (0075) |

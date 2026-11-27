@@ -3713,17 +3713,19 @@ start values, so it started from ones.
   This covers every way it gets there, saved projects included. The result card
   keeps its warning and the problem list says that no curve is drawn.
 - **One rule for every fit run again on its own** (an edit, the rule of 0076,
-  *Use another file…*; `fit.keeps`): the result is kept only if it converged
-  and the data decide its parameters as much as before. Where they did not
-  before either (data without noise), nothing is worse and it is kept.
-  Otherwise the fit is left not fitted, with the start values it had before the
-  edit. *Fit again* and the fit dialog keep what they get, with the card's
-  warning: the user asked.
+  *Use another file…*; `fit.keeps`): the result is kept only if it converged.
+  An own formula must also have its parameters decided by the data as much as
+  before, since from start values of before the change curve_fit may stop where
+  it started. A predefined model need not: strongly dependent parameters, such
+  as a polynomial's in kelvin, have no uncertainties though the curve fits.
+  Otherwise the fit is left not fitted. *Fit again* and the fit dialog keep
+  what they get, with the card's warning: the user asked.
 - **A unit change keeps an own formula's start values** (the user, 2026-11-27,
   taking the recommendation): nothing can be guessed for it. Where it may not
   be kept after the change, it is left not fitted; the unit change is never
-  refused for it. A predefined model drops what it can guess anew, as before
-  (0041), with a result or without.
+  refused for it. A predefined model drops the start values it can guess anew,
+  as before (0041), with a result or without, and also where it then cannot be
+  fitted: they are in the old units. Held ones stay; undo brings all back.
 - Breaks are converted **panel by panel**, like the range typed on an axis,
   also beside data in other units; so where each panel of a shared axis holds
   one dataset, converting them all converts every break (0072 kept them while
