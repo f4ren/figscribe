@@ -433,6 +433,25 @@ class FitCurve(ArtistBase):
     outside_as_left_out: bool = False
     """Draw the plot's points outside the fit range like its left-out points;
     they are not left out of the plot."""
+    curve_range: tuple[float, float] | None = None
+    """(lower, upper) of x the curve is drawn over, which may reach beyond the
+    data to extrapolate, in the units the plot shows; None leaves the ends to
+    the data, as `extend_curve` says. The fit itself is not changed."""
+    curve_to_limits: bool = False
+    """Draw the curve across the range typed on the x axis, instead of over
+    `curve_range` or the data. It waits for a typed range: with an automatic
+    one the curve would move the limit it is to reach."""
+    mark_extrapolated: bool = True
+    """Draw the curve differently where it leaves the data, which only ends
+    given to it make it do: no points back it there. The three fields below say
+    how."""
+    extrapolated_linestyle: str = "--"
+    """The line style beyond the data: "-", "--", "-." or ":"."""
+    extrapolated_color: Color | None = None
+    """A Matplotlib color for the curve beyond the data; None keeps the
+    curve's."""
+    extrapolated_linewidth: float | None = Field(None, gt=0.0)
+    """Line width beyond the data in pt; None keeps the curve's."""
     result: FitResult | None = None
     """The outcome of the last fit; None before the first."""
     color: Color | None = None
@@ -448,6 +467,61 @@ class FitCurve(ArtistBase):
         if fit_range is not None and not fit_range[0] < fit_range[1]:
             raise ValueError("the lower end of the fit range is not below the upper")
         return fit_range
+
+    @field_validator("curve_range")
+    @classmethod
+    def _curve_ordered(cls, curve_range):
+        if curve_range is not None and not curve_range[0] < curve_range[1]:
+            raise ValueError("the lower end of the curve is not below the upper")
+        return curve_range
+
+    def given_ends(
+        self, x_limits: tuple[float, float] | None
+    ) -> tuple[float, float] | None:
+        """The ends the user gave the curve, where `x_limits` is the range typed
+        on its x axis, lowest first; None where the data give them."""
+        if self.curve_to_limits and x_limits is not None:
+            return x_limits
+        return self.curve_range
+
+    def looks_alike_beyond(self) -> bool:
+        """Whether the part beyond the data would be drawn as the rest."""
+        return (
+            self.extrapolated_linestyle == self.linestyle
+            and self.extrapolated_color in (None, self.color)
+            and self.extrapolated_linewidth in (None, self.linewidth)
+        )
+
+    def extrapolated_look(
+        self, ends: tuple[float, float], data_ends: tuple[float, float] | None
+    ) -> dict[str, object] | None:
+        """How the parts beyond the data are drawn, for a curve from and to
+        `ends` over data from and to `data_ends`: "linestyle", "color" (None:
+        the curve's) and "linewidth". None where the whole curve is drawn
+        alike. With the data not known (None), as if the curve left them."""
+        if not self.mark_extrapolated or self.looks_alike_beyond():
+            return None
+        if data_ends is not None:
+            if data_ends[0] <= ends[0] and ends[1] <= data_ends[1]:
+                return None
+        return {
+            "linestyle": self.extrapolated_linestyle,
+            "color": self.extrapolated_color,
+            "linewidth": self.extrapolated_linewidth or self.linewidth,
+        }
+
+    def curve_ends(
+        self, low: float, high: float, x_limits: tuple[float, float] | None
+    ) -> tuple[float, float] | None:
+        """From where to where the curve is drawn for data from `low` to `high`;
+        None if nowhere."""
+        if (given := self.given_ends(x_limits)) is not None:
+            return given
+        if self.fit_range is not None and not self.extend_curve:
+            low, high = max(self.fit_range[0], low), min(self.fit_range[1], high)
+            if not low < high:
+                return None
+        return low, high
 
     @field_validator("parameter_bounds")
     @classmethod

@@ -108,6 +108,18 @@ def _broken_figure(ref) -> Figure:
     )
 
 
+def _extrapolated(ref, **curve) -> list:
+    """A rising line, fitted, with the curve reaching further."""
+    plot = LinePlot(x=ref("t"), y=ref("U"), marker="o", linestyle="none")
+    fit = FitCurve(
+        target=plot.id,
+        model=PredefinedFit(name="linear"),
+        result=FitResult(parameters={"a": 0.08, "b": 0.0}, uncertainties={}),
+        **curve,
+    )
+    return [plot, fit]
+
+
 def _figures(ref) -> dict[str, Figure]:
     labelled = {
         "x": AxisSpec(label="$t$", unit="s"),
@@ -399,6 +411,20 @@ def _figures(ref) -> dict[str, Figure]:
                 ),
             ],
         ),
+        # F1.9: a curve beyond the data, and one to the typed limits across a break
+        "curve_beyond": Figure(
+            dpi=100.0,
+            width_mm=170,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(**labelled, artists=_extrapolated(ref, curve_range=(-2.0, 18.0))),
+                Axes(
+                    col=1,
+                    x=AxisSpec(label="t", limits=(0.0, 30.0), breaks=[(14.0, 24.0)]),
+                    artists=_extrapolated(ref, curve_to_limits=True),
+                ),
+            ],
+        ),
     }
 
 
@@ -421,6 +447,7 @@ def _figures(ref) -> dict[str, Figure]:
         "number_formats",
         "broken_axes",
         "minor_grid",
+        "curve_beyond",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

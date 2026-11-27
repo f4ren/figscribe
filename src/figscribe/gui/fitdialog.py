@@ -76,11 +76,14 @@ class FitDialog(QDialog):
         residuals_default: bool = False,
         parent=None,
         fit: FitCurve | None = None,
+        x_limits: tuple[float, float] | None = None,
     ):
-        """With `fit`, the dialog opens on that fit as it is, to change it."""
+        """With `fit`, the dialog opens on that fit as it is, to change it.
+        `x_limits` is the range typed on the plot's x axis, if one is."""
         super().__init__(parent)
         self.target = target
         self.existing = fit
+        self.x_limits = x_limits
         # In the units the plot shows, as the parameters will be read.
         self.shown = shown = plot_data(target, data)
         self.x, self.y = shown.x, shown.y
@@ -116,6 +119,15 @@ class FitDialog(QDialog):
             end.editingFinished.connect(self._range_changed)
         self.extend = QCheckBox("Draw the curve across all the data")
         self.extend.setToolTip("Otherwise the curve spans only the fit range.")
+        self.curve_low, self.curve_high = _bound("automatic"), _bound("automatic")
+        for end in (self.curve_low, self.curve_high):
+            end.setToolTip(
+                "Where the curve is drawn; it may reach beyond the data, to "
+                "extrapolate. The fit does not change."
+            )
+            end.editingFinished.connect(self._curve_changed)
+        self.to_limits = QCheckBox("To the axis limits")
+        self.to_limits.toggled.connect(self._curve_changed)
         self.outside = QCheckBox("Draw the points outside like left-out ones")
         self.outside.setToolTip(
             "In the left-out color and marker of the plot; they stay in the plot."
@@ -164,6 +176,7 @@ class FitDialog(QDialog):
         self.buttons.rejected.connect(self.reject)
 
         self._layout()
+        self._enable_curve()
         if fit is None:
             self.models.button(0).setChecked(True)
         else:
@@ -228,6 +241,13 @@ class FitDialog(QDialog):
         span.addWidget(self.extend)
         self._details.addRow(_caption("Fit x from"), span)
         self._details.addRow(_caption(""), self.outside)
+        reach = QHBoxLayout()
+        reach.setSpacing(8)
+        reach.addWidget(self.curve_low, 1)
+        reach.addWidget(label("to", "caption"))
+        reach.addWidget(self.curve_high, 1)
+        reach.addWidget(self.to_limits)
+        self._details.addRow(_caption("Draw curve from"), reach)
         self._start_form.setHorizontalSpacing(12)
         card = QFrame()
         card.setObjectName("card")
@@ -315,9 +335,16 @@ class FitDialog(QDialog):
         self.label.setText(fit.label or "")
         self.label.setModified(True)  # not replaced by the model's name
         if fit.fit_range is not None:
-            self.range_low.setText(f"{fit.fit_range[0]:.6g}")
-            self.range_high.setText(f"{fit.fit_range[1]:.6g}")
+            self.range_low.setText(_shown(fit.fit_range[0]))
+            self.range_high.setText(_shown(fit.fit_range[1]))
         self.extend.setChecked(fit.extend_curve)
+        if fit.curve_range is not None:
+            self.curve_low.setText(_shown(fit.curve_range[0]))
+            self.curve_high.setText(_shown(fit.curve_range[1]))
+        self.to_limits.blockSignals(True)
+        self.to_limits.setChecked(fit.curve_to_limits)
+        self.to_limits.blockSignals(False)
+        self._enable_curve()
         self.outside.setChecked(fit.outside_as_left_out)
         if isinstance(fit.model, ExpressionFit):
             self.expression.setText(fit.model.expression)
@@ -429,12 +456,64 @@ class FitDialog(QDialog):
         if not all(texts):
             raise FitError("enter both ends of the fit range, or neither")
         try:
-            low, high = (number(text) for text in texts)
+            low, high = self._ends(texts, "fit_range")
         except ValueError as exc:
             raise FitError(f"the fit range: {exc}") from None
         if not low < high:
             raise FitError("the lower end of the fit range is not below the upper")
         return low, high
+
+    def _ends(self, texts: list[str], name: str) -> list[float]:
+        """The numbers typed as the two ends of the range `name`. An end still
+        shown as the fit had it keeps its exact value."""
+        had = getattr(self.existing, name, None) or (None, None)
+        return [
+            stored if stored is not None and text == _shown(stored) else number(text)
+            for text, stored in zip(texts, had, strict=True)
+        ]
+
+    def curve_range(self) -> tuple[float, float] | None:
+        """The typed range to draw the curve over; None to follow the data."""
+        texts = [self.curve_low.text().strip(), self.curve_high.text().strip()]
+        if not any(texts):
+            return None
+        try:
+            if not all(texts):
+                raise FitError("enter both ends of the curve's range, or neither")
+            try:
+                low, high = self._ends(texts, "curve_range")
+            except ValueError as exc:
+                raise FitError(f"the curve's range: {exc}") from None
+            if not low < high:
+                raise FitError("the lower end of the curve is not below the upper")
+        except FitError:
+            if self.curve_low.isEnabled():
+                raise
+            return None  # the curve goes to the axis limits meanwhile
+        return low, high
+
+    def _enable_curve(self) -> None:
+        """Grey out what has no effect, and say what the box would do."""
+        checked = self.to_limits.isChecked()
+        to_limits = checked and self.x_limits is not None
+        for end in (self.curve_low, self.curve_high):
+            end.setEnabled(not to_limits)
+        typed = self.curve_low.text().strip() or self.curve_high.text().strip()
+        self.extend.setEnabled(not (to_limits or typed))
+        self.to_limits.setEnabled(checked or self.x_limits is not None)
+        if self.x_limits is None:
+            tip = (
+                "No range is typed on the x axis. With one typed, the curve can "
+                "reach to its ends."
+            )
+        else:
+            low, high = self.x_limits
+            tip = f"The curve reaches to the typed x range, {low:g} to {high:g}."
+        self.to_limits.setToolTip(tip)
+
+    def _curve_changed(self) -> None:
+        self._enable_curve()
+        self.refit()
 
     def _used(self, pending: bool = True):
         """x, y and y errors of the points the fit uses: in range, not left out
@@ -581,6 +660,7 @@ class FitDialog(QDialog):
             model = self.model()
             self._guesses_within(self.bounds())
             self.fit_range()  # refused here with its own message
+            self.curve_range()
             x, y, yerr = self._used()
             self.points.setText(self._count(len(x)))
             result = run_fit(
@@ -652,6 +732,8 @@ class FitDialog(QDialog):
             parameter_bounds=self.bounds(),
             fit_range=self.fit_range(),
             extend_curve=self.extend.isChecked(),
+            curve_range=self.curve_range(),
+            curve_to_limits=self.to_limits.isChecked(),
             outside_as_left_out=self.outside.isChecked(),
             result=self.result,
             label=self.label.text().strip() or None,
@@ -685,6 +767,10 @@ class FitDialog(QDialog):
             chi = f"{result.reduced_chi_square:.2f} · {len(self._used()[0])} points"
             self._result_grid.addWidget(label(chi, "value"), row, 1)
         self._result_grid.setColumnStretch(1, 1)
+
+
+def _shown(value: float) -> str:
+    return f"{value:.6g}"
 
 
 def _bound(placeholder: str) -> QLineEdit:

@@ -61,7 +61,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   in the figure (3); CSV and a LaTeX row (4); a confidence band (5); more
   models, such as sine, power law, logistic, Voigt, two peaks (6); weighting
   by none, y errors or Poisson (7); x errors (8, `[decide]`); the curve
-  drawn beyond the data (9).
+  ~~drawn beyond the data (9)~~ done.
 - **F4** plot types (M each): hollow markers, error bar colour and caps, an
   error bar on every n-th point (3); step plot (4); points coloured by a
   third column (5); waterfall (6); contours (7); bar chart (8).
@@ -102,7 +102,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
 needs no answer. The user named the order on 2026-11-03: B7.4, F13, U11 and
 F14 are done, F15 follows (ask its `[decide]` first). The lab user's two
 wishes of 2026-11-04 went before it (the user's choice, 2026-11-26): F5.10 is
-done, F1.9, the fit's curve beyond the data, is in work. Before 0.4: the
+done and so is F1.9, the fit's curve beyond the data (0074). Before 0.4: the
 manual checklist (B7.5), which 0.3.0 went out without.
 
 ---
@@ -1065,6 +1065,13 @@ covariance detected). Missing:
    assistant's `fit` tool and `set_field`; a range that does not reach the
    data is a problem in the list. Leave `extend_curve` as it is.
 
+   **Done** (2026-11-26, decision 0074): `curve_range`, `curve_to_limits` for
+   a typed x range, and the part beyond the data dashed,
+   with a box to switch that off and its own line style, color and width, as the
+   user asked. *Learned:* the curve's
+   ends were worked out in three places; they now come from
+   `FitCurve.curve_ends`. *Decided against:* automatic axis limits as ends.
+
 ### F2 Leave points out, reproducibly — M
 
 Click points in the preview to exclude them from a plot or a fit (outliers,
@@ -1989,7 +1996,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
-| F1.9 | The curve beyond the data: a typed range, or also "to the axis limits"? |
+| F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | A source's file: what did the user mean by changing the name of the .csv in the template? |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |

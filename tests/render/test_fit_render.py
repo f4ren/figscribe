@@ -139,3 +139,167 @@ def test_the_zero_line_can_be_left_out(figure: Figure, data) -> None:
     ax = render(figure, data).axes[1]
     zero = [line for line in ax.get_lines() if tuple(line.get_ydata()) == (0.0, 0.0)]
     assert zero == []
+
+
+# --- the curve beyond the data (F1.9) ----------------------------------------
+
+
+def _curve(figure: Figure, data) -> np.ndarray:
+    """Where the fitted curve of the first panel was sampled."""
+    fit = figure.axes[0].artists[1]
+    line = _lines(render(figure, data).axes[0], fit.id)[0]
+    return np.asarray(line.get_xdata())
+
+
+def test_a_given_range_draws_the_curve_there(figure: Figure, data) -> None:
+    figure.axes[0].artists[1].curve_range = (-5.0, 25.0)
+    figure.axes[0].artists[1].mark_extrapolated = False  # one plain curve
+    xs = _curve(figure, data)
+    assert (len(xs), xs[0], xs[-1]) == (400, -5.0, 25.0)
+    low, high = render(figure, data).axes[0].get_xlim()
+    assert low < -5.0 and high > 25.0  # the automatic range follows the curve
+
+
+@pytest.mark.parametrize("limits", [(-2.0, 20.0), (20.0, -2.0)])
+def test_the_curve_goes_to_the_typed_axis_limits(figure, data, limits) -> None:
+    figure.axes[0].x.limits = limits
+    figure.axes[0].artists[1].curve_to_limits = True
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (-2.0, 20.0)
+
+
+def test_the_limits_of_a_panel_that_shares_x_count(figure: Figure, data) -> None:
+    figure.layout.share_x = "col"
+    figure.axes[1].x.limits = (-2.0, 20.0)
+    figure.axes[0].artists[1].curve_to_limits = True
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (-2.0, 20.0)
+
+
+def test_to_the_limits_waits_for_typed_ones(figure, data, columns) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.curve_to_limits = True
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (columns["t"].min(), columns["t"].max())
+    fit.curve_range = (1.0, 30.0)  # the range typed serves meanwhile
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (1.0, 30.0)
+
+
+def test_typed_limits_win_over_a_typed_range(figure: Figure, data) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.curve_range, fit.curve_to_limits = (1.0, 30.0), True
+    figure.axes[0].x.limits = (0.0, 12.0)
+    xs = _curve(figure, data)
+    assert (xs[0], xs[-1]) == (0.0, 12.0)
+
+
+def test_on_a_log_axis_a_given_range_is_sampled_in_log(figure, data) -> None:
+    figure.axes[0].x.scale = "log"
+    even = np.diff(_curve(figure, data))
+    assert even == pytest.approx([even[0]] * len(even))  # as before
+    figure.axes[0].artists[1].curve_range = (0.1, 100.0)
+    figure.axes[0].artists[1].mark_extrapolated = False  # one plain curve
+    ratios = np.diff(np.log(_curve(figure, data)))
+    assert ratios == pytest.approx([ratios[0]] * len(ratios))
+
+
+# --- beyond the data, another line (F1.9) ------------------------------------
+
+
+def _drawn_x(line) -> np.ndarray:
+    """The x of the samples a line really shows."""
+    x, y = (np.asarray(v, dtype=float) for v in line.get_data())
+    return x[np.isfinite(y)]
+
+
+def _curve_lines(figure: Figure, data):
+    fit = figure.axes[0].artists[1]
+    return _lines(render(figure, data).axes[0], fit.id)
+
+
+def test_the_curve_is_dashed_where_it_leaves_the_data(figure, data, columns) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.linestyle, fit.label, fit.curve_range = "-", "fit", (-5.0, 25.0)
+    measured, beyond = _curve_lines(figure, data)
+    first, last = columns["t"].min(), columns["t"].max()
+    assert (measured.get_linestyle(), beyond.get_linestyle()) == ("-", "--")
+    assert measured.get_color() == beyond.get_color()
+    assert measured.get_label() == "fit" and beyond.get_label() == "_nolegend_"
+    inside, outside = _drawn_x(measured), _drawn_x(beyond)
+    assert (inside.min(), inside.max()) == (first, last)  # no gap between them
+    assert (outside.min(), outside.max()) == (-5.0, 25.0)
+    assert not ((outside > first) & (outside < last)).any()
+    assert {first, last} <= set(outside)
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {},  # along the data
+        {"curve_range": (2.0, 8.0)},  # given, but within them
+        {"curve_range": (-5.0, 25.0), "mark_extrapolated": False},
+        {
+            "curve_range": (-5.0, 25.0),
+            "mark_extrapolated": False,
+            "extrapolated_color": "red",
+        },
+        {"curve_range": (-5.0, 25.0), "extrapolated_linestyle": "--"},  # as it is
+        {"fit_range": (3.0, 7.0), "extend_curve": True},  # unfitted, but measured
+    ],
+)
+def test_a_curve_drawn_alike_stays_one_line(figure, data, settings) -> None:
+    fit = figure.axes[0].artists[1]  # dashed itself
+    for name, value in settings.items():
+        setattr(fit, name, value)
+    assert len(_curve_lines(figure, data)) == 1
+
+
+def test_a_curve_away_from_the_data_is_dashed_all_along(figure, data) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.linestyle, fit.curve_range = "-", (20.0, 30.0)
+    measured, beyond = _curve_lines(figure, data)
+    assert _drawn_x(measured).size == 0
+    assert (_drawn_x(beyond).min(), _drawn_x(beyond).max()) == (20.0, 30.0)
+
+
+@pytest.mark.parametrize(
+    ("settings", "look"),
+    [
+        ({"extrapolated_color": "red"}, ("--", "#ff0000", 1.5)),
+        ({"extrapolated_linewidth": 0.5}, ("--", None, 0.5)),
+        # In the curve's own style, set apart by color or width alone.
+        (
+            {
+                "linestyle": "-",
+                "extrapolated_linestyle": "-",
+                "extrapolated_color": "k",
+            },
+            ("-", "#000000", 1.5),
+        ),
+        (
+            {
+                "linestyle": "-",
+                "extrapolated_linestyle": "-",
+                "extrapolated_linewidth": 3.0,
+            },
+            ("-", None, 3.0),
+        ),
+        ({"extrapolated_linestyle": ":"}, (":", None, 1.5)),
+    ],
+    ids=["color", "width", "color-alone", "width-alone", "dotted"],
+)
+def test_the_part_beyond_the_data_has_a_look_of_its_own(
+    figure, data, settings, look
+) -> None:
+    fit = figure.axes[0].artists[1]
+    fit.curve_range = (-5.0, 25.0)
+    for name, value in settings.items():
+        setattr(fit, name, value)
+    measured, beyond = _curve_lines(figure, data)
+    style, color, width = look
+    assert beyond.get_linestyle() == style and beyond.get_linewidth() == width
+    expected = color or measured.get_color()  # None: the curve's
+    assert matplotlib.colors.to_hex(beyond.get_color()) == matplotlib.colors.to_hex(
+        expected
+    )

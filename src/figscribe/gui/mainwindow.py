@@ -113,6 +113,7 @@ from figscribe.model import (
     ImagePlot,
     ResidualPlot,
 )
+from figscribe.model.sharing import x_limits_of
 from figscribe.model.validate import FIT_TARGETS
 from figscribe.render import export, export_bytes
 from figscribe.templates import template
@@ -874,7 +875,13 @@ class MainWindow(QMainWindow):
             for o in figure.axes
         )
         try:
-            dialog = FitDialog(target, self.document.data, below, self)
+            dialog = FitDialog(
+                target,
+                self.document.data,
+                below,
+                self,
+                x_limits=x_limits_of(self.document.project, target.id),
+            )
         except Exception as exc:  # the data cannot be read
             self.show_error("Cannot fit", exc)
             return
@@ -900,7 +907,13 @@ class MainWindow(QMainWindow):
         try:
             fit = find(self.document.project, fit_id)
             target = find(self.document.project, fit.target)
-            dialog = FitDialog(target, self.document.data, parent=self, fit=fit)
+            dialog = FitDialog(
+                target,
+                self.document.data,
+                parent=self,
+                fit=fit,
+                x_limits=x_limits_of(self.document.project, fit_id),
+            )
         except Exception as exc:  # gone, or the data cannot be read
             self.show_error("Cannot change the fit", exc)
             return

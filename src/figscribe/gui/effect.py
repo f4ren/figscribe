@@ -32,6 +32,7 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
 )
+from figscribe.model.sharing import x_limits_of
 from figscribe.render.figure import NO_LINE, aligned_axes
 
 Path = tuple[str, ...]
@@ -103,6 +104,11 @@ GRID = (
 )
 LEGEND = ("position", "frame", "ncols", "fontsize")
 LEFT_OUT = ("left_out_color", "left_out_marker", "left_out_linestyle")
+EXTRAPOLATED = (
+    "extrapolated_linestyle",
+    "extrapolated_color",
+    "extrapolated_linewidth",
+)
 
 RULES: list[Rule] = [
     Rule(
@@ -233,6 +239,38 @@ RULES: list[Rule] = [
         (("extend_curve",), ("outside_as_left_out",)),
         "the fit uses all the data: set a range in the fit dialog",
         lambda fit, _: fit.fit_range is None,
+    ),
+    Rule(
+        (FitCurve,),
+        (("extend_curve",),),
+        "the curve's ends are given",
+        lambda fit, project: fit.given_ends(x_limits_of(project, fit.id)) is not None,
+    ),
+    Rule(
+        (FitCurve,),
+        tuple((name,) for name in ("mark_extrapolated", *EXTRAPOLATED)),
+        "the curve's ends follow the data",
+        lambda fit, project: fit.given_ends(x_limits_of(project, fit.id)) is None,
+    ),
+    Rule(
+        (FitCurve,),
+        tuple((name,) for name in EXTRAPOLATED),
+        "the part beyond the data is not marked",
+        lambda fit, _: not fit.mark_extrapolated,
+    ),
+    Rule(
+        (FitCurve,),
+        (("curve_range",),),
+        "the curve goes to the axis limits",
+        lambda fit, project: (
+            fit.curve_to_limits and x_limits_of(project, fit.id) is not None
+        ),
+    ),
+    Rule(
+        (FitCurve,),
+        (("curve_to_limits",),),
+        "the x axis has no typed range",
+        lambda fit, project: x_limits_of(project, fit.id) is None,
     ),
     Rule(
         (FitCurve,),

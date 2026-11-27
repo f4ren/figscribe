@@ -145,6 +145,142 @@ def test_fit_and_residuals(tmp_path: Path) -> None:
     assert 'ax_a.tick_params(axis="x"' in script
 
 
+@pytest.mark.parametrize(
+    ("x", "curve", "written"),
+    [
+        ({}, {"curve_range": (-3.0, 15.0)}, "np.linspace(-3.0, 15.0, 400)"),
+        (
+            {"limits": (16.0, -2.0)},
+            {"curve_to_limits": True},
+            "np.linspace(-2.0, 16.0, 400)",
+        ),
+        ({"limits": (0.0, 12.0)}, {"curve_range": (2.0, 4.0)}, "linspace(2.0, 4.0"),
+        (
+            {"scale": "log"},
+            {"curve_range": (0.5, 100.0)},
+            "np.geomspace(0.5, 100.0, 400)",
+        ),
+        (
+            {"breaks": [(11.0, 18.0)]},
+            {"curve_range": (0.0, 22.0)},
+            "np.linspace(18.0, 22.0",
+        ),
+        (
+            {"breaks": [(11.0, 18.0)], "limits": (-1.0, 22.0)},
+            {"curve_to_limits": True, "fit_range": (3.0, 7.0)},
+            "np.linspace(-1.0, 11.0",
+        ),
+    ],
+    ids=["range", "limits", "shorter", "log", "break", "break-limits"],
+)
+def test_a_curve_beyond_the_data(tmp_path: Path, x, curve, written) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"), **curve)
+    panel = Axes(x=AxisSpec(**x), artists=[data])
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    add_fit(project, fit, residuals=False).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert written in script
+    assert [line for line in script.splitlines() if len(line) > 88] == []
+
+
+@pytest.mark.parametrize(
+    "curve",
+    [
+        {"curve_range": (-3.0, 15.0)},
+        {"curve_range": (-3.0, 15.0), "extrapolated_linestyle": ":"},
+        {"curve_range": (-3.0, 15.0), "mark_extrapolated": False},
+        {"curve_range": (-3.0, 15.0), "extrapolated_color": "red"},
+        {"curve_range": (-3.0, 15.0), "extrapolated_linewidth": 3.0},
+        {"curve_range": (4.0, 15.0)},  # leaves the data on one side only
+        {"curve_range": (12.0, 15.0)},  # nowhere on them
+        {"curve_range": (2.0, 8.0)},  # never leaves them
+    ],
+    ids=["dashed", "dotted", "unmarked", "color", "width", "one-side", "away", "in"],
+)
+@pytest.mark.parametrize("known", [True, False], ids=["data", "no-data"])
+def test_the_extrapolated_part_of_a_curve(tmp_path: Path, curve, known) -> None:
+    """In the cycle's colors, which the two parts of the curve share: the plot
+    after them keeps its own."""
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"], linestyle="none", marker="o")
+    fit = FitCurve(
+        target=data.id, model=PredefinedFit(name="gaussian"), label="fit", **curve
+    )
+    panel = Axes(legend=Legend(visible=True), artists=[data])
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    add_fit(project, fit, residuals=False).apply(project)
+    values = load_data(project, tmp_path)
+    refit(project, fit.id, values).apply(project)
+    project.figures[0].axes[0].artists.append(LinePlot(x=ref["t"], y=ref["U"]))
+    export(project.figures[0], values, tmp_path / "from_renderer.png")
+    script = generate(
+        project,
+        base_dir=tmp_path,
+        output="from_script.png",
+        data=values if known else None,
+    )
+    a = np.asarray(Image.open(tmp_path / "from_renderer.png"))
+    b = np.asarray(Image.open(_run(script, tmp_path)))
+    assert np.array_equal(a, b), f"{np.count_nonzero(np.any(a != b, axis=-1))} pixels"
+    assert [line for line in script.splitlines() if len(line) > 88] == []
+    if known:
+        marked = curve["curve_range"] != (2.0, 8.0) and curve.get(
+            "mark_extrapolated", True
+        )
+        assert ("beyond" in script) == marked
+        # A color of its own is written plainly, not taken from the curve.
+        assert ("get_color()" in script) == (
+            marked and "extrapolated_color" not in curve
+        )
+
+
+@pytest.mark.parametrize("x_breaks", [[], [(11.0, 12.0)]], ids=["whole", "broken"])
+def test_columns_named_like_the_scripts_own_variables(tmp_path: Path, x_breaks) -> None:
+    """The names the script makes for a curve beyond the data must not take a
+    column's."""
+    names = ["t", "U", "t_first", "t_last", "t_fit", "t_fit_y", "t_fit_measured"]
+    names += ["t_fit_beyond", "t_fit_line"]
+    t = np.linspace(0.0, 10.0, 21)
+    rows = [
+        ",".join(f"{v:.4f}" for v in (a, 0.1 * a, *(0.1 * a + k for k in range(7))))
+        for a in t
+    ]
+    (tmp_path / "d.csv").write_text("\n".join([",".join(names), *rows]) + "\n")
+    source = csv_source(tmp_path / "d.csv", tmp_path)
+    ref = {c: ColumnRef(source=source.id, column=c) for c in names}
+    project = Project(figscribe_version="test", sources=[source])
+    data = LinePlot(x=ref["t"], y=ref["U"], linestyle="none", marker="o")
+    fit = FitCurve(
+        target=data.id, model=PredefinedFit(name="linear"), curve_range=(0.0, 15.0)
+    )
+    panel = Axes(x=AxisSpec(breaks=x_breaks), artists=[data])
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    add_fit(project, fit, residuals=False).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    # Drawn after the fit: each would show what the fit had written over it.
+    project.figures[0].axes[0].artists += [
+        LinePlot(x=ref["t"], y=ref[name]) for name in names[2:]
+    ]
+    _assert_same(project, tmp_path)
+
+
+def test_a_curve_beyond_the_data_with_residuals_sharing_x(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    fit = FitCurve(
+        target=data.id, model=PredefinedFit(name="gaussian"), curve_to_limits=True
+    )
+    project.figures = [Figure(dpi=110, axes=[Axes(artists=[data])])]
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    project.figures[0].axes[1].x.limits = (-4.0, 14.0)  # typed below only
+    script = _assert_same(project, tmp_path)
+    assert "np.linspace(-4.0, 14.0, 400)" in script
+
+
 def test_residuals_with_a_line_width_and_a_styled_zero_line(tmp_path: Path) -> None:
     project, ref = _scan(tmp_path)
     data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")

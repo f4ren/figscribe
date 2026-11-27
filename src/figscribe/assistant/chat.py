@@ -66,6 +66,11 @@ Common set_field paths (get_schema has all of them):
 `decimal_comma` (1,5 along every axis and color bar), \
 `panel_labels` (letters (a), (b) on the panels: {"style": "(a)", "bold": \
 false}; null removes them)
+- fit: `curve_range` ([lower, upper] of x, may reach beyond the data), \
+`curve_to_limits` (the curve reaches to the typed `x.limits`), \
+`mark_extrapolated` (on: drawn differently beyond the data), \
+`extrapolated_linestyle` ("--"), `extrapolated_color`, \
+`extrapolated_linewidth`
 - panel (axes): `title`, `grid`, `grid_color`, `grid_linewidth`, \
 `grid_linestyle`, `grid_which` ("major", "minor", "both"), \
 `grid_minor_color`, `grid_minor_linewidth`, `grid_minor_linestyle`, \

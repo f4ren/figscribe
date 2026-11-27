@@ -3527,3 +3527,63 @@ to set them apart from, and they keep the grid's width.
 **Equal widths unless set**: saved files unchanged, but the wish would need a
 setting in every figure. **A lighter color instead of a thinner line**: was
 not asked, and in print a thin line reads better than a pale one.
+
+## 0074 — The fitted curve beyond the data
+
+2026-11-26. Roadmap F1.9.
+
+### Context
+
+A lab user wants the fit drawn over a larger range than the points, to
+extrapolate (2026-11-04). `extend_curve` reaches across the data, never
+beyond. The user decided, after pictures of the variants: **a fit holds only
+for the measured data**. Going beyond them has to be stated, so that one
+thinks about it instead of taking it for granted, and the figure should show
+which part no points back.
+
+### Decision
+
+- `FitCurve.curve_range`: the curve is drawn from one x to another, in the
+  units the plot shows. Typed in the fit dialog (*Draw curve from … to …*) and
+  in the panel (*Curve from, to*). A unit conversion moves it with the fit
+  range.
+- `FitCurve.curve_to_limits` (*To the axis limits*): the curve is drawn across
+  the range **typed** on the x axis, of this panel or one sharing it. Ticking
+  it is a deliberate step. With an automatic range it does nothing; the box is
+  greyed then, and a file that has it ticked is told in the problem list.
+- Where the curve leaves the data it is drawn differently, **dashed** by
+  default in the curve's color and width. The user wants to switch that off
+  and to set that part themselves (2026-11-26): `mark_extrapolated` (*Mark the
+  part beyond the data*, on) with `extrapolated_linestyle` (*Line beyond the
+  data*), `extrapolated_color` and `extrapolated_linewidth`, the last two
+  empty for the curve's. One box switches it off, as for the grid, rather than
+  three fields to be set back; the three are greyed while it is off.
+- "The data" are the x values the plot shows, fitted or not: between them the
+  reader sees the points, so a stretch outside the fit range is not marked,
+  and figures with `extend_curve` are drawn as before. The part beyond has no
+  legend entry. If it would look like the rest in style, color and width while
+  the box is on, the problem list says so.
+- Order of the ends: typed axis limits where asked for, else `curve_range`,
+  else as before. Given ends win over `extend_curve`. The fit itself, its
+  residuals and its range are not touched.
+- The curve is sampled at the data's ends too, so the two lines meet; the
+  script draws them as two `plot` calls with the same color.
+- On a log x axis a curve with given ends is sampled evenly in log x
+  (`np.geomspace`). Without given ends it is sampled as before, so saved
+  figures are drawn unchanged.
+- An automatic axis range follows the curve, and its samples count among the
+  axis's values (breaks, the break dialog). The problem list reports a typed
+  range that misses the data altogether, and a curve from zero or below on a
+  log axis.
+- No schema bump: the fields have defaults, and those that are not "off", the
+  box and the dashed style, count only where ends are given.
+
+### Alternatives considered
+
+**To the edge of an automatic axis**: decided against (the user, 2026-11-26).
+The curve would extrapolate without anyone having asked for how far, and by
+as much as whatever else moves the axis. **Only typed numbers, no *To the axis
+limits***: the box follows limits that may be widened for other reasons; kept
+because the dashed part then shows it. **One open end** (from the data to a
+typed x): a third meaning of an empty field; both numbers are typed, as for
+the fit range.

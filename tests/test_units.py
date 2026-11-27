@@ -59,6 +59,7 @@ def _project(*others) -> Project:
         target=plot.id,
         model=PredefinedFit(name="gaussian"),
         fit_range=(4000.0, 11000.0),
+        curve_range=(4000.0, 15400.0),
     )
     axes = Axes(
         x=AxisSpec(label="t", unit="s", limits=(1000.0, 15400.0), major_step=3600.0),
@@ -94,6 +95,7 @@ def test_the_axis_and_everything_on_it_follow_a_conversion() -> None:
     # 1000 s is the start, so 3600 s is 0.722… h after it.
     assert plot.x_range == pytest.approx(((3600 - 1000) / 3600, 11000 / 3600))
     assert fit.fit_range == pytest.approx((3000 / 3600, 10000 / 3600))
+    assert fit.curve_range == pytest.approx((3000 / 3600, 14400 / 3600))
     assert fit.result.parameters["mu"] == pytest.approx((T[20] - 1000) / 3600)
     assert axes.x.unit == "h"
     assert axes.x.limits == pytest.approx((0.0, 4.0))

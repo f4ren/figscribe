@@ -252,6 +252,8 @@ class Toolbox:
         fixed: list[str] | None = None,
         bounds: dict[str, tuple[float | None, float | None]] | None = None,
         fit_range: tuple[float, float] | None = None,
+        curve_range: tuple[float, float] | None = None,
+        curve_to_limits: bool = False,
     ) -> dict[str, Any]:
         command, fit_id = _fit(
             self.workspace.project,
@@ -264,6 +266,8 @@ class Toolbox:
             fixed,
             bounds,
             fit_range,
+            curve_range,
+            curve_to_limits,
         )
         info = self._push(command, {"id": fit_id})
         info["result"] = find(self.workspace.project, fit_id).result.model_dump()
@@ -471,6 +475,8 @@ def _fit(
     fixed: list[str] | None = None,
     bounds: dict[str, tuple[float | None, float | None]] | None = None,
     fit_range: tuple[float, float] | None = None,
+    curve_range: tuple[float, float] | None = None,
+    curve_to_limits: bool = False,
 ) -> tuple[Macro, str]:
     """A FitCurve on `target_id`, in the target's axes, fitted at once; with
     `residuals` also their panel below, as the GUI's fit dialog makes it."""
@@ -494,6 +500,8 @@ def _fit(
             dict[str, tuple[float | None, float | None]], bounds or {}, "bounds"
         ),
         fit_range=_validate(tuple[float, float] | None, fit_range, "fit_range"),
+        curve_range=_validate(tuple[float, float] | None, curve_range, "curve_range"),
+        curve_to_limits=_validate(bool, curve_to_limits, "curve_to_limits"),
     )
     placed = add_fit(project, fit, residuals)
     staging = project.model_copy(deep=True)

@@ -79,6 +79,9 @@ def set_conversion(
     for fit in _fits_of(project, plot_id):
         if axis == "x" and fit.fit_range is not None:
             steps.append(SetField(fit.id, ("fit_range",), _ends(fit.fit_range, remap)))
+        if axis == "x" and fit.curve_range is not None:
+            ends = _ends(fit.curve_range, remap)
+            steps.append(SetField(fit.id, ("curve_range",), ends))
         # Start values in the old units would mislead the fit; held ones are
         # the user's and stay as typed.
         held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}

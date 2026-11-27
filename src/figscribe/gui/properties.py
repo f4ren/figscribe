@@ -151,6 +151,7 @@ COLOR_FIELDS = {
     "edgecolor",
     "grid_color",
     "grid_minor_color",
+    "extrapolated_color",
     "left_out_color",
     "zero_color",
     "background",
@@ -444,6 +445,12 @@ BASIC = {
         "linestyle",
         "linewidth",
         "extend_curve",
+        "curve_range",
+        "curve_to_limits",
+        "mark_extrapolated",
+        "extrapolated_linestyle",
+        "extrapolated_color",
+        "extrapolated_linewidth",
         "outside_as_left_out",
     ),
     "ResidualPlot": (
@@ -566,6 +573,9 @@ PLACEHOLDERS = {
     "grid_color": "automatic",
     "grid_linewidth": "default",
     "grid_minor_color": "as the major lines",
+    "curve_range": "as the data",
+    "extrapolated_color": "as the curve",
+    "extrapolated_linewidth": "as the curve",
     "grid_minor_linewidth": "default",
     "linewidth": "default",
     "frame_width": "default",
@@ -613,6 +623,16 @@ TIPS = {
     "none.",
     "left_out_linestyle": "How the line runs on through the rows left out, in "
     "their color: like the plot's, another style, or none for a gap.",
+    "curve_range": "Draw the fitted curve from one x to another, which may reach "
+    "beyond the data to extrapolate; the fit does not change.",
+    "curve_to_limits": "Draw the curve across the range typed on the x axis.",
+    "mark_extrapolated": "Draw the curve differently where it leaves the data, "
+    "which no points back.",
+    "extrapolated_linestyle": "Line style of the curve beyond the data.",
+    "extrapolated_color": "Color of the curve beyond the data; empty keeps the "
+    "curve's.",
+    "extrapolated_linewidth": "Line width of the curve beyond the data; empty "
+    "keeps the curve's.",
     "extend_curve": "Draw the fitted curve across all the data, not only over the "
     "points it was fitted to.",
     "name": "Shown in the contents list and used for the file names of exports.",
@@ -993,6 +1013,12 @@ ELEMENT_SECTIONS = {
         "linestyle": "Look",
         "linewidth": "Look",
         "extend_curve": "Look",
+        "curve_range": "Look",
+        "curve_to_limits": "Look",
+        "mark_extrapolated": "Look",
+        "extrapolated_linestyle": "Look",
+        "extrapolated_color": "Look",
+        "extrapolated_linewidth": "Look",
         "outside_as_left_out": "Look",
     },
     "Histogram": {
@@ -2029,6 +2055,7 @@ CHOICES["method"] = [
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
 CHOICES["grid_minor_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["zero_linestyle"] = CHOICES["grid_linestyle"]
+CHOICES["extrapolated_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
 CHOICES["taus"] = [
     ("octaves: 1, 2, 4, 8 …", "octave"),
