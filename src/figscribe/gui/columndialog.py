@@ -6,7 +6,9 @@ under other names, or not at all.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
+from html import escape
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -23,16 +25,30 @@ from figscribe.datafile import MissingColumn
 from figscribe.gui.widgets import label
 
 NOT_THERE = "(not in the new file)"
+NO_NAME = "(column without a name)"
+SHOWN = 40
+"""Characters of a column name written out; a longer one is cut in the middle,
+and shown whole when pointed at."""
+
+
+def _short(name: str) -> str:
+    if len(name) <= SHOWN:
+        return name
+    return f"{name[: SHOWN // 2]}…{name[-(SHOWN // 2 - 1) :]}"
+
+
+class _Choice(QComboBox):
+    def wheelEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        event.ignore()  # the list scrolls; no choice changes under the pointer
 
 
 class ColumnDialog(QDialog):
-    """Asks for each of `missing` which of `columns` takes its place."""
+    """Asks for each of `missing` which column takes its place."""
 
     def __init__(
         self,
         name: str,
         missing: Sequence[MissingColumn],
-        columns: Sequence[str],
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -43,24 +59,31 @@ class ColumnDialog(QDialog):
         form.setHorizontalSpacing(16)
         # A long name takes the line, and its choice the one below.
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        self.combos: dict[str, QComboBox] = {}
+        heading.setTextFormat(Qt.TextFormat.PlainText)
+        self.combos: dict[tuple[str, str], QComboBox] = {}
+        twice = Counter(column.name for column in missing)
         for column in missing:
-            combo = QComboBox()
-            for new in columns:
-                combo.addItem(new, new)
+            combo = _Choice()
+            for new in column.choices:
+                combo.addItem(new or NO_NAME, new)
             combo.addItem(NOT_THERE, None)
-            chosen = combo.findData(column.default) if column.default else -1
+            chosen = -1 if column.default is None else combo.findData(column.default)
             combo.setCurrentIndex(chosen if chosen >= 0 else combo.count() - 1)
             # A long column name does not widen the dialog; the list shows it whole.
             combo.setSizeAdjustPolicy(
                 QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
             )
             combo.setMinimumContentsLength(24)
-            combo.setToolTip(f"Used by {', '.join(column.plots)}")
-            old = label(column.name, "value")
-            old.setToolTip(combo.toolTip())
+            used = f"Used by {', '.join(column.plots)}"
+            combo.setToolTip(f"<qt>{escape(used)}</qt>")
+            text = _short(column.name)
+            if twice[column.name] > 1:  # two sources of the file: tell them apart
+                text = f"{text} · {_short(', '.join(column.plots))}"
+            old = label(text, "value")
+            old.setTextFormat(Qt.TextFormat.PlainText)
+            old.setToolTip(f"<qt>{escape(column.name)}<br>{escape(used)}</qt>")
             form.addRow(old, combo)
-            self.combos[column.name] = combo
+            self.combos[column.source, column.name] = combo
         rows = QWidget()
         rows.setObjectName("columnRows")
         rows.setLayout(form)
@@ -86,6 +109,7 @@ class ColumnDialog(QDialog):
         layout.addWidget(buttons)
         self.resize(520, min(190 + 44 * len(missing), 560))
 
-    def chosen(self) -> dict[str, str | None]:
-        """The new column by old name; None for one the new file lacks."""
+    def chosen(self) -> dict[tuple[str, str], str | None]:
+        """The new column by source id and old name; None for one the new file
+        lacks."""
         return {name: combo.currentData() for name, combo in self.combos.items()}

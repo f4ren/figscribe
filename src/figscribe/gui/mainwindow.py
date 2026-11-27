@@ -1376,10 +1376,10 @@ class MainWindow(QMainWindow):
             return
         project, base_dir = self.document.project, self.document.base_dir
         try:
-            missing, new_columns = columns_to_choose(project, oid, base_dir, path)
+            missing = columns_to_choose(project, oid, base_dir, path)
             columns = None
             if missing:
-                dialog = ColumnDialog(path.name, missing, new_columns, self)
+                dialog = ColumnDialog(path.name, missing, self)
                 if not self.run_dialog(dialog):
                     return
                 columns = dialog.chosen()

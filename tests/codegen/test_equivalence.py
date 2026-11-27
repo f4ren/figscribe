@@ -2489,7 +2489,9 @@ def test_a_figure_taken_over_to_columns_under_other_names(tmp_path: Path) -> Non
     text = (tmp_path / "scan.csv").read_text(encoding="utf-8")
     other = text.replace("t,U,dU,t2", "time,signal,error,square")
     (tmp_path / "other.csv").write_text(other, encoding="utf-8")
-    columns = {"t": "time", "U": "signal", "dU": "error"}
+    source = project.sources[0].id
+    columns = {(source, "t"): "time", (source, "U"): "signal"}
+    columns[source, "dU"] = "error"
     swap = use_another_file(
         project, project.sources[0].id, tmp_path, tmp_path / "other.csv", columns
     )
