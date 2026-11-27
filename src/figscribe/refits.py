@@ -82,9 +82,7 @@ def fits_follow(project: Project, command: Command, base_dir: str | Path) -> Com
     whose result it does not set itself: one step. `command` unchanged where
     there is none."""
     before = {
-        fit.id: (_inputs(project, fit), repr(fit.result))
-        for fit in _fits(project)
-        if fit.result is not None
+        fit.id: (_inputs(project, fit), _paths(project, fit)) for fit in _fits(project)
     }
     if not before:
         return command
@@ -92,20 +90,66 @@ def fits_follow(project: Project, command: Command, base_dir: str | Path) -> Com
     copy.deepcopy(command).apply(staging)
     steps: list[Command] = []
     for fit in _fits(staging):
-        if fit.id not in before:
+        if fit.id not in before or _sets_result(command, fit.id):
             continue
-        inputs, result = before[fit.id]
-        if repr(fit.result) != result:
-            continue  # the command has seen to it
+        inputs, paths = before[fit.id]
         new = _inputs(staging, fit)
-        if new == inputs or not _readable(staging, fit, base_dir):
+        # One left not fitted is tried again once its file is found elsewhere,
+        # too: Locate may change nothing but the path.
+        moved = fit.result is None and _paths(staging, fit) != paths
+        if new == inputs and not moved:
             continue
-        for step in _again(staging, fit, base_dir, data_changed=new[1:] != inputs[1:]):
+        again, why = [], "the files cannot be read"
+        if _readable(staging, fit, base_dir):
+            data = load_data(staging, base_dir)
+            again, why = run_again(staging, fit, data, new[1:] != inputs[1:])
+        if why is not None and fit.result is not None:
+            again = [SetField(fit.id, ("result",), None)]
+        for step in again:
             step.apply(staging)
             steps.append(step)
     if not steps:
         return command
     return Macro(command.description, [command, *steps])
+
+
+def run_again(
+    project: Project, fit: FitCurve, data, data_changed: bool
+) -> tuple[list[Command], str | None]:
+    """The steps that fit `fit` to `data`, and None; or no steps, and why it
+    cannot be fitted. The start values change only where the fit succeeds.
+
+    A predefined model is tried from the values it started from and from a
+    guess; where the points or the model are others (`data_changed`) the guess
+    goes first. Nothing can be guessed for an own formula, so its values are
+    the only start: ones must not take their place.
+    """
+    stored = fit.initial_values
+    starts = [stored]
+    if fit.model.kind == "predefined":
+        guessed = {k: v for k, v in stored.items() if k in fit.fixed}
+        starts = [guessed, stored] if data_changed else [stored, guessed]
+    why = None
+    for start in starts:
+        trial = project.model_copy(deep=True)
+        SetField(fit.id, ("initial_values",), start).apply(trial)
+        try:
+            again = refit(trial, fit.id, data)
+        except (FitError, DataError, ValueError, KeyError, IndexError) as exc:
+            why = why or str(exc).strip("'\"").rstrip(".")
+            continue
+        if next(s for s in again.steps if s.path == ("result",)).value.converged:
+            return again.steps, None
+        why = why or "the fit did not converge"
+    return [], why
+
+
+def _sets_result(command: Command, fit_id: str) -> bool:
+    """Whether `command` itself sets the result of the fit. Asked of the
+    command, not of the values: a fit run again may come out as before."""
+    if isinstance(command, SetField):
+        return command.target == fit_id and command.path == ("result",)
+    return any(_sets_result(step, fit_id) for step in getattr(command, "steps", ()))
 
 
 def _fits(project: Project) -> list[FitCurve]:
@@ -136,6 +180,11 @@ def _sources(project: Project, plot) -> list:
     return [source for source in project.sources if source.id in used]
 
 
+def _paths(project: Project, fit: FitCurve) -> list[str]:
+    plot = _target(project, fit)
+    return [] if plot is None else [s.path for s in _sources(project, plot)]
+
+
 def _inputs(project: Project, fit: FitCurve) -> tuple[str, str, str]:
     """What the fit's result comes from, in three parts: its model and what it
     was told, then its plot's points, then the files those are in. Told from
@@ -157,31 +206,3 @@ def _readable(project: Project, fit: FitCurve, base_dir: str | Path) -> bool:
     return plot is not None and all(
         source_state(source, base_dir) == "ok" for source in _sources(project, plot)
     )
-
-
-def _again(
-    project: Project, fit: FitCurve, base_dir: str | Path, data_changed: bool
-) -> list[Command]:
-    """The steps that fit `fit` again; that leave it not fitted if it cannot."""
-    data = load_data(project, base_dir)
-    held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
-    # From the values it started from, or guessed anew. Where the points or the
-    # model are others, a guess from them goes first; nothing can be guessed
-    # for an own formula.
-    starts = [None, held]
-    if data_changed and fit.model.kind == "predefined":
-        starts.reverse()
-    for start in starts:
-        trial = project.model_copy(deep=True)
-        steps: list[Command] = []
-        if start is not None and start != fit.initial_values:
-            steps.append(SetField(fit.id, ("initial_values",), start))
-            steps[0].apply(trial)
-        try:
-            again = refit(trial, fit.id, data)
-        except (FitError, DataError, ValueError, KeyError, IndexError):
-            continue
-        result = next(s for s in again.steps if s.path == ("result",)).value
-        if result.converged:
-            return [*steps, *again.steps]
-    return [SetField(fit.id, ("result",), None)]

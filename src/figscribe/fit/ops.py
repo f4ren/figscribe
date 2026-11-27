@@ -128,17 +128,43 @@ def set_left_out(
     steps = [SetField(plot_id, ("left_out",), rows)]
     steps[0].apply(staging)
     fits = [
-        artist.id
+        artist
         for figure in staging.figures
         for axes in figure.axes
         for artist in axes.artists
         if isinstance(artist, FitCurve) and artist.target == plot_id
     ]
-    for fit_id in fits:
-        again = refit(staging, fit_id, data)
-        again.apply(staging)
-        steps += again.steps
+    for fit in fits:
+        steps += refit_in_edit(project, staging, fit, data)
     return Macro(description, steps)
+
+
+def refit_in_edit(
+    project: Project, staging: Project, fit: FitCurve, data: DataProvider
+) -> list:
+    """Fit `fit` again as part of an edit of `project` that `staging` holds
+    already, apply the fit to `staging` and return its steps. A FitError
+    refuses the edit; but a fit that has no result and could not be fitted
+    before the edit either has nothing to lose, and refuses nothing."""
+    try:
+        again = refit(staging, fit.id, data)
+    except FitError:
+        if fit.result is not None or _can_be_fitted(project, fit.id, data):
+            raise
+        return []
+    result = next(step for step in again.steps if step.path == ("result",)).value
+    if fit.result is None and not result.converged:
+        return []
+    again.apply(staging)
+    return again.steps
+
+
+def _can_be_fitted(project: Project, fit_id: str, data: DataProvider) -> bool:
+    try:
+        again = refit(project, fit_id, data)
+    except (FitError, ValueError, KeyError, IndexError):
+        return False
+    return next(s for s in again.steps if s.path == ("result",)).value.converged
 
 
 @dataclass(frozen=True)

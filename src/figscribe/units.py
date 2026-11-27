@@ -18,7 +18,7 @@ import numpy as np
 
 from figscribe.commands import Command, CommandError, Macro, SetField, find
 from figscribe.convert import linear, start
-from figscribe.fit import FitError, refit
+from figscribe.fit import FitError, refit_in_edit
 from figscribe.model import (
     AllanDeviationPlot,
     Annotation,
@@ -314,9 +314,7 @@ def _with_fits_again(project, plot_id, text, steps, data) -> Macro:
     for step in steps:
         step.apply(staging)
     for fit in _fits_of(staging, plot_id):
-        again = refit(staging, fit.id, data)
-        again.apply(staging)
-        steps += again.steps
+        steps += refit_in_edit(project, staging, fit, data)
     return Macro(text, steps)
 
 

@@ -3609,9 +3609,10 @@ panel and in the search (Ctrl+K). One undo step.
   over together (the arrays of an `.npz`), and an array must be there under its
   name.
 - **Fits are run again**: a different file under an old fit curve would be a
-  wrong figure. A predefined model guesses its start values anew; an own
-  formula keeps the ones it had, since nothing can be guessed for it; held
-  values and bounds stay. A fit that fails or does not converge is left **not
+  wrong figure. A predefined model guesses its start values anew, and where
+  that fails tries the ones it had; an own formula starts from those only,
+  since nothing can be guessed for it. They change only where the fit
+  succeeds; held values and bounds stay. A fit that fails or does not converge is left **not
   fitted**, so it draws nothing, and is named.
 - **Left-out rows are taken back in**, with a message: their numbers meant the
   old file.
@@ -3655,14 +3656,23 @@ it again in the same undo step** (`refits.fits_follow`).
   range; the fields of its plot that decide the points; and the files they are
   in, by their hash and reading options, not their path. Every field of a plot
   and of a fit is listed as one or the other, which a test holds.
-- A command that sets the result itself is left alone.
+- A command that sets the result itself is left alone, told by what the
+  command contains, not by whether the value changed.
 - Where the points or the model changed, a predefined model is guessed anew
   first and the stored start values are tried second; else the other way
-  round. An own formula keeps its values.
+  round. An own formula starts from its values only: ones never take their
+  place. Start values change only where a fit succeeds.
 - A fit that cannot be run or does not converge is left **not fitted**: it
   draws nothing, and the problem list says so. The change itself is kept. The
-  commands that refused before (units, x range) still do.
-- While a file the fit reads is changed or missing, the fit is left as it is.
+  commands that refused before (units, x range) still do, but not for a fit
+  that has no result and could not be fitted before the edit either.
+- Where a fit's inputs change while its files cannot be read, it is left not
+  fitted too: no result is better than one of other inputs.
+- A fit without a result is tried again whenever its inputs or the path of its
+  file change, so it fills in once what was wrong is put right. That includes
+  one added without a result, when its plot's data changes. A file put back at
+  the same place outside figscribe changes nothing it is told of; the problem
+  list still names the fit.
 - A project saved with an old result stays as it is until something its fit
   uses changes, or *Fit again with the current data* is pressed.
 
