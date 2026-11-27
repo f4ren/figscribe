@@ -77,7 +77,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   ~~broken axes (6)~~ done; ~~minor grid lines of their own, thinner than the
   major ones (10)~~ done.
 - **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
-  check of whitespace-separated text (2), Excel (3, `[decide]`). **F9** a
+  check of whitespace-separated text (2); ~~Excel and Calc (3)~~ done. **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
   (`[decide]`, judged by decision 0036).
 - **F14** fit an Allan deviation (M): built and accepted (0064); named
@@ -105,7 +105,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Phase 5** is later and optional.
 
 **Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2.
-F15 is done (0078); then F6 several files as one series, F1.5 a confidence
+F15 is done (0078), and Excel and Calc files (F7.3, 0079, asked for by the
+user 2026-11-27); then F6 several files as one series, F1.5 a confidence
 band, and a legend entry for the part of a curve beyond the data.
 **The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B10 items
 5 and 6 and B7 item 5, the GUI at small sizes, need no answer. The lab user's
@@ -1417,8 +1418,16 @@ measurement at ten temperatures". The script loads them in a loop.
    browser in the import dialog, `h5py` as an optional extra.
 2. **Tab/whitespace `.txt` and `.dat`** are already readable; make sure the
    import dialog's detection finds them, including several blanks.
-3. `[decide]` **Excel `.xlsx`**: very common in labs, needs `openpyxl`;
-   decide whether it is worth the dependency, or whether to say "save as CSV".
+3. ~~**Excel and LibreOffice Calc**~~ **Done** (2026-11-27, decision 0079):
+   `.xlsx`, `.xls`, `.ods` with `python-calamine`. *Learned:* a formula error
+   and a formula without a stored result read as empty cells; every save of the
+   workbook is a changed file; data files named like `2026-11-27 run.csv` gave
+   scripts that did not run (fixed on the way, in 0.3.0 too). *Open:* try files
+   saved by a real Excel and LibreOffice (the tests write their own); date and
+   time columns wait for F5.5; the installers' notices name the license of the
+   Python binding only, not of the Rust parts compiled into it, listed in its
+   `sboms/` (before R9). *Follow-ups, only if asked:* `u(x)` recognised as the
+   error of x; several sheets imported at once.
 
 ### F8 Several figures in one project — M
 
@@ -2013,7 +2022,9 @@ Waits for the user's word (2026-11-27). It carries everything under
 1. Add what is new to the manual checklist (`docs/testing.md`): a broken axis,
    number format and decimal comma, minor grid lines, a curve beyond the data,
    *Use another file…* with other column names, a changed file with a fit,
-   *Check for Updates…*. Then go through it (B7.5), on macOS at least.
+   *Check for Updates…*, a sheet from a real Excel and LibreOffice. Add the
+   licenses of python-calamine's Rust parts to the installers' notices. Then go
+   through the checklist (B7.5), on macOS at least.
 2. Version 0.4.0; date the changelog's section, and say first that a project
    saved with 0.3.0 after a change of a fit's data may hold an old curve:
    *Fit again with the current data*.
@@ -2051,7 +2062,7 @@ answer in `docs/decisions.md` when the task is started.
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | answered 2026-11-26: another file for the same figure (0075) |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
-| F7.3 | Read Excel `.xlsx` (needs `openpyxl`)? |
+| F7.3 | answered 2026-11-27: Excel and Calc with `python-calamine` (0079) |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | answered 2026-11-05: PyInstaller, no signing for now, dmg (arm64) + Windows installer + AppImage (0066) |

@@ -11,6 +11,7 @@ from figscribe.commands import History
 from figscribe.fit import add_fit, refit
 from figscribe.io import csv_source, load_data
 from figscribe.io.numpyfile import numpy_source
+from figscribe.io.sheetfile import sheet_source
 from figscribe.model import (
     AllanDeviationPlot,
     Annotation,
@@ -42,6 +43,7 @@ from figscribe.model import (
     ShadedSpan,
     dumps,
 )
+from tests.sheetfiles import write_ods
 
 
 def build(folder: Path) -> Path:
@@ -74,6 +76,18 @@ def build(folder: Path) -> Path:
     background = numpy_source(folder / "map.npz", folder, array="background")
     xs = numpy_source(folder / "map.npz", folder, array="x")
     ys = numpy_source(folder / "map.npz", folder, array="y")
+
+    # A spreadsheet, for the settings of how it is read.
+    write_ods(
+        folder / "book.ods",
+        {
+            "run 1": [["t", "U"], ["s", "V"], [1, "1,5"], [2, 3]],
+            "run 2": [["t", "U"], ["s", "V"], [3, 4], [4, 5]],
+        },
+    )
+    book = sheet_source(
+        folder / "book.ods", folder, header_row=0, skip_rows=1, decimal=","
+    )
 
     def col(name: str) -> ColumnRef:
         return ColumnRef(source=scan.id, column=name)
@@ -136,6 +150,11 @@ def build(folder: Path) -> Path:
                 curve_range=(1.0, 4.0),
                 label="theory",
             ),
+            LinePlot(
+                x=ColumnRef(source=book.id, column="t"),
+                y=ColumnRef(source=book.id, column="U"),
+                label="sheet",
+            ),
         ],
     )
     c = Axes(
@@ -181,7 +200,7 @@ def build(folder: Path) -> Path:
         panel_labels=PanelLabels(),
         axes=[a, b, c, d, e],
     )
-    sources = [scan, grid, background, xs, ys]
+    sources = [scan, grid, background, xs, ys, book]
     project = Project(sources=sources, figures=[figure])
 
     history = History(project)

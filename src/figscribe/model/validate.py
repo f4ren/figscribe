@@ -141,6 +141,10 @@ def validate_references(
                         )
                     )
 
+                if data is not None:
+                    why = _text_where_numbers_are_plotted(artist, data)
+                    if why is not None:
+                        issues.append(ReferenceIssue(tpath, artist.id, why))
                 if data is not None and isinstance(artist, FITTABLE):
                     why = _unequal_or_unreadable(artist, data)
                     if why is not None:
@@ -318,6 +322,30 @@ def unequal_columns(
                 f"{name} ({ref.column}) has {other} values, "
                 f"{first} ({base.column}) has {count}"
             )
+    return None
+
+
+def file_refs(artist) -> list[ColumnRef | ArrayRef]:
+    """Every column and whole table the artist reads."""
+    return [
+        value
+        for name in type(artist).model_fields
+        if isinstance(value := getattr(artist, name), ColumnRef | ArrayRef)
+    ]
+
+
+def _text_where_numbers_are_plotted(artist, data) -> str | None:
+    """Why a cell the artist plots is no number; None if all are."""
+    # Imported here: the data package imports the model.
+    from figscribe.io.errors import CellError, DataError
+
+    for ref in file_refs(artist):
+        try:
+            data(ref)
+        except CellError as exc:
+            return str(exc)
+        except DataError:
+            continue  # a missing column or file is told elsewhere
     return None
 
 

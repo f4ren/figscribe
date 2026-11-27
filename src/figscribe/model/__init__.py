@@ -34,12 +34,14 @@ from figscribe.model.artists import (
 from figscribe.model.axes import Axes, AxisSpec, Inset, Legend
 from figscribe.model.base import Identified, StrictModel, new_id
 from figscribe.model.data import (
+    FILE_SOURCES,
     ArrayRef,
     ColumnRef,
     CsvSource,
     DataSource,
     Hdf5Source,
     NumpySource,
+    SheetSource,
 )
 from figscribe.model.figure import Figure, GridLayout, PanelLabels
 from figscribe.model.project import (
@@ -83,6 +85,8 @@ __all__ = [
     "Legend",
     "LinePlot",
     "NumpySource",
+    "SheetSource",
+    "FILE_SOURCES",
     "PanelLabels",
     "PredefinedFit",
     "Project",

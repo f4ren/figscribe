@@ -25,7 +25,7 @@ from figscribe.gui.document import Document
 from figscribe.gui.names import artist_name
 from figscribe.io import DataError
 from figscribe.io.files import resolve_path
-from figscribe.io.refresh import describe_change, reread, use_new_version
+from figscribe.io.refresh import describe_change, reread, sole_sheet, use_new_version
 from figscribe.model import DataSource
 from figscribe.model.validate import missing_columns
 
@@ -124,8 +124,10 @@ class DataBar(QWidget):
 
     def _show_change(self, source: DataSource) -> None:
         name = Path(source.path).name
+        base = self.document.base_dir
+        sheet = sole_sheet(source, resolve_path(source.path, base))
         try:
-            new = reread(source, self.document.base_dir)
+            new = reread(source, base, sheet=sheet)
         except DataError as exc:
             self.show_message(f"What changed in {name}", str(exc))
             return

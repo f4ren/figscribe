@@ -147,7 +147,9 @@ class StartPage(QScrollArea):
         title = label("Drop a data file here", "zoneTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         zone.addWidget(title)
-        hint = label("CSV, TSV or text columns · or a figscribe project", "caption")
+        hint = label(
+            "CSV, text columns, Excel or Calc · or a figscribe project", "caption"
+        )
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         zone.addWidget(hint)
         chooser = _button("Choose a file…", "primary")

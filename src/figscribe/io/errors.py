@@ -7,3 +7,7 @@ class DataError(Exception):
 
 class DataChangedError(DataError):
     """A data file no longer matches the hash recorded in the project."""
+
+
+class CellError(DataError):
+    """A cell of a spreadsheet that is plotted but holds no number."""

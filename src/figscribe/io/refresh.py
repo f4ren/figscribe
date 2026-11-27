@@ -20,10 +20,29 @@ from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path, sha256_of
 from figscribe.io.numpyfile import numpy_source
 from figscribe.io.provider import load_data
-from figscribe.model import ArrayRef, CsvSource, DataSource, NumpySource, Project
+from figscribe.io.sheetfile import sheet_names, sheet_source
+from figscribe.model import (
+    FILE_SOURCES,
+    ArrayRef,
+    CsvSource,
+    DataSource,
+    NumpySource,
+    Project,
+    SheetSource,
+)
+from figscribe.model.validate import file_refs
 
 RECORDED = ("path", "sha256", "columns", "row_count")
 """What importing a file records about it, as opposed to how it is read."""
+
+
+def recorded(source: DataSource) -> tuple[str, ...]:
+    """The fields another version of the source's file may set."""
+    if isinstance(source, SheetSource):
+        # Another file may be of another format, start in another column, and
+        # have only one sheet, of another name.
+        return (*RECORDED, "format", "first_column", "sheet")
+    return RECORDED
 
 
 def source_state(
@@ -37,22 +56,64 @@ def source_state(
 
 
 def reread(
-    source: DataSource, base_dir: str | Path, path: str | Path | None = None
+    source: DataSource,
+    base_dir: str | Path,
+    path: str | Path | None = None,
+    *,
+    sheet: str | None = None,
 ) -> DataSource:
     """`source` as importing its file again would record it, read the way it
-    is read now; from `path` instead, for a file that moved. A DataError if
-    the file cannot be read that way."""
+    is read now; from `path` instead, for a file that moved, and from `sheet`
+    instead of the source's sheet. A DataError if the file cannot be read that
+    way."""
     describe = _describer(source)
     target = Path(path) if path is not None else resolve_path(source.path, base_dir)
     options = {name: getattr(source, name) for name in reading_options(source)}
+    if sheet is not None:
+        options["sheet"] = sheet
     try:
         fresh = describe(target, base_dir, **options)
     except OSError as exc:
         raise DataError(f"cannot open {target}: {exc.strerror}") from exc
-    new = source.model_copy(update={name: getattr(fresh, name) for name in RECORDED})
+    new = source.model_copy(
+        update={name: getattr(fresh, name) for name in recorded(source)}
+    )
     # Parse all of it now: a version that cannot be plotted is refused here.
-    load_data(Project(sources=[new]), base_dir)(ArrayRef(source=new.id))
+    # A sheet may hold anything beside what is plotted; see `check_plotted`.
+    if not isinstance(new, SheetSource):
+        load_data(Project(sources=[new]), base_dir)(ArrayRef(source=new.id))
     return new
+
+
+def sole_sheet(source: DataSource, path: Path) -> str | None:
+    """The only sheet of the file at `path`, where the source's is not in it:
+    sheets of lab files are often named after the run or the day."""
+    if not isinstance(source, SheetSource):
+        return None
+    try:
+        names = sheet_names(path.read_bytes(), path.name)
+    except (OSError, DataError):
+        return None  # reading it says why
+    return names[0] if len(names) == 1 and source.sheet not in names else None
+
+
+def check_plotted(project: Project, source_id: str, base_dir: str | Path) -> None:
+    """A DataError if a column of the sheet `source_id` that a figure plots is
+    not numbers. A column that is gone is left to the list of problems."""
+    source = find(project, source_id)
+    if not isinstance(source, SheetSource):
+        return
+    data = load_data(project, base_dir)
+    for figure in project.figures:
+        for axes in figure.axes:
+            for artist in axes.artists:
+                for ref in file_refs(artist):
+                    if ref.source == source_id and (
+                        isinstance(ref, ArrayRef)
+                        or not isinstance(ref.column, str)
+                        or ref.column in source.columns
+                    ):
+                        data(ref)
 
 
 def use_new_version(
@@ -66,15 +127,19 @@ def use_new_version(
     A DataError, changing nothing, if it cannot be read as before.
     """
     source = find(project, source_id)
-    if not isinstance(source, CsvSource | NumpySource):
+    if not isinstance(source, FILE_SOURCES):
         raise CommandError(f"{source_id!r} is not a data file")
-    new = reread(source, base_dir, path)
+    target = Path(path) if path is not None else resolve_path(source.path, base_dir)
+    new = reread(source, base_dir, path, sheet=sole_sheet(source, target))
+    staging = project.model_copy(deep=True)
+    staging.sources = [new if s.id == new.id else s for s in staging.sources]
+    check_plotted(staging, source_id, base_dir)
     name = Path(source.path).name
     return Macro(
         f"Locate {name}" if path is not None else f"Use the new version of {name}",
         [
             SetField(source.id, (field,), getattr(new, field))
-            for field in RECORDED
+            for field in recorded(source)
             if getattr(new, field) != getattr(source, field)
         ],
     )
@@ -88,13 +153,14 @@ OPTION_NAMES = {
     "comment": "comment mark",
     "encoding": "text encoding",
     "array": "array",
+    "sheet": "sheet",
 }
 """What each reading option is called in the undo text."""
 
 
 def reading_options(obj: object) -> tuple[str, ...]:
     """The fields that say how a data file is read; none for anything else."""
-    if not isinstance(obj, CsvSource | NumpySource):
+    if not isinstance(obj, FILE_SOURCES):
         return ()
     # The reader's options after the file and the project's directory, so
     # that a new one counts without being listed here.
@@ -113,7 +179,7 @@ def read_differently(
     without saying so.
     """
     source = find(project, source_id)
-    if not isinstance(source, CsvSource | NumpySource):
+    if not isinstance(source, FILE_SOURCES):
         raise CommandError(f"{source_id!r} is not a data file")
     if field not in reading_options(source):
         raise CommandError(f"{field!r} is not how {source.path} is read")
@@ -132,13 +198,20 @@ def read_differently(
         reason = "; ".join(e["msg"] for e in exc.errors())
         raise CommandError(f"cannot set {field}: {reason}") from exc
     new = reread(candidate, base_dir)
+    # As for a text file, a way of reading that makes no numbers of what is
+    # plotted is refused; not another sheet, whose rows are set after it.
+    if field != "sheet":
+        staging = project.model_copy(deep=True)
+        staging.sources = [new if s.id == new.id else s for s in staging.sources]
+        check_plotted(staging, source_id, base_dir)
     return Macro(
         f"Read {name} with another {OPTION_NAMES.get(field, field)}",
         [SetField(source.id, (field,), value)]
         + [
             SetField(source.id, (part,), getattr(new, part))
-            for part in ("columns", "row_count")
-            if getattr(new, part) != getattr(source, part)
+            for part in ("columns", "row_count", "first_column")
+            if part in type(new).model_fields
+            and getattr(new, part) != getattr(source, part)
         ],
     )
 
@@ -148,6 +221,8 @@ def _describer(source: DataSource):
         return csv_source
     if isinstance(source, NumpySource):
         return numpy_source
+    if isinstance(source, SheetSource):
+        return sheet_source
     raise DataError(f"reading {source.format!r} sources is not implemented yet")
 
 
@@ -155,6 +230,8 @@ def describe_change(old: DataSource, new: DataSource) -> str:
     """Rows and columns before and after, in a few lines."""
     before = "unknown" if old.row_count is None else str(old.row_count)
     lines = [f"{before} → {new.row_count} rows"]
+    if isinstance(new, SheetSource) and new.sheet != old.sheet:
+        lines.append(f"The sheet is now {new.sheet!r}")
     gone = [c for c in old.columns if c not in new.columns]
     added = [c for c in new.columns if c not in old.columns]
     if gone:

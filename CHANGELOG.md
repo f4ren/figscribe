@@ -5,6 +5,15 @@ release open in every later one.
 
 ## Unreleased
 
+- **Excel and LibreOffice Calc files.** `.xlsx`, `.xls` and `.ods` are read as
+  they are: pick the sheet, the row of names and rows to skip. Computed columns
+  come with the results saved in the file; empty cells are gaps; columns of
+  notes or dates do no harm unless plotted. The Python script reads the same
+  file and needs `python-calamine`, a new dependency (decision 0079). A new
+  example shows it: a pendulum with times, computed columns and *g*.
+- Fixed (in 0.3.0 too): the Python script of a figure whose data file's name
+  starts with a digit, such as `2026-11-27 run.csv`, or is a Python word, did
+  not run.
 - **Draw a function.** *Insert > Add Reference > Function…*: a formula such as
   `a * exp(-x / tau)` as a theory curve or a guide, with a field in the panel
   for each name. It moves no axis limits beside data (decision 0078).

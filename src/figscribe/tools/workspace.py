@@ -14,7 +14,7 @@ import numpy as np
 
 from figscribe.commands import Command, History
 from figscribe.io import DataError, load_data
-from figscribe.model import ArrayRef, ColumnRef, Figure, Project
+from figscribe.model import ArrayRef, ColumnRef, Figure, Project, SheetSource
 from figscribe.refits import fits_follow
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
@@ -81,9 +81,7 @@ def column_choices(project: Project, data: DataProvider) -> list[tuple[str, Colu
         columns: list[str | int] = list(source.columns)
         if not columns:
             columns = list(range(_width(source.id, data)))
-        name = Path(source.path).name
-        if getattr(source, "array", None):
-            name = f"{name}[{source.array}]"
+        name = _source_name(project, source)
         for column in columns:
             ref = ColumnRef(source=source.id, column=column)
             choices.append((f"{name}: {column}", ref))
@@ -95,13 +93,23 @@ def array_choices(project: Project) -> list[tuple[str, ArrayRef]]:
     NumPy file's array."""
     choices = []
     for source in project.sources:
-        name = Path(source.path).name
-        if getattr(source, "array", None):
-            name = f"{name}[{source.array}]"
-        elif source.format == "csv":
+        name = _source_name(project, source)
+        if source.format == "csv" or isinstance(source, SheetSource):
             name = f"{name} (whole table)"
         choices.append((name, ArrayRef(source=source.id)))
     return choices
+
+
+def _source_name(project: Project, source) -> str:
+    """The file's name, with the array or sheet where that tells it apart."""
+    name = Path(source.path).name
+    if getattr(source, "array", None):
+        return f"{name}[{source.array}]"
+    if isinstance(source, SheetSource) and any(
+        other is not source and other.path == source.path for other in project.sources
+    ):
+        return f"{name}[{source.sheet}]"
+    return name
 
 
 def _width(source_id: str, data: DataProvider) -> int:

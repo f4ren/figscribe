@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "figscribe_version": "0.2.0",
+  "created": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "92300f976a72",
+      "format": "ods",
+      "path": "pendulum.ods",
+      "sha256": "b3d81e8b0bb08a5a8f94ab774a5f692212beaf7e2bd4fe1d8086bd3f1167a58a",
+      "sheet": "measurement",
+      "header_row": 2,
+      "skip_rows": 1,
+      "decimal": ".",
+      "first_column": 0,
+      "columns": [
+        "L",
+        "t1",
+        "t2",
+        "t3",
+        "T",
+        "T2",
+        "u(T2)",
+        "note"
+      ],
+      "row_count": 11
+    }
+  ],
+  "figures": [
+    {
+      "id": "e16dd2aa1e56",
+      "name": "Pendulum",
+      "width_mm": 89.0,
+      "height_mm": 75.0,
+      "dpi": 300.0,
+      "unit_format": "parentheses",
+      "decimal_comma": false,
+      "stylesheet": null,
+      "font_size": null,
+      "tick_direction": "in",
+      "ticks_all_sides": true,
+      "open_frame": false,
+      "frame_width": null,
+      "tick_width": null,
+      "tick_length": null,
+      "minor_tick_width": null,
+      "minor_tick_length": null,
+      "align_labels": true,
+      "panel_labels": null,
+      "layout": {
+        "rows": 1,
+        "cols": 1,
+        "share_x": "none",
+        "share_y": "none",
+        "width_ratios": null,
+        "height_ratios": null,
+        "constrained_layout": true,
+        "hspace": null,
+        "wspace": null
+      },
+      "axes": [
+        {
+          "id": "b70d284e086f",
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "title": null,
+          "title_size": null,
+          "x": {
+            "label": "Length",
+            "unit": "m",
+            "scale": "linear",
+            "limits": [
+              0.0,
+              1.35
+            ],
+            "inverted": false,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null,
+            "number_format": "auto",
+            "decimals": 1,
+            "breaks": []
+          },
+          "y": {
+            "label": "Period squared",
+            "unit": "s²",
+            "scale": "linear",
+            "limits": [
+              0.0,
+              5.4
+            ],
+            "inverted": false,
+            "ticks": null,
+            "tick_labels": null,
+            "major_step": null,
+            "minor_ticks": true,
+            "minor_divisions": null,
+            "label_size": null,
+            "tick_size": null,
+            "labelpad": null,
+            "symlog_linthresh": null,
+            "prefix": null,
+            "number_format": "auto",
+            "decimals": 1,
+            "breaks": []
+          },
+          "y_right": null,
+          "inset": null,
+          "legend": {
+            "visible": true,
+            "location": "upper left",
+            "position": null,
+            "frame": false,
+            "ncols": 1,
+            "fontsize": null
+          },
+          "grid": false,
+          "grid_axis": "both",
+          "grid_which": "major",
+          "grid_color": null,
+          "grid_linewidth": null,
+          "grid_linestyle": null,
+          "grid_minor_color": null,
+          "grid_minor_linewidth": null,
+          "grid_minor_linestyle": null,
+          "artists": [
+            {
+              "id": "5a433a143daf",
+              "label": "measured",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "errorbar",
+              "x": {
+                "source": "92300f976a72",
+                "column": "L"
+              },
+              "y": {
+                "source": "92300f976a72",
+                "column": "T2"
+              },
+              "xerr": null,
+              "yerr": {
+                "source": "92300f976a72",
+                "column": "u(T2)"
+              },
+              "color": "C0",
+              "linestyle": "none",
+              "linewidth": 1.5,
+              "marker": "o",
+              "markersize": 3.5,
+              "capsize": 2.0,
+              "elinewidth": 1.0,
+              "band": null,
+              "left_out": [],
+              "left_out_color": null,
+              "left_out_marker": "same",
+              "left_out_linestyle": "same",
+              "left_out_note": null,
+              "x_conversion": null,
+              "y_conversion": null,
+              "x_range": null,
+              "reduction": null
+            },
+            {
+              "id": "1a90ff098926",
+              "label": "straight line",
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "fit",
+              "target": "5a433a143daf",
+              "model": {
+                "kind": "predefined",
+                "name": "linear",
+                "degree": null
+              },
+              "initial_values": {
+                "b": -0.0005975343434337253,
+                "a": 4.023147545454546
+              },
+              "fixed": [],
+              "parameter_bounds": {},
+              "fit_range": null,
+              "extend_curve": false,
+              "outside_as_left_out": false,
+              "curve_range": null,
+              "curve_to_limits": true,
+              "mark_extrapolated": true,
+              "extrapolated_linestyle": "--",
+              "extrapolated_color": null,
+              "extrapolated_linewidth": null,
+              "result": {
+                "parameters": {
+                  "a": 4.025142479867718,
+                  "b": -0.002186837415198446
+                },
+                "uncertainties": {
+                  "a": 0.01990186496958438,
+                  "b": 0.012035916028758913
+                },
+                "reduced_chi_square": 1.2276262379761909,
+                "converged": true
+              },
+              "color": "C1",
+              "linestyle": "-",
+              "linewidth": 1.5
+            },
+            {
+              "id": "4b8c74a35549",
+              "label": null,
+              "visible": true,
+              "zorder": 2.0,
+              "alpha": 1.0,
+              "axis": "left",
+              "kind": "annotation",
+              "text": "$g = 4\\pi^2/a$ = 9.81 m/s²",
+              "position": [
+                0.42,
+                0.07
+              ],
+              "coords": "axes",
+              "arrow_to": null,
+              "fontsize": null,
+              "color": null,
+              "background": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

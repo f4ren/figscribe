@@ -1,10 +1,11 @@
-"""Adding a CSV file: guessed options, a live preview, and a first plot."""
+"""Adding a data file: guessed options, a live preview, and a first plot."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
+import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -30,7 +31,7 @@ from figscribe.gui.names import ENCODINGS
 from figscribe.gui.widgets import label, rule
 from figscribe.io.csvfile import csv_source, detect_encoding, read_csv
 from figscribe.io.errors import DataError
-from figscribe.model import CsvSource
+from figscribe.model import CsvSource, DataSource
 from figscribe.suggest import Suggestion, error_columns, suggest, units_line
 
 DELIMITERS: list[tuple[str, str | None]] = [
@@ -97,8 +98,8 @@ class LineSpinBox(QSpinBox):
         return int(text) - 1
 
 
-class ImportDialog(QDialog):
-    """Asks how to read `path`; `source()` then describes it for the model.
+class DataDialog(QDialog):
+    """Asks how to read a data file; `source()` then describes it for the model.
 
     Shows what was detected as a row of chips, the table as it will be read,
     and first plots to choose from. `mode` says what to do on accept: "plot"
@@ -107,6 +108,9 @@ class ImportDialog(QDialog):
 
     `base_dir` is the project's directory; files below it are stored relative
     to it. Without one (an unsaved project), the path is stored absolute.
+
+    A subclass reads one kind of file: `_settings_form` makes its settings,
+    `_guessed` fills them first, `_read` reads the file as they say.
     """
 
     def __init__(self, path: str | Path, base_dir: Path | None, parent=None):
@@ -115,9 +119,7 @@ class ImportDialog(QDialog):
         self.base_dir = base_dir
         self.setWindowTitle(f"Add {self.path.name}")
         self._raw = self.path.read_bytes()
-        encoding = detect_encoding(self._raw)
-        self._text = self._raw.decode(encoding)
-        self._source: CsvSource | None = None
+        self._source: DataSource | None = None
         self.units: list[str] | None = None
         """One unit per column, from a line of units below the header."""
         self.errors: dict[str, str] = {}
@@ -125,41 +127,10 @@ class ImportDialog(QDialog):
         self.suggestions: list[Suggestion] = []
         self.mode = "plot"
 
-        self.delimiter = QComboBox()
-        for text, _ in DELIMITERS:
-            self.delimiter.addItem(text)
-        self.decimal = QComboBox()
-        self.decimal.addItem("Point (1.5)", ".")
-        self.decimal.addItem("Comma (1,5)", ",")
-        self.has_header = QCheckBox("Column names in line")
-        self.header_row = LineSpinBox()
-        self.header_row.setRange(0, 10_000)
-        self.skip_rows = QSpinBox()
-        self.skip_rows.setRange(0, 10_000)
-        self.comment = QLineEdit()
-        self.comment.setPlaceholderText("none")
-        self.comment.setMaxLength(3)
-        self.encoding = QComboBox()
-        for text, value in ENCODINGS:
-            self.encoding.addItem(text, value)
-        self.encoding.setCurrentIndex(self.encoding.findData(encoding))
-
-        header = QWidget()
-        row = QHBoxLayout(header)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(self.has_header)
-        row.addWidget(self.header_row)
-        row.addStretch(1)
-
         self.settings = QWidget()
         form = QFormLayout(self.settings)
         form.setContentsMargins(0, 0, 0, 0)
-        form.addRow("Separator", self.delimiter)
-        form.addRow("Decimal mark", self.decimal)
-        form.addRow("Header", header)
-        form.addRow("Lines skipped after it", self.skip_rows)
-        form.addRow("Comments start with", self.comment)
-        form.addRow("Text encoding", self.encoding)
+        self._settings_form(form)
         self.settings.hide()
 
         self.chips = QHBoxLayout()
@@ -201,15 +172,7 @@ class ImportDialog(QDialog):
 
         self._layout(form)
         self.resize(980, 600)
-
-        self.set_options(guess_options(self._text))
-        for widget in (self.delimiter, self.decimal):
-            widget.currentIndexChanged.connect(self.update_preview)
-        for widget in (self.header_row, self.skip_rows):
-            widget.valueChanged.connect(self.update_preview)
-        self.has_header.toggled.connect(self.update_preview)
-        self.comment.textChanged.connect(self.update_preview)
-        self.encoding.currentIndexChanged.connect(self._set_encoding)
+        self._start()
         self.update_preview()
 
     def _layout(self, form: QFormLayout) -> None:
@@ -264,36 +227,7 @@ class ImportDialog(QDialog):
         layout.addWidget(rule())
         layout.addLayout(bottom)
 
-    # --- options ------------------------------------------------------------
-
-    def set_options(self, options: dict) -> None:
-        delimiters = [d for _, d in DELIMITERS]
-        self.delimiter.setCurrentIndex(delimiters.index(options["delimiter"]))
-        self.decimal.setCurrentIndex(self.decimal.findData(options["decimal"]))
-        self.has_header.setChecked(options["header_row"] is not None)
-        self.header_row.setValue(options["header_row"] or 0)
-        self.skip_rows.setValue(options["skip_rows"])
-        self.comment.setText(options["comment"] or "")
-        self.update_preview()
-
-    def options(self) -> dict:
-        return {
-            "delimiter": DELIMITERS[self.delimiter.currentIndex()][1],
-            "decimal": self.decimal.currentData(),
-            "header_row": self.header_row.value()
-            if self.has_header.isChecked()
-            else None,
-            "skip_rows": self.skip_rows.value(),
-            "comment": self.comment.text() or None,
-            "encoding": self.encoding.currentData(),
-        }
-
-    def _set_encoding(self) -> None:
-        # Undecodable bytes become � for the units line; the preview reports them.
-        self._text = self._raw.decode(self.encoding.currentData(), errors="replace")
-        self.update_preview()
-
-    def source(self) -> CsvSource | None:
+    def source(self) -> DataSource | None:
         """The file as the model will record it; None while it does not parse."""
         return self._source
 
@@ -339,12 +273,7 @@ class ImportDialog(QDialog):
         self._source = None
         self.units = None
         try:
-            source = csv_source(
-                self.path, self.base_dir or self.path.parent, **self.options()
-            )
-            if self.base_dir is None:
-                source = source.model_copy(update={"path": str(self.path.resolve())})
-            table = read_csv(source, self._raw, self.path.name)
+            source, table = self._read()
         except (DataError, ValueError) as exc:
             self.error.setText(str(exc))
             self.table.clear()
@@ -353,7 +282,6 @@ class ImportDialog(QDialog):
             self.summary.setText("Not readable with these settings. Change one below.")
             self.status.setText("")
             self.settings.show()
-            table = None
         else:
             if source.columns and len(source.columns) != table.shape[1]:
                 self.error.setText(
@@ -380,16 +308,28 @@ class ImportDialog(QDialog):
             ok.setText("Add and plot")
             self.mode = "plot"
 
-    def _read_units(self, source: CsvSource, count: int) -> list[str] | None:
-        if source.header_row is None or source.skip_rows < 1:
-            return None
-        lines = self._text.splitlines()
-        index = source.header_row + 1
-        if index >= len(lines):
-            return None
-        return units_line(lines[index], source.delimiter, count)
+    def _read(self) -> tuple[DataSource, np.ndarray]:
+        """The source as the settings describe it, and its table (rows by
+        columns); a DataError if the file cannot be read that way."""
+        raise NotImplementedError
 
-    def _fill(self, source: CsvSource, table) -> None:
+    def _relative_to_project(self, source: DataSource) -> DataSource:
+        if self.base_dir is None:
+            return source.model_copy(update={"path": str(self.path.resolve())})
+        return source
+
+    def _read_units(self, source: DataSource, count: int) -> list[str] | None:
+        raise NotImplementedError
+
+    def _cell(self, value) -> str:
+        """One value of the table as the preview shows it."""
+        return f"{value:g}"
+
+    def _numbers_note(self, source: DataSource, table: np.ndarray) -> list[str]:
+        """What to say about the table's values, a sentence each."""
+        return [f"All {table.shape[0]} rows read as numbers."]
+
+    def _fill(self, source: DataSource, table: np.ndarray) -> None:
         rows, cols = min(table.shape[0], PREVIEW_ROWS), table.shape[1]
         self.table.setRowCount(rows)
         self.table.setColumnCount(cols)
@@ -410,13 +350,13 @@ class ImportDialog(QDialog):
                 item.setToolTip(f"Looks like the error of {self.errors[str(name)]}")
         for r in range(rows):
             for c in range(cols):
-                self.table.setItem(r, c, QTableWidgetItem(f"{table[r, c]:g}"))
+                self.table.setItem(r, c, QTableWidgetItem(self._cell(table[r, c])))
         count = table.shape[0]
         self.summary.setText(
             f"{count} rows · {cols} columns · read as shown below. "
             "Wrong? Change any setting, the table follows."
         )
-        notes = [f"All {count} rows read as numbers."]
+        notes = self._numbers_note(source, table)
         notes += [
             f"{err} looks like the error of {value}."
             for err, value in self.errors.items()
@@ -427,6 +367,124 @@ class ImportDialog(QDialog):
     def _show_chips(self) -> None:
         while self.chips.count():
             _discard(self.chips.takeAt(0).widget())
+        for text in self._chip_texts():
+            chip = QToolButton()
+            chip.setObjectName("pill")
+            chip.setText(f"{text} ▾")
+            chip.setToolTip("Change how the file is read")
+            chip.clicked.connect(lambda: self.settings.setVisible(True))
+            self.chips.addWidget(chip)
+
+    def _chip_texts(self) -> list[str]:
+        raise NotImplementedError
+
+    def _plottable(self) -> list[str | int] | None:
+        """The columns a first plot may use."""
+        if self._source is None:
+            return None
+        return self._source.columns or list(range(self.table.columnCount()))
+
+    def _show_suggestions(self) -> None:
+        columns = self._plottable()
+        found = suggest(columns) if columns else []
+        if found == self.suggestions:
+            return
+        wanted = self._wanted
+        self.suggestions = found
+        for button in self.choices.buttons():
+            self.choices.removeButton(button)
+            _discard(button)
+        for i, suggestion in enumerate(found):
+            tile = _choice_tile(suggestion)
+            self.choices.addButton(tile, i)
+            self._choice_box.addWidget(tile)
+        if found:
+            self.choose(found.index(wanted) if wanted in found else 0)
+
+
+class ImportDialog(DataDialog):
+    """Asks how to read the text file `path` (see `DataDialog`)."""
+
+    def _settings_form(self, form: QFormLayout) -> None:
+        encoding = detect_encoding(self._raw)
+        self._text = self._raw.decode(encoding)
+        self.delimiter = QComboBox()
+        for text, _ in DELIMITERS:
+            self.delimiter.addItem(text)
+        self.decimal = _decimal_box()
+        self.has_header = QCheckBox("Column names in line")
+        self.header_row = LineSpinBox()
+        self.header_row.setRange(0, 10_000)
+        self.skip_rows = QSpinBox()
+        self.skip_rows.setRange(0, 10_000)
+        self.comment = QLineEdit()
+        self.comment.setPlaceholderText("none")
+        self.comment.setMaxLength(3)
+        self.encoding = QComboBox()
+        for text, value in ENCODINGS:
+            self.encoding.addItem(text, value)
+        self.encoding.setCurrentIndex(self.encoding.findData(encoding))
+        form.addRow("Separator", self.delimiter)
+        form.addRow("Decimal mark", self.decimal)
+        form.addRow("Header", _header_row(self.has_header, self.header_row))
+        form.addRow("Lines skipped after it", self.skip_rows)
+        form.addRow("Comments start with", self.comment)
+        form.addRow("Text encoding", self.encoding)
+
+    def _start(self) -> None:
+        self.set_options(guess_options(self._text))
+        for widget in (self.delimiter, self.decimal):
+            widget.currentIndexChanged.connect(self.update_preview)
+        for widget in (self.header_row, self.skip_rows):
+            widget.valueChanged.connect(self.update_preview)
+        self.has_header.toggled.connect(self.update_preview)
+        self.comment.textChanged.connect(self.update_preview)
+        self.encoding.currentIndexChanged.connect(self._set_encoding)
+
+    def set_options(self, options: dict) -> None:
+        delimiters = [d for _, d in DELIMITERS]
+        self.delimiter.setCurrentIndex(delimiters.index(options["delimiter"]))
+        self.decimal.setCurrentIndex(self.decimal.findData(options["decimal"]))
+        self.has_header.setChecked(options["header_row"] is not None)
+        self.header_row.setValue(options["header_row"] or 0)
+        self.skip_rows.setValue(options["skip_rows"])
+        self.comment.setText(options["comment"] or "")
+        self.update_preview()
+
+    def options(self) -> dict:
+        return {
+            "delimiter": DELIMITERS[self.delimiter.currentIndex()][1],
+            "decimal": self.decimal.currentData(),
+            "header_row": self.header_row.value()
+            if self.has_header.isChecked()
+            else None,
+            "skip_rows": self.skip_rows.value(),
+            "comment": self.comment.text() or None,
+            "encoding": self.encoding.currentData(),
+        }
+
+    def _set_encoding(self) -> None:
+        # Undecodable bytes become � for the units line; the preview reports them.
+        self._text = self._raw.decode(self.encoding.currentData(), errors="replace")
+        self.update_preview()
+
+    def _read(self) -> tuple[CsvSource, np.ndarray]:
+        source = csv_source(
+            self.path, self.base_dir or self.path.parent, **self.options()
+        )
+        source = self._relative_to_project(source)
+        return source, read_csv(source, self._raw, self.path.name)
+
+    def _read_units(self, source: CsvSource, count: int) -> list[str] | None:
+        if source.header_row is None or source.skip_rows < 1:
+            return None
+        lines = self._text.splitlines()
+        index = source.header_row + 1
+        if index >= len(lines):
+            return None
+        return units_line(lines[index], source.delimiter, count)
+
+    def _chip_texts(self) -> list[str]:
         options = self.options()
         texts = [
             DELIMITER_NAMES[DELIMITERS[self.delimiter.currentIndex()][0]],
@@ -444,32 +502,24 @@ class ImportDialog(QDialog):
             texts.append(f"{options['comment']} comments")
         if options["encoding"] != "utf-8-sig":
             texts.append(f"{self.encoding.currentText()} text")
-        for text in texts:
-            chip = QToolButton()
-            chip.setObjectName("pill")
-            chip.setText(f"{text} ▾")
-            chip.setToolTip("Change how the file is read")
-            chip.clicked.connect(lambda: self.settings.setVisible(True))
-            self.chips.addWidget(chip)
+        return texts
 
-    def _show_suggestions(self) -> None:
-        columns = (self._source.columns or None) if self._source else None
-        if self._source is not None and columns is None:
-            columns = list(range(self.table.columnCount()))
-        found = suggest(columns) if columns else []
-        if found == self.suggestions:
-            return
-        wanted = self._wanted
-        self.suggestions = found
-        for button in self.choices.buttons():
-            self.choices.removeButton(button)
-            _discard(button)
-        for i, suggestion in enumerate(found):
-            tile = _choice_tile(suggestion)
-            self.choices.addButton(tile, i)
-            self._choice_box.addWidget(tile)
-        if found:
-            self.choose(found.index(wanted) if wanted in found else 0)
+
+def _decimal_box() -> QComboBox:
+    box = QComboBox()
+    box.addItem("Point (1.5)", ".")
+    box.addItem("Comma (1,5)", ",")
+    return box
+
+
+def _header_row(check: QCheckBox, line: QSpinBox) -> QWidget:
+    holder = QWidget()
+    row = QHBoxLayout(holder)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.addWidget(check)
+    row.addWidget(line)
+    row.addStretch(1)
+    return holder
 
 
 DELIMITER_NAMES = {

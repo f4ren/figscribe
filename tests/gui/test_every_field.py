@@ -62,7 +62,7 @@ TYPED = {
     "cols": ["3"],
     "zorder": ["5", "0.5"],  # to the front, or to the back
     "array": ["background"],
-    "decimal": [","],
+    "decimal": [",", "."],
     "comment": ["%"],
     "major_value": ["1"],
     "minor_tick_length": ["4"],  # 2 pt is Matplotlib's own
@@ -93,6 +93,11 @@ EXPECTED = {
         "the file has commas; no other separator reads it",
     ),
     "CsvSource.decimal": (REFUSED, "a comma, the only other mark, is the separator"),
+    "SheetSource.decimal": (REFUSED, "numbers stored as text with a comma"),
+    "SheetSource.header_row": (
+        "the figure cannot be drawn: DataError: no column 't'",
+        "another header row renames the columns the plots use, and says so",
+    ),
     "CsvSource.header_row": (
         "the figure cannot be drawn: DataError: no column 't'",
         "another header line renames the columns the plots use, and says so",
@@ -138,6 +143,7 @@ OBJECTS: dict[str, Callable[[Project], str]] = {
     "color mesh": _artist("colormesh"),
     "CSV file": lambda p: p.sources[0].id,
     "NumPy file": lambda p: p.sources[1].id,
+    "spreadsheet": lambda p: p.sources[5].id,
 }
 
 

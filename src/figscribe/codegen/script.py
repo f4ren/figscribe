@@ -41,7 +41,9 @@ from figscribe.function import values as function_values
 from figscribe.io import load_data
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
+from figscribe.io.sheetfile import column_letters
 from figscribe.model import (
+    FILE_SOURCES,
     AllanDeviationPlot,
     Annotation,
     ArrayRef,
@@ -66,6 +68,7 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
     ShadedSpan,
+    SheetSource,
 )
 from figscribe.model.breaks import Breaks, effective_breaks
 from figscribe.model.sharing import sharing_group, typed_limits
@@ -158,6 +161,9 @@ RESERVED = {
     "cut_out",
     "Shape",
     "PathCollection",
+    # Builtins the script calls, which a column of the name would hide.
+    *"abs all any dict enumerate float int isinstance len list map max min".split(),
+    *"open print range round sorted str sum super tuple zip SystemExit".split(),
 }
 
 
@@ -231,6 +237,12 @@ class _Writer:
         self._mappables = 0
         self.artists = {a.id: a for axes in figure.axes for a in axes.artists}
         self.sources = {s.id: s for s in project.sources}
+        self.reserved = RESERVED | {
+            f"{_stem(s.path)}_path" for s in project.sources if hasattr(s, "path")
+        }
+        """Names the script uses itself, which no variable of its data takes."""
+        if any(isinstance(s, SheetSource) for s in project.sources):
+            self.reserved |= SHEET_NAMES
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
         self.unit_lines: list[tuple[str, str, str]] = []
@@ -292,7 +304,7 @@ class _Writer:
 
     def _name_columns(self) -> dict[tuple[str, str | int], str]:
         names: dict[tuple[str, str | int], str] = {}
-        taken = set(RESERVED)
+        taken = set(self.reserved)
         for ref in self._refs():
             source = self.sources.get(ref.source)
             if source is None:
@@ -308,7 +320,7 @@ class _Writer:
                 plain = f"col{ref.column}"
             name = plain
             if name in taken:
-                name = f"{_slug(Path(source.path).stem) or 'data'}_{plain}"
+                name = f"{_stem(source.path)}_{plain}"
             while name in taken:
                 name += "_"
             taken.add(name)
@@ -318,7 +330,7 @@ class _Writer:
     def _name_arrays(self) -> dict[tuple[str, str | None], str]:
         """{(source id, key): variable} for every 2-D array the figure plots."""
         names: dict[tuple[str, str | None], str] = {}
-        taken = set(RESERVED) | set(self.columns.values())
+        taken = set(self.reserved) | set(self.columns.values())
         for axes in self.figure.axes:
             for artist in axes.artists:
                 for field in ("data", "c"):
@@ -333,9 +345,9 @@ class _Writer:
                     key = (ref.source, ref.key)
                     if key in names:
                         continue
-                    stem = _slug(Path(source.path).stem) or "data"
+                    stem = _stem(source.path)
                     name = f"{stem}_{_slug(ref.key)}" if ref.key else stem
-                    if isinstance(source, CsvSource):
+                    if isinstance(source, CsvSource | SheetSource):
                         name = f"{stem}_table"
                     if name[0].isdigit():
                         name = f"data_{name}"
@@ -348,7 +360,7 @@ class _Writer:
     def _taken(self) -> set[str]:
         """Names given so far, which a new name must not repeat."""
         return {
-            *RESERVED,
+            *self.reserved,
             *self.columns.values(),
             *getattr(self, "units", {}).values(),
             *getattr(self, "used", {}).values(),
@@ -579,6 +591,7 @@ class _Writer:
     def write(self, script_dir: Path, output: str) -> str:
         self._header()
         self._imports()
+        self._sheet_helpers()
         self._data(script_dir)
         self._units()
         self._left_out()
@@ -597,8 +610,12 @@ class _Writer:
 
     def _header(self) -> None:
         figure = self.figure
-        scipy = self.fits or self._grouped()
-        needs = "NumPy, Matplotlib and SciPy" if scipy else "NumPy and Matplotlib"
+        packages = ["NumPy", "Matplotlib"]
+        if self.fits or self._grouped():
+            packages.append("SciPy")
+        if self._sheets():
+            packages.append("python-calamine")
+        needs = f"{', '.join(packages[:-1])} and {packages[-1]}"
         self.emit(
             f'"""{figure.name}: {_num(figure.width_mm)} × {_num(figure.height_mm)} mm '
             f"at {_num(figure.dpi)} dpi.",
@@ -613,6 +630,14 @@ class _Writer:
                 self.emit(f"    {source.path}", f"        sha256 {source.sha256}")
         self.emit('"""')
 
+    def _sheets(self) -> list[SheetSource]:
+        """The spreadsheet sources the figure plots."""
+        return [
+            s
+            for s in self.project.sources
+            if isinstance(s, SheetSource) and self._used(s.id)
+        ]
+
     def _used(self, source_id: str) -> bool:
         return any(key[0] == source_id for key in [*self.columns, *self.arrays])
 
@@ -620,6 +645,8 @@ class _Writer:
         self.emit("")
         if self.columns or self.arrays:
             self.emit("import hashlib")
+        if self._sheets():
+            self.emit("import io")
         self.emit("from pathlib import Path", "")
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
         locators = self._locators()
@@ -639,6 +666,8 @@ class _Writer:
             )
         if any(self.places[oid][1] != "both" for oid in self.functions):
             self.emit("from matplotlib.lines import Line2D")
+        if self._sheets():
+            self.emit("from python_calamine import CalamineWorkbook")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
         if self._grouped():
@@ -759,6 +788,16 @@ class _Writer:
         self.section("Tick numbers")
         self.emit(*"\n\n\n".join(helpers).splitlines())
 
+    def _sheet_helpers(self) -> None:
+        sheets = self._sheets()
+        if not sheets:
+            return
+        self.section("Reading spreadsheets")
+        column = SHEET_COLUMN
+        if any(source.decimal != "." for source in sheets):
+            column = SHEET_COLUMN_WITH_MARK
+        self.emit(*f"{ROWS_OF_SHEET}\n\n\n{column}".splitlines())
+
     def _data(self, script_dir: Path) -> None:
         used = [s for s in self.project.sources if self._used(s.id)]
         if not used:
@@ -770,11 +809,11 @@ class _Writer:
             self._source(source, script_dir)
 
     def _source(self, source, script_dir: Path) -> None:
-        if not isinstance(source, CsvSource | NumpySource):
+        if not isinstance(source, FILE_SOURCES):
             raise NotImplementedError(
                 f"generating code for {source.format!r} sources is not implemented"
             )
-        stem = _slug(Path(source.path).stem) or "data"
+        stem = _stem(source.path)
         path = f"{stem}_path"
         location = resolve_path(source.path, self.base_dir)
         self.emit(f"{path} = HERE / {_str(_relative(location, script_dir))}")
@@ -790,6 +829,9 @@ class _Writer:
         indices = [_index(source, column) for column, _ in refs]
         if isinstance(source, NumpySource):
             self._numpy(source, path, refs, indices)
+            return
+        if isinstance(source, SheetSource):
+            self._sheet(source, path, stem, refs, indices)
             return
         kwargs: dict[str, str] = {}
         if source.delimiter is not None:
@@ -830,6 +872,39 @@ class _Writer:
         targets = ", ".join(name for _, name in refs)
         self.call(f"{targets} = np.loadtxt", path, **kwargs)
 
+    def _sheet(self, source: SheetSource, path: str, stem: str, refs, indices) -> None:
+        """The sheet's rows of data, and the columns of them that are used."""
+        rows = self._free(f"{stem}_rows")
+        first = (0 if source.header_row is None else source.header_row + 1) + (
+            source.skip_rows
+        )
+        self.call(f"{rows} = rows_of_sheet", path, _str(source.sheet), first=str(first))
+        decimal = ""
+        if source.decimal != ".":
+            decimal = f", decimal={_str(source.decimal)}"
+        table = self.arrays.get((source.id, None))
+        if table is not None:
+            # The whole table is plotted as an image; columns are slices of it.
+            width = len(source.columns)
+            if self.data is not None:
+                width = self.data(ArrayRef(source=source.id)).shape[1]
+            start = source.first_column
+            self.emit(
+                f"{table} = np.column_stack(",
+                f"    [sheet_column({rows}, i{decimal}) "
+                f"for i in range({start}, {start + width})]",
+                ")",
+            )
+            for (_, name), index in zip(refs, indices, strict=True):
+                self.emit(f"{name} = {table}[:, {index}]")
+            return
+        for (_, name), index in zip(refs, indices, strict=True):
+            at = source.first_column + index
+            self.emit(
+                f"{name} = sheet_column({rows}, {at}{decimal})"
+                f"  # column {column_letters(at)}"
+            )
+
     def _numpy(self, source: NumpySource, path: str, refs, indices) -> None:
         """np.load the arrays used, as floats like figscribe reads them."""
         keys = {key for sid, key in self.arrays if sid == source.id}
@@ -846,9 +921,9 @@ class _Writer:
         for key in sorted(keys, key=lambda k: (k is not None, k or "")):
             name = self.arrays.get((source.id, key))
             if name is None:
-                stem = _slug(Path(source.path).stem) or "data"
+                stem = _stem(source.path)
                 name = f"{stem}_{_slug(source.array)}" if source.array else stem
-                taken = {*self.arrays.values(), *self.columns.values(), *RESERVED}
+                taken = {*self.arrays.values(), *self.columns.values(), *self.reserved}
                 while name in taken:
                     name += "_"
                 self.arrays[(source.id, key)] = name
@@ -2456,6 +2531,30 @@ def overlapping_adev(phase, tau0, m):
 does the same, step by step."""
 
 
+# What the script reads a spreadsheet with, as `io.sheetfile` does.
+SHEET_NAMES = {"CalamineWorkbook", "io", "rows_of_sheet", "sheet_column"}
+
+ROWS_OF_SHEET = '''\
+def rows_of_sheet(path, sheet, first):
+    """The rows of data of a sheet, without empty ones, from row `first` on
+    (0 is the sheet's row 1)."""
+    book = CalamineWorkbook.from_filelike(io.BytesIO(path.read_bytes()))
+    rows = book.get_sheet_by_name(sheet).to_python(skip_empty_area=False)
+    return [row for row in rows[first:] if any(str(cell).strip() for cell in row)]'''
+
+SHEET_COLUMN = '''\
+def sheet_column(rows, column):
+    """A column of those rows as numbers (0 is column A); empty cells are NaN."""
+    cells = [str(row[column]).strip() for row in rows]
+    return np.array([float(cell) if cell else np.nan for cell in cells])'''
+
+SHEET_COLUMN_WITH_MARK = '''\
+def sheet_column(rows, column, decimal="."):
+    """A column of those rows as numbers (0 is column A); empty cells are NaN.
+    `decimal` is the mark of numbers stored as text."""
+    cells = [str(row[column]).strip().replace(decimal, ".") for row in rows]
+    return np.array([float(cell) if cell else np.nan for cell in cells])'''
+
 DECIMAL_COMMA = '''\
 def decimal_comma(text):
     """The number with a decimal comma; in mathtext, the braces keep TeX from
@@ -2761,6 +2860,16 @@ def _slug(text: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", text).strip("_").lower()
 
 
+def _stem(path: str) -> str:
+    """A data file's name as the start of the names of its variables."""
+    name = _slug(Path(path).stem) or "data"
+    if name[0].isdigit():
+        name = f"data_{name}"
+    if keyword.iskeyword(name):
+        name = f"{name}_data"
+    return name
+
+
 def _identifier(text: str) -> str:
     name = re.sub(r"\W+", "_", text).strip("_") or "col"
     if name[0].isdigit():
@@ -2770,7 +2879,7 @@ def _identifier(text: str) -> str:
     return name
 
 
-def _index(source: CsvSource, column: str | int) -> int:
+def _index(source: CsvSource | NumpySource | SheetSource, column: str | int) -> int:
     return source.columns.index(column) if isinstance(column, str) else column
 
 

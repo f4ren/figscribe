@@ -72,8 +72,11 @@ from figscribe.gui.numbers import number, numbers, whole
 from figscribe.gui.path import path_to
 from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
+from figscribe.io.files import resolve_path
 from figscribe.io.refresh import read_differently, reading_options
+from figscribe.io.sheetfile import column_letters, sheet_names
 from figscribe.model import (
+    FILE_SOURCES,
     AllanDeviationPlot,
     ArrayRef,
     Axes,
@@ -81,14 +84,12 @@ from figscribe.model import (
     Colorbar,
     ColumnRef,
     Conversion,
-    CsvSource,
     ErrorBand,
     ExpressionFit,
     Figure,
     FitCurve,
     FitResult,
     FunctionPlot,
-    NumpySource,
     PanelLabels,
     PredefinedFit,
     Project,
@@ -129,6 +130,7 @@ READ_ONLY = {
     "path": "set by importing, locating or using another file",
     "sha256": "the file's fingerprint, taken on import",
     "row_count": "counted on import",
+    "first_column": "where the table starts, found when the file is read",
     "target": "the plot a fit or its residuals belong to, set when added",
     "parent": "the panel an inset sits in, set when it is added",
 }
@@ -285,6 +287,7 @@ SECTIONS = {
     "panel_labels": "Text",
     "path": "File",
     "sha256": "File",
+    "first_column": "File",
     "label": "Legend",
     "visible": "More",
     "zorder": "More",
@@ -852,6 +855,12 @@ TIPS = {
     "comment": "Lines starting with this are ignored; empty for none.",
     "dataset": "Where the data lies inside the HDF5 file, e.g. /run3/voltage.",
     "array": "Which array of the .npz archive to plot.",
+    "sheet": "Which sheet of the file to read.",
+    "SheetSource.header_row": "The row with the column names, numbered as in the "
+    "spreadsheet; empty for a sheet without names.",
+    "SheetSource.skip_rows": "Rows between the names and the numbers, such as a "
+    "row of units.",
+    "SheetSource.decimal": "The decimal mark of numbers the file stores as text.",
     "x_conversion": "Show x in another unit: min, h or days for times measured in s, "
     "ms, another factor, or a formula such as x / 60 - 273.15. The axis, the "
     "plot's range, its fits and the lines and notes on the axis follow.",
@@ -1736,7 +1745,7 @@ class PropertyPanel(QScrollArea):
                 self._row(form, obj, (name,))
                 if name in INLINE and getattr(obj, name) is not None:
                     self._nested(form, getattr(obj, name), (name,))
-            if title == "File" and isinstance(obj, CsvSource | NumpySource):
+            if title == "File" and isinstance(obj, FILE_SOURCES):
                 self._another_file_link(form, obj.id)
             if title in titles:
                 name = titles[title]
@@ -2516,6 +2525,10 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         return _marker_list(spec, path, panel)
     if name == "text":
         return NoteText(spec, path, panel)
+    if name == "sheet":
+        names = _sheets_of(panel.document)
+        if names:
+            return ChoiceEditor(spec, path, panel, [(n, n) for n in names])
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
@@ -2556,6 +2569,16 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
             placeholder = "none"
         editor.line.setPlaceholderText(placeholder or "none")
     return editor
+
+
+def _sheets_of(document: Document) -> list[str]:
+    """The sheets of the selected source's file; none if it cannot be read."""
+    source = find(document.project, document.selected)
+    path = resolve_path(source.path, document.base_dir)
+    try:
+        return sheet_names(path.read_bytes(), path.name)
+    except (OSError, DataError):
+        return []
 
 
 def _area(size: float) -> float:
@@ -2698,6 +2721,8 @@ def _section_name(name: str) -> str:
 def _read_only_text(name: str, value: Any, document: Document) -> str:
     if name == "sha256":
         return f"{value[:12]}…"
+    if name == "first_column":
+        return f"column {column_letters(value)}"
     if name == "row_count" and value is None:
         return "not recorded"  # imported before figscribe counted rows
     if name == "parent":

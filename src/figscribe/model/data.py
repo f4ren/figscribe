@@ -81,8 +81,37 @@ class NumpySource(Identified):
     projects from before it was recorded."""
 
 
+class SheetSource(Identified):
+    """One sheet of an Excel or LibreOffice Calc file (decision 0079)."""
+
+    format: Literal["xlsx", "xls", "ods"] = "xlsx"
+    """Excel (.xlsx, .xlsm, or the old .xls) or LibreOffice Calc (.ods)."""
+    path: str = Field(min_length=1)
+    """Where the file is: relative to the project's folder when it lies below it."""
+    sha256: Sha256
+    """SHA-256 of the file when it was imported; a changed file is refused."""
+    sheet: str = Field(min_length=1)
+    """The sheet's name."""
+    header_row: int | None = Field(0, ge=0)
+    """Row (from 0, the spreadsheet's row 1) of the column names; rows above it
+    are skipped. None means no names, and columns are addressed by index."""
+    skip_rows: int = Field(0, ge=0)
+    """Rows skipped between the names and the data, e.g. a row of units."""
+    decimal: str = Field(".", min_length=1, max_length=1)
+    """The decimal mark of numbers stored as text."""
+    first_column: int = Field(0, ge=0)
+    """The sheet's column (from 0, column A) the table starts at."""
+    columns: list[str] = Field(default_factory=list)
+    """Column names discovered on import, cached for the GUI."""
+    row_count: int | None = Field(None, ge=0)
+    """Rows of data when the file was imported, to tell what changed."""
+
+
+FILE_SOURCES = (CsvSource, NumpySource, SheetSource)
+"""The kinds of source that are read from a file."""
+
 DataSource = Annotated[
-    CsvSource | Hdf5Source | NumpySource,
+    CsvSource | Hdf5Source | NumpySource | SheetSource,
     Field(discriminator="format"),
 ]
 

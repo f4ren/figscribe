@@ -19,8 +19,10 @@ from pathlib import Path
 from figscribe.commands import Command, CommandError, Macro, SetField, find
 from figscribe.io import DataError, load_data
 from figscribe.io.files import resolve_path
-from figscribe.io.refresh import RECORDED, reread
+from figscribe.io.refresh import check_plotted, recorded, reread, sole_sheet
+from figscribe.io.sheetfile import FORMATS, sheet_names
 from figscribe.model import (
+    FILE_SOURCES,
     ArtistBase,
     ColumnRef,
     CsvSource,
@@ -28,6 +30,7 @@ from figscribe.model import (
     FitCurve,
     NumpySource,
     Project,
+    SheetSource,
 )
 from figscribe.model.validate import column_refs, data_refs, missing_columns
 from figscribe.refits import guess_first, run_again
@@ -55,8 +58,35 @@ class MissingColumn:
     """The column at the same place; None if there is none free to propose."""
 
 
-def columns_to_choose(
+def sheets_to_choose(
     project: Project, source_id: str, base_dir: str | Path, path: str | Path
+) -> dict[str, list[str]]:
+    """{sheet in use: the sheets of the file at `path`} where the user has to
+    say which sheet takes its place: the file has none of that name, and it is
+    not the one sheet in use for a file that has one sheet."""
+    used = [
+        each.sheet
+        for each in _same_file(project, source_id, base_dir)
+        if isinstance(each, SheetSource)
+    ]
+    if not used or Path(path).suffix.lower() not in FORMATS:
+        return {}
+    try:
+        names = sheet_names(Path(path).read_bytes(), Path(path).name)
+    except OSError as exc:
+        raise DataError(f"cannot open {path}: {exc.strerror}") from exc
+    missing = [sheet for sheet in dict.fromkeys(used) if sheet not in names]
+    if len(names) == 1 and len(set(used)) == 1:
+        return {}
+    return {sheet: names for sheet in missing}
+
+
+def columns_to_choose(
+    project: Project,
+    source_id: str,
+    base_dir: str | Path,
+    path: str | Path,
+    sheets: Mapping[str, str] | None = None,
 ) -> list[MissingColumn]:
     """The columns to find a place for in the file at `path`. None for a file
     without column names, whose columns go by number.
@@ -64,8 +94,9 @@ def columns_to_choose(
     A DataError if the file cannot be read the way the old one was.
     """
     found: list[MissingColumn] = []
-    for each in _same_file(project, source_id, base_dir):
-        new = _read(each, base_dir, Path(path))
+    same_file = _same_file(project, source_id, base_dir)
+    for each in same_file:
+        new = _read(each, base_dir, Path(path), _sheet(same_file, each, path, sheets))
         if not new.columns:
             continue
         choices = list(dict.fromkeys(new.columns))
@@ -79,12 +110,24 @@ def columns_to_choose(
                     continue
                 if name not in missing:
                     default = _at_the_same_place(each.columns, new.columns, name)
+                    if default and not _numbers(new, default, base_dir):
+                        default = None
                     missing[name] = MissingColumn(each.id, name, [], choices, default)
                 if _name(artist) not in missing[name].plots:
                     missing[name].plots.append(_name(artist))
         order = {name: i for i, name in enumerate(each.columns)}
         found += sorted(missing.values(), key=lambda m: order.get(m.name, len(order)))
     return found
+
+
+def _numbers(source: DataSource, column: str, base_dir: str | Path) -> bool:
+    """Whether the column can be plotted."""
+    data = load_data(Project(sources=[source]), base_dir)
+    try:
+        data(ColumnRef(source=source.id, column=column))
+    except DataError:
+        return False
+    return True
 
 
 def _at_the_same_place(old: list[str], new: list[str], name: str) -> str | None:
@@ -102,11 +145,14 @@ def use_another_file(
     base_dir: str | Path,
     path: str | Path,
     columns: Mapping[tuple[str, str], str | None] | None = None,
+    sheets: Mapping[str, str] | None = None,
 ) -> Swap:
     """Take the file at `path` in the place of the source's, in every source
     read from that file (the arrays of an .npz file), as one command. `columns`
     says, by source id and old name, which column of the new file takes a place.
     The file already used may be given again to place a column left out before.
+    `sheets` says, by sheet in use, which sheet of the new file takes its place
+    (see `sheets_to_choose`).
 
     A DataError, changing nothing, if the file cannot be read the way the old
     one was.
@@ -115,10 +161,10 @@ def use_another_file(
     old = Path(find(project, source_id).path).name
     steps: list[Command] = []
     for each in same_file:
-        new = _read(each, base_dir, Path(path))
+        new = _read(each, base_dir, Path(path), _sheet(same_file, each, path, sheets))
         steps += [
             SetField(each.id, (field,), getattr(new, field))
-            for field in RECORDED
+            for field in recorded(each)
             if getattr(new, field) != getattr(each, field)
         ]
     staging = project.model_copy(deep=True)
@@ -140,6 +186,11 @@ def use_another_file(
                         artist.id, (field,), ColumnRef(source=ref.source, column=new)
                     )
                 )
+    for each in same_file:  # with the columns in their places
+        try:
+            check_plotted(staging, each.id, base_dir)
+        except DataError as exc:
+            raise DataError(f"{Path(path).name} cannot be used: {exc}") from exc
     if not steps:
         raise DataError(f"{Path(path).name} is the file already used")
     plots = [
@@ -184,30 +235,47 @@ def use_another_file(
     return Swap(Macro(f"Use another file for {old}", steps), notes)
 
 
+def _sheet(same_file: list, source: DataSource, path: str | Path, sheets) -> str | None:
+    """The sheet of the new file that the source is read from; None to keep
+    the one it has."""
+    if not isinstance(source, SheetSource):
+        return None
+    if sheets and source.sheet in sheets:
+        return sheets[source.sheet]
+    used = {each.sheet for each in same_file if isinstance(each, SheetSource)}
+    return sole_sheet(source, Path(path)) if len(used) == 1 else None
+
+
 def _same_file(
     project: Project, source_id: str, base_dir: str | Path
-) -> list[CsvSource | NumpySource]:
+) -> list[CsvSource | NumpySource | SheetSource]:
     """Every source read from the file the source `source_id` is read from."""
     source = find(project, source_id)
-    if not isinstance(source, CsvSource | NumpySource):
+    if not isinstance(source, FILE_SOURCES):
         raise CommandError(f"{source_id!r} is not a data file")
     return [
         other
         for other in project.sources
         if resolve_path(other.path, base_dir) == resolve_path(source.path, base_dir)
-        and isinstance(other, CsvSource | NumpySource)
+        and isinstance(other, FILE_SOURCES)
     ]
 
 
-def _read(source: DataSource, base_dir: str | Path, path: Path) -> DataSource:
+def _read(
+    source: DataSource, base_dir: str | Path, path: Path, sheet: str | None = None
+) -> DataSource:
     """The file at `path`, read as `source` is."""
+    if isinstance(source, SheetSource) and path.suffix.lower() not in FORMATS:
+        raise DataError(
+            f"{path.name} is not a spreadsheet, which {Path(source.path).name} is"
+        )
     if isinstance(source, NumpySource) and path.suffix.lower() != f".{source.format}":
         raise DataError(
             f"{path.name} is not a .{source.format} file, which "
             f"{Path(source.path).name} is read as"
         )
     try:
-        return reread(source, base_dir, path)
+        return reread(source, base_dir, path, sheet=sheet)
     except DataError as exc:
         raise DataError(
             f"{path.name} cannot be read the way {Path(source.path).name} is "
@@ -215,8 +283,13 @@ def _read(source: DataSource, base_dir: str | Path, path: Path) -> DataSource:
         ) from exc
 
 
-def _how(source: CsvSource | NumpySource) -> str:
+def _how(source: CsvSource | NumpySource | SheetSource) -> str:
     """What decides whether a file can be read, as the panel shows it."""
+    if isinstance(source, SheetSource):
+        header = "no row of names"
+        if source.header_row is not None:
+            header = f"names in row {source.header_row + 1}"
+        return f"sheet {source.sheet!r}, {header}, rows skipped {source.skip_rows}"
     if isinstance(source, NumpySource):
         return f"array {source.array}" if source.array else "one array"
     if source.delimiter is None:
