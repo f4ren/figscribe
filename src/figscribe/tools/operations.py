@@ -77,6 +77,11 @@ UNIT_FIELDS = ("x_conversion", "y_conversion", "x_range")
 _REFUSED = (CommandError, FitError, DataError)
 """Errors that mean the request cannot be carried out, as opposed to bugs."""
 
+COMPUTED = (
+    "a fit's result is computed by figscribe, never given; use the fit tool, or "
+    "change what the fit uses and it is run again"
+)
+
 PREVIEW_DPI = 150.0
 """Enough to judge a layout, at a fraction of the export's pixels."""
 
@@ -369,16 +374,24 @@ class Toolbox:
         project = self.workspace.project
         changed = project.model_copy(deep=True)
         command.apply(changed)
-        before = self._tick_problems(project)
-        for key, message in self._tick_problems(changed).items():
+        before = self._tick_problems(project, self.workspace.data)
+        # A change to the files, such as a new version, changes the ranges too.
+        data = (
+            self.workspace.data
+            if changed.sources == project.sources
+            else self._data(changed)
+        )
+        for key, message in self._tick_problems(changed, data).items():
             if key not in before:
                 raise ToolError(message)
 
-    def _tick_problems(self, project: Project) -> dict[tuple[str, str], str]:
+    def _tick_problems(
+        self, project: Project, data: DataProvider
+    ) -> dict[tuple[str, str], str]:
         problems = {}
         for figure in project.figures:
             try:
-                ranges = tick_ranges(figure, self.workspace.data)
+                ranges = tick_ranges(figure, data)
             except Exception:  # what cannot be drawn cannot freeze either
                 continue
             for index, axes in enumerate(figure.axes):
@@ -422,6 +435,8 @@ def _set_field(
     if not path:
         raise ToolError("path is empty")
     owner: BaseModel = find(project, object_id)
+    if path[0] == "result" and isinstance(owner, FitCurve):
+        raise ToolError(COMPUTED)
     for part in path[:-1]:
         owner = _field_value(owner, part)
         if not isinstance(owner, BaseModel):
@@ -451,7 +466,20 @@ def _insert(
     if field == "sources":
         raise ToolError("data files are imported by the user in figscribe, not here")
     item = _validate(_ITEM_TYPES[field], object, field)
+    if _brings_a_result(item):
+        raise ToolError(COMPUTED)
     return InsertItem(parent_id, field, item, index), item.id
+
+
+def _brings_a_result(item: object) -> bool:
+    """Whether `item` is, or holds, a fit that says what its result is."""
+    if isinstance(item, FitCurve):
+        return item.result is not None
+    if isinstance(item, Axes):
+        return any(map(_brings_a_result, item.artists))
+    if isinstance(item, Figure):
+        return any(map(_brings_a_result, item.axes))
+    return False
 
 
 def _remove(project: Project, object_id: str) -> Command:
