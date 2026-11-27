@@ -8,9 +8,22 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from figscribe.commands import History
+from figscribe.datafile import columns_to_choose, sheets_to_choose, use_another_file
 from figscribe.io import DataError, load_data
+from figscribe.io.refresh import read_differently, reading_options, use_new_version
 from figscribe.io.sheetfile import sheet_names, sheet_source
-from figscribe.model import ArrayRef, ColumnRef, Project, SheetSource, dumps, loads
+from figscribe.model import (
+    ArrayRef,
+    Axes,
+    ColumnRef,
+    Figure,
+    LinePlot,
+    Project,
+    SheetSource,
+    dumps,
+    loads,
+)
 from tests.sheetfiles import Error, Formula, write_ods, write_xlsx
 
 nan = float("nan")
@@ -150,3 +163,114 @@ def test_a_file_that_is_no_spreadsheet(tmp_path: Path, raw: bytes) -> None:
 def test_a_sheet_source_survives_saving(book: Path) -> None:
     project = Project(sources=[sheet_source(book, book.parent, header_row=2)])
     assert loads(dumps(project)).sources == project.sources
+
+
+# --- changed and other files -------------------------------------------------
+
+SCAN = [["t", "U", "note"], [1, 2.0, "start"], [2, 4.0, None], [3, 6.0, "end"]]
+
+
+def _plotted(tmp_path: Path, kind: str = "ods", rows=SCAN, sheets=None) -> Project:
+    """A plot of U over t of a sheet with a column of notes."""
+    path = tmp_path / f"scan.{kind}"
+    WRITERS[kind](path, sheets or {"run 1": rows})
+    source = sheet_source(path, tmp_path)
+    refs = {c: ColumnRef(source=source.id, column=c) for c in ("t", "U")}
+    line = LinePlot(x=refs["t"], y=refs["U"])
+    return Project(sources=[source], figures=[Figure(axes=[Axes(artists=[line])])])
+
+
+def _y(project: Project, folder: Path) -> np.ndarray:
+    return load_data(project, folder)(project.figures[0].axes[0].artists[0].y)
+
+
+@pytest.mark.parametrize("kind", WRITERS)
+def test_a_new_version_with_notes_is_taken(tmp_path: Path, kind: str) -> None:
+    project = _plotted(tmp_path, kind)
+    WRITERS[kind](
+        tmp_path / f"scan.{kind}",
+        {"run 1": [["when", *SCAN[0]], *(["noon", *r] for r in SCAN[1:]), ["", 4, 8]]},
+    )
+    source = project.sources[0]
+    use_new_version(project, source.id, tmp_path).apply(project)
+    new = project.sources[0]
+    assert (new.columns, new.row_count) == (["when", "t", "U", "note"], 4)
+    np.testing.assert_array_equal(_y(project, tmp_path), [2, 4, 6, 8])
+
+
+def test_a_new_version_whose_plotted_column_has_text_is_refused(tmp_path) -> None:
+    project = _plotted(tmp_path)
+    write_ods(tmp_path / "scan.ods", {"run 1": [SCAN[0], [1, "oops"]]})
+    with pytest.raises(DataError, match="cell B2: 'oops' is not a number"):
+        use_new_version(project, project.sources[0].id, tmp_path)
+
+
+def test_where_the_table_starts_goes_with_a_new_version(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    write_ods(tmp_path / "scan.ods", {"run 1": [[None, *row] for row in SCAN]})
+    use_new_version(project, project.sources[0].id, tmp_path).apply(project)
+    assert project.sources[0].first_column == 1
+    np.testing.assert_array_equal(_y(project, tmp_path), [2, 4, 6])
+
+
+def test_another_file_of_another_format_with_one_sheet(tmp_path: Path) -> None:
+    project = _plotted(tmp_path, "ods")
+    write_xlsx(tmp_path / "next.xlsx", {"2026-11-27": [["t", "U"], [1, 10], [2, 20]]})
+    source = project.sources[0]
+    path = tmp_path / "next.xlsx"
+    assert sheets_to_choose(project, source.id, tmp_path, path) == {}
+    assert columns_to_choose(project, source.id, tmp_path, path) == []
+    use_another_file(project, source.id, tmp_path, path).command.apply(project)
+    new = project.sources[0]
+    assert (new.format, new.sheet, new.path) == ("xlsx", "2026-11-27", "next.xlsx")
+    np.testing.assert_array_equal(_y(project, tmp_path), [10, 20])
+
+
+def test_which_sheet_is_asked_where_it_cannot_be_told(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    write_ods(
+        tmp_path / "two.ods",
+        {"a": [["t", "U"], [1, 10]], "b": [["t", "U"], [1, 30]]},
+    )
+    source = project.sources[0]
+    path = tmp_path / "two.ods"
+    assert sheets_to_choose(project, source.id, tmp_path, path) == {"run 1": ["a", "b"]}
+    with pytest.raises(DataError, match="no sheet 'run 1'"):
+        use_another_file(project, source.id, tmp_path, path)
+    chosen = {"run 1": "b"}
+    assert columns_to_choose(project, source.id, tmp_path, path, chosen) == []
+    use_another_file(project, source.id, tmp_path, path, sheets=chosen).command.apply(
+        project
+    )
+    assert project.sources[0].sheet == "b"
+    np.testing.assert_array_equal(_y(project, tmp_path), [30])
+
+
+def test_a_spreadsheet_does_not_take_the_place_of_another_kind(tmp_path) -> None:
+    project = _plotted(tmp_path)
+    (tmp_path / "scan.csv").write_text("t,U\n1,2\n", encoding="utf-8")
+    with pytest.raises(DataError, match="scan.csv is not a spreadsheet"):
+        use_another_file(
+            project, project.sources[0].id, tmp_path, tmp_path / "scan.csv"
+        )
+
+
+def test_the_sheet_and_the_rows_are_how_a_file_is_read(tmp_path: Path) -> None:
+    project = _plotted(
+        tmp_path,
+        sheets={
+            "run 1": SCAN,
+            "run 2": [["t", "U"], ["s", "V"], [1, 100]],
+        },
+    )
+    source = project.sources[0]
+    assert reading_options(source) == ("sheet", "header_row", "skip_rows", "decimal")
+    history = History(project)
+    history.push(read_differently(project, source.id, "sheet", "run 2", tmp_path))
+    with pytest.raises(DataError, match="'V' is not a number"):
+        _y(project, tmp_path)
+    history.push(read_differently(project, source.id, "skip_rows", 1, tmp_path))
+    np.testing.assert_array_equal(_y(project, tmp_path), [100])
+    assert project.sources[0].row_count == 1
+    with pytest.raises(DataError, match="no sheet 'nope'"):
+        read_differently(project, source.id, "sheet", "nope", tmp_path)
