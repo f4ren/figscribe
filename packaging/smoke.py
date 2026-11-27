@@ -66,6 +66,16 @@ def license_problem(system: str) -> str | None:
     return None
 
 
+def unwanted_library() -> str | None:
+    """A library of a copyleft license that is in no wheel of Pillow's and must
+    not be collected from the build machine either (see notices.PARTS)."""
+    for path in FROZEN.rglob("*"):
+        if any(word in path.name.lower() for word in ("imagequant", "fribidi")):
+            if path.suffix.lower() not in (".py", ".pyc", ".pyi"):
+                return f"{path} must not be in the installer"
+    return None
+
+
 def document_type_problem(system: str) -> str | None:
     """The macOS app has to say it opens `.figscribe` files, or Finder does not
     hand them to it."""
@@ -99,6 +109,10 @@ def main(argv: list[str]) -> int:
     if problem:
         return fail(problem)
     print("licenses ok", flush=True)
+
+    problem = unwanted_library()
+    if problem:
+        return fail(problem)
 
     problem = document_type_problem(system)
     if problem:

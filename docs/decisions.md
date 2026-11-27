@@ -3866,6 +3866,13 @@ most permissive offered, MIT first), followed by the standard texts from the
 SPDX license list, kept in `packaging/licenses/spdx`. A crate without a license,
 or with one that has no text there, stops the build.
 
+The lists also name C libraries. Those are decided one by one
+(`notices.PARTS`), since a list may name what is not shipped: Pillow's names
+libimagequant (GPL) and FriBiDi (LGPL), neither of which is in its wheels, and
+the installer test fails if either is collected. OpenSSL (in cryptography) and
+libXau (in Pillow's wheels) were named by no file and are added. A part not
+decided yet stops the build.
+
 ### Alternatives considered
 
 **Downloading every crate while building** to copy its own license file with

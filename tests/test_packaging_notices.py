@@ -266,7 +266,6 @@ def test_the_notices_list_the_crates_compiled_into_a_package(site: Site) -> None
         sbom=[
             _crate("reader", "MIT", author="A. Writer <a@example.org>"),
             _crate("codec", "(MIT OR Apache-2.0) AND Unicode-3.0"),
-            {"name": "c-library", "version": "9", "purl": "pkg:generic/c-library@9"},
         ],
     )
 
@@ -275,7 +274,6 @@ def test_the_notices_list_the_crates_compiled_into_a_package(site: Site) -> None
     assert "reader 1.2.3 (MIT) by A. Writer <a@example.org>" in text
     assert "codec 1.2.3 (MIT, Unicode-3.0)" in text
     assert "https://crates.io/crates/reader/1.2.3" in text
-    assert "c-library" not in text  # its license is in the package's own files
     assert "Permission is hereby granted, free of charge" in text
     assert "UNICODE LICENSE V3" in text
     assert "UNICODE LICENSE" not in text.split("UNICODE LICENSE V3", 1)[1]
@@ -292,10 +290,64 @@ def test_a_crate_that_names_no_license_stops_the_build(site: Site) -> None:
 def test_the_license_of_every_crate_installed_here_has_its_text() -> None:
     """A new version of a package may bring a license without a text: found here
     rather than when an installer is built."""
-    dists = notices.closure([notices.ROOT])
+    try:
+        dists = notices.closure([notices.ROOT])
+    except SystemExit as exc:  # without the extras the installers have
+        pytest.skip(str(exc))
+    notices.other_parts(dists)  # every other part is known, too
     crates = notices.crates(dists)
     # Older versions of the package carry no list of their parts.
     if any("sboms" in f.parts for f in dists["python-calamine"].files):
         assert any(crate["name"] == "calamine" for crate in crates)
     for crate in crates:
         assert notices.taken(crate), crate["name"]
+
+
+# --- parts that are no Rust crates --------------------------------------------
+
+
+def _part(name: str, **fields) -> dict:
+    return {"name": name, "version": "4.0", "purl": "", **fields}
+
+
+def test_openssl_is_named_with_its_license(site: Site) -> None:
+    site.add("app", requires=("cryptography",), files={"LICENSE": "App."})
+    site.add("cryptography", files={"LICENSE": "C."}, sbom=[_part("openssl")])
+
+    text = notices.render(notices.closure(["app"], find=site), python_license="x")
+
+    assert "openssl 4.0 (Apache-2.0)" in text and "in cryptography" in text
+    assert "License text: Apache-2.0" in text and "Apache License" in text
+
+
+def test_parts_a_package_names_itself_or_does_not_ship_are_not_repeated(
+    site: Site,
+) -> None:
+    parts = [_part("FreeType"), _part("libimagequant"), _part("PIL._imaging")]
+    site.add("pillow", files={"LICENSE": "P."}, sbom=parts)
+
+    text = notices.render(notices.closure(["pillow"], find=site), python_license="x")
+
+    assert "FreeType" not in text and "libimagequant" not in text
+
+
+def test_an_unknown_part_stops_the_build(site: Site) -> None:
+    site.add("app", files={"LICENSE": "A."}, sbom=[_part("libsurprise")])
+
+    with pytest.raises(SystemExit, match="libsurprise"):
+        notices.render(notices.closure(["app"], find=site), python_license="x")
+
+
+def test_a_library_no_list_names_is_found_by_its_file(site: Site) -> None:
+    dist = site.add("pillow", files={"LICENSE": "P."})
+    info = dist._path
+    library = info.parent / "pillow.libs" / "libXau-154567c4.so.6"
+    library.parent.mkdir()
+    library.write_bytes(b"")
+    with (info / "RECORD").open("a") as record:
+        record.write("pillow.libs/libXau-154567c4.so.6,,\n")
+
+    dists = {"pillow": metadata.PathDistribution(info)}
+    text = notices.render(dists, python_license="x")
+
+    assert "libXau (MIT-open-group)" in text and "The Open Group" in text
