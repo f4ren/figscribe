@@ -5,7 +5,7 @@ left off. The brief stays the vision; this file is the work list. It is written
 so that a coding session can take the next open task and finish it without
 asking what was meant.
 
-**State as of 2026-11-26** (branch `develop`):
+**State as of 2026-11-27** (branch `develop`):
 
 - M1 to M6 of the brief are done: model, renderer, code generator with the
   pixel equivalence test, GUI with import, property panel, outline, undo/redo,
@@ -16,13 +16,16 @@ asking what was meant.
   a range per plot, fewer points drawn, the Allan deviation, error bands,
   reference lines, a search and a command palette for settings, and
   settings that grey out when they do nothing. Since 0.3.0: number formats
-  and the decimal comma, broken and inverted axes, an open frame, a check
-  for updates, and two more examples (fourteen in all).
+  and the decimal comma, broken and inverted axes, minor grid lines of their
+  own, an open frame, a fit drawn beyond the data, *Use another file…* with a
+  choice of columns, a check for updates, and two more examples (fourteen in
+  all). Fits are now run again whenever what they were fitted to changes
+  (0076), which fixes a fault of 0.3.0.
 - M7 is open: style templates, snapping and alignment guides, and the screenshots of R4.
-- About 2,100 tests run in about three minutes in parallel; CI is green on
+- About 2,300 tests run in about three minutes in parallel; CI is green on
   Linux, Windows and macOS with Python 3.11 and 3.13, and a further job runs
   the fast tests at the oldest allowed versions (decision 0044). Decisions
-  0001 to 0072 are in [`docs/decisions.md`](../docs/decisions.md).
+  0001 to 0076 are in [`docs/decisions.md`](../docs/decisions.md).
 - 0.1.0 (2026-10-26), 0.2.0 (2026-10-29) and 0.3.0 (2026-11-05) are released, on
   PyPI, and since 0.3.0 with installers for macOS, Windows and Linux on the
   GitHub release; `main` is at 0.3.0 (PR #136). What `develop` has gained since
@@ -33,7 +36,7 @@ reproduction is given so a session can turn it into a failing test first.
 
 ---
 
-## What is open (2026-11-26)
+## What is open (2026-11-27)
 
 A map of the tasks below that are not finished; the tasks hold the detail.
 `[decide]` needs the user's answer first (rule 2). A task that is not named
@@ -51,6 +54,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **B8** is done but for its follow-ups: ratios that no longer match the
   grid; a lower bound for font sizes and the figure size; marking columns of
   another length.
+- **B10** faults found in the reviews of 2026-11-26 and 27, left for later:
+  fits that did not converge, rounded start values, units and own formulas,
+  two on the assistant, breaks after a unit change.
 
 **Phase 1 — The settings** (U1 to U5 and U7 to U12 are done)
 - **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
@@ -88,6 +94,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   after all~~ done (*Use another file…*, 0075).
 
 **Phase 4 — M7: polish and release**
+- **R9** release 0.4, which the user wants soon.
 - **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
   snapping and alignment guides. **R3** the dpi at export (TIFF, EPS and the
   transparent background are built, 0065). **R4** installers (done in 0.3.0: PyInstaller, decision 0066; the macOS disk
@@ -98,13 +105,12 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 5** is later and optional.
 
-**Where to start** (rule 1): the first open task is B7, and its open item 5
-needs no answer. The user named the order on 2026-11-03: B7.4, F13, U11 and
-F14 are done, F15 follows (ask its `[decide]` first). The lab user's two
-wishes of 2026-11-04 went before it (the user's choice, 2026-11-26): F5.10 is
-done and so are F1.9, the fit's curve beyond the data (0074), and their last
-open question, *Use another file…* (E4, 0075). Before 0.4: the manual
-checklist (B7.5), which 0.3.0 went out without.
+**Where to start** (rule 1): the user wants **0.4 soon** (2026-11-27; no
+0.3.1, the fix of 0076 goes out with it), so R9 comes first. What may go into
+it before: the items of B10 that can give a wrong figure (1 to 4). After the
+release the user's order of 2026-11-03 goes on with F15 (ask its `[decide]`
+first); B7 item 5, the GUI at small sizes, needs no answer. The lab user's requests
+of 2026-11-04 are all done.
 
 ---
 
@@ -664,6 +670,31 @@ file system (another volume, another drive) stays absolute. *Learned:* the one t
 the removal of a data file after a *Save As* elsewhere restores its old path, and
 *Locate file…* repairs it. `resolve_path` now returns a path without the dots, so
 messages name the file plainly.
+
+---
+
+### B10 Faults found in review, left for later — S each
+
+Noted in the reviews of 2026-11-26 and 27, beside what they changed. 3 came
+with the broken axes and is not released; the others are older and in 0.3.0
+too. Test first for each.
+
+1. **A fit that did not converge is stored** when leaving rows out, a range or
+   a unit change fits again: the window draws its start values, the script
+   fails. 0076 leaves such a fit unfitted only where its rule fits it; do the
+   same here, or refuse the change.
+2. **A unit change drops an own formula's start values**, so it starts from
+   ones and may converge to nonsense that looks like a result (0041, 0076).
+   `[decide]` keep them and leave the fit unfitted where it does not converge.
+3. **Breaks keep their old numbers** where two panels with data of their own
+   share a broken axis and the units change (0072).
+4. **Change the fit… rounds** start values, held values and bounds to six
+   digits on *Update fit*, which can change the result (the two ranges were
+   fixed).
+5. **The assistant may set a fit's `result`** itself, or insert a fit that has
+   one, which nothing computed: make it read-only there.
+6. **The assistant's check for too many ticks** judges the changed project
+   with the data from before the change (`Toolbox._refuse_too_many_ticks`).
 
 ---
 
@@ -1794,19 +1825,7 @@ is: the file has what it has). The program's own defaults stay as decision
 - ~~**Bug: fits after a new version of a file**~~ **fixed** (2026-11-27,
   decision 0076; in 0.3.0 too). It was wider than found first: any change of
   what a fit is run on left the old result unless its command fitted again.
-  Now one rule where changes are applied.
-- **Follow-ups on fits** (found in review, 2026-11-27, both in 0.3.0):
-  leaving rows out, a range or a unit change still stores a fit that did not
-  converge, whose start values the window then draws while the script fails
-  (0076 leaves such a fit unfitted only where the rule fits it). And *Change
-  the fit…* rounds start values, held values and bounds to six digits on
-  *Update fit*, which can change the result. A unit change drops an own
-  formula's start values, so it starts from ones and may converge to nonsense
-  (0041, 0076). And the assistant may set a fit's `result` itself, or insert a
-  fit that has one, which nothing computed: make `result` read-only there. The
-  assistant's check for too many ticks judges the changed project with the data
-  from before the change, so a change of how a file is read can be refused or
-  let through wrongly (`Toolbox._refuse_too_many_ticks`).
+  Now one rule where changes are applied. What the reviews left is B10.
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,
@@ -1986,6 +2005,24 @@ needs signed releases first.
 
 ---
 
+### R9 Release 0.4 — S
+
+The user wants it soon (2026-11-27). It carries everything under "Unreleased"
+in the changelog.
+
+1. Add what is new to the manual checklist (`docs/testing.md`): a broken axis,
+   number format and decimal comma, minor grid lines, a curve beyond the data,
+   *Use another file…* with other column names, a changed file with a fit,
+   *Check for Updates…*. Then go through it (B7.5), on macOS at least.
+2. Version 0.4.0; date the changelog's section, and say first that a project
+   saved with 0.3.0 after a change of a fit's data may hold an old curve:
+   *Fit again with the current data*.
+3. `develop` into `main`, tag `v0.4.0`, the GitHub release (PyPI and the
+   installers); install one and open an example.
+4. Tell the lab user: their requests of 2026-11-04 are in it.
+
+---
+
 ## Phase 5 — Later, optional
 
 - Live data: watch a file and redraw when it grows (from the brief).
@@ -2009,6 +2046,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.6 | answered 2026-11-26: x and y, several breaks; the rest decided and built (0072) |
 | F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
+| B10.2 | A unit change on an own formula: keep its start values and leave the fit unfitted where it does not converge? |
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | answered 2026-11-26: another file for the same figure (0075) |
