@@ -1799,7 +1799,10 @@ is: the file has what it has). The program's own defaults stay as decision
   converge, whose start values the window then draws while the script fails
   (0076 leaves such a fit unfitted only where the rule fits it). And *Change
   the fit…* rounds start values, held values and bounds to six digits on
-  *Update fit*, which can change the result.
+  *Update fit*, which can change the result. A unit change drops an own
+  formula's start values, so it starts from ones and may converge to nonsense
+  (0041, 0076). And the assistant may set a fit's `result` itself, or insert a
+  fit that has one, which nothing computed: make `result` read-only there.
 - Keyboard shortcuts for every menu action and for switching panels.
 - **The plot dialog** (asked for by the user, 2026-10-26: "looks unloved").
   **Done**: in the import dialog's look. The kinds are tiles with icons,

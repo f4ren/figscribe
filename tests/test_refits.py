@@ -396,6 +396,93 @@ def test_a_unit_change_keeps_the_values_of_a_formula_that_cannot_be_fitted(
     assert fit.result is None and fit.initial_values == {"a": 2.0, "b": 1.0}
 
 
+def _batch(ws: ProjectWorkspace, *operations: dict) -> None:
+    Toolbox(ws).call(
+        "apply_changes", {"description": "batch", "operations": list(operations)}
+    )
+
+
+def _op(obj, path: str, value) -> dict:
+    return {"op": "set_field", "object_id": obj.id, "path": [path], "value": value}
+
+
+@pytest.mark.parametrize("then", ["left_out", "x_range", "y_conversion", "fit"])
+def test_a_batch_fits_to_the_file_as_the_batch_reads_it(tmp_path: Path, then) -> None:
+    """An earlier step reads the file otherwise; a later one fits, and must not
+    be given the data from before the batch."""
+    ws = _workspace(tmp_path)
+    source, plot, fit = _parts(ws)
+    value = {"left_out": [3], "x_range": [4.0, 9.5], "y_conversion": {"factor": 10}}
+    if then == "fit":
+        later = {
+            "op": "fit",
+            "target_id": plot.id,
+            "model": {"kind": "predefined", "name": "gaussian"},
+        }
+    else:
+        later = _op(plot, then, value[then])
+    _batch(ws, _op(source, "skip_rows", 6), later)
+    for each in ws.project.figures[0].axes[0].artists[1:]:
+        _same_as_fitting_now(ws, each)
+
+
+def test_start_values_set_with_the_model_are_the_start(tmp_path: Path) -> None:
+    ws = _workspace(tmp_path)
+    fit = _parts(ws)[2]
+    _batch(
+        ws,
+        _op(fit, "model", {"kind": "predefined", "name": "lorentzian"}),
+        _op(fit, "initial_values", {"x0": 4.5}),
+    )
+    fit = _parts(ws)[2]
+    assert fit.result is not None and fit.initial_values["x0"] == 4.5
+
+
+def test_a_file_that_cannot_be_opened_stops_nothing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ws = _workspace(tmp_path)
+
+    def locked(source, base_dir):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(refits, "source_state", locked)
+    plot = _parts(ws)[1]
+    ws.push(SetField(plot.id, ("x_range",), (1.0, 5.0)))
+    _, plot, fit = _parts(ws)
+    assert plot.x_range == (1.0, 5.0) and fit.result is None
+
+
+@pytest.mark.parametrize(
+    ("part", "name", "value"),
+    [
+        (1, "reduction", Reduction(count=2)),
+        (1, "yerr", None),
+        (2, "fit_range", (1.0, 7.0)),
+    ],
+)
+def test_other_points_start_from_the_values_there_are(
+    tmp_path: Path, part, name, value
+) -> None:
+    """They may have been typed: a guess comes in only where they fail."""
+    ws = _workspace(tmp_path)
+    typed = {"a": 0.8, "mu": 4.5, "sigma": 1.0, "c": 0.0}
+    _parts(ws)[2].initial_values = typed
+    refit(ws.project, _parts(ws)[2].id, ws.data).apply(ws.project)
+    ws.push(SetField(_parts(ws)[part].id, (name,), value))
+    fit = _parts(ws)[2]
+    assert fit.result is not None and fit.initial_values == typed
+
+
+def test_another_model_is_guessed(tmp_path: Path) -> None:
+    """The values of the old one mean nothing to it."""
+    ws = _workspace(tmp_path)
+    fit = _parts(ws)[2]
+    fit.initial_values = {**fit.initial_values, "a": -50.0}
+    ws.push(SetField(fit.id, ("model",), PredefinedFit(name="linear")))
+    assert _parts(ws)[2].initial_values["a"] != -50.0
+
+
 def test_every_field_is_known_to_matter_to_a_fit_or_not() -> None:
     """A new field has to be put in one list or the other."""
     for kind in (LinePlot, ScatterPlot, ErrorbarPlot, AllanDeviationPlot):

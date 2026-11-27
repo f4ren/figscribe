@@ -28,7 +28,7 @@ from figscribe.model import (
     Project,
 )
 from figscribe.model.validate import data_refs, missing_columns
-from figscribe.refits import run_again
+from figscribe.refits import guess_first, run_again
 
 
 @dataclass
@@ -106,7 +106,7 @@ def use_another_file(
         if fit.result is None:
             continue
         data = load_data(staging, base_dir)
-        again, why = run_again(staging, fit, data, data_changed=True)
+        again, why = run_again(staging, fit, data, guess_first(fit))
         if why is not None:
             change(SetField(fit.id, ("result",), None))
             subject = fit.label or "The fit"

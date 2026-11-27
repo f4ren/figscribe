@@ -39,7 +39,7 @@ from figscribe.commands import (
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
 from figscribe.fit import FitError, add_fit, refit, set_left_out
-from figscribe.io import DataError
+from figscribe.io import DataError, load_data
 from figscribe.io.refresh import (
     read_differently,
     reading_options,
@@ -60,7 +60,7 @@ from figscribe.model.artists import Artist
 from figscribe.render import render
 from figscribe.render.figure import style_context, tick_ranges
 from figscribe.render.ticks import as_drawn, counted_interval, too_many_ticks
-from figscribe.tools.workspace import Workspace, column_choices
+from figscribe.tools.workspace import DataProvider, Workspace, column_choices
 from figscribe.units import CONVERTIBLE, set_conversion, set_range
 
 PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns", "row_count"})
@@ -185,13 +185,18 @@ class Toolbox:
         command = self._set_field(self.workspace.project, object_id, path, value)
         return self._push(command, {})
 
+    def _data(self, project: Project) -> DataProvider:
+        """The data as `project` reads it: in a batch, with what its earlier
+        steps have changed about the files, which the workspace's does not."""
+        return load_data(project, self.workspace.base_dir)
+
     def _set_field(
         self, project: Project, object_id: str | None, path: list[str], value: Any
     ) -> Command:
         command = _set_field(project, object_id, path, value)
         if path == ["left_out"]:
             try:  # the plot's fits are fitted again without those rows
-                data = self.workspace.data
+                data = self._data(project)
                 return set_left_out(project, object_id, list(command.value), data)
             except FitError as exc:
                 raise ToolError(str(exc)) from exc
@@ -202,7 +207,7 @@ class Toolbox:
                 whole = {**getattr(plot, path[0]).model_dump(), path[1]: value}
                 value = _validate(Conversion, whole, path[0])
             try:  # the axis and the plot's fits follow, as in the panel
-                data = self.workspace.data
+                data = self._data(project)
                 if path[0] == "x_range":
                     return set_range(project, plot.id, value, data)
                 return set_conversion(project, plot.id, path[0][0], value, data)
@@ -331,7 +336,7 @@ class Toolbox:
             "insert": lambda **a: _insert(project, **a),
             "remove": lambda **a: (_remove(project, **a), None),
             "move": lambda **a: (_move(project, **a), None),
-            "fit": lambda **a: _fit(project, self.workspace.data, **a),
+            "fit": lambda **a: _fit(project, self._data(project), **a),
         }
         if op not in builders:
             raise ToolError(

@@ -3659,10 +3659,13 @@ it again in the same undo step** (`refits.fits_follow`).
 - A fit whose result the command sets is left alone, unless a later change in
   the same command alters its inputs again. This is told by what the command
   contains, not by whether the value changed.
-- Where the points or the model changed, a predefined model is guessed anew
-  first and the stored start values are tried second; else the other way
-  round. An own formula starts from its values only: ones never take their
-  place. Start values change only where a fit succeeds.
+- A fit is run again from the start values it has, which may have been typed;
+  a predefined model is guessed only where that fails. Where the model is
+  another, the guess goes first. Start values set by the same command are the
+  only ones tried. An own formula starts from its values only. They change only
+  where a fit succeeds. (A unit change drops the start values of a fit with a
+  result, as before, since they are in the old units: 0041. For an own formula
+  that means ones; a follow-up.)
 - A fit that cannot be run or does not converge is left **not fitted**: it
   draws nothing, and the problem list says so. The change itself is kept. The
   commands that refused before (units, x range) still do, but not for a fit
