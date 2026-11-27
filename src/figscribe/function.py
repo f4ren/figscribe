@@ -13,7 +13,9 @@ from collections.abc import Callable
 
 import numpy as np
 
+from figscribe.allan import allan_points
 from figscribe.commands import CommandError, Macro, SetField, find
+from figscribe.convert import convert, plot_data, within
 from figscribe.fit.expression import (
     VARIABLE,
     FitError,
@@ -32,7 +34,7 @@ from figscribe.model import (
     ResidualPlot,
 )
 from figscribe.model.sharing import sharing_group, typed_limits
-from figscribe.model.validate import FITTABLE, axis_values
+from figscribe.model.validate import FITTABLE
 
 DATA = (
     *FITTABLE,
@@ -55,7 +57,7 @@ def names(expression: str) -> list[str]:
         if "np" in found:  # the script's name for NumPy
             raise FitError("'np' is reserved and cannot be a name in a formula")
         compile_expression(expression, found)
-    except FitError as exc:
+    except (FitError, ValueError, OverflowError, RecursionError) as exc:
         raise CommandError(f"the formula cannot be read: {exc}") from None
     return found
 
@@ -78,7 +80,16 @@ def uses_x(expression: str) -> bool:
     """Whether the formula depends on x, once it can be read."""
     return any(
         isinstance(node, ast.Name) and node.id == VARIABLE
-        for node in ast.walk(ast.parse(expression, mode="eval"))
+        for node in ast.walk(ast.parse(expression.strip(), mode="eval"))
+    )
+
+
+def divides(expression: str) -> bool:
+    """Whether the formula divides or takes powers, where Python's own numbers
+    stop with an error and NumPy's give inf or nan."""
+    return any(
+        isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div | ast.Pow)
+        for node in ast.walk(ast.parse(expression.strip(), mode="eval"))
     )
 
 
@@ -102,26 +113,80 @@ def x_span(
         return typed
     if data is None:
         return None
-    found = axis_values(figure, index, "x", data, functions=False)
+    found = _data_x(figure, index, data)
     found = found[np.isfinite(found)]
-    if figure.axes[index].x.scale == "log":
+    if log_x(figure, index):
         found = found[found > 0]
     if not found.size or not found.min() < found.max():
         return None
     return float(found.min()), float(found.max())
 
 
-def sets_limits(figure: Figure, index: int, function: FunctionPlot) -> bool:
-    """Whether the function scales its y axis: only where no data do."""
+def log_x(figure: Figure, index: int) -> bool:
+    """Whether the x axis of the panel is logarithmic: one panel of those that
+    share it makes it so for all."""
+    return any(
+        figure.axes[i].x.scale == "log" for i in sharing_group(figure, index, "x")
+    )
+
+
+def _data_x(figure: Figure, index: int, data) -> np.ndarray:
+    """The x values of the data on the panel's x axis, those its plots use."""
+    found = [np.array([])]
+    group = [figure.axes[i] for i in sharing_group(figure, index, "x")]
+    plots = {a.id: a for axes in figure.axes for a in axes.artists}
+    for axes in group:
+        for artist in axes.artists:
+            if isinstance(artist, ResidualPlot):  # at its data's x
+                fit = plots.get(artist.target)
+                artist = plots.get(getattr(fit, "target", None))
+            try:
+                found.append(np.asarray(_x_of(artist, data), dtype=float).ravel())
+            except Exception:  # a plot that cannot be drawn counts for nothing
+                continue
+    return np.concatenate(found)
+
+
+def _x_of(artist, data):
+    if isinstance(artist, FITTABLE):
+        shown = plot_data(artist, data)
+        return shown.x[shown.used]
+    if isinstance(artist, AllanDeviationPlot):
+        points = allan_points(artist, data)
+        return [] if points is None else points[0]
+    if isinstance(artist, Histogram):
+        values_ = convert(data(artist.values), artist.x_conversion)
+        return values_[within(values_, artist.x_range)]
+    if isinstance(artist, ColorMesh) and artist.x is not None:
+        return data(artist.x)
+    if isinstance(artist, ImagePlot) and artist.extent is not None:
+        return artist.extent[:2]
+    if isinstance(artist, ImagePlot | ColorMesh):  # cell numbers
+        columns = data(getattr(artist, "data", None) or artist.c).shape[1]
+        return (-0.5, columns - 0.5)
+    return []
+
+
+def sets_limits(figure: Figure, index: int, function: FunctionPlot) -> str:
+    """Which limits the function sets: "both" in a panel without data, "y" where
+    the data on its x axis are all against the other y axis or in other panels,
+    "none" beside data on its own y axis."""
     axes = figure.axes[index]
     right = function.axis == "right" and axes.y_right is not None
     group = [index] if right else sharing_group(figure, index, "y")
-    return not any(
+    if any(
         isinstance(artist, DATA)
         and (artist.axis == "right" and figure.axes[i].y_right is not None) == right
         for i in group
         for artist in figure.axes[i].artists
+    ):
+        return "none"
+    shares_x = any(
+        isinstance(artist, DATA)
+        for i in sharing_group(figure, index, "x")
+        for artist in figure.axes[i].artists
     )
+    return "y" if shares_x else "both"
 
 
 def new_function(expression: str) -> FunctionPlot:

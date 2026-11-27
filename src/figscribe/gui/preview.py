@@ -140,9 +140,9 @@ class Preview(QWidget):
     """The zoomed or panned view changed, or was dropped."""
     fit_requested = Signal(str)
     """Fit the plot with this id, from its menu; the window asks how."""
-    same_range_requested = Signal(str, str)
     function_requested = Signal(str)
     """Draw a function in the panel with this id."""
+    same_range_requested = Signal(str, str)
     """Give every panel the range this panel shows on an axis: (panel id,
     "x" or "y"), from its menu."""
 

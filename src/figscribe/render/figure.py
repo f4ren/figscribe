@@ -972,10 +972,10 @@ def _draw_function(
     common: dict,
     cut: tuple[Breaks, Breaks],
     span: tuple[float, float] | None,
-    scales: bool,
+    sets: str,
 ) -> None:
     """The formula over `span`; nothing where it cannot be read or there is no
-    range. Beside data it moves no limits (`scales` False)."""
+    range. `sets` says which limits it sets, as `function.sets_limits`."""
     f = evaluator(function)
     if f is None or span is None:
         return
@@ -992,10 +992,14 @@ def _draw_function(
         "linestyle": function.linestyle,
         "linewidth": function.linewidth,
     }
-    if scales:
+    if sets == "both":
         ax.plot(xs, ys, **style, **common)
-    else:  # added as it is: Matplotlib then leaves the limits to the data
-        ax.add_artist(Line2D(xs, ys, transform=ax.transData, **style, **common))
+        return
+    # Added as it is: Matplotlib then leaves the limits to the data.
+    ax.add_artist(Line2D(xs, ys, transform=ax.transData, **style, **common))
+    if sets == "y":  # but nothing else scales this y axis
+        ax.update_datalim(np.column_stack([xs, ys]), updatex=False)
+        ax.autoscale_view(scalex=False)
 
 
 def _draw_fit(

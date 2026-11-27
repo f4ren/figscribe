@@ -1745,7 +1745,8 @@ Proposed (to be agreed before building):
 user. *Learned:* `plot(..., scaley=False)` leaves the limits alone only until
 the next plot; the line is added with `add_artist` instead. *Follow-ups, only
 if asked:* a slider for a value; a function over a typed range that extends the
-axes.
+axes; arithmetic of numbers alone in a formula, such as 1/0 or 9**9**9, stops
+or stalls the script (as in own fit formulas).
 
 ---
 

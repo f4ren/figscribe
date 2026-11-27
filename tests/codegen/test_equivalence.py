@@ -47,7 +47,7 @@ from figscribe.model import (
     ShadedSpan,
     loads,
 )
-from figscribe.render import export
+from figscribe.render import export, render
 
 EXAMPLES = sorted((Path(__file__).parents[2] / "examples").glob("*/*.figscribe"))
 
@@ -2598,11 +2598,11 @@ def test_a_formula_that_cannot_be_read_is_drawn_by_neither(tmp_path: Path) -> No
 @pytest.mark.parametrize(
     ("label", "name"),
     [
-        ("theory", "def theory("),
+        ("theory", "def theory_function("),
         ("1/x guide", "def function("),
         ("max", "def max_function("),
-        ("t", "def t2("),  # a column has the name
-        ("lambda", "def function("),
+        ("t", "def t_function("),
+        ("lambda", "def lambda_function("),
     ],
 )
 def test_a_function_is_named_after_its_legend_entry(
@@ -2613,3 +2613,93 @@ def test_a_function_is_named_after_its_legend_entry(
     made = _guide("0 * x + 0.5", label=label)
     project.figures = [Figure(dpi=100, axes=[Axes(artists=[data, made])])]
     assert name in _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "label", ["Gaussian", "gaussian", "Linear", "model", "ax", "ax_right", "scan"]
+)
+def test_a_function_takes_no_name_the_script_needs(tmp_path: Path, label) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    other = LinePlot(x=ref["t"], y=ref["t2"], axis="right")
+    panel = Axes(y_right=AxisSpec(), artists=[data, other])
+    project.figures = [Figure(dpi=100, axes=[panel])]
+    for name in ("gaussian", "linear"):
+        fit = FitCurve(target=data.id, model=PredefinedFit(name=name))
+        add_fit(project, fit).apply(project)
+        refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    project.figures[0].axes[0].artists.append(_guide("0 * x + 0.5", label=label))
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("expression", "values"),
+    [
+        ("x + a / b", {"a": 1.0, "b": 0.0}),
+        ("x + a**0.5", {"a": -4.0}),
+        ("x * a**b", {"a": 0.0, "b": -1.0}),
+        ("x * a**b", {"a": 1e200, "b": 2.0}),
+        (" a * x", {"a": 0.1}),
+    ],
+    ids=["zero", "root", "pole", "overflow", "space"],
+)
+def test_a_function_whose_numbers_python_would_refuse(
+    tmp_path: Path, expression, values
+) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    made = _guide(expression, values=values)
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data, made])])]
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("where", ["right", "below", "inset"])
+def test_a_function_moves_no_x_limits(tmp_path: Path, where) -> None:
+    """On an axis without data of its own in y, whose x is the data's."""
+    from figscribe.model import Inset
+
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    wide = _guide("x", curve_range=(-40.0, 60.0))
+    layout = GridLayout()
+    if where == "right":
+        wide.axis = "right"
+        axes = [Axes(y_right=AxisSpec(), artists=[data, wide])]
+    elif where == "below":
+        layout = GridLayout(rows=2, share_x="col")
+        axes = [Axes(artists=[data]), Axes(row=1, artists=[wide])]
+    else:
+        top = Axes(artists=[data])
+        axes = [
+            top,
+            Axes(inset=Inset(parent=top.id, bounds=(0.5, 0.5, 0.4, 0.4))),
+        ]
+        axes[1].artists = [data.model_copy(update={"id": "other"}), wide]
+    project.figures = [Figure(dpi=100, layout=layout, axes=axes)]
+    _assert_same(project, tmp_path)
+    drawn = render(project.figures[0], load_data(project, tmp_path))
+    drawn.draw_without_rendering()
+    for ax in drawn.axes:
+        for each in [ax, *ax.child_axes]:
+            assert each.get_xlim()[1] < 20, where
+
+
+def test_a_log_x_axis_from_a_shared_panel(tmp_path: Path) -> None:
+    """Matplotlib draws both logarithmic; both sample the curves so."""
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t2"], y=ref["U"])
+    made = _guide("1 / (1 + x)", curve_range=(0.01, 90.0))
+    below = Axes(row=1, artists=[data.model_copy(update={"id": "b"}), made])
+    project.figures = [
+        Figure(
+            dpi=100,
+            layout=GridLayout(rows=2, share_x="col"),
+            axes=[Axes(x=AxisSpec(scale="log"), artists=[data]), below],
+        )
+    ]
+    fit = FitCurve(
+        target="b", model=PredefinedFit(name="linear"), curve_range=(0.01, 90.0)
+    )
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    _assert_same(project, tmp_path)

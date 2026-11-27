@@ -9,17 +9,21 @@ import numpy as np
 import pytest
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
+from figscribe.codegen import generate
 from figscribe.commands import CommandError, History, InsertItem
-from figscribe.function import new_function, set_expression
+from figscribe.function import new_function, set_expression, x_span
 from figscribe.io import csv_source, load_data
 from figscribe.model import (
+    ArrayRef,
     Axes,
     AxisSpec,
+    ColorMesh,
     ColumnRef,
     Conversion,
     Figure,
     FunctionPlot,
     GridLayout,
+    ImagePlot,
     LinePlot,
     Project,
     dumps,
@@ -194,3 +198,68 @@ def test_insert_and_undo(tmp_path: Path) -> None:
     )
     history.undo()
     assert dumps(project) == before
+
+
+def test_a_number_too_large_for_a_float_is_a_formula_that_cannot_be_read(
+    tmp_path: Path,
+) -> None:
+    huge = "x + " + "9" * 400
+    with pytest.raises(CommandError, match="cannot be read"):
+        new_function(huge)
+    project = _project(tmp_path, FunctionPlot(expression=huge))
+    (problem,) = _problems(project, tmp_path)
+    assert "formula" in problem
+    _drawn(project, tmp_path)
+
+
+def test_a_range_from_the_rows_the_plot_uses(tmp_path: Path) -> None:
+    made = new_function("x")
+    project = _project(tmp_path, made)
+    project.figures[0].axes[0].artists[0].x_range = (3.0, 5.0)
+    line = _line(_drawn(project, tmp_path), made.id)
+    assert (line.get_xdata()[0], line.get_xdata()[-1]) == (3.0, 5.0)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "image"])
+def test_a_range_over_two_dimensional_data(kind: str) -> None:
+    table = np.arange(12.0).reshape(3, 4)
+    if kind == "mesh":
+        columns = {"x": np.array([2.0, 4.0, 6.0, 8.0]), "y": np.arange(3.0)}
+        plot = ColorMesh(
+            c=ArrayRef(source="s"),
+            x=ColumnRef(source="s", column="x"),
+            y=ColumnRef(source="s", column="y"),
+        )
+        expected = (2.0, 8.0)
+    else:
+        columns, expected = {}, (0.0, 10.0)
+        plot = ImagePlot(data=ArrayRef(source="s"), extent=(0.0, 10.0, 0.0, 1.0))
+    figure = Figure(axes=[Axes(artists=[plot, new_function("x / 10")])])
+
+    def data(ref):
+        return table if isinstance(ref, ArrayRef) else columns[ref.column]
+
+    assert x_span(figure, 0, figure.axes[0].artists[1], data) == expected
+
+
+@pytest.mark.parametrize(
+    ("x", "curve", "said"),
+    [
+        ({"scale": "log"}, (-5.0, -1.0), "logarithmic"),
+        ({"scale": "log"}, (-5.0, 5.0), "logarithmic"),
+        ({"breaks": [(2.0, 8.0)]}, (3.0, 6.0), "break"),
+    ],
+)
+def test_what_is_not_shown_is_listed(tmp_path: Path, x, curve, said) -> None:
+    made = new_function("x")
+    made.curve_range = curve
+    project = _project(tmp_path, made, **x)
+    assert any(said in p for p in _problems(project, tmp_path)), said
+
+
+def test_without_data_the_script_says_why_a_function_is_missing(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path, new_function("x"))
+    script = generate(project, base_dir=tmp_path)
+    assert "comes from the data, which could not be read" in script

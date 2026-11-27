@@ -394,7 +394,10 @@ def _function_values(figure: Figure, index: int, artist, field: str, data):
     from figscribe.function import evaluator, sets_limits, x_span
 
     f = evaluator(artist)
-    if f is None or not sets_limits(figure, index, artist):
+    if f is None:
+        return []
+    sets = sets_limits(figure, index, artist)
+    if sets == "none" or (field == "x" and sets != "both"):
         return []
     span = x_span(figure, index, artist, data)
     if span is None:
@@ -404,19 +407,28 @@ def _function_values(figure: Figure, index: int, artist, field: str, data):
 
 
 def _function_problems(figure: Figure, index: int, artist, data) -> list:
-    """(field, why) for a function that draws nothing."""
-    from figscribe.function import problem, x_span
+    """(field, why) for a function that draws nothing, or not all of itself."""
+    from figscribe.function import log_x, problem, x_span
+    from figscribe.render.breaks import curve_parts, overlapping
 
     if (why := problem(artist)) is not None:
         return [("expression", why)]
-    if data is not None and x_span(figure, index, artist, data) is None:
-        return [
-            (
-                "curve_range",
-                "has no x range to be drawn over; type one for the function, or "
-                "limits for the x axis",
-            )
-        ]
+    span = x_span(figure, index, artist, data)
+    if span is None:
+        if data is None:
+            return []
+        why = (
+            "has no x range to be drawn over; type one for the function, or "
+            "limits for the x axis"
+        )
+        return [("curve_range", why)]
+    low, high = span
+    if low <= 0 and log_x(figure, index):
+        why = f"starts at {low:g}, which a logarithmic axis cannot show"
+        return [("curve_range", why)]
+    breaks = line_breaks(figure, index, "x")
+    if overlapping(breaks, low, high) and not curve_parts(low, high, breaks, 2):
+        return [("curve_range", "lies within a break, so it is not drawn")]
     return []
 
 

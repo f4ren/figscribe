@@ -3767,7 +3767,9 @@ Agreed with the user (2026-11-27, as recommended):
 - **It moves no limits of a panel that shows data**, whatever it reaches and
   wherever it stands in the order of drawing: the line is added as it is
   (`add_artist`; `plot(scaley=False)` does not hold, as the next plot scales to
-  it after all). A panel of functions alone is scaled by them.
+  it after all). A panel of functions alone is scaled by them. A y axis with
+  no data of its own beside data on x (a right axis, a panel below sharing x)
+  is scaled in y only.
 - It has **a color of its own** (black), taking none of the color cycle, so
   adding one recolors no plot.
 - Sampled as a fit curve: evenly in log x on a log axis, on each stretch of a
@@ -3776,9 +3778,13 @@ Agreed with the user (2026-11-27, as recommended):
   rewrite it; a range typed for the function moves with the axis.
 - A formula that cannot be read opens with the file, draws nothing and is
   listed. Changing it keeps the values of names that remain, in one step.
+- "The data" are the points the plots use ("Use only values"), a color mesh's
+  or image's x, and for residuals their data's.
 - The script defines a function per formula from the checked tree, never from
-  the text, named after its legend entry where that is a free name, and calls
-  it with the numbers.
+  the text, named after its legend entry and ending in `_function`, so that it
+  takes no name the script needs, and calls it with the numbers. Where the
+  formula divides or takes powers, the numbers are made NumPy's, so that 1 / 0
+  is inf as drawn and no error.
 - A new kind with defaults: no schema bump.
 
 ### Alternatives considered

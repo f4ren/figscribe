@@ -9,7 +9,6 @@ otherwise change (line widths, marker sizes, legend location); those are kept.
 
 from __future__ import annotations
 
-import builtins
 import keyword
 import os
 import re
@@ -30,7 +29,14 @@ from figscribe.fit import (
     parameter_names,
 )
 from figscribe.fit.expression import numpy_source as numpy_code
-from figscribe.function import problem, sets_limits, uses_x, x_span
+from figscribe.function import (
+    divides,
+    log_x,
+    problem,
+    sets_limits,
+    uses_x,
+    x_span,
+)
 from figscribe.function import values as function_values
 from figscribe.io import load_data
 from figscribe.io.errors import DataError
@@ -262,7 +268,7 @@ class _Writer:
             for a in axes.artists
             if isinstance(a, FunctionPlot)
         }
-        """{function id: (its x range or None, whether it scales its axis)}."""
+        """{function id: (its x range or None, which limits it sets)}."""
         self.functions = self._name_functions()
         """{function id: name of the def} of the functions that are drawn."""
         self.axis_specs = self._ticks_that_fit()
@@ -631,7 +637,7 @@ class _Writer:
                 "from matplotlib.collections import PathCollection",
                 "from matplotlib.path import Path as Shape",
             )
-        if any(not self.places[oid][1] for oid in self.functions):
+        if any(self.places[oid][1] != "both" for oid in self.functions):
             self.emit("from matplotlib.lines import Line2D")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
@@ -1117,11 +1123,12 @@ class _Writer:
             function = self.artists[oid]
             if span is None or problem(function) is not None:
                 continue
-            base = _slug(function.label or "")
-            if not base.isidentifier() or keyword.iskeyword(base):
+            # Ending in "function", it takes no name of a fit model, an axes or
+            # a helper of the script.
+            slug = _slug(function.label or "")
+            base = f"{slug}_function" if slug else "function"
+            if not base.isidentifier():
                 base = "function"
-            if hasattr(builtins, base):  # the script calls max, print and so on
-                base = f"{base}_function"
             found[oid] = self._free(base)
         return found
 
@@ -1137,18 +1144,23 @@ class _Writer:
             body = numpy_code(expression)
             if not uses_x(expression):  # one number: a value for every x
                 body = f"{body} + np.zeros_like(x)"
-            parameters = ", ".join(["x", *function_values(function)])
-            self.emit("", f"def {name}({parameters}):", f"    return {body}", "")
+            names = list(function_values(function))
+            self.emit("", f"def {name}({', '.join(['x', *names])}):")
+            if names and divides(expression):
+                # Python's numbers stop at 1 / 0; NumPy's give inf, as drawn.
+                values = ", ".join(f"np.float64({n})" for n in names)
+                self.emit(f"    {', '.join(names)} = {values}")
+            self.emit(f"    return {body}", "")
 
     def _function(self, ax: str, function: FunctionPlot, common: dict) -> None:
-        span, scales = self.places[function.id]
+        span, sets = self.places[function.id]
         name = self.functions.get(function.id)
         if name is None:
-            why = (
-                "has a formula that cannot be read"
-                if problem(function) is not None
-                else "has no x range"
-            )
+            why = "has no x range"
+            if problem(function) is not None:
+                why = "has a formula that cannot be read"
+            elif self.data is None:
+                why = "has an x range that comes from the data, which could not be read"
             self.emit(f"# {_describe(function)} {why}, so it is not drawn.")
             return
         index, panel = next(
@@ -1159,7 +1171,7 @@ class _Writer:
             if typed_limits(self.figure, index, "x") is None:
                 self.emit("# Over the x range of the data, as figscribe drew it.")
         xs = self._free(f"x_{name}")
-        space = "geomspace" if panel.x.scale == "log" and low > 0 else "linspace"
+        space = "geomspace" if log_x(self.figure, index) and low > 0 else "linspace"
         arguments = [xs, *(repr(float(v)) for v in function_values(function).values())]
         curve = f"{name}({', '.join(arguments)})"
         if self._cut == ([], []):
@@ -1176,13 +1188,25 @@ class _Writer:
             "linestyle": _str(function.linestyle),
             "linewidth": _num(function.linewidth),
         }
-        if scales:
+        if sets == "both":
             self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
             return
+        if sets == "y" and curve.endswith(")"):
+            values = self._free(f"{name}_values")
+            self.emit(f"{values} = {curve}")
+            curve = values
         line = self._free(f"{name}_line")
         kwargs |= common | {"transform": f"{ax}.transData"}
         self.call(f"{line} = Line2D", xs, curve, **kwargs)
         self.emit(f"{ax}.add_artist({line})  # leaves the limits to the data")
+        if sets == "y":
+            self.emit("# Nothing else scales this y axis; x stays the data's.")
+            self.call(
+                f"{ax}.update_datalim",
+                f"np.column_stack([{xs}, {curve}])",
+                updatex="False",
+            )
+            self.emit(f"{ax}.autoscale_view(scalex=False)")
 
     def _fit_models(self) -> None:
         if not self.fits:
@@ -2189,7 +2213,7 @@ class _Writer:
             high = f"min({fit.fit_range[1]!r}, {high})"
         look = None if given is None else self._extrapolated(fit, given)
         # Evenly in log x for an Allan deviation, and over ends of the user's.
-        log = panel.x.scale == "log" and (
+        log = log_x(self.figure, index) and (
             isinstance(target, AllanDeviationPlot) if given is None else given[0] > 0
         )
         space = "geomspace" if log else "linspace"

@@ -2007,10 +2007,11 @@ class ValuesEditor(Editor):
     def __init__(self, spec, path, panel):
         super().__init__(spec, path, panel)
         function = find(panel.document.project, self.oid)
+        empty = "none: the formula has its numbers"
         try:
             found = formula_names(function.expression)
         except CommandError:
-            found = []
+            found, empty = [], "the formula cannot be read"
         self.widget = QWidget()
         form = QFormLayout(self.widget)
         form.setContentsMargins(0, 0, 0, 0)
@@ -2021,7 +2022,7 @@ class ValuesEditor(Editor):
             form.addRow(label(name, "value"), line)
             self.lines[name] = line
         if not found:
-            form.addRow(label("none: the formula has its numbers", "hint"))
+            form.addRow(label(empty, "hint"))
 
     def show(self, value: Any) -> None:
         self.value = dict(value)
