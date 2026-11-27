@@ -94,7 +94,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   after all~~ done (*Use another file…*, 0075).
 
 **Phase 4 — M7: polish and release**
-- **R9** release 0.4, which the user wants soon.
+- **R9** release 0.4, when the user says so.
 - **R1** style templates for journals (`[decide]` `text.usetex`). **R2**
   snapping and alignment guides. **R3** the dpi at export (TIFF, EPS and the
   transparent background are built, 0065). **R4** installers (done in 0.3.0: PyInstaller, decision 0066; the macOS disk
@@ -105,12 +105,12 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 5** is later and optional.
 
-**Where to start** (rule 1): the user wants **0.4 soon** (2026-11-27; no
-0.3.1, the fix of 0076 goes out with it), so R9 comes first. What may go into
-it before: the items of B10 that can give a wrong figure (1 to 4). After the
-release the user's order of 2026-11-03 goes on with F15 (ask its `[decide]`
-first); B7 item 5, the GUI at small sizes, needs no answer. The lab user's requests
-of 2026-11-04 are all done.
+**Where to start** (rule 1; the user, 2026-11-27): first the items of B10
+that can give a wrong figure (1 to 4), then new features of Phase 2: F15 (ask
+its `[decide]` first), F6 several files as one series, F1.5 a confidence band,
+and a legend entry for the part of a curve beyond the data. **The release of
+0.4 (R9) waits** until the user says so; no 0.3.1. B7 item 5, the GUI at small
+sizes, needs no answer. The lab user's requests of 2026-11-04 are all done.
 
 ---
 
@@ -2007,8 +2007,8 @@ needs signed releases first.
 
 ### R9 Release 0.4 — S
 
-The user wants it soon (2026-11-27). It carries everything under "Unreleased"
-in the changelog.
+Waits for the user's word (2026-11-27). It carries everything under
+"Unreleased" in the changelog.
 
 1. Add what is new to the manual checklist (`docs/testing.md`): a broken axis,
    number format and decimal comma, minor grid lines, a curve beyond the data,
