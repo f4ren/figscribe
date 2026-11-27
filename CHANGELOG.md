@@ -5,6 +5,9 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed (in 0.3.0 too): the Python script of a figure whose data file's name
+  starts with a digit, such as `2026-11-27 run.csv`, or is a Python word, did
+  not run.
 - **Draw a function.** *Insert > Add Reference > Function…*: a formula such as
   `a * exp(-x / tau)` as a theory curve or a guide, with a field in the panel
   for each name. It moves no axis limits beside data (decision 0078).

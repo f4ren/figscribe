@@ -308,7 +308,7 @@ class _Writer:
                 plain = f"col{ref.column}"
             name = plain
             if name in taken:
-                name = f"{_slug(Path(source.path).stem) or 'data'}_{plain}"
+                name = f"{_stem(source.path)}_{plain}"
             while name in taken:
                 name += "_"
             taken.add(name)
@@ -333,7 +333,7 @@ class _Writer:
                     key = (ref.source, ref.key)
                     if key in names:
                         continue
-                    stem = _slug(Path(source.path).stem) or "data"
+                    stem = _stem(source.path)
                     name = f"{stem}_{_slug(ref.key)}" if ref.key else stem
                     if isinstance(source, CsvSource):
                         name = f"{stem}_table"
@@ -774,7 +774,7 @@ class _Writer:
             raise NotImplementedError(
                 f"generating code for {source.format!r} sources is not implemented"
             )
-        stem = _slug(Path(source.path).stem) or "data"
+        stem = _stem(source.path)
         path = f"{stem}_path"
         location = resolve_path(source.path, self.base_dir)
         self.emit(f"{path} = HERE / {_str(_relative(location, script_dir))}")
@@ -846,7 +846,7 @@ class _Writer:
         for key in sorted(keys, key=lambda k: (k is not None, k or "")):
             name = self.arrays.get((source.id, key))
             if name is None:
-                stem = _slug(Path(source.path).stem) or "data"
+                stem = _stem(source.path)
                 name = f"{stem}_{_slug(source.array)}" if source.array else stem
                 taken = {*self.arrays.values(), *self.columns.values(), *RESERVED}
                 while name in taken:
@@ -2759,6 +2759,16 @@ def _letter(index: int) -> str:
 
 def _slug(text: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", text).strip("_").lower()
+
+
+def _stem(path: str) -> str:
+    """A data file's name as the start of the names of its variables."""
+    name = _slug(Path(path).stem) or "data"
+    if name[0].isdigit():
+        name = f"data_{name}"
+    if keyword.iskeyword(name):
+        name = f"{name}_data"
+    return name
 
 
 def _identifier(text: str) -> str:

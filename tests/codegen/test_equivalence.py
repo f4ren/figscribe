@@ -22,8 +22,10 @@ from figscribe.commands import add_panel
 from figscribe.fit import add_fit, refit
 from figscribe.io import load_data
 from figscribe.io.csvfile import csv_source
+from figscribe.io.numpyfile import numpy_source
 from figscribe.model import (
     AllanDeviationPlot,
+    ArrayRef,
     Axes,
     AxisSpec,
     ColumnRef,
@@ -35,6 +37,7 @@ from figscribe.model import (
     FitCurve,
     GridLayout,
     Histogram,
+    ImagePlot,
     Legend,
     LinePlot,
     PanelLabels,
@@ -2723,3 +2726,18 @@ def test_a_panel_of_functions_beside_data_on_y_alone(tmp_path: Path, share_x) ->
     first, second = drawn.axes[0], drawn.axes[1]
     assert second.get_xlim()[1] > 29 and second.get_xlim()[0] < 1
     assert first.get_ylim()[1] < 2  # the data's, not 100
+
+
+@pytest.mark.parametrize("stem", ["2026-11-27 run", "lambda", "---"])
+def test_a_data_file_whose_name_is_no_python_name(tmp_path: Path, stem: str) -> None:
+    (tmp_path / f"{stem}.csv").write_text("a,b\n1,2\n3,5\n", encoding="utf-8")
+    np.save(tmp_path / f"{stem}.npy", np.arange(12.0).reshape(3, 4))
+    table = csv_source(tmp_path / f"{stem}.csv", tmp_path)
+    array = numpy_source(tmp_path / f"{stem}.npy", tmp_path)
+    a, b = (ColumnRef(source=table.id, column=c) for c in ("a", "b"))
+    panels = [
+        Axes(artists=[LinePlot(x=a, y=b)]),
+        Axes(col=1, artists=[ImagePlot(data=ArrayRef(source=array.id))]),
+    ]
+    figure = Figure(dpi=100, layout=GridLayout(rows=1, cols=2), axes=panels)
+    _assert_same(Project(sources=[table, array], figures=[figure]), tmp_path)
