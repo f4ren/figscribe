@@ -85,6 +85,8 @@ def test_the_dialog_takes_the_sheet_with_numbers(qtbot, book: Path) -> None:
     assert headers == ["L [m]", "t10 [s]", "T [s]", "dT [s]", "note"]
     assert dialog.table.item(0, 2).text() == "0.897"
     assert dialog.table.item(0, 4).text() == "ok"
+    write_ods(book, {"data": [["a"], [1 / 3]]})
+    assert _dialog(qtbot, book).table.item(0, 0).text() == "0.333333"
     chips = [dialog.chips.itemAt(i).widget().text() for i in range(3)]
     assert chips == ["Sheet data ▾", "Names in row 3 ▾", "Units in row 4 ▾"]
 

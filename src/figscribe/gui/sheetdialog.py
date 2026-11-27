@@ -177,6 +177,8 @@ class SheetDialog(DataDialog):
         return units_line("\t".join(cells), "\t", count)
 
     def _cell(self, value) -> str:
+        if isinstance(value, float):  # as the preview of a text file shows it
+            return f"{value:g}"
         return cell_text(value)
 
     def _numbers_note(self, source: SheetSource, table: np.ndarray) -> list[str]:

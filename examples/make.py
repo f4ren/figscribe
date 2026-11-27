@@ -30,6 +30,7 @@ from figscribe.commands import History
 from figscribe.fit import add_fit, refit
 from figscribe.io import csv_source, load_data
 from figscribe.io.numpyfile import numpy_source
+from figscribe.io.sheetfile import sheet_source
 from figscribe.model import (
     AllanDeviationPlot,
     Annotation,
@@ -156,15 +157,15 @@ def write_ods(path: Path, sheets: dict[str, list[list[object]]]) -> None:
         '<manifest:file-entry manifest:full-path="content.xml" '
         'manifest:media-type="text/xml"/></manifest:manifest>'
     )
-    with zipfile.ZipFile(path, "w") as archive:
-        # "mimetype" comes first and uncompressed, so that the file is known.
-        for name, text, how in (
-            ("mimetype", kind, zipfile.ZIP_STORED),
-            ("content.xml", content, zipfile.ZIP_DEFLATED),
-            ("META-INF/manifest.xml", manifest, zipfile.ZIP_DEFLATED),
+    # Nothing is compressed: zlib differs between platforms, and the file's hash
+    # is in the project. "mimetype" comes first, so that the file is known.
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as archive:
+        for name, text in (
+            ("mimetype", kind),
+            ("content.xml", content),
+            ("META-INF/manifest.xml", manifest),
         ):
             entry = zipfile.ZipInfo(name, date_time=(2026, 11, 1, 0, 0, 0))
-            entry.compress_type = how
             entry.create_system = 3  # the same bytes written on Windows
             entry.external_attr = 0o644 << 16
             archive.writestr(entry, text)
@@ -173,7 +174,11 @@ def write_ods(path: Path, sheets: dict[str, list[list[object]]]) -> None:
 def _ods_cell(value: object) -> str:
     formula = ""
     if isinstance(value, Formula):
-        inner = re.sub(r"\b([A-Z]+[0-9]+)\b", r"[.\1]", value.text)
+        inner = re.sub(
+            r"\b([A-Z]+[0-9]+)(?::([A-Z]+[0-9]+))?\b(?!\()",
+            lambda m: f"[.{m[1]}:.{m[2]}]" if m[2] else f"[.{m[1]}]",
+            value.text,
+        )
         formula = f" table:formula={quoteattr('of:=' + inner)}"
         value = value.value
     if value is None:
@@ -1123,6 +1128,85 @@ def ir_spectrum(folder: Path) -> Project:
 
 # --- the program --------------------------------------------------------------
 
+
+def pendulum(folder: Path) -> Project:
+    """A spreadsheet as it comes from the lab: three raw times of ten periods
+    for each length, and columns the spreadsheet computes from them."""
+    rng = np.random.default_rng(112)
+    lengths = [round(0.2 + 0.1 * i, 1) for i in range(11)]
+    g, reaction = 9.81, 0.12  # m/s², s of scatter of a start and stop by hand
+    rows: list[list[object]] = [
+        ["Thread pendulum: ten periods timed by hand (synthetic)"],
+        [],
+        ["L", "t1", "t2", "t3", "T", "T2", "u(T2)", "note"],
+        ["m", "s", "s", "s", "s", "s^2", "s^2"],
+    ]
+    for i, length in enumerate(lengths):
+        ten = 20 * np.pi * np.sqrt(length / g)
+        times = [round(float(ten + rng.normal(0, reaction)), 2) for _ in range(3)]
+        row = len(rows) + 1
+        period = sum(times) / 3 / 10
+        rows.append(
+            [
+                length,
+                *times,
+                Formula(f"AVERAGE(B{row}:D{row})/10", period),
+                Formula(f"E{row}*E{row}", period * period),
+                Formula(
+                    f"2*E{row}*{reaction}/10/SQRT(3)",
+                    2 * period * reaction / 10 / 3**0.5,
+                ),
+                "thread retied" if i == 6 else None,
+            ]
+        )
+    write_ods(folder / "pendulum.ods", {"measurement": rows})
+    source = sheet_source(folder / "pendulum.ods", folder, header_row=2, skip_rows=1)
+    points = ErrorbarPlot(
+        x=column(source, "L"),
+        y=column(source, "T2"),
+        yerr=column(source, "u(T2)"),
+        marker="o",
+        linestyle="none",
+        markersize=3.5,
+        capsize=2.0,
+        color="C0",
+        label="measured",
+    )
+    panel = Axes(
+        x=axis("Length", "m", limits=(0.0, 1.35)),
+        y=axis("Period squared", "s²", limits=(0.0, 5.4)),
+        legend=Legend(visible=True, location="upper left", frame=False),
+        artists=[points],
+    )
+    figure = Figure(
+        name="Pendulum",
+        width_mm=89,
+        height_mm=75,
+        layout=GridLayout(rows=1, cols=1),
+        axes=[panel],
+    )
+    project = project_of([source], figure)
+    fit = fit_to(
+        project,
+        folder,
+        points,
+        PredefinedFit(name="linear"),
+        color="C1",
+        curve_to_limits=True,
+        mark_extrapolated=True,
+        label="straight line",
+    )
+    slope = fit.result.parameters["a"]
+    project.figures[0].axes[0].artists.append(
+        Annotation(
+            text=f"$g = 4\\pi^2/a$ = {4 * np.pi**2 / slope:.2f} m/s²",
+            position=(0.42, 0.07),
+            coords="axes",
+        )
+    )
+    return project
+
+
 EXAMPLES: dict[str, tuple[str, str, str, Callable[[Path], Project] | None]] = {
     # folder: (project file, title, what it shows, builder); a builder of None
     # is an example written by hand, of which only the thumbnail is made.
@@ -1209,6 +1293,12 @@ EXAMPLES: dict[str, tuple[str, str, str, Callable[[Path], Project] | None]] = {
         "An infrared spectrum",
         "Wavenumbers from high to low, an open frame and a decimal comma.",
         ir_spectrum,
+    ),
+    "pendulum": (
+        "pendulum.figscribe",
+        "A pendulum from a spreadsheet",
+        "A LibreOffice Calc sheet with computed columns, and g from the fit.",
+        pendulum,
     ),
 }
 

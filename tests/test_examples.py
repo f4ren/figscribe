@@ -24,7 +24,7 @@ MAX_BYTES = 1_000_000
 
 
 def test_there_are_examples() -> None:
-    assert len(NAMES) >= 14
+    assert len(NAMES) >= 15
     assert examples_root().resolve() == ROOT.resolve()
 
 
@@ -146,7 +146,7 @@ def _same_as_committed(make, name: str, written: Path, kept: Path) -> None:
         assert (written / "thumbnail.png").is_file()
         return
     for data in kept.iterdir():
-        if data.suffix == ".csv":
+        if data.suffix in (".csv", ".ods"):
             assert (written / data.name).read_bytes() == data.read_bytes(), data.name
         if data.suffix == ".npz":
             a, b = np.load(written / data.name), np.load(data)
@@ -157,7 +157,10 @@ def _same_as_committed(make, name: str, written: Path, kept: Path) -> None:
     old, old_results = _without_results((kept / project_file).read_text())
     for project in (new, old):
         for source in project["sources"]:
-            if source["format"] != "csv":  # the bytes of an .npz follow the last bits
+            if source["format"] in (
+                "npy",
+                "npz",
+            ):  # the bytes of an .npz follow the last bits
                 source["sha256"] = None
     _same(new, old, name)
     for a, b in zip(new_results, old_results, strict=True):

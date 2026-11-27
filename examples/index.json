@@ -83,6 +83,12 @@
       "project": "spectrum.figscribe",
       "title": "An infrared spectrum",
       "detail": "Wavenumbers from high to low, an open frame and a decimal comma."
+    },
+    {
+      "folder": "pendulum",
+      "project": "pendulum.figscribe",
+      "title": "A pendulum from a spreadsheet",
+      "detail": "A LibreOffice Calc sheet with computed columns, and g from the fit."
     }
   ]
 }
