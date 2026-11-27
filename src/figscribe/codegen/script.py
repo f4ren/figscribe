@@ -335,6 +335,13 @@ class _Writer:
             *getattr(self, "_retired", ()),
         }
 
+    def _free(self, name: str) -> str:
+        """`name`, or with underscores after it where a column has it."""
+        taken = self._taken()
+        while name in taken:
+            name += "_"
+        return name
+
     def _name_converted(self) -> dict[tuple[str, str], str]:
         """One variable per column and conversion, named after both: t_h,
         U_mV, or t_scaled without a unit; numbered on a clash."""
@@ -2058,7 +2065,7 @@ class _Writer:
         function, popt = self.fits[fit.id]
         target = self.artists[fit.target]
         x = self.shown(target, "x")
-        xs = f"{x}_fit" if f"{x}_fit" not in self._taken() else f"{x}_fit_"
+        xs = self._free(f"{x}_fit")
         index, panel = next(
             (i, a) for i, a in enumerate(self.figure.axes) if fit in a.artists
         )
@@ -2097,12 +2104,13 @@ class _Writer:
         curve = f"{function}({xs}, *{popt})"
         joined = None  # the data's ends, to be sampled where the style changes
         if look:
+            names = self._free(f"{x}_first"), self._free(f"{x}_last")
             self.emit(
                 "# Drawn differently beyond the data: no points back the curve there.",
-                f"{x}_first = {first}",
-                f"{x}_last = {last}",
+                f"{names[0]} = {first}",
+                f"{names[1]} = {last}",
             )
-            first, last = f"{x}_first", f"{x}_last"
+            first, last = names
             joined = f"np.clip([{first}, {last}], {low}, {high})"
         if self._cut == ([], []):
             sampled = f"np.{space}({low}, {high}, {CURVE_POINTS})"
@@ -2120,28 +2128,32 @@ class _Writer:
         if not look:
             self.call(f"{ax}.plot", xs, curve, **kwargs, **common)
             return
-        values = curve
-        if values != f"{xs}_y":
-            values = f"{xs}_y"
+        values = self._free(f"{xs}_y")
+        if curve != values:  # a break may have made the variable already
             self.emit(f"{values} = {curve}")
+        measured, beyond = (
+            self._free(f"{xs}_measured"),
+            self._free(f"{xs}_beyond"),
+        )
         for name, where in (
-            ("measured", f"({xs} >= {first}) & ({xs} <= {last})"),
-            ("beyond", f"({xs} <= {first}) | ({xs} >= {last})"),
+            (measured, f"({xs} >= {first}) & ({xs} <= {last})"),
+            (beyond, f"({xs} <= {first}) | ({xs} >= {last})"),
         ):
-            self.call(f"{xs}_{name} = np.where", where, values, "np.nan")
+            self.call(f"{name} = np.where", where, values, "np.nan")
         plot, color = f"{ax}.plot", look["color"]
         if color is None:  # the curve's, which may come from the color cycle
-            plot, color = f"{xs}_line, = {plot}", f"{xs}_line.get_color()"
+            line = self._free(f"{xs}_line")
+            plot, color = f"{line}, = {plot}", f"{line}.get_color()"
         else:
             color = _str(color)
-        self.call(plot, xs, f"{xs}_measured", **kwargs, **common)
+        self.call(plot, xs, measured, **kwargs, **common)
         style = {
             "color": color,
             "linestyle": _str(look["linestyle"]),
             "linewidth": _num(look["linewidth"]),
         }
         rest = {key: value for key, value in common.items() if key != "label"}
-        self.call(f"{ax}.plot", xs, f"{xs}_beyond", **style, **rest)
+        self.call(f"{ax}.plot", xs, beyond, **style, **rest)
 
     def _extrapolated(
         self, fit: FitCurve, ends: tuple[float, float]
@@ -2196,7 +2208,7 @@ class _Writer:
         # A line can cross a break only between two stretches, or in y.
         if len(parts) == 1 and not self._cut[1]:
             return curve
-        values = f"{xs}_y"
+        values = self._free(f"{xs}_y")
         self.emit(f"{values} = {curve}")
         cuts = self._cuts(xs, values)
         self.call(f"{xs} = np.insert", xs, cuts, "np.nan")

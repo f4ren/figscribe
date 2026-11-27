@@ -335,12 +335,12 @@ class FitDialog(QDialog):
         self.label.setText(fit.label or "")
         self.label.setModified(True)  # not replaced by the model's name
         if fit.fit_range is not None:
-            self.range_low.setText(f"{fit.fit_range[0]:.6g}")
-            self.range_high.setText(f"{fit.fit_range[1]:.6g}")
+            self.range_low.setText(_shown(fit.fit_range[0]))
+            self.range_high.setText(_shown(fit.fit_range[1]))
         self.extend.setChecked(fit.extend_curve)
         if fit.curve_range is not None:
-            self.curve_low.setText(f"{fit.curve_range[0]:.6g}")
-            self.curve_high.setText(f"{fit.curve_range[1]:.6g}")
+            self.curve_low.setText(_shown(fit.curve_range[0]))
+            self.curve_high.setText(_shown(fit.curve_range[1]))
         self.to_limits.blockSignals(True)
         self.to_limits.setChecked(fit.curve_to_limits)
         self.to_limits.blockSignals(False)
@@ -456,12 +456,21 @@ class FitDialog(QDialog):
         if not all(texts):
             raise FitError("enter both ends of the fit range, or neither")
         try:
-            low, high = (number(text) for text in texts)
+            low, high = self._ends(texts, "fit_range")
         except ValueError as exc:
             raise FitError(f"the fit range: {exc}") from None
         if not low < high:
             raise FitError("the lower end of the fit range is not below the upper")
         return low, high
+
+    def _ends(self, texts: list[str], name: str) -> list[float]:
+        """The numbers typed as the two ends of the range `name`. An end still
+        shown as the fit had it keeps its exact value."""
+        had = getattr(self.existing, name, None) or (None, None)
+        return [
+            stored if stored is not None and text == _shown(stored) else number(text)
+            for text, stored in zip(texts, had, strict=True)
+        ]
 
     def curve_range(self) -> tuple[float, float] | None:
         """The typed range to draw the curve over; None to follow the data."""
@@ -472,7 +481,7 @@ class FitDialog(QDialog):
             if not all(texts):
                 raise FitError("enter both ends of the curve's range, or neither")
             try:
-                low, high = (number(text) for text in texts)
+                low, high = self._ends(texts, "curve_range")
             except ValueError as exc:
                 raise FitError(f"the curve's range: {exc}") from None
             if not low < high:
@@ -758,6 +767,10 @@ class FitDialog(QDialog):
             chi = f"{result.reduced_chi_square:.2f} · {len(self._used()[0])} points"
             self._result_grid.addWidget(label(chi, "value"), row, 1)
         self._result_grid.setColumnStretch(1, 1)
+
+
+def _shown(value: float) -> str:
+    return f"{value:.6g}"
 
 
 def _bound(placeholder: str) -> QLineEdit:

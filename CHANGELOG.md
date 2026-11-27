@@ -5,6 +5,8 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed: *Change the fit…* no longer rounds the fit range's ends to six digits
+  when you press *Update fit*.
 - **A fit beyond the data.** To extrapolate, type *Draw curve from … to …* in
   the fit dialog or *Curve from, to* in the panel, or tick *To the axis limits*
   where the x range is typed. Beyond the data the curve is dashed, as no
