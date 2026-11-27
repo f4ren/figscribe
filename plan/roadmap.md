@@ -1425,9 +1425,8 @@ measurement at ten temperatures". The script loads them in a loop.
    workbook is a changed file; data files named like `2026-11-27 run.csv` gave
    scripts that did not run (fixed on the way, in 0.3.0 too). *Open:* try files
    saved by a real Excel and LibreOffice (the tests write their own); date and
-   time columns wait for F5.5; the installers' notices name the license of the
-   Python binding only, not of the Rust parts compiled into it, listed in its
-   `sboms/` (before R9). *Follow-ups, only if asked:* `u(x)` recognised as the
+   time columns wait for F5.5. The installers' notices name the Rust parts
+   compiled in since 0080. *Follow-ups, only if asked:* `u(x)` recognised as the
    error of x; several sheets imported at once.
 
 ### F8 Several figures in one project — M
@@ -2023,8 +2022,7 @@ Waits for the user's word (2026-11-27). It carries everything under
 1. Add what is new to the manual checklist (`docs/testing.md`): a broken axis,
    number format and decimal comma, minor grid lines, a curve beyond the data,
    *Use another file…* with other column names, a changed file with a fit,
-   *Check for Updates…*, a sheet from a real Excel and LibreOffice. Add the
-   licenses of python-calamine's Rust parts to the installers' notices. Then go
+   *Check for Updates…*, a sheet from a real Excel and LibreOffice. Then go
    through the checklist (B7.5), on macOS at least.
 2. Version 0.4.0; date the changelog's section, and say first that a project
    saved with 0.3.0 after a change of a fit's data may hold an old curve:

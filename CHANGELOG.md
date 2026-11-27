@@ -5,6 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed (in 0.3.0 too): the assistant could write a fit's result itself, which
+  was then drawn as if figscribe had computed it; and its check for too many
+  ticks did not look at a new version of a data file.
+- The installers' license notices name the Rust libraries compiled into their
+  packages, with the licenses' texts (decision 0080).
 - **Excel and LibreOffice Calc files.** `.xlsx`, `.xls` and `.ods` are read as
   they are: pick the sheet, the row of names and rows to skip. Computed columns
   come with the results saved in the file; empty cells are gaps; columns of
