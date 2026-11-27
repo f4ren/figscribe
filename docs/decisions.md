@@ -3643,8 +3643,7 @@ units, the x range, left-out rows, the Allan settings and the fit dialog.
 After *Use the new version* or *Locate file…*, another column, a reduction,
 the y errors switched off, a file read differently, or a fit's range or model
 set by the assistant, the window kept the old curve over the new data and the
-script drew another one. The new file version and the located file were so in
-0.3.0.
+script drew another one. All of these were so in 0.3.0.
 
 ### Decision
 

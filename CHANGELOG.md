@@ -5,13 +5,15 @@ release open in every later one.
 
 ## Unreleased
 
-- **Fixed: a fit kept its old curve over new data.** After *Use the new
-  version* or *Locate file…* (both already in 0.3.0), another column, drawing
-  fewer points, reading a file differently and some changes by the assistant,
-  the window still showed the old fit while the Python script drew a new one.
-  The fit is now run again in the same step; one that cannot be is left not
-  fitted. Check figures made with 0.3.0 after a file changed: *Fit again with
-  the current data* (decision 0076).
+- **Fixed: a fit kept its old curve over new data**, in 0.3.0 too. The window
+  and its export drew the old fit while the Python script fitted again, after
+  any of these: *Use the new version* or *Locate file…* for a changed file,
+  another column, the y errors switched off, *Draw fewer points*, another way
+  of reading the file, or a fit's range, model or held values changed by the
+  assistant. The fit is now run again in the same step; one that cannot be is
+  left not fitted and listed among the problems. A project saved after one of
+  those changes still has the old curve: select the fit and *Fit again with the
+  current data* (decision 0076).
 - **Use another file.** Draw a figure, such as an example, with your own data:
   right-click the data file in *Contents* and *Use another file…*. The file is
   read like the old one, the fits are run again and left-out rows are taken
