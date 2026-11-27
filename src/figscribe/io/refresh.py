@@ -200,6 +200,12 @@ def read_differently(
         reason = "; ".join(e["msg"] for e in exc.errors())
         raise CommandError(f"cannot set {field}: {reason}") from exc
     new = reread(candidate, base_dir)
+    # As for a text file, a way of reading that makes no numbers of what is
+    # plotted is refused; not another sheet, whose rows are set after it.
+    if field != "sheet":
+        staging = project.model_copy(deep=True)
+        staging.sources = [new if s.id == new.id else s for s in staging.sources]
+        check_plotted(staging, source_id, base_dir)
     return Macro(
         f"Read {name} with another {OPTION_NAMES.get(field, field)}",
         [SetField(source.id, (field,), value)]

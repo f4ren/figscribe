@@ -119,7 +119,9 @@ def test_numbers_as_names_and_no_names(tmp_path: Path, kind: str) -> None:
     WRITERS[kind](path, {"s": [[300, 77.5, "U\n(V)"], [1, 2, 3]]})
     assert sheet_source(path, tmp_path).columns == ["300", "77.5", "U (V)"]
     bare = sheet_source(path, tmp_path, header_row=None)
-    assert bare.columns == [] and bare.row_count == 2
+    assert bare.columns == ["column A", "column B", "column C"]
+    assert bare.row_count == 2
+    np.testing.assert_array_equal(_load(tmp_path, bare, "column B"), [77.5, 2])
     np.testing.assert_array_equal(_load(tmp_path, bare, 1), [77.5, 2])
 
 
@@ -274,3 +276,14 @@ def test_the_sheet_and_the_rows_are_how_a_file_is_read(tmp_path: Path) -> None:
     assert project.sources[0].row_count == 1
     with pytest.raises(DataError, match="no sheet 'nope'"):
         read_differently(project, source.id, "sheet", "nope", tmp_path)
+
+
+def test_a_way_of_reading_that_makes_no_numbers_is_refused(tmp_path: Path) -> None:
+    rows = [["t", "U"], [1, "1,5"], [2, "3,5"]]
+    write_ods(tmp_path / "a.ods", {"s": rows})
+    source = sheet_source(tmp_path / "a.ods", tmp_path, decimal=",")
+    a, b = (ColumnRef(source=source.id, column=c) for c in ("t", "U"))
+    figure = Figure(axes=[Axes(artists=[LinePlot(x=a, y=b)])])
+    project = Project(sources=[source], figures=[figure])
+    with pytest.raises(DataError, match="'1,5' is not a number"):
+        read_differently(project, source.id, "decimal", ".", tmp_path)

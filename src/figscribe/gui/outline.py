@@ -34,11 +34,10 @@ from figscribe.gui.names import artist_name, panel_name, size_text
 from figscribe.gui.reveal import reveal_label
 from figscribe.gui.widgets import FlowLayout, chip
 from figscribe.model import (
+    FILE_SOURCES,
     Axes,
-    CsvSource,
     Figure,
     FitCurve,
-    NumpySource,
     ResidualPlot,
 )
 
@@ -338,7 +337,7 @@ class Outline(QTreeWidget):
             )
         elif any(source.id == oid for source in self.document.project.sources):
             menu.addAction(reveal_label(), lambda: self.reveal_requested.emit(oid))
-            if isinstance(obj, CsvSource | NumpySource):
+            if isinstance(obj, FILE_SOURCES):
                 menu.addAction(
                     "Use another file…", lambda: self.another_file_requested.emit(oid)
                 )

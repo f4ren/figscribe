@@ -65,7 +65,9 @@ from figscribe.render.ticks import as_drawn, counted_interval, too_many_ticks
 from figscribe.tools.workspace import DataProvider, Workspace, column_choices
 from figscribe.units import CONVERTIBLE, set_conversion, set_range
 
-PROTECTED_SOURCE_FIELDS = frozenset({"path", "sha256", "columns", "row_count"})
+PROTECTED_SOURCE_FIELDS = frozenset(
+    {"path", "sha256", "columns", "row_count", "format", "first_column"}
+)
 """Set by importing a file in figscribe; a tool must not point a source
 elsewhere on the machine. How a file is read (delimiter, header...) may change."""
 

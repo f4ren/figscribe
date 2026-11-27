@@ -85,6 +85,7 @@ class SheetSource(Identified):
     """One sheet of an Excel or LibreOffice Calc file (decision 0079)."""
 
     format: Literal["xlsx", "xls", "ods"] = "xlsx"
+    """Excel (.xlsx, .xlsm, or the old .xls) or LibreOffice Calc (.ods)."""
     path: str = Field(min_length=1)
     """Where the file is: relative to the project's folder when it lies below it."""
     sha256: Sha256

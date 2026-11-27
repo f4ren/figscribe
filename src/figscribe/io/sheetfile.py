@@ -216,8 +216,6 @@ def _table(
     first_column = min(
         next(i for i, cell in enumerate(row) if not _blank(cell)) for row in taken
     )
-    if header_row is None:
-        return [], first_column, rows
     width = max(_last_filled(row) for row in taken) + 1
     columns = []
     for at in range(first_column, width):

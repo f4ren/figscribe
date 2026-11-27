@@ -68,7 +68,7 @@ from figscribe.commands import (
     same_range,
 )
 from figscribe.commands.core import noun, walk
-from figscribe.datafile import columns_to_choose, use_another_file
+from figscribe.datafile import columns_to_choose, sheets_to_choose, use_another_file
 from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.function import new_function
@@ -96,12 +96,15 @@ from figscribe.gui.plotdialog import KINDS, NEW_PANEL, PlotDialog
 from figscribe.gui.preview import Preview
 from figscribe.gui.problems import Problems
 from figscribe.gui.properties import PropertyPanel
+from figscribe.gui.sheetdialog import SheetDialog
 from figscribe.gui.start import DOCS_URL, GUIDE_URL, StartPage
 from figscribe.gui.widgets import AdaptiveToolBar
 from figscribe.io import DataError, numpy_source
 from figscribe.io.files import resolve_path
 from figscribe.io.numpyfile import array_names, read_numpy
+from figscribe.io.sheetfile import FORMATS as SHEET_FORMATS
 from figscribe.model import (
+    FILE_SOURCES,
     AllanDeviationPlot,
     Annotation,
     ArrayRef,
@@ -110,13 +113,11 @@ from figscribe.model import (
     AxisSpec,
     Colorbar,
     ColumnRef,
-    CsvSource,
     DataSource,
     Figure,
     FitCurve,
     Histogram,
     ImagePlot,
-    NumpySource,
     ResidualPlot,
 )
 from figscribe.model.sharing import x_limits_of
@@ -137,9 +138,12 @@ appears here at once and can be undone.</p>
 unless you also allow it to see the figure.</p>"""
 
 PROJECT_FILTER = "figscribe projects (*.figscribe)"
+SHEET_PATTERNS = " ".join(f"*{suffix}" for suffix in SHEET_FORMATS)
 DATA_FILTER = (
-    "Data (*.csv *.tsv *.txt *.dat *.npy *.npz);;Delimited text (*.csv *.tsv "
-    "*.txt *.dat);;NumPy (*.npy *.npz);;All files (*)"
+    f"Data (*.csv *.tsv *.txt *.dat {SHEET_PATTERNS} *.npy *.npz);;"
+    "Delimited text (*.csv *.tsv *.txt *.dat);;"
+    f"Excel and LibreOffice Calc ({SHEET_PATTERNS});;"
+    "NumPy (*.npy *.npz);;All files (*)"
 )
 EXPORT_FORMATS = {
     "PDF": ".pdf",
@@ -163,10 +167,11 @@ EXPORT_ALL_FORMATS = {
     "Python scripts": ".py",
 }
 """What Export All Figures writes, each figure into a file of its own."""
-DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat", ".npy", ".npz"}
+DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat", ".npy", ".npz", *SHEET_FORMATS}
 NUMPY_SUFFIXES = {".npy", ".npz"}
 START_FILTER = (
-    "Data or project (*.csv *.tsv *.txt *.dat *.npy *.npz *.figscribe);;All files (*)"
+    f"Data or project (*.csv *.tsv *.txt *.dat {SHEET_PATTERNS} *.npy *.npz "
+    "*.figscribe);;All files (*)"
 )
 MAX_RECENT = 6
 
@@ -198,6 +203,7 @@ class MainWindow(QMainWindow):
         self.choose_data_file: Callable[[DataSource], Path | None] = (
             self._choose_data_file
         )
+        self.choose_sheet: Callable[[str, list[str]], str | None] = self._choose_sheet
         """Asks for the file to use instead of a source's; replaced in tests."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         self.ask_text: Callable[[str, str], str | None] = self._ask_text
@@ -718,7 +724,8 @@ class MainWindow(QMainWindow):
     # --- insert actions -----------------------------------------------------
 
     def import_csv(self, path: str | Path | None = None) -> bool:
-        """Add a delimited text file as a data source, asking how to read it.
+        """Add a data file as a data source, asking how to read a text file or
+        a spreadsheet.
 
         True if a source was added.
         """
@@ -728,9 +735,10 @@ class MainWindow(QMainWindow):
                 return False
         if Path(path).suffix.lower() in NUMPY_SUFFIXES:
             return self.import_numpy(path)
+        kind = SheetDialog if Path(path).suffix.lower() in SHEET_FORMATS else None
         try:
-            dialog = ImportDialog(path, self.document.project_dir, self)
-        except OSError as exc:
+            dialog = (kind or ImportDialog)(path, self.document.project_dir, self)
+        except (OSError, DataError) as exc:
             self.show_error(f"Cannot read {path}", exc)
             return False
         if not self.run_dialog(dialog) or dialog.source() is None:
@@ -1140,10 +1148,10 @@ class MainWindow(QMainWindow):
                 f"Use another file for {Path(source.path).name}",
                 "Data",
                 lambda oid=source.id: self.use_another_file(oid),
-                keywords="replace change swap csv data file own name",
+                keywords="replace change swap csv excel calc data file own name",
             )
             for source in self.document.project.sources
-            if isinstance(source, CsvSource | NumpySource)
+            if isinstance(source, FILE_SOURCES)
         ]
         return entries
 
@@ -1402,14 +1410,21 @@ class MainWindow(QMainWindow):
             return
         project, base_dir = self.document.project, self.document.base_dir
         try:
-            missing = columns_to_choose(project, oid, base_dir, path)
+            sheets = {}
+            asked = sheets_to_choose(project, oid, base_dir, path)
+            for old, names in asked.items():
+                chosen = self.choose_sheet(old, names)
+                if chosen is None:
+                    return
+                sheets[old] = chosen
+            missing = columns_to_choose(project, oid, base_dir, path, sheets)
             columns = None
             if missing:
                 dialog = ColumnDialog(path.name, missing, self)
                 if not self.run_dialog(dialog):
                     return
                 columns = dialog.chosen()
-            swap = use_another_file(project, oid, base_dir, path, columns)
+            swap = use_another_file(project, oid, base_dir, path, columns, sheets)
         except DataError as exc:
             self.show_error("The file cannot be used", exc)
             return
@@ -1418,6 +1433,17 @@ class MainWindow(QMainWindow):
         if swap.notes:
             self.tell(f"Now using {path.name}", "\n\n".join(swap.notes))
 
+    def _choose_sheet(self, old: str, names: list[str]) -> str | None:
+        """Which sheet of the new file takes the place of `old`; None: cancel."""
+        chosen, ok = QInputDialog.getItem(
+            self,
+            "Which sheet?",
+            f"The file has no sheet “{old}”. Which one takes its place?",
+            names,
+            editable=False,
+        )
+        return chosen if ok else None
+
     def _choose_data_file(self, source: DataSource) -> Path | None:
         name = Path(source.path).name
         kinds = {
@@ -1425,6 +1451,8 @@ class MainWindow(QMainWindow):
             "npy": "NumPy array (*.npy)",
             "npz": "NumPy archive (*.npz)",
         }
+        sheets = f"Excel and LibreOffice Calc ({SHEET_PATTERNS})"
+        kinds |= dict.fromkeys(SHEET_FORMATS.values(), sheets)
         folder = resolve_path(source.path, self.document.base_dir).parent
         chosen, _ = QFileDialog.getOpenFileName(
             self,
@@ -1795,7 +1823,10 @@ class MainWindow(QMainWindow):
         # makes; in a narrow window the icon stays and the words go (decision
         # 0055), so that nothing is hidden behind the » menu.
         self._adding_button(
-            self.import_action, "file", "Data", "Import a data file (CSV, .npy, .npz)"
+            self.import_action,
+            "file",
+            "Data",
+            "Import a data file (CSV, Excel, Calc, .npy, .npz)",
         )
         self._adding_button(
             self.add_figure_action,
