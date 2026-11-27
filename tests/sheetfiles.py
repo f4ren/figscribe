@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +20,12 @@ _spec = importlib.util.spec_from_file_location(
     "figscribe_examples_make", Path(__file__).parents[1] / "examples" / "make.py"
 )
 _make = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_make)
+# No __pycache__ among the examples, which are copied and packaged as they are.
+_writes, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+try:
+    _spec.loader.exec_module(_make)
+finally:
+    sys.dont_write_bytecode = _writes
 Formula = _make.Formula
 write_ods = _make.write_ods
 

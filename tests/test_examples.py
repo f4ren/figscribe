@@ -37,7 +37,11 @@ def test_every_folder_is_listed_and_every_listing_exists() -> None:
 
 
 def test_the_examples_are_small() -> None:
-    total = sum(f.stat().st_size for f in ROOT.rglob("*") if f.is_file())
+    total = sum(
+        f.stat().st_size
+        for f in ROOT.rglob("*")
+        if f.is_file() and f.parent.name != "__pycache__"
+    )
     assert total < MAX_BYTES, f"{total} bytes"
 
 
