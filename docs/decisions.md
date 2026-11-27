@@ -3630,3 +3630,46 @@ version* does: for a different file the curve would belong to other data.
 then point the plots at the new columns. **Choose the reading options in the
 same step**, through the import dialog: not built; a follow-up if files differ
 in their separator or header.
+
+## 0076 — A fit follows what it was fitted to
+
+2026-11-27.
+
+### Context
+
+A fit's result is stored. The window and its export draw it, while the
+generated script runs `curve_fit` again. Only some changes fitted again: the
+units, the x range, left-out rows, the Allan settings and the fit dialog.
+After *Use the new version* or *Locate file…*, another column, a reduction,
+the y errors switched off, a file read differently, or a fit's range or model
+set by the assistant, the window kept the old curve over the new data and the
+script drew another one. The new file version and the located file were so in
+0.3.0.
+
+### Decision
+
+One rule, where changes are applied (`Document.push` and the assistant's
+workspace), not in each command: **whatever changes what a fit is run on runs
+it again in the same undo step** (`refits.fits_follow`).
+
+- What a fit is run on: its model, start values, held values, bounds and
+  range; the fields of its plot that decide the points; and the files they are
+  in, by their hash and reading options, not their path. Every field of a plot
+  and of a fit is listed as one or the other, which a test holds.
+- A command that sets the result itself is left alone.
+- Where the points or the model changed, a predefined model is guessed anew
+  first and the stored start values are tried second; else the other way
+  round. An own formula keeps its values.
+- A fit that cannot be run or does not converge is left **not fitted**: it
+  draws nothing, and the problem list says so. The change itself is kept. The
+  commands that refused before (units, x range) still do.
+- While a file the fit reads is changed or missing, the fit is left as it is.
+- A project saved with an old result stays as it is until something its fit
+  uses changes, or *Fit again with the current data* is pressed.
+
+### Alternatives considered
+
+**Fit again in each command that needs it**: what was there, and each new
+setting or way in could forget it. **Only say that a fit is old**: the window
+and the script would still disagree. **Check every fit when a project is
+opened**: changes a file without being asked.

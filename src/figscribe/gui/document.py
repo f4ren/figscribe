@@ -18,6 +18,7 @@ from figscribe.io import load_data
 from figscribe.io.files import rebase_path, resolve_path, write_atomically
 from figscribe.io.refresh import source_state
 from figscribe.model import ArrayRef, ColumnRef, Figure, Project, dumps, loads
+from figscribe.refits import fits_follow
 from figscribe.render import DataProvider
 from figscribe.tools.workspace import array_choices, column_choices
 
@@ -101,8 +102,9 @@ class Document(QObject):
     # --- changes ------------------------------------------------------------
 
     def push(self, command: Command) -> None:
-        """Apply `command` as one undo step. Raises CommandError, changing nothing."""
-        self.history.push(command)
+        """Apply `command` as one undo step, with the fits it affects run again.
+        Raises CommandError, changing nothing."""
+        self.history.push(fits_follow(self.project, command, self.base_dir))
         self._after_change()
 
     def undo(self) -> None:

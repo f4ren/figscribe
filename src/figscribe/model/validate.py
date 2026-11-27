@@ -148,6 +148,16 @@ def validate_references(
                     for why in _not_drawn(artist, axes, data):
                         issues.append(ReferenceIssue(tpath, artist.id, why))
                     if isinstance(artist, FitCurve):
+                        if artist.result is None:
+                            issues.append(
+                                ReferenceIssue(
+                                    tpath,
+                                    artist.id,
+                                    "is not fitted, so no curve is drawn; try "
+                                    "Fit again with the current data, in its "
+                                    "panel",
+                                )
+                            )
                         why = _nothing_to_fit(artist, artists_by_id, data)
                         if why is not None:
                             issues.append(ReferenceIssue(tpath, artist.id, why))
