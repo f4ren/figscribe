@@ -13,6 +13,7 @@ import matplotlib
 import matplotlib.colors
 import numpy as np
 import pytest
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import PathCollection
 from matplotlib.ticker import MultipleLocator
 
@@ -460,6 +461,84 @@ def test_tick_style_and_prefixes(data, ref) -> None:
     assert tick.tick2line.get_visible()  # on the top edge too
     assert not tick.label2.get_visible()  # but numbers only at the bottom
     assert tick._tickdir == "in"
+
+
+def _grid_lines(data, ref, **grid) -> dict[str, tuple]:
+    """(width, style, color) of the drawn x grid lines, by kind of tick."""
+    panel = Axes(grid=True, artists=[LinePlot(x=ref("t"), y=ref("U"))], **grid)
+    figure = render(Figure(axes=[panel]), data)
+    FigureCanvasAgg(figure).draw()
+    axis = figure.axes[0].xaxis
+    found = {}
+    for kind, ticks in (
+        ("major", axis.get_major_ticks()),
+        ("minor", axis.get_minor_ticks()),
+    ):
+        lines = [t.gridline for t in ticks if t.gridline.get_visible()]
+        if lines:
+            line = lines[-1]
+            found[kind] = (
+                line.get_linewidth(),
+                line.get_linestyle(),
+                matplotlib.colors.to_hex(line.get_color()),
+            )
+    return found
+
+
+@pytest.mark.parametrize(
+    ("grid", "major", "minor"),
+    [
+        # Both kinds: the minor ones half as thick, else as the major ones.
+        ({}, (0.8, "-", "#b0b0b0"), (0.4, "-", "#b0b0b0")),
+        (
+            {"grid_linewidth": 1.2, "grid_color": "red", "grid_linestyle": "--"},
+            (1.2, "--", "#ff0000"),
+            (0.6, "--", "#ff0000"),
+        ),
+        # Settings of their own.
+        (
+            {
+                "grid_color": "red",
+                "grid_minor_linewidth": 1.5,
+                "grid_minor_linestyle": ":",
+                "grid_minor_color": "blue",
+            },
+            (0.8, "-", "#ff0000"),
+            (1.5, ":", "#0000ff"),
+        ),
+    ],
+    ids=["default", "follows-major", "own"],
+)
+def test_minor_grid_lines_beside_major_ones(data, ref, grid, major, minor) -> None:
+    found = _grid_lines(data, ref, grid_which="both", **grid)
+    assert found == {"major": major, "minor": minor}
+
+
+def test_minor_grid_lines_alone_keep_the_width_of_the_grid(data, ref) -> None:
+    """Nothing to set them apart from; their own settings still count."""
+    assert _grid_lines(data, ref, grid_which="minor", grid_linewidth=1.2) == {
+        "minor": (1.2, "-", "#b0b0b0")
+    }
+    assert _grid_lines(
+        data, ref, grid_which="minor", grid_linewidth=1.2, grid_minor_linewidth=0.3
+    ) == {"minor": (0.3, "-", "#b0b0b0")}
+
+
+def test_the_minor_settings_wait_for_minor_grid_lines(data, ref) -> None:
+    found = _grid_lines(data, ref, grid_minor_linewidth=3.0, grid_minor_color="red")
+    assert found == {"major": (0.8, "-", "#b0b0b0")}
+
+
+def test_half_the_width_of_the_style_sheet(data, ref) -> None:
+    panel = Axes(
+        grid=True, grid_which="both", artists=[LinePlot(x=ref("t"), y=ref("U"))]
+    )
+    figure = render(Figure(stylesheet="ggplot", axes=[panel]), data)
+    FigureCanvasAgg(figure).draw()
+    axis = figure.axes[0].xaxis
+    major = axis.get_major_ticks()[1].gridline.get_linewidth()
+    minor = axis.get_minor_ticks()[1].gridline.get_linewidth()
+    assert minor == pytest.approx(major / 2)
 
 
 def test_frame_ticks_and_grid_lines_have_widths(data, ref) -> None:

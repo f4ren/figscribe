@@ -71,6 +71,7 @@ from figscribe.render.ticks import (
     CommaLogFormatter,
     MinorLogNumbers,
     comma_formatter,
+    grid_calls,
     minor_numbers,
     minor_ticks,
     scaling,
@@ -410,17 +411,10 @@ def _draw_axes(
         if open_frame:
             right.spines["right"].set_visible(True)  # the frame left it out
         _apply_axis(right, "y", axes.y_right, unit_format)
-    if axes.grid:
-        style = {
-            key: value
-            for key, value in (
-                ("color", axes.grid_color),
-                ("linewidth", axes.grid_linewidth),
-                ("linestyle", axes.grid_linestyle),
-            )
-            if value is not None
-        }
-        ax.grid(True, which=axes.grid_which, axis=axes.grid_axis, **style)
+    for style in grid_calls(axes):
+        if style.get("linewidth", 0) is None:  # half the style's
+            style["linewidth"] = matplotlib.rcParams["grid.linewidth"] / 2
+        ax.grid(True, axis=axes.grid_axis, **style)
 
     for artist in axes.artists:
         # Without a right axis, a plot meant for it is drawn against the left

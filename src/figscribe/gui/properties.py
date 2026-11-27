@@ -150,6 +150,7 @@ COLOR_FIELDS = {
     "color",
     "edgecolor",
     "grid_color",
+    "grid_minor_color",
     "left_out_color",
     "zero_color",
     "background",
@@ -259,6 +260,9 @@ SECTIONS = {
     "grid_color": "Grid",
     "grid_linewidth": "Grid",
     "grid_linestyle": "Grid",
+    "grid_minor_color": "Grid",
+    "grid_minor_linewidth": "Grid",
+    "grid_minor_linestyle": "Grid",
     "font_size": "Text",
     "tick_direction": "Ticks and frame",
     "open_frame": "Ticks and frame",
@@ -526,6 +530,9 @@ BASIC = {
         "grid_color",
         "grid_linewidth",
         "grid_linestyle",
+        "grid_minor_color",
+        "grid_minor_linewidth",
+        "grid_minor_linestyle",
     ),
 }
 """The settings shown at first, per kind of object, apart from its data and
@@ -558,6 +565,8 @@ PLACEHOLDERS = {
     "edgecolor": "automatic",
     "grid_color": "automatic",
     "grid_linewidth": "default",
+    "grid_minor_color": "as the major lines",
+    "grid_minor_linewidth": "default",
     "linewidth": "default",
     "frame_width": "default",
     "tick_width": "default",
@@ -646,6 +655,12 @@ TIPS = {
     "grid_linewidth": "Width of the grid lines; empty keeps the style's 0.8 pt.",
     "grid_linestyle": "How the grid lines are drawn: solid, dashed, dotted or "
     "dash-dotted.",
+    "grid_minor_color": "Color of the grid lines at the minor ticks; empty "
+    "takes the grid color.",
+    "grid_minor_linewidth": "Width of the minor grid lines; empty makes them "
+    "half as thick as the major ones, or as the grid width if shown alone.",
+    "grid_minor_linestyle": "How the minor grid lines are drawn; empty as the "
+    "other grid lines.",
     "row": "Grid row of the panel, counted from 1 at the top.",
     "col": "Grid column of the panel, counted from 1 at the left.",
     "rowspan": "How many grid rows the panel covers.",
@@ -2012,6 +2027,7 @@ CHOICES["method"] = [
     ("mean over x intervals", "interval"),
 ]
 CHOICES["grid_linestyle"] = [s for s in LINESTYLES if s[1] != "none"]
+CHOICES["grid_minor_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["zero_linestyle"] = CHOICES["grid_linestyle"]
 CHOICES["data_type"] = [("fractional frequency", "frequency"), ("phase (s)", "phase")]
 CHOICES["taus"] = [
@@ -2037,6 +2053,7 @@ NONE_TEXT = {
     "tick_direction": "style default",
     "time": "the sample interval below",
     "grid_linestyle": "style default",
+    "grid_minor_linestyle": "as the major lines",
     "prefix": "as in the data",
     "marker": "No marker",
     "left_out_marker": "No marker",

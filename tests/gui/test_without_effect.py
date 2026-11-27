@@ -163,6 +163,42 @@ CASES: dict[tuple, Case] = {
     ("Axes", ("grid_color",)): (_panel(), "red", ("grid",), True),
     ("Axes", ("grid_linewidth",)): (_panel(), 3.0, ("grid",), True),
     ("Axes", ("grid_linestyle",)): (_panel(), ":", ("grid",), True),
+    ("Axes", ("grid_minor_color",)): (
+        _panel(grid_which="both"),
+        "red",
+        ("grid",),
+        True,
+    ),
+    ("Axes", ("grid_minor_color",), "major only"): (
+        _panel(grid=True),
+        "red",
+        ("grid_which",),
+        "both",
+    ),
+    ("Axes", ("grid_minor_linewidth",)): (
+        _panel(grid_which="both"),
+        3.0,
+        ("grid",),
+        True,
+    ),
+    ("Axes", ("grid_minor_linewidth",), "major only"): (
+        _panel(grid=True),
+        3.0,
+        ("grid_which",),
+        "both",
+    ),
+    ("Axes", ("grid_minor_linestyle",)): (
+        _panel(grid_which="both"),
+        ":",
+        ("grid",),
+        True,
+    ),
+    ("Axes", ("grid_minor_linestyle",), "major only"): (
+        _panel(grid=True),
+        ":",
+        ("grid_which",),
+        "both",
+    ),
     ("Axes", ("legend", "location")): (
         _panel(legend=Legend(visible=True, position=(0.1, 0.1))),
         "upper left",

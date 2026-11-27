@@ -153,5 +153,15 @@ class Axes(Identified):
     grid_linestyle: str | None = None
     """A Matplotlib line style for the grid lines, such as ":" or "--"; None
     keeps the style's solid line."""
+    grid_minor_color: str | None = None
+    """A color for the grid lines at the minor ticks; None keeps `grid_color`.
+    Like the two fields below, it counts when `grid_which` is "minor" or
+    "both"."""
+    grid_minor_linewidth: float | None = Field(None, gt=0.0)
+    """Width of the minor grid lines in pt; None makes them half as thick as
+    the major ones when both are shown, and keeps `grid_linewidth` when only
+    the minor ones are."""
+    grid_minor_linestyle: str | None = None
+    """A line style for the minor grid lines; None keeps `grid_linestyle`."""
     artists: list[Artist] = Field(default_factory=list)
     """The plots, fits and notes in the panel, drawn in this order."""

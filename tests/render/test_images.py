@@ -373,6 +373,32 @@ def _figures(ref) -> dict[str, Figure]:
                 )
             ],
         ),
+        # F5.10: minor grid lines half as thick, or with settings of their own;
+        # none of them crosses the break
+        "minor_grid": Figure(
+            dpi=100.0,
+            width_mm=170,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(
+                    **labelled,
+                    grid=True,
+                    grid_which="both",
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                ),
+                Axes(
+                    col=1,
+                    x=AxisSpec(label="t", breaks=[(4.2, 5.8)]),
+                    grid=True,
+                    grid_which="both",
+                    grid_color="gray",
+                    grid_minor_color="silver",
+                    grid_minor_linestyle=":",
+                    grid_minor_linewidth=0.8,
+                    artists=[LinePlot(x=ref("t"), y=ref("U"))],
+                ),
+            ],
+        ),
     }
 
 
@@ -394,6 +420,7 @@ def _figures(ref) -> dict[str, Figure]:
         "open_frame",
         "number_formats",
         "broken_axes",
+        "minor_grid",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

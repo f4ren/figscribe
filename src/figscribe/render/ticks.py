@@ -18,7 +18,7 @@ from matplotlib.ticker import (
     ScalarFormatter,
 )
 
-from figscribe.model import AxisSpec, Figure
+from figscribe.model import Axes, AxisSpec, Figure
 from figscribe.model.breaks import line_breaks
 from figscribe.render.breaks import pieces
 
@@ -62,6 +62,40 @@ def tick_style(figure: Figure) -> dict[str, object]:
         style["xtick.top"] = True
         style["ytick.right"] = True
     return style
+
+
+def grid_calls(axes: Axes) -> list[dict[str, object]]:
+    """The keywords of each `grid()` call of a panel, in order; none while its
+    grid is off. "which" is left out for Matplotlib's own, the major ticks.
+    A "linewidth" of None stands for half of the style's grid lines, which
+    only the style knows."""
+    if not axes.grid:
+        return []
+    major = {
+        "color": axes.grid_color,
+        "linewidth": axes.grid_linewidth,
+        "linestyle": axes.grid_linestyle,
+    }
+    own = {
+        "color": axes.grid_minor_color,
+        "linewidth": axes.grid_minor_linewidth,
+        "linestyle": axes.grid_minor_linestyle,
+    }
+
+    def given(which: str | None, style: dict, *always: str) -> dict[str, object]:
+        kept = {k: v for k, v in style.items() if v is not None or k in always}
+        return ({"which": which} if which else {}) | kept
+
+    if axes.grid_which == "major":
+        return [given(None, major)]
+    minor = {key: major[key] if own[key] is None else own[key] for key in major}
+    if axes.grid_which == "minor":
+        return [given("minor", minor)]
+    if own["linewidth"] is None and major["linewidth"] is not None:
+        minor["linewidth"] = major["linewidth"] / 2
+    elif own["linewidth"] is None:
+        minor["linewidth"] = None
+    return [given("major", major), given("minor", minor, "linewidth")]
 
 
 def reversed_axis(spec: AxisSpec) -> bool:
