@@ -3814,6 +3814,9 @@ Saving each as CSV first is a step that is forgotten, and the copy goes stale.
   and its license in it for the installers' notices. A fixed dependency, so that
   a spreadsheet opens wherever figscribe is installed. 0.5.4 is the first with
   wheels for Python 3.14.
+- Hidden sheets are listed after the others and chart sheets not at all; a
+  name used twice gets its column letter; a plotted column with text is listed
+  among the problems.
 - **A source is one sheet**, with the row of the column names and rows skipped
   below it, as for CSV; rows are numbered as the spreadsheet numbers them. The
   table starts at the first column with something in it. A column without a

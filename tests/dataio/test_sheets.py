@@ -18,11 +18,13 @@ from figscribe.model import (
     Axes,
     ColumnRef,
     Figure,
+    ImagePlot,
     LinePlot,
     Project,
     SheetSource,
     dumps,
     loads,
+    validate_references,
 )
 from tests.sheetfiles import Error, Formula, write_ods, write_xlsx
 
@@ -287,3 +289,55 @@ def test_a_way_of_reading_that_makes_no_numbers_is_refused(tmp_path: Path) -> No
     project = Project(sources=[source], figures=[figure])
     with pytest.raises(DataError, match="'1,5' is not a number"):
         read_differently(project, source.id, "decimal", ".", tmp_path)
+
+
+# --- found in review ----------------------------------------------------------
+
+
+def _image(tmp_path: Path) -> Project:
+    write_ods(tmp_path / "m.ods", {"s": [["a", "b"], [1, 2], [3, 4]]})
+    source = sheet_source(tmp_path / "m.ods", tmp_path)
+    image = ImagePlot(data=ArrayRef(source=source.id))
+    return Project(sources=[source], figures=[Figure(axes=[Axes(artists=[image])])])
+
+
+def test_text_in_a_plotted_table_refuses_a_new_version(tmp_path: Path) -> None:
+    project = _image(tmp_path)
+    write_ods(tmp_path / "m.ods", {"s": [["a", "b"], [1, "oops"]]})
+    with pytest.raises(DataError, match="'oops' is not a number"):
+        use_new_version(project, project.sources[0].id, tmp_path)
+
+
+def test_a_column_of_text_is_not_put_in_the_place_of_a_plotted_one(tmp_path) -> None:
+    project = _plotted(tmp_path)
+    write_ods(tmp_path / "new.ods", {"run 1": [["t", "note"], [1, "a"], [2, "b"]]})
+    source, path = project.sources[0], tmp_path / "new.ods"
+    (missing,) = columns_to_choose(project, source.id, tmp_path, path)
+    assert (missing.name, missing.default) == ("U", None)
+    with pytest.raises(DataError, match="'a' is not a number"):
+        use_another_file(project, source.id, tmp_path, path, {(source.id, "U"): "note"})
+
+
+def test_a_plotted_column_of_text_is_listed_as_a_problem(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    plot = project.figures[0].axes[0].artists[0]
+    plot.y = ColumnRef(source=project.sources[0].id, column="note")
+    data = load_data(project, tmp_path)
+    (issue,) = validate_references(project, data)
+    assert issue.object_id == plot.id and "'start' is not a number" in issue.message
+
+
+def test_columns_of_one_name_are_told_apart(tmp_path: Path) -> None:
+    write_ods(tmp_path / "a.ods", {"s": [["t", "U", "t", "U"], [1, 2, 3, 4]]})
+    source = sheet_source(tmp_path / "a.ods", tmp_path)
+    assert source.columns == ["t", "U", "t (column C)", "U (column D)"]
+    np.testing.assert_array_equal(_load(tmp_path, source, "U (column D)"), [4])
+
+
+def test_hidden_sheets_come_last_and_chart_sheets_not_at_all(tmp_path: Path) -> None:
+    """chartfirst.xlsx (written with openpyxl): a chart sheet, a hidden sheet
+    and the sheet "data"."""
+    path = tmp_path / "chartfirst.xlsx"
+    path.write_bytes((Path(__file__).parent / "chartfirst.xlsx").read_bytes())
+    assert sheet_names(path.read_bytes(), path.name) == ["data", "hidden"]
+    assert sheet_source(path, tmp_path).sheet == "data"

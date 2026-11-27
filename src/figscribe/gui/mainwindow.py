@@ -203,8 +203,9 @@ class MainWindow(QMainWindow):
         self.choose_data_file: Callable[[DataSource], Path | None] = (
             self._choose_data_file
         )
-        self.choose_sheet: Callable[[str, list[str]], str | None] = self._choose_sheet
         """Asks for the file to use instead of a source's; replaced in tests."""
+        self.choose_sheet: Callable[[str, list[str]], str | None] = self._choose_sheet
+        """Asks which sheet of that file takes a sheet's place."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         self.ask_text: Callable[[str, str], str | None] = self._ask_text
         """Asks for a line of text, None if cancelled; replaced in tests."""

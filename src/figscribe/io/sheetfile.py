@@ -18,9 +18,9 @@ from datetime import date, time, timedelta
 from pathlib import Path
 
 import numpy as np
-from python_calamine import CalamineWorkbook
+from python_calamine import CalamineWorkbook, SheetTypeEnum, SheetVisibleEnum
 
-from figscribe.io.errors import DataError
+from figscribe.io.errors import CellError, DataError
 from figscribe.io.files import sha256_of, stored_path
 from figscribe.model import SheetSource
 
@@ -62,8 +62,16 @@ def sheet_source(
 
 
 def sheet_names(raw: bytes, name: str) -> list[str]:
-    """The sheets of a spreadsheet file, in their order."""
-    names = _opened(raw, name, lambda book: list(book.sheet_names))
+    """The sheets of cells of a spreadsheet file: those one sees in their
+    order, then the hidden ones. Chart sheets hold no cells."""
+    sheets = _opened(
+        raw,
+        name,
+        lambda book: [(s.name, s.typ, s.visible) for s in book.sheets_metadata],
+    )
+    cells = [(n, v) for n, kind, v in sheets if kind == SheetTypeEnum.WorkSheet]
+    cells.sort(key=lambda sheet: sheet[1] != SheetVisibleEnum.Visible)  # stable
+    names = [n for n, _ in cells]
     if not names:
         raise DataError(f"{name} has no sheets")
     return names
@@ -105,7 +113,7 @@ class SheetTable:
             try:
                 values[i] = _number(cell, self.decimal)
             except ValueError as exc:
-                raise DataError(
+                raise CellError(
                     f"cannot read {self.name}: sheet {self.sheet!r}, cell "
                     f"{column_letters(at)}{number}{exc}"
                 ) from None
@@ -220,7 +228,10 @@ def _table(
     columns = []
     for at in range(first_column, width):
         cell = header[at] if at < len(header) else ""
-        columns.append(cell_text(cell) or f"column {column_letters(at)}")
+        title = cell_text(cell) or f"column {column_letters(at)}"
+        if title in columns:  # side by side blocks repeat their names
+            title = f"{title} (column {column_letters(at)})"
+        columns.append(title)
     return columns, first_column, rows
 
 

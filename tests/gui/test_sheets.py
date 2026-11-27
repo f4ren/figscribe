@@ -186,3 +186,22 @@ def test_another_file_is_left_when_no_sheet_is_chosen(window, book, tmp_path) ->
     window.choose_sheet = lambda old, names: None
     window.use_another_file(source.id)
     assert window.document.project.sources[0].path.endswith("pendulum.ods")
+
+
+def test_what_changed_is_shown_for_a_renamed_sheet(window, book: Path) -> None:
+    source = _imported(window, book)
+    write_ods(book, {"renamed": MEASURED})
+    shown = []
+    window.data_bar.show_message = lambda title, text: shown.append(text)
+    window.data_bar._show_change(source)
+    assert "no sheet" not in shown[0] and "sheet is now 'renamed'" in shown[0]
+
+
+def test_the_dialog_does_not_propose_a_hidden_sheet(qtbot, tmp_path: Path) -> None:
+    path = tmp_path / "chartfirst.xlsx"
+    fixture = Path(__file__).parents[1] / "dataio" / "chartfirst.xlsx"
+    path.write_bytes(fixture.read_bytes())
+    dialog = _dialog(qtbot, path)
+    assert dialog.sheet.currentText() == "data"
+    offered = [dialog.sheet.itemText(i) for i in range(dialog.sheet.count())]
+    assert offered == ["data", "hidden"]

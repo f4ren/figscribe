@@ -30,7 +30,7 @@ from figscribe.model import (
     Project,
     SheetSource,
 )
-from figscribe.model.validate import column_refs, data_refs
+from figscribe.model.validate import file_refs
 
 RECORDED = ("path", "sha256", "columns", "row_count")
 """What importing a file records about it, as opposed to how it is read."""
@@ -107,15 +107,13 @@ def check_plotted(project: Project, source_id: str, base_dir: str | Path) -> Non
     for figure in project.figures:
         for axes in figure.axes:
             for artist in axes.artists:
-                for _, used in data_refs(artist):
-                    if used != source_id:
-                        continue
-                    for _, ref in column_refs(artist):
-                        if ref.source == source_id and (
-                            not isinstance(ref.column, str)
-                            or ref.column in source.columns
-                        ):
-                            data(ref)
+                for ref in file_refs(artist):
+                    if ref.source == source_id and (
+                        isinstance(ref, ArrayRef)
+                        or not isinstance(ref.column, str)
+                        or ref.column in source.columns
+                    ):
+                        data(ref)
 
 
 def use_new_version(
@@ -232,6 +230,8 @@ def describe_change(old: DataSource, new: DataSource) -> str:
     """Rows and columns before and after, in a few lines."""
     before = "unknown" if old.row_count is None else str(old.row_count)
     lines = [f"{before} → {new.row_count} rows"]
+    if isinstance(new, SheetSource) and new.sheet != old.sheet:
+        lines.append(f"The sheet is now {new.sheet!r}")
     gone = [c for c in old.columns if c not in new.columns]
     added = [c for c in new.columns if c not in old.columns]
     if gone:

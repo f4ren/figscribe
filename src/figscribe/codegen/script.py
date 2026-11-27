@@ -161,6 +161,9 @@ RESERVED = {
     "cut_out",
     "Shape",
     "PathCollection",
+    # Builtins the script calls, which a column of the name would hide.
+    *"abs all any dict enumerate float int isinstance len list map max min".split(),
+    *"open print range round sorted str sum super tuple zip SystemExit".split(),
 }
 
 
@@ -234,10 +237,12 @@ class _Writer:
         self._mappables = 0
         self.artists = {a.id: a for axes in figure.axes for a in axes.artists}
         self.sources = {s.id: s for s in project.sources}
-        self.reserved = RESERVED
+        self.reserved = RESERVED | {
+            f"{_stem(s.path)}_path" for s in project.sources if hasattr(s, "path")
+        }
         """Names the script uses itself, which no variable of its data takes."""
         if any(isinstance(s, SheetSource) for s in project.sources):
-            self.reserved = RESERVED | SHEET_NAMES
+            self.reserved |= SHEET_NAMES
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
         self.unit_lines: list[tuple[str, str, str]] = []
@@ -918,7 +923,7 @@ class _Writer:
             if name is None:
                 stem = _stem(source.path)
                 name = f"{stem}_{_slug(source.array)}" if source.array else stem
-                taken = {*self.arrays.values(), *self.columns.values(), *RESERVED}
+                taken = {*self.arrays.values(), *self.columns.values(), *self.reserved}
                 while name in taken:
                     name += "_"
                 self.arrays[(source.id, key)] = name

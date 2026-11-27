@@ -2870,3 +2870,48 @@ def test_a_data_file_whose_name_is_no_python_name(tmp_path: Path, stem: str) -> 
     ]
     figure = Figure(dpi=100, layout=GridLayout(rows=1, cols=2), axes=panels)
     _assert_same(Project(sources=[table, array], figures=[figure]), tmp_path)
+
+
+@pytest.mark.parametrize("kind", ["csv", "ods"])
+def test_columns_named_like_builtins(tmp_path: Path, kind: str) -> None:
+    names = ["str", "float", "any", "range", "len", "max", "min", "print"]
+    rows = [names, [i + 1 for i in range(8)], [i + 3 for i in range(8)]]
+    if kind == "ods":
+        write_ods(tmp_path / "b.ods", {"s": rows})
+        source = sheet_source(tmp_path / "b.ods", tmp_path)
+    else:
+        text = "".join(",".join(map(str, row)) + "\n" for row in rows)
+        (tmp_path / "b.csv").write_text(text.replace(".", ","), encoding="utf-8")
+        source = csv_source(tmp_path / "b.csv", tmp_path)
+    ref = [ColumnRef(source=source.id, column=c) for c in names]
+    plots = [LinePlot(x=a, y=b) for a, b in zip(ref[::2], ref[1::2], strict=True)]
+    figure = Figure(dpi=100, axes=[Axes(artists=plots)])
+    _assert_same(Project(sources=[source], figures=[figure]), tmp_path)
+
+
+def test_an_array_file_named_like_what_the_sheet_code_uses(tmp_path: Path) -> None:
+    np.save(tmp_path / "io.npy", np.arange(6.0).reshape(3, 2))
+    write_ods(tmp_path / "s.ods", {"s": [["a"], [1], [2], [3]]})
+    array = numpy_source(tmp_path / "io.npy", tmp_path)
+    sheet = sheet_source(tmp_path / "s.ods", tmp_path)
+    plot = LinePlot(
+        x=ColumnRef(source=sheet.id, column="a"),
+        y=ColumnRef(source=array.id, column=0),
+    )
+    figure = Figure(dpi=100, axes=[Axes(artists=[plot])])
+    _assert_same(Project(sources=[array, sheet], figures=[figure]), tmp_path)
+
+
+def test_a_column_named_like_the_path_of_its_file(tmp_path: Path) -> None:
+    rows = [["t", "book_path", "book_rows"], [1, 2, 5], [2, 3, 7]]
+    write_ods(tmp_path / "book.ods", {"a": rows, "b": rows})
+    sources = [sheet_source(tmp_path / "book.ods", tmp_path, sheet=s) for s in "ab"]
+    lines = [
+        LinePlot(
+            x=ColumnRef(source=source.id, column="t"),
+            y=ColumnRef(source=source.id, column=column),
+        )
+        for source, column in zip(sources, ("book_path", "book_rows"), strict=True)
+    ]
+    figure = Figure(dpi=100, axes=[Axes(artists=lines)])
+    _assert_same(Project(sources=sources, figures=[figure]), tmp_path)

@@ -110,12 +110,24 @@ def columns_to_choose(
                     continue
                 if name not in missing:
                     default = _at_the_same_place(each.columns, new.columns, name)
+                    if default and not _numbers(new, default, base_dir):
+                        default = None
                     missing[name] = MissingColumn(each.id, name, [], choices, default)
                 if _name(artist) not in missing[name].plots:
                     missing[name].plots.append(_name(artist))
         order = {name: i for i, name in enumerate(each.columns)}
         found += sorted(missing.values(), key=lambda m: order.get(m.name, len(order)))
     return found
+
+
+def _numbers(source: DataSource, column: str, base_dir: str | Path) -> bool:
+    """Whether the column can be plotted."""
+    data = load_data(Project(sources=[source]), base_dir)
+    try:
+        data(ColumnRef(source=source.id, column=column))
+    except DataError:
+        return False
+    return True
 
 
 def _at_the_same_place(old: list[str], new: list[str], name: str) -> str | None:
@@ -158,11 +170,6 @@ def use_another_file(
     staging = project.model_copy(deep=True)
     for step in steps:
         step.apply(staging)
-    for each in same_file:
-        try:
-            check_plotted(staging, each.id, base_dir)
-        except DataError as exc:
-            raise DataError(f"{Path(path).name} cannot be used: {exc}") from exc
     ids = {each.id for each in same_file}
     swapped = bool(steps)  # not the file already used
 
@@ -179,6 +186,11 @@ def use_another_file(
                         artist.id, (field,), ColumnRef(source=ref.source, column=new)
                     )
                 )
+    for each in same_file:  # with the columns in their places
+        try:
+            check_plotted(staging, each.id, base_dir)
+        except DataError as exc:
+            raise DataError(f"{Path(path).name} cannot be used: {exc}") from exc
     if not steps:
         raise DataError(f"{Path(path).name} is the file already used")
     plots = [
