@@ -52,6 +52,7 @@ def test_an_inset_from_the_context_menu(window: MainWindow) -> None:
         "Add panel below",
         "Add inset",
         "Add note…",
+        "Add function…",
         "Add line or range",
         "Same x range in all panels",
         "Same y range in all panels",
@@ -75,6 +76,7 @@ def test_an_inset_from_the_context_menu(window: MainWindow) -> None:
     insets_menu = window.outline.context_menu(inset.id)
     assert _menu_texts(insets_menu) == [
         "Add note…",
+        "Add function…",
         "Add line or range",
         "Delete panel",
     ]

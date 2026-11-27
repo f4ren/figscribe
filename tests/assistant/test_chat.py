@@ -575,7 +575,14 @@ def test_every_field_path_in_the_prompt_exists() -> None:
     import re
 
     from figscribe.assistant.chat import SYSTEM
-    from figscribe.model import Axes, ErrorbarPlot, Figure, FitCurve, LinePlot
+    from figscribe.model import (
+        Axes,
+        ErrorbarPlot,
+        Figure,
+        FitCurve,
+        FunctionPlot,
+        LinePlot,
+    )
 
     def exists(model, path: str) -> bool:
         for part in path.split("."):
@@ -591,7 +598,7 @@ def test_every_field_path_in_the_prompt_exists() -> None:
 
     paths = re.findall(r"`([a-z_.]+)`", SYSTEM)
     assert len(paths) >= 15
-    owners = (Figure, Axes, LinePlot, ErrorbarPlot, FitCurve)
+    owners = (Figure, Axes, LinePlot, ErrorbarPlot, FitCurve, FunctionPlot)
     missing = [p for p in paths if not any(exists(m, p) for m in owners)]
     assert missing == []
 

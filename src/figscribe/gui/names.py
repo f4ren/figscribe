@@ -19,6 +19,7 @@ KIND_NAMES = {
     "residual": "Residuals of the fit",
     "annotation": "Note",
     "refline": "Reference line",
+    "function": "Function",
     "span": "Shaded range",
 }
 
@@ -234,6 +235,8 @@ def artist_name(artist) -> str:
         if model.kind == "predefined":
             return f"{model.name.capitalize()} fit"
         return f"Fit: {model.expression}"
+    if artist.kind == "function":
+        return f"f(x) = {artist.expression}"
     if artist.kind in ("refline", "span"):
         axis = "x" if artist.orientation == "vertical" else "y"
         if artist.kind == "refline":

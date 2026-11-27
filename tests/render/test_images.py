@@ -27,6 +27,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     FitResult,
+    FunctionPlot,
     GridLayout,
     Legend,
     LinePlot,
@@ -425,6 +426,39 @@ def _figures(ref) -> dict[str, Figure]:
                 ),
             ],
         ),
+        # F15: a theory curve beside data, and guides alone on a log panel
+        "functions": Figure(
+            dpi=100.0,
+            width_mm=170,
+            layout=GridLayout(cols=2),
+            axes=[
+                Axes(
+                    **labelled,
+                    legend=Legend(visible=True),
+                    artists=[
+                        LinePlot(x=ref("t"), y=ref("U"), marker="o", linestyle="none"),
+                        FunctionPlot(
+                            expression="exp(-(x - m)**2 / 2.8)",
+                            parameters={"m": 5.0},
+                            label="theory",
+                        ),
+                        FunctionPlot(expression="x**2", linestyle=":", color="tab:red"),
+                    ],
+                ),
+                Axes(
+                    col=1,
+                    x=AxisSpec(label="tau", scale="log", limits=(0.1, 100.0)),
+                    y=AxisSpec(scale="log"),
+                    legend=Legend(visible=True),
+                    artists=[
+                        FunctionPlot(expression="1 / sqrt(x)", label="white"),
+                        FunctionPlot(
+                            expression="0.1 * sqrt(x)", linestyle="--", label="walk"
+                        ),
+                    ],
+                ),
+            ],
+        ),
     }
 
 
@@ -448,6 +482,7 @@ def _figures(ref) -> dict[str, Figure]:
         "broken_axes",
         "minor_grid",
         "curve_beyond",
+        "functions",
     ],
 )
 def test_matches_baseline(name: str, ref, data, tmp_path: Path) -> None:

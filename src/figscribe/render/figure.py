@@ -14,6 +14,7 @@ import numpy as np
 from matplotlib.axes import Axes as MplAxes
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure as MplFigure
+from matplotlib.lines import Line2D
 from matplotlib.ticker import (
     AutoMinorLocator,
     FuncFormatter,
@@ -22,6 +23,7 @@ from matplotlib.ticker import (
 )
 
 from figscribe.convert import convert, plot_data, within
+from figscribe.function import evaluator, sets_limits, x_span
 from figscribe.io.errors import DataError
 from figscribe.model import (
     AllanDeviationPlot,
@@ -35,6 +37,7 @@ from figscribe.model import (
     ErrorbarPlot,
     Figure,
     FitCurve,
+    FunctionPlot,
     Histogram,
     ImagePlot,
     Legend,
@@ -138,6 +141,14 @@ def _render(
         )
 
         artists = {a.id: a for axes in figure.axes for a in axes.artists}
+        # Where each function is drawn and whether it scales its axis: from the
+        # model and the data, never from what is on the axes so far.
+        places = {
+            a.id: (x_span(figure, i, a, data), sets_limits(figure, i, a))
+            for i, axes in enumerate(figure.axes)
+            for a in axes.artists
+            if isinstance(a, FunctionPlot)
+        }
         axs: dict[int, MplAxes] = {}
         ticked: list[tuple[MplAxes, str, AxisSpec]] = []
         # By (gid, "x" or "y"): the other panels' settings for the same axis.
@@ -169,6 +180,7 @@ def _render(
                 figure.decimal_comma,
                 tuple(cuts[axes.id, name] for name in ("x", "y")),
                 typed_limits(figure, i, "x"),
+                places,
             )
             if len(drawn) > 2:
                 twins[i] = drawn[2][0]
@@ -399,6 +411,7 @@ def _draw_axes(
     comma: bool = False,
     breaks: tuple[Breaks, Breaks] = ([], []),
     x_limits: tuple[float, float] | None = None,
+    places: Mapping[str, tuple] | None = None,
 ) -> list[tuple[MplAxes, str, AxisSpec]]:
     """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
@@ -424,7 +437,8 @@ def _draw_axes(
         target = right if artist.axis == "right" and right is not None else ax
         # The breaks of the y axis are the left one's.
         cut = breaks if target is ax else (breaks[0], [])
-        _draw_artist(artist, target, data, artists, comma, cut, x_limits)
+        place = (places or {}).get(artist.id)
+        _draw_artist(artist, target, data, artists, comma, cut, x_limits, place)
 
     if axes.legend.visible:
         _draw_legend(axes.legend, ax, right).set_gid(axes.id)
@@ -528,6 +542,7 @@ def _draw_artist(
     comma: bool = False,
     cut: tuple[Breaks, Breaks] = ([], []),
     x_limits: tuple[float, float] | None = None,
+    place: tuple | None = None,
 ) -> None:
     """Draw one artist; `artists` finds the plots that fits and residuals
     refer to, wherever in the figure they are."""
@@ -579,6 +594,8 @@ def _draw_artist(
         _draw_2d(artist, ax, data, common, comma)
     elif isinstance(artist, AllanDeviationPlot):
         _draw_allan(artist, ax, data, common, cut)
+    elif isinstance(artist, FunctionPlot):
+        _draw_function(artist, ax, common, cut, *place)
     elif isinstance(artist, FitCurve):
         _draw_fit(artist, ax, data, artists, common, cut, x_limits)
     elif isinstance(artist, ResidualPlot):
@@ -937,6 +954,50 @@ CURVE_POINTS = 400
 """Points along a fitted curve: smooth at any print size."""
 
 
+def _samples(low: float, high: float, breaks: Breaks, log: bool):
+    """Where a curve from `low` to `high` is worked out: evenly, on each stretch
+    of a broken x axis so that a short one stays smooth; None if breaks leave
+    nothing of it."""
+    if overlapping(breaks, low, high):
+        parts = curve_parts(low, high, breaks, CURVE_POINTS)
+        if not parts:
+            return None
+        return np.concatenate([np.linspace(*part) for part in parts])
+    return (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
+
+
+def _draw_function(
+    function: FunctionPlot,
+    ax: MplAxes,
+    common: dict,
+    cut: tuple[Breaks, Breaks],
+    span: tuple[float, float] | None,
+    scales: bool,
+) -> None:
+    """The formula over `span`; nothing where it cannot be read or there is no
+    range. Beside data it moves no limits (`scales` False)."""
+    f = evaluator(function)
+    if f is None or span is None:
+        return
+    low, high = span
+    xs = _samples(low, high, cut[0], ax.get_xscale() == "log" and low > 0)
+    if xs is None:
+        return
+    ys = f(xs)
+    at = crossings(xs, ys, *cut)
+    if at.size:
+        xs, ys = _apart(xs, at), _apart(ys, at)
+    style = {
+        "color": function.color,
+        "linestyle": function.linestyle,
+        "linewidth": function.linewidth,
+    }
+    if scales:
+        ax.plot(xs, ys, **style, **common)
+    else:  # added as it is: Matplotlib then leaves the limits to the data
+        ax.add_artist(Line2D(xs, ys, transform=ax.transData, **style, **common))
+
+
 def _draw_fit(
     fit: FitCurve,
     ax: MplAxes,
@@ -975,14 +1036,9 @@ def _draw_fit(
             or fit.given_ends(x_limits) is not None
         )
     )
-    # Sampled on each stretch, so that a short one stays smooth.
-    if overlapping(cut[0], low, high):
-        parts = curve_parts(low, high, cut[0], CURVE_POINTS)
-        if not parts:
-            return
-        xs = np.concatenate([np.linspace(*part) for part in parts])
-    else:
-        xs = (np.geomspace if log else np.linspace)(low, high, CURVE_POINTS)
+    xs = _samples(low, high, cut[0], log)
+    if xs is None:
+        return
     if look:  # both parts reach the data's ends, so there is no gap
         xs = np.union1d(xs, np.clip([first, last], low, high))
     ys = evaluate(fit.model, fit.result.parameters, xs)

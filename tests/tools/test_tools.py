@@ -939,3 +939,21 @@ def test_a_tick_step_for_what_a_broken_axis_shows_is_taken(tools, workspace) -> 
         "set_field", {"object_id": axes.id, "path": ["x", "major_step"], "value": 2}
     )
     assert workspace.project.figures[0].axes[0].x.major_step == 2.0
+
+
+def test_the_assistant_draws_a_function(tools, workspace) -> None:
+    _, axes, _, _ = _ids(workspace)
+    made = tools.call(
+        "insert",
+        {
+            "parent_id": axes,
+            "field": "artists",
+            "object": {"kind": "function", "expression": "a * x"},
+        },
+    )
+    path = {"object_id": made["id"], "path": ["expression"]}
+    tools.call("set_field", {**path, "value": "a * x + c"})
+    function = find(workspace.project, made["id"])
+    assert function.parameters == {"a": 1.0, "c": 1.0}
+    with pytest.raises(ToolError, match="cannot be read"):
+        tools.call("set_field", {**path, "value": "a +"})

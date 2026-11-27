@@ -141,6 +141,8 @@ class Preview(QWidget):
     fit_requested = Signal(str)
     """Fit the plot with this id, from its menu; the window asks how."""
     same_range_requested = Signal(str, str)
+    function_requested = Signal(str)
+    """Draw a function in the panel with this id."""
     """Give every panel the range this panel shows on an axis: (panel id,
     "x" or "y"), from its menu."""
 
@@ -948,6 +950,8 @@ class Preview(QWidget):
             else:
                 text = f"Shade {'an' if name == 'x' else 'a'} {name} range here"
             menu.addAction(text, lambda m=made: self._add_marking(ax.get_gid(), m))
+        panel = ax.get_gid()
+        menu.addAction("Add function…", lambda: self.function_requested.emit(panel))
 
     def _range_entries(self, menu: QMenu, ax) -> None:
         """Give all panels the range of the panel `ax`, when there are others."""

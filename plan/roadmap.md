@@ -81,8 +81,7 @@ here is done; its follow-ups ("only if asked") stay in its text.
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
   (`[decide]`, judged by decision 0036).
 - **F14** fit an Allan deviation (M): built and accepted (0064); named
-  noise-type models are open. **F15** draw a function (M), from the user
-  (`[decide]`).
+  noise-type models are open. ~~**F15** draw a function~~ done (0078).
 
 **Phase 3 — Speed and working faster**
 - **E1** large data: render off the GUI thread (2), thin the preview only
@@ -105,9 +104,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 5** is later and optional.
 
-**Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2:
-F15 (ask its `[decide]` first), F6 several files as one series, F1.5 a
-confidence band, and a legend entry for the part of a curve beyond the data.
+**Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2.
+F15 is done (0078); then F6 several files as one series, F1.5 a confidence
+band, and a legend entry for the part of a curve beyond the data.
 **The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B10 items
 5 and 6 and B7 item 5, the GUI at small sizes, need no answer. The lab user's
 requests of 2026-11-04 are all done.
@@ -1742,6 +1741,12 @@ Proposed (to be agreed before building):
   would be nice, a field is enough), and whether the function can also be
   fitted to a plot (which is what *Fit…* does), or stays a drawing.
 
+**Done** (2026-11-27, decision 0078): `FunctionPlot`, with the answers of the
+user. *Learned:* `plot(..., scaley=False)` leaves the limits alone only until
+the next plot; the line is added with `add_artist` instead. *Follow-ups, only
+if asked:* a slider for a value; a function over a typed range that extends the
+axes.
+
 ---
 
 ## Phase 3 — Speed and working faster
@@ -2041,7 +2046,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
 | B10.3 | A panel with two datasets or none keeps its breaks and range across units: store the unit typed numbers are in, or leave it? |
-| F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
+| F15 | answered 2026-11-27: named values and numbers; not fitted; no limits moved (0078) |
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | answered 2026-11-26: another file for the same figure (0075) |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |

@@ -42,6 +42,7 @@ class Entry:
 
 
 KEYWORDS = {
+    "Function…": "function theory curve formula guide plot draw equation",
     # menu actions
     "Import Data…": "csv load open file table npz npy",
     "Add Figure": "tab page",

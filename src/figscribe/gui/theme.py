@@ -385,6 +385,10 @@ _ICONS = {
     "histogram": '<path d="M2 14 V9 H5 V5 H8 V7 H11 V10 H14 V14 Z" fill="{c}"/>',
     "refline": '<path d="M8 1.5 V14.5" stroke="{c}" stroke-width="1.6" '
     'stroke-dasharray="3 2"/>',
+    # A curve through axes: a function, drawn from its formula.
+    "function": '<path d="M2 1.5 V14 H14.5" stroke="{c}" stroke-width="1.2" '
+    'fill="none"/><path d="M3 12 C6 12 6 3.5 8.5 3.5 C11 3.5 11 10 14 10" '
+    'stroke="{c}" stroke-width="1.6" fill="none" stroke-linecap="round"/>',
     "span": '<rect x="4.5" y="1.5" width="7" height="13" fill="{c}" opacity="0.4"/>',
     "image": '<rect x="2" y="2" width="12" height="12" fill="{c}" opacity="0.35"/>'
     '<rect x="2" y="2" width="6" height="6" fill="{c}"/>',
@@ -438,6 +442,7 @@ ARTIST_ICONS = {
     "allan": "allan",
     "refline": "refline",
     "span": "span",
+    "function": "function",
 }
 
 

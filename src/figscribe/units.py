@@ -29,6 +29,7 @@ from figscribe.model import (
     Conversion,
     ErrorbarPlot,
     FitCurve,
+    FunctionPlot,
     Histogram,
     ImagePlot,
     LinePlot,
@@ -297,14 +298,19 @@ def _sharing(project: Project, axes: Axes, field: str) -> list[Axes]:
 
 
 def _marks_follow(axes: Axes, axis: str, same_side, remap) -> list[Command]:
-    """The reference lines, shaded ranges and notes placed on the axis."""
+    """The reference lines, shaded ranges and notes placed on the axis, and the
+    x range a function is given; its formula stays as written."""
     across = "vertical" if axis == "x" else "horizontal"
     index = 0 if axis == "x" else 1
     steps: list[Command] = []
     for mark in axes.artists:
         if not same_side(mark):
             continue
-        if isinstance(mark, ReferenceLine) and mark.orientation == across:
+        if isinstance(mark, FunctionPlot):
+            if axis == "x" and mark.curve_range is not None:
+                ends = _ends(mark.curve_range, remap)
+                steps.append(SetField(mark.id, ("curve_range",), ends))
+        elif isinstance(mark, ReferenceLine) and mark.orientation == across:
             steps.append(SetField(mark.id, ("at",), remap(mark.at)))
         elif isinstance(mark, ShadedSpan) and mark.orientation == across:
             steps.append(SetField(mark.id, ("start",), remap(mark.start)))

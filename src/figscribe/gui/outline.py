@@ -68,6 +68,7 @@ class Outline(QTreeWidget):
     """Add a panel beside or inside the panel with this id: (id, side)."""
     delete_requested = Signal(str)
     note_requested = Signal(str)
+    function_requested = Signal(str)
     same_range_requested = Signal(str, str)
     """Give every panel the range this panel shows on an axis: (panel id,
     "x" or "y")."""
@@ -305,6 +306,7 @@ class Outline(QTreeWidget):
                     )
                 menu.addSeparator()
             menu.addAction("Add note…", lambda: self.note_requested.emit(oid))
+            menu.addAction("Add function…", lambda: self.function_requested.emit(oid))
             lines = menu.addMenu("Add line or range")
             for text, kind, orientation in ENTRIES:
                 lines.addAction(

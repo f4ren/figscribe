@@ -39,6 +39,7 @@ from figscribe.commands import (
 )
 from figscribe.commands.core import ITEM_FIELDS, walk
 from figscribe.fit import FitError, add_fit, refit, set_left_out
+from figscribe.function import set_expression
 from figscribe.io import DataError, load_data
 from figscribe.io.refresh import (
     read_differently,
@@ -53,6 +54,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     FitModel,
+    FunctionPlot,
     Project,
     validate_references,
 )
@@ -201,6 +203,8 @@ class Toolbox:
             except FitError as exc:
                 raise ToolError(str(exc)) from exc
         plot = find(project, object_id)
+        if path == ["expression"] and isinstance(plot, FunctionPlot):
+            return set_expression(project, object_id, command.value)
         if path[0] in UNIT_FIELDS and isinstance(plot, CONVERTIBLE):
             value = command.value
             if len(path) == 2:  # the whole conversion is checked, factor > 0 too

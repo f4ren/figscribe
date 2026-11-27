@@ -2520,3 +2520,96 @@ def test_a_fit_that_did_not_converge_is_drawn_by_neither(tmp_path: Path) -> None
     stored.result = stored.result.model_copy(update={"converged": False})
     script = _assert_same(project, tmp_path)
     assert "curve_fit(" not in script
+
+
+def _guide(expression="a * exp(-(x - m)**2 / 3)", values=None, **fields):
+    from figscribe.function import new_function
+
+    made = new_function(expression)
+    made.parameters |= values or {}
+    for name, value in fields.items():
+        setattr(made, name, value)
+    return made
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "function"),
+    [
+        ({}, {}, {"values": {"a": 1.0, "m": 5.0}, "label": "theory"}),
+        ({"scale": "log"}, {}, {"expression": "a / sqrt(x)", "curve_range": (0.1, 9)}),
+        ({"breaks": [(4.0, 6.0)]}, {}, {"expression": "x / 10"}),
+        ({}, {"breaks": [(0.4, 0.6)]}, {"expression": "x / 10"}),
+        ({"limits": (-3.0, 15.0)}, {}, {"expression": "1 / (x - 4)"}),
+        ({}, {}, {"expression": "x**2", "curve_range": (-4.0, 14.0)}),
+        ({}, {}, {"expression": "100 * x", "linestyle": ":", "color": "tab:red"}),
+        ({}, {}, {"expression": "log(x - 5)"}),
+    ],
+    ids=["plain", "log", "x-break", "y-break", "limits", "beyond", "above", "nan"],
+)
+@pytest.mark.parametrize("first", [False, True], ids=["after", "before"])
+def test_a_function(tmp_path: Path, x, y, function, first) -> None:
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    later = LinePlot(x=ref["t"], y=ref["dU"])  # in the cycle's next color
+    artists = [data, _guide(**function), later]
+    if first:
+        artists = [artists[1], data, later]
+    panel = Axes(
+        x=AxisSpec(**x), y=AxisSpec(**y), artists=artists, legend=Legend(visible=True)
+    )
+    project.figures = [Figure(dpi=110, axes=[panel])]
+    script = _assert_same(project, tmp_path)
+    lines = script.splitlines()
+    assert any(line.startswith("def ") and "(x" in line for line in lines)
+    assert [line for line in lines if len(line) > 88] == []
+
+
+def test_functions_on_a_right_axis_shared_axes_and_alone(tmp_path: Path) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    right = _guide("100 * x", axis="right")  # the right axis has nothing else
+    top = Axes(y_right=AxisSpec(label="f"), artists=[data, right])
+    below = Axes(row=1, artists=[_guide("sin(x)")])  # x shared with the data
+    alone = Axes(
+        row=2, x=AxisSpec(limits=(0.0, 5.0)), artists=[_guide("x"), _guide("2 * x")]
+    )
+    project.figures = [
+        Figure(
+            dpi=100,
+            height_mm=150,
+            layout=GridLayout(rows=3, share_x="col"),
+            axes=[top, below, alone],
+        )
+    ]
+    _assert_same(project, tmp_path)
+
+
+def test_a_formula_that_cannot_be_read_is_drawn_by_neither(tmp_path: Path) -> None:
+    from figscribe.model import FunctionPlot
+
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    bad = FunctionPlot(expression="__import__('os').system('x')")
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data, bad])])]
+    script = _assert_same(project, tmp_path)
+    assert "__import__" not in script and "cannot be read" in script
+
+
+@pytest.mark.parametrize(
+    ("label", "name"),
+    [
+        ("theory", "def theory("),
+        ("1/x guide", "def function("),
+        ("max", "def max_function("),
+        ("t", "def t2("),  # a column has the name
+        ("lambda", "def function("),
+    ],
+)
+def test_a_function_is_named_after_its_legend_entry(
+    tmp_path: Path, label, name
+) -> None:
+    project, ref = _scan(tmp_path)
+    data = LinePlot(x=ref["t"], y=ref["U"])
+    made = _guide("0 * x + 0.5", label=label)
+    project.figures = [Figure(dpi=100, axes=[Axes(artists=[data, made])])]
+    assert name in _assert_same(project, tmp_path)

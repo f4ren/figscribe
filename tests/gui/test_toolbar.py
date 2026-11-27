@@ -106,6 +106,7 @@ def test_the_reference_menu_holds_lines_and_ranges(window) -> None:
         "Horizontal line",
         "Shaded x range",
         "Shaded y range",
+        "Function…",
     ]
 
 
