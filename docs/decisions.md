@@ -3618,8 +3618,16 @@ panel and in the search (Ctrl+K). One undo step.
   old file.
 - Ranges, axis limits, breaks and curve ends are in the data's units and the
   user's; they stay, and the problem list says where they no longer fit.
-- Columns the new file lacks are listed, as after a new version; the change is
-  made anyway.
+- **Columns under other names are asked for** (added 2026-11-27: the lab user
+  wanted a figure of theirs for other data, whose columns need not be called
+  the same). Where plots use a column the new file has under no such name, a
+  dialog asks for each which column takes its place, and proposes the one at
+  the same position; every plot using it follows, in the same step. A column of
+  the same name is never asked about, and without a missing one there is no
+  dialog. Cancel cancels the whole change. Columns go by name: a file without a
+  header line, and arrays of NumPy files, have none to choose.
+- A column given no place (*(not in the new file)*) is listed, as after a new
+  version; the change is made anyway.
 - **No assistant tool**, as for *Locate file…* (0007): the assistant must not
   point a source at other files on the machine.
 

@@ -9,6 +9,7 @@ import pytest
 from figscribe.fit import add_fit, refit
 from figscribe.gui import MainWindow
 from figscribe.gui.app import create_window
+from figscribe.gui.columndialog import NOT_THERE, ColumnDialog
 from figscribe.model import FitCurve, PredefinedFit, dumps
 
 
@@ -80,6 +81,7 @@ def test_what_has_to_be_known_is_told(window: MainWindow, example: Path) -> None
     path = example.parent / "short.csv"
     path.write_text("# a scan\nt,U\ns,V\n0.0,0.1\n0.5,0.2\n", encoding="utf-8")
     messages = _answer(window, path)
+    window.run_dialog = lambda dialog: True  # the columns, as proposed
     window.use_another_file(window.document.project.sources[0].id)
     assert "no column dU" in " ".join(messages)
 
@@ -111,3 +113,73 @@ def test_it_is_offered_where_the_file_is(window: MainWindow) -> None:
     entry.run()
     assert asked == [source.id] * 3
     assert not window.document.history.can_undo
+
+
+def _renamed(example: Path) -> Path:
+    """The example's data, its columns under other and one under a long name."""
+    text = (example.parent / "scan.csv").read_text(encoding="utf-8")
+    path = example.parent / "mine.csv"
+    path.write_text(text.replace("t,U,dU", f"time,signal,{LONG}"), encoding="utf-8")
+    return path
+
+
+LONG = "standard_uncertainty_of_the_signal_in_volts"
+
+
+def test_columns_under_other_names_are_asked_for(
+    window: MainWindow, example: Path
+) -> None:
+    """The dialog opens with the columns at the same places chosen."""
+    messages = _answer(window, _renamed(example))
+    seen = {}
+
+    def run(dialog: ColumnDialog) -> bool:
+        seen.update(
+            {name: combo.currentText() for name, combo in dialog.combos.items()}
+        )
+        return True
+
+    window.run_dialog = run
+    window.use_another_file(window.document.project.sources[0].id)
+    assert seen == {"t": "time", "U": "signal", "dU": LONG}
+    plot = window.document.figure.axes[0].artists[0]
+    assert (plot.x.column, plot.y.column, plot.yerr.column) == (
+        "time",
+        "signal",
+        LONG,
+    )
+    assert window.preview.error is None and window.data_bar.isHidden()
+    assert messages == []
+
+
+def test_a_column_can_be_picked_or_left_out(window: MainWindow, example: Path) -> None:
+    messages = _answer(window, _renamed(example))
+
+    def run(dialog: ColumnDialog) -> bool:
+        combo = dialog.combos["dU"]
+        _pick(combo, combo.findText(NOT_THERE))
+        return True
+
+    window.run_dialog = run
+    window.use_another_file(window.document.project.sources[0].id)
+    plot = window.document.figure.axes[0].artists[0]
+    assert (plot.y.column, plot.yerr.column) == ("signal", "dU")
+    assert "no column dU" in " ".join(messages)
+
+
+def test_cancelling_the_columns_changes_nothing(
+    window: MainWindow, example: Path
+) -> None:
+    _answer(window, _renamed(example))
+    window.run_dialog = lambda dialog: False
+    before = dumps(window.document.project)
+    window.use_another_file(window.document.project.sources[0].id)
+    assert dumps(window.document.project) == before
+    assert not window.document.history.can_undo
+
+
+def _pick(combo, index: int) -> None:
+    """Choose an entry of the list, as a person does."""
+    assert index >= 0, "no such entry"
+    combo.setCurrentIndex(index)
+    combo.activated.emit(index)

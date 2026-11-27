@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from figscribe.commands import History
-from figscribe.datafile import use_another_file
+from figscribe.datafile import columns_to_choose, use_another_file
 from figscribe.fit import add_fit, refit
 from figscribe.io import DataError, csv_source, load_data, sha256_of
 from figscribe.io.numpyfile import numpy_source
@@ -191,3 +191,97 @@ def test_an_archive_needs_the_same_arrays(tmp_path: Path, name, said) -> None:
     with pytest.raises(DataError, match=said):
         _use(project, tmp_path, tmp_path / name)
     assert dumps(project) == before
+
+
+# --- columns under other names ------------------------------------------------
+
+
+def _renamed(tmp_path: Path, header: str = "time,signal,error") -> Path:
+    return _write(tmp_path / "new.csv", 5.0, header=header)
+
+
+def _two_figures(tmp_path: Path) -> Project:
+    """The plot with its fit, and a second figure that draws U again."""
+    project = _project(tmp_path)
+    source = project.sources[0]
+    line = LinePlot(
+        x=ColumnRef(source=source.id, column="t"),
+        y=ColumnRef(source=source.id, column="U"),
+        label="again",
+    )
+    project.figures.append(Figure(name="Second", axes=[Axes(artists=[line])]))
+    return project
+
+
+def test_the_columns_to_choose_are_those_used_and_missing(tmp_path: Path) -> None:
+    project = _two_figures(tmp_path)
+    missing, columns = columns_to_choose(
+        project, project.sources[0].id, tmp_path, _renamed(tmp_path, "t,signal,error")
+    )
+    assert columns == ["t", "signal", "error"]
+    assert [(m.name, m.plots, m.default) for m in missing] == [
+        ("U", ["data", "again"], "signal"),
+        ("dU", ["data"], "error"),
+    ]
+
+
+def test_a_column_without_a_place_has_no_default(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = tmp_path / "new.csv"
+    path.write_text("time,signal\n0,1\n1,2\n2,3\n", encoding="utf-8")
+    missing, _ = columns_to_choose(project, project.sources[0].id, tmp_path, path)
+    assert [(m.name, m.default) for m in missing] == [
+        ("t", "time"),
+        ("U", "signal"),
+        ("dU", None),
+    ]
+
+
+def test_nothing_is_chosen_where_the_names_are_the_same(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    other = _write(tmp_path / "new.csv", 5.0)
+    missing, _ = columns_to_choose(project, project.sources[0].id, tmp_path, other)
+    assert missing == []
+
+
+def test_the_chosen_columns_take_the_places_of_the_old(tmp_path: Path) -> None:
+    project = _two_figures(tmp_path)
+    before = dumps(project)
+    columns = {"t": "time", "U": "signal", "dU": "error"}
+    swap = use_another_file(
+        project, project.sources[0].id, tmp_path, _renamed(tmp_path), columns
+    )
+    assert dumps(project) == before
+    history = History(project)
+    history.push(swap.command)
+
+    line, fit = _parts(project)
+    assert (line.x.column, line.y.column, line.yerr.column) == (
+        "time",
+        "signal",
+        "error",
+    )
+    again = project.figures[1].axes[0].artists[0]
+    assert (again.x.column, again.y.column) == ("time", "signal")
+    assert swap.notes == [] and missing_columns(project) == []
+    assert fit.result.parameters["a"] == pytest.approx(5.0)
+    history.undo()
+    assert dumps(project) == before
+
+
+def test_a_column_left_out_of_the_choice_is_still_listed(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    swap = use_another_file(
+        project,
+        project.sources[0].id,
+        tmp_path,
+        _renamed(tmp_path),
+        {"t": "time", "U": "signal", "dU": None},
+    )
+    History(project).push(swap.command)
+    assert [column.column for _, _, column in missing_columns(project)] == ["dU"]
+    assert swap.notes[0] == "The new file has no column dU, which data uses."
+    assert swap.notes[1] == (
+        "fit is not fitted on the new data: no column 'dU' in new.csv; known are "
+        "'time', 'signal', 'error'."
+    )

@@ -1788,8 +1788,9 @@ is: the file has what it has). The program's own defaults stay as decision
   the name of the .csv in the template and did not manage".
   **Done** (2026-11-27, decision 0075; the user chose "another file for the
   same figure"): *Use another file…*, fits run again, left-out rows taken back
-  in. *Follow-ups, only if asked:* choosing the reading options in the same
-  step. *Open:* ask whether this is what was meant.
+  in. Confirmed 2026-11-27: they had made a figure and wanted it for other
+  data; so columns under other names are now asked for in a dialog.
+  *Follow-ups, only if asked:* choosing the reading options in the same step.
 - ~~**Bug: fits after a new version of a file**~~ **fixed** (2026-11-27,
   decision 0076; in 0.3.0 too). It was wider than found first: any change of
   what a fit is run on left the old result unless its command fitted again.

@@ -68,7 +68,7 @@ from figscribe.commands import (
     same_range,
 )
 from figscribe.commands.core import noun, walk
-from figscribe.datafile import use_another_file
+from figscribe.datafile import columns_to_choose, use_another_file
 from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.gui import clipboard, markings, recovery, reveal, theme
@@ -76,6 +76,7 @@ from figscribe.gui.about import about_text
 from figscribe.gui.axisform import AXIS_TITLES, axis_settings
 from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
+from figscribe.gui.columndialog import ColumnDialog
 from figscribe.gui.databar import DataBar
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
 from figscribe.gui.errors import explain
@@ -1373,10 +1374,16 @@ class MainWindow(QMainWindow):
         path = self.choose_data_file(source)
         if path is None:
             return
+        project, base_dir = self.document.project, self.document.base_dir
         try:
-            swap = use_another_file(
-                self.document.project, oid, self.document.base_dir, path
-            )
+            missing, new_columns = columns_to_choose(project, oid, base_dir, path)
+            columns = None
+            if missing:
+                dialog = ColumnDialog(path.name, missing, new_columns, self)
+                if not self.run_dialog(dialog):
+                    return
+                columns = dialog.chosen()
+            swap = use_another_file(project, oid, base_dir, path, columns)
         except DataError as exc:
             self.show_error("The file cannot be used", exc)
             return

@@ -12,6 +12,7 @@ the machine (decision 0007).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,13 +22,14 @@ from figscribe.io.files import resolve_path
 from figscribe.io.refresh import RECORDED, reread
 from figscribe.model import (
     ArtistBase,
+    ColumnRef,
     CsvSource,
     DataSource,
     FitCurve,
     NumpySource,
     Project,
 )
-from figscribe.model.validate import data_refs, missing_columns
+from figscribe.model.validate import column_refs, data_refs, missing_columns
 from figscribe.refits import guess_first, run_again
 
 
@@ -38,25 +40,70 @@ class Swap:
     """What the user should know about it, a sentence each; often nothing."""
 
 
-def use_another_file(
+@dataclass
+class MissingColumn:
+    """A column that plots use and the other file has under no such name."""
+
+    name: str
+    plots: list[str]
+    """What the plots that use it are called."""
+    default: str | None
+    """The column of the other file at the same place; None if it has none."""
+
+
+def columns_to_choose(
     project: Project, source_id: str, base_dir: str | Path, path: str | Path
+) -> tuple[list[MissingColumn], list[str]]:
+    """The columns to find a place for in the file at `path`, and the columns it
+    has. None for a file without column names, whose columns go by number.
+
+    A DataError if the file cannot be read the way the old one was.
+    """
+    same_file = _same_file(project, source_id, base_dir)
+    missing: dict[str, MissingColumn] = {}
+    columns: list[str] = []
+    for each in same_file:
+        new = _read(each, base_dir, Path(path))
+        columns = new.columns
+        for artist in _artists(project):
+            for _, ref in column_refs(artist):
+                name = ref.column
+                if ref.source != each.id or not isinstance(name, str):
+                    continue
+                if not new.columns or name in new.columns:
+                    continue
+                at = each.columns.index(name) if name in each.columns else None
+                default = (
+                    new.columns[at]
+                    if at is not None and at < len(new.columns)
+                    else None
+                )
+                found = missing.setdefault(name, MissingColumn(name, [], default))
+                if _name(artist) not in found.plots:
+                    found.plots.append(_name(artist))
+    order = [name for each in same_file for name in each.columns]
+    return sorted(
+        missing.values(),
+        key=lambda m: order.index(m.name) if m.name in order else len(order),
+    ), columns
+
+
+def use_another_file(
+    project: Project,
+    source_id: str,
+    base_dir: str | Path,
+    path: str | Path,
+    columns: Mapping[str, str | None] | None = None,
 ) -> Swap:
     """Take the file at `path` in the place of the source's, in every source
-    read from that file (the arrays of an .npz file), as one command.
+    read from that file (the arrays of an .npz file), as one command. `columns`
+    says which column of the new file takes the place of which old one.
 
     A DataError, changing nothing, if the file cannot be read the way the old
     one was.
     """
-    source = find(project, source_id)
-    if not isinstance(source, CsvSource | NumpySource):
-        raise CommandError(f"{source_id!r} is not a data file")
-    old = Path(source.path).name
-    same_file = [
-        other
-        for other in project.sources
-        if resolve_path(other.path, base_dir) == resolve_path(source.path, base_dir)
-        and isinstance(other, CsvSource | NumpySource)
-    ]
+    same_file = _same_file(project, source_id, base_dir)
+    old = Path(find(project, source_id).path).name
     steps: list[Command] = []
     for each in same_file:
         new = _read(each, base_dir, Path(path))
@@ -72,6 +119,20 @@ def use_another_file(
     for step in steps:
         step.apply(staging)
     ids = {each.id for each in same_file}
+
+    def change(step: Command) -> None:
+        step.apply(staging)
+        steps.append(step)
+
+    for artist in _artists(staging):
+        for field, ref in column_refs(artist):
+            new = (columns or {}).get(ref.column) if ref.source in ids else None
+            if new is not None:
+                change(
+                    SetField(
+                        artist.id, (field,), ColumnRef(source=ref.source, column=new)
+                    )
+                )
     plots = [
         artist
         for artist in _artists(staging)
@@ -82,10 +143,6 @@ def use_another_file(
         for artist, _, column in missing_columns(staging)
         if column.source in ids
     ]
-
-    def change(step: Command) -> None:
-        step.apply(staging)
-        steps.append(step)
 
     taken_back = []
     for plot in plots:
@@ -114,6 +171,21 @@ def use_another_file(
         for step in again:
             change(step)
     return Swap(Macro(f"Use another file for {old}", steps), notes)
+
+
+def _same_file(
+    project: Project, source_id: str, base_dir: str | Path
+) -> list[CsvSource | NumpySource]:
+    """Every source read from the file the source `source_id` is read from."""
+    source = find(project, source_id)
+    if not isinstance(source, CsvSource | NumpySource):
+        raise CommandError(f"{source_id!r} is not a data file")
+    return [
+        other
+        for other in project.sources
+        if resolve_path(other.path, base_dir) == resolve_path(source.path, base_dir)
+        and isinstance(other, CsvSource | NumpySource)
+    ]
 
 
 def _read(source: DataSource, base_dir: str | Path, path: Path) -> DataSource:

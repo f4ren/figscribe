@@ -165,7 +165,9 @@ def run_again(
         try:
             again = refit(trial, fit.id, data)
         except (FitError, DataError, OSError, ValueError, KeyError, IndexError) as exc:
-            why = why or str(exc).strip("'\"").rstrip(".")
+            # A KeyError's text is its message in quotes; others are as they are.
+            text = exc.args[0] if isinstance(exc, KeyError) and exc.args else exc
+            why = why or str(text).rstrip(".")
             continue
         if next(s for s in again.steps if s.path == ("result",)).value.converged:
             return again.steps, None

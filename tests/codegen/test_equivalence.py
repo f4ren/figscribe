@@ -2475,3 +2475,24 @@ def test_shared_panels_with_two_ranges(tmp_path: Path) -> None:
     layout = GridLayout(rows=2, share_x="col")
     project.figures = [Figure(dpi=110, layout=layout, axes=panels)]
     _assert_same(project, tmp_path)
+
+
+def test_a_figure_taken_over_to_columns_under_other_names(tmp_path: Path) -> None:
+    from figscribe.datafile import use_another_file
+
+    project, ref = _scan(tmp_path)
+    data = ErrorbarPlot(x=ref["t"], y=ref["U"], yerr=ref["dU"], label="data")
+    project.figures = [Figure(dpi=110, axes=[Axes(artists=[data])])]
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="gaussian"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    text = (tmp_path / "scan.csv").read_text(encoding="utf-8")
+    other = text.replace("t,U,dU,t2", "time,signal,error,square")
+    (tmp_path / "other.csv").write_text(other, encoding="utf-8")
+    columns = {"t": "time", "U": "signal", "dU": "error"}
+    swap = use_another_file(
+        project, project.sources[0].id, tmp_path, tmp_path / "other.csv", columns
+    )
+    swap.command.apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "time, signal, " in script and '"other.csv"' in script

@@ -187,6 +187,7 @@ QPushButton#crumb:hover {{ text-decoration: underline; }}
 
 QScrollArea {{ border: 0; background: {SURFACE}; }}
 QScrollArea#fitScroll, QWidget#fitSettings {{ background: {SURFACE}; }}
+QScrollArea#columnScroll, QWidget#columnRows {{ background: {SURFACE}; }}
 
 QScrollArea#startPage, QWidget#startBody {{ background: {GROUND}; }}
 QWidget#startHeader {{ background: {SURFACE}; border-bottom: 1px solid {BORDER}; }}
