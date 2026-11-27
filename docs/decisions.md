@@ -3712,18 +3712,25 @@ start values, so it started from ones.
   residuals, in the window and in the script alike (`FitCurve.drawn_result`).
   This covers every way it gets there, saved projects included. The result card
   keeps its warning and the problem list says that no curve is drawn.
-- Where an edit fits again (left-out rows, ranges, units) and it does not
-  converge, the fit is left not fitted with the start values it had, as the
-  rule of 0076 does.
+- **One rule for every fit run again on its own** (an edit, the rule of 0076,
+  *Use another file…*; `fit.keeps`): the result is kept only if it converged
+  and the data decide its parameters as much as before. Where they did not
+  before either (data without noise), nothing is worse and it is kept.
+  Otherwise the fit is left not fitted, with the start values it had before the
+  edit. *Fit again* and the fit dialog keep what they get, with the card's
+  warning: the user asked.
 - **A unit change keeps an own formula's start values** (the user, 2026-11-27,
-  taking the recommendation): nothing can be guessed for it. Where it cannot be
-  fitted from them, or the data then do not decide its parameters, it is left
-  not fitted. The unit change is never refused for it. A predefined model drops
-  what it can guess anew, as before (0041).
+  taking the recommendation): nothing can be guessed for it. Where it may not
+  be kept after the change, it is left not fitted; the unit change is never
+  refused for it. A predefined model drops what it can guess anew, as before
+  (0041), with a result or without.
 - Breaks are converted **panel by panel**, like the range typed on an axis,
-  also beside data in other units; so once every dataset on a shared axis is
-  converted, its breaks are too (0072 kept them while any panel showed other
-  data, and they then stayed in the old numbers).
+  also beside data in other units; so where each panel of a shared axis holds
+  one dataset, converting them all converts every break (0072 kept them while
+  any panel showed other data). **Not solved:** a panel that holds two
+  datasets itself, or none, keeps its range and breaks, and where it is the
+  first of the panels sharing the axis its breaks are drawn. Which unit the
+  typed numbers are in cannot be told from the model.
 - The fit dialog keeps every stored number it shows rounded, unless its text
   is changed.
 

@@ -614,7 +614,7 @@ def _nothing_to_fit(fit: FitCurve, artists: dict, data) -> str | None:
     from figscribe.io.errors import DataError
 
     target = artists.get(fit.target)
-    if fit.result is None or not isinstance(target, FIT_TARGETS):
+    if fit.drawn_result() is None or not isinstance(target, FIT_TARGETS):
         return None
     try:
         shown = plot_data(target, data)

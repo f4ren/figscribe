@@ -33,7 +33,14 @@ from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
 from figscribe.gui.reveal import reveal_label
 from figscribe.gui.widgets import FlowLayout, chip
-from figscribe.model import Axes, CsvSource, Figure, NumpySource
+from figscribe.model import (
+    Axes,
+    CsvSource,
+    Figure,
+    FitCurve,
+    NumpySource,
+    ResidualPlot,
+)
 
 ID_ROLE = Qt.ItemDataRole.UserRole
 PANEL_SIDES = [
@@ -161,7 +168,8 @@ class Outline(QTreeWidget):
             cycles.setdefault(family, 0)
             color = getattr(artist, "color", None)
             shown = theme.plot_color(color, cycles[family])
-            if color is None and artist.kind in LINE_CYCLE | PATCH_CYCLE:
+            takes = color is None and artist.kind in LINE_CYCLE | PATCH_CYCLE
+            if takes and self._drawn(artist):
                 cycles[family] += 1
             name = theme.ARTIST_ICONS.get(artist.kind, "line")
             item = self._row(artist_name(artist), artist.id)
@@ -199,6 +207,16 @@ class Outline(QTreeWidget):
                 0, theme.icon("axis_y" if field != "x" else "axis_x", theme.MUTED)
             )
             item.setToolTip(0, axis_summary(spec))
+
+    def _drawn(self, artist) -> bool:
+        """Whether the preview draws `artist`, and so takes a color for it: not
+        a fit without a result to draw, nor the residuals of one."""
+        if isinstance(artist, ResidualPlot):
+            try:
+                artist = find(self.document.project, artist.target)
+            except CommandError:
+                return False
+        return not isinstance(artist, FitCurve) or artist.drawn_result() is not None
 
     def _data_rows(self) -> None:
         sources = self.document.project.sources

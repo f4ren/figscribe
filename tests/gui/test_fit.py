@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib.colors
 import pytest
 from PySide6.QtWidgets import QDialogButtonBox, QLabel
 
@@ -12,6 +13,7 @@ from figscribe.fit import FitError, add_fit, parameter_names, refit, update_fit
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
+from figscribe.gui.outline import COLOR_ROLE
 from figscribe.gui.properties import PropertyPanel
 from figscribe.io.refresh import use_new_version
 from figscribe.model import (
@@ -727,3 +729,26 @@ def test_every_model_can_be_read_chosen_or_with_the_focus(
         assert tile.isDefault()  # the premise: focus makes a button default
         for other in tiles:
             assert readable(other) >= 4.5, (tile.text(), other.text())
+
+
+def test_the_contents_colors_skip_a_fit_that_is_not_drawn(
+    window: MainWindow,
+) -> None:
+    from figscribe.model import ColumnRef, LinePlot
+
+    document = window.document
+    data = _data(document)
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    document.push(add_fit(document.project, fit))  # never run: not drawn
+    source = data.y.source
+    line = LinePlot(
+        x=ColumnRef(source=source, column="t"),
+        y=ColumnRef(source=source, column="U"),
+    )
+    axes = document.figure.axes[0]
+    document.push(InsertItem(axes.id, "artists", line))
+    item = window.outline.item_for(line.id)
+    shown = item.data(0, COLOR_ROLE)
+    assert shown.lower() == matplotlib.colors.to_hex(
+        window.preview.drawn_color(line.id)
+    )

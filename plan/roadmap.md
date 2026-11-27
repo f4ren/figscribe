@@ -680,7 +680,10 @@ first for each.
 1. to 4. **Done** (2026-11-27, decision 0077): a fit that did not converge is
    drawn nowhere; own formulas keep their start values across units; breaks
    follow a unit change panel by panel; the fit dialog keeps untouched
-   numbers exact.
+   numbers exact. **Left of 3:** a panel with two datasets of its own, or with
+   none, keeps its range and breaks across unit changes (as ranges did in
+   0.3.0), and leads a shared axis if it is first. Solving it means storing
+   the unit typed numbers are in. `[decide]` whether that is worth it.
 5. **The assistant may set a fit's `result`** itself, or insert a fit that has
    one, which nothing computed: make it read-only there.
 6. **The assistant's check for too many ticks** judges the changed project

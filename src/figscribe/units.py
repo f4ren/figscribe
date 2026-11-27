@@ -65,7 +65,9 @@ def set_conversion(
     data: DataProvider,
 ) -> Macro:
     """Show the plot's `axis` values with `conversion` (None: as in the
-    file). A FitError, changing nothing, if a fit of the plot then fails."""
+    file). A FitError, changing nothing, if a predefined model that was drawn
+    can then not be run. A fit that does not converge, and an own formula that
+    cannot be fitted, is left not fitted instead."""
     plot = _plot(project, plot_id)
     field = f"{axis}_conversion"
     if field not in type(plot).model_fields:
@@ -82,13 +84,13 @@ def set_conversion(
         if axis == "x" and fit.curve_range is not None:
             ends = _ends(fit.curve_range, remap)
             steps.append(SetField(fit.id, ("curve_range",), ends))
-        # Start values in the old units would mislead the fit; held ones are
-        # the user's and stay as typed. A fit without a result keeps them all:
-        # they change only where a fit succeeds. So does an own formula, for
-        # which nothing can be guessed: from ones it can "converge" to nonsense.
+        # Start values in the old units would mislead the fit, with a result or
+        # without; held ones are the user's and stay as typed. Where the fit
+        # then fails, all of them come back (refit_in_edit). An own formula
+        # keeps them: nothing can be guessed for it, and from ones it can
+        # "converge" to nonsense.
         held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
-        guessed = fit.model.kind == "predefined" and fit.result is not None
-        if guessed and held != fit.initial_values:
+        if fit.model.kind == "predefined" and held != fit.initial_values:
             steps.append(SetField(fit.id, ("initial_values",), held))
     steps += _axis_follows(project, plot, axis, old, conversion, remap, rescale)
     # An own formula keeps start values in the old units; where it cannot be

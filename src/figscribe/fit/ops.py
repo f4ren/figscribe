@@ -26,6 +26,7 @@ from figscribe.model import (
     ExpressionFit,
     Figure,
     FitCurve,
+    FitResult,
     Project,
     ResidualPlot,
 )
@@ -140,6 +141,22 @@ def set_left_out(
     return Macro(description, steps)
 
 
+def keeps(before: FitResult | None, result: FitResult) -> bool:
+    """Whether a fit run again on its own, not asked for, may keep `result`
+    after having had `before`: it must have converged, and the data must decide
+    its parameters as much as they did. From start values of before a change,
+    curve_fit may stop where it started and call that converged."""
+    if not result.converged:
+        return False
+    if _decided(result):
+        return True
+    return before is not None and before.converged and not _decided(before)
+
+
+def _decided(result: FitResult) -> bool:
+    return all(map(math.isfinite, result.uncertainties.values()))
+
+
 def refit_in_edit(
     project: Project,
     staging: Project,
@@ -149,30 +166,35 @@ def refit_in_edit(
 ) -> list:
     """Fit `fit` again as part of an edit of `project` that `staging` holds
     already, apply the change to `staging` and return its steps. A FitError
-    refuses the edit, unless the fit `may_fail`; a fit that has no result and
-    could not be fitted before the edit either refuses nothing. Where it fails
-    or does not converge, it is left not fitted with the start values it had.
-
-    A fit that `may_fail` starts from values of before the edit. It also counts
-    as failed where the data then do not decide its parameters: curve_fit may
-    stop where it started and call that converged."""
-    left_unfitted = [] if fit.result is None else [SetField(fit.id, ("result",), None)]
+    refuses the edit, unless the fit `may_fail`, or draws nothing anyway: it
+    did not converge, or has no result and could not be fitted before the edit
+    either. Where it fails,
+    or its result may not be kept, it is left not fitted, with the start values
+    it had before the edit."""
+    original = _get(project, fit.id)
     try:
         again = refit(staging, fit.id, data)
     except FitError:
-        refuses = fit.result is not None or _can_be_fitted(project, fit.id, data)
-        if refuses and not may_fail:
+        if fit.result is None:  # not run yet: could it have been?
+            loses = _can_be_fitted(project, fit.id, data)
+        else:
+            loses = fit.drawn_result() is not None
+        if loses and not may_fail:
             raise
         again = None
     if again is not None:
         result = next(s for s in again.steps if s.path == ("result",)).value
-        decided = all(map(math.isfinite, result.uncertainties.values()))
-        if result.converged and (decided or not may_fail):
+        if keeps(original.drawn_result(), result):
             again.apply(staging)
             return again.steps
-    for step in left_unfitted:
+    undo = []
+    if fit.initial_values != original.initial_values:
+        undo.append(SetField(fit.id, ("initial_values",), original.initial_values))
+    if fit.result is not None:
+        undo.append(SetField(fit.id, ("result",), None))
+    for step in undo:
         step.apply(staging)
-    return left_unfitted
+    return undo
 
 
 def _can_be_fitted(project: Project, fit_id: str, data: DataProvider) -> bool:
@@ -202,7 +224,7 @@ class Residuals:
 def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | None:
     """The residuals of a fit that has been run; None before."""
     fit = _get(project, fit_id)
-    if not isinstance(fit, FitCurve) or fit.result is None:
+    if not isinstance(fit, FitCurve) or fit.drawn_result() is None:
         return None
     if not set(parameter_names(fit.model)) <= set(fit.result.parameters):
         return None  # a result from a file that lacks some parameters
