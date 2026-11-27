@@ -178,7 +178,7 @@ def validate_references(
                                 f"references unknown data source {ref!r}",
                             )
                         )
-                for field, column in _columns(artist):
+                for field, column in column_refs(artist):
                     source = sources.get(column.source)
                     if source is not None and _lacks(source, column):
                         issues.append(
@@ -273,12 +273,12 @@ def missing_columns(project: Project) -> list[tuple[ArtistBase, str, ColumnRef]]
         for figure in project.figures
         for axes in figure.axes
         for artist in axes.artists
-        for field, column in _columns(artist)
+        for field, column in column_refs(artist)
         if column.source in sources and _lacks(sources[column.source], column)
     ]
 
 
-def _columns(artist: ArtistBase) -> list[tuple[str, ColumnRef]]:
+def column_refs(artist: ArtistBase) -> list[tuple[str, ColumnRef]]:
     return [
         (name, value)
         for name in type(artist).model_fields

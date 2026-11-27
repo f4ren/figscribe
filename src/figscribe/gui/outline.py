@@ -33,7 +33,7 @@ from figscribe.gui.markings import ENTRIES
 from figscribe.gui.names import artist_name, panel_name, size_text
 from figscribe.gui.reveal import reveal_label
 from figscribe.gui.widgets import FlowLayout, chip
-from figscribe.model import Axes, Figure
+from figscribe.model import Axes, CsvSource, Figure, NumpySource
 
 ID_ROLE = Qt.ItemDataRole.UserRole
 PANEL_SIDES = [
@@ -318,9 +318,10 @@ class Outline(QTreeWidget):
             )
         elif any(source.id == oid for source in self.document.project.sources):
             menu.addAction(reveal_label(), lambda: self.reveal_requested.emit(oid))
-            menu.addAction(
-                "Use another file…", lambda: self.another_file_requested.emit(oid)
-            )
+            if isinstance(obj, CsvSource | NumpySource):
+                menu.addAction(
+                    "Use another file…", lambda: self.another_file_requested.emit(oid)
+                )
             menu.addSeparator()
             menu.addAction("Remove data file", lambda: self.delete_requested.emit(oid))
         elif hasattr(obj, "visible") and hasattr(obj, "kind"):

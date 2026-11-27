@@ -5,6 +5,8 @@ release open in every later one.
 
 ## Unreleased
 
+- Fixed: when the assistant changed how a file is read and fitted or edited in
+  the same batch, the fit was run on the data as read before.
 - **Fixed: a fit kept its old curve over new data**, in 0.3.0 too. The window
   and its export drew the old fit while the Python script fitted again, after
   any of these: *Use the new version* or *Locate file…* for a changed file,
@@ -18,7 +20,8 @@ release open in every later one.
   when you press *Update fit*.
 - **Use another file.** Draw a figure, such as an example, with your own data:
   right-click the data file in *Contents* and *Use another file…*. The file is
-  read like the old one, the fits are run again and left-out rows are taken
+  read like the old one; where its columns have other names, you choose which
+  takes the place of which. The fits are run again and left-out rows are taken
   back in (decision 0075).
 - **A fit beyond the data.** To extrapolate, type *Draw curve from … to …* in
   the fit dialog or *Curve from, to* in the panel, or tick *To the axis limits*
