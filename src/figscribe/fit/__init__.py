@@ -14,6 +14,7 @@ from figscribe.fit.expression import (
 from figscribe.fit.ops import (
     Residuals,
     add_fit,
+    keeps,
     refit,
     refit_in_edit,
     residuals,
@@ -47,6 +48,7 @@ __all__ = [
     "free_names",
     "free_parameters",
     "in_range",
+    "keeps",
     "kept",
     "initial_guess",
     "numpy_source",

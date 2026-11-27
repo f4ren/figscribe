@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -25,6 +26,8 @@ from figscribe.model import (
     ExpressionFit,
     Figure,
     FitCurve,
+    FitModel,
+    FitResult,
     Project,
     ResidualPlot,
 )
@@ -139,24 +142,60 @@ def set_left_out(
     return Macro(description, steps)
 
 
+def keeps(model: FitModel, before: FitResult | None, result: FitResult) -> bool:
+    """Whether a fit of `model` run again on its own, not asked for, may keep
+    `result` after having had `before`: it must have converged.
+
+    An own formula starts from values of before the change, from which
+    curve_fit may stop where it started and call that converged: the data must
+    also decide its parameters as much as before. A predefined model is guessed
+    from the data, and its parameters may depend on each other so strongly that
+    they have no uncertainties, though the curve fits."""
+    if not result.converged:
+        return False
+    if model.kind == "predefined" or _decided(result):
+        return True
+    return before is not None and before.converged and not _decided(before)
+
+
+def _decided(result: FitResult) -> bool:
+    return all(map(math.isfinite, result.uncertainties.values()))
+
+
 def refit_in_edit(
-    project: Project, staging: Project, fit: FitCurve, data: DataProvider
+    project: Project,
+    staging: Project,
+    fit: FitCurve,
+    data: DataProvider,
+    may_fail: bool = False,
 ) -> list:
     """Fit `fit` again as part of an edit of `project` that `staging` holds
-    already, apply the fit to `staging` and return its steps. A FitError
-    refuses the edit; but a fit that has no result and could not be fitted
-    before the edit either has nothing to lose, and refuses nothing."""
+    already, apply the change to `staging` and return its steps. A FitError
+    refuses the edit, unless the fit `may_fail`, or draws nothing anyway: it
+    did not converge, or has no result and could not be fitted before the edit
+    either. Where it fails, or its result may not be kept, it is left not
+    fitted."""
+    original = _get(project, fit.id)  # for the result it drew before the edit
     try:
         again = refit(staging, fit.id, data)
     except FitError:
-        if fit.result is not None or _can_be_fitted(project, fit.id, data):
+        if fit.result is None:  # not run yet: could it have been?
+            loses = _can_be_fitted(project, fit.id, data)
+        else:
+            loses = fit.drawn_result() is not None
+        if loses and not may_fail:
             raise
+        again = None
+    if again is not None:
+        result = next(s for s in again.steps if s.path == ("result",)).value
+        if keeps(fit.model, original.drawn_result(), result):
+            again.apply(staging)
+            return again.steps
+    if fit.result is None:
         return []
-    result = next(step for step in again.steps if step.path == ("result",)).value
-    if fit.result is None and not result.converged:
-        return []
-    again.apply(staging)
-    return again.steps
+    step = SetField(fit.id, ("result",), None)
+    step.apply(staging)
+    return [step]
 
 
 def _can_be_fitted(project: Project, fit_id: str, data: DataProvider) -> bool:
@@ -186,7 +225,7 @@ class Residuals:
 def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | None:
     """The residuals of a fit that has been run; None before."""
     fit = _get(project, fit_id)
-    if not isinstance(fit, FitCurve) or fit.result is None:
+    if not isinstance(fit, FitCurve) or fit.drawn_result() is None:
         return None
     if not set(parameter_names(fit.model)) <= set(fit.result.parameters):
         return None  # a result from a file that lacks some parameters

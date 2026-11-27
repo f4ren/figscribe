@@ -3694,3 +3694,50 @@ it again in the same undo step** (`refits.fits_follow`).
 setting or way in could forget it. **Only say that a fit is old**: the window
 and the script would still disagree. **Check every fit when a project is
 opened**: changes a file without being asked.
+
+## 0077 — A fit that did not converge is drawn nowhere; own formulas keep their start values
+
+2026-11-27. Roadmap B10, items 1 to 4.
+
+### Context
+
+Where `curve_fit` gives up, the stored parameters are the start values. The
+window drew a curve from them, while the script, which runs the same
+`curve_fit`, stopped with an error. A unit change dropped an own formula's
+start values, so it started from ones.
+
+### Decision
+
+- A result that did not converge is **drawn nowhere**: not the curve, not its
+  residuals, in the window and in the script alike (`FitCurve.drawn_result`).
+  This covers every way it gets there, saved projects included. The result card
+  keeps its warning and the problem list says that no curve is drawn.
+- **One rule for every fit run again on its own** (an edit, the rule of 0076,
+  *Use another file…*; `fit.keeps`): the result is kept only if it converged.
+  An own formula must also have its parameters decided by the data as much as
+  before, since from start values of before the change curve_fit may stop where
+  it started. A predefined model need not: strongly dependent parameters, such
+  as a polynomial's in kelvin, have no uncertainties though the curve fits.
+  Otherwise the fit is left not fitted. *Fit again* and the fit dialog keep
+  what they get, with the card's warning: the user asked.
+- **A unit change keeps an own formula's start values** (the user, 2026-11-27,
+  taking the recommendation): nothing can be guessed for it. Where it may not
+  be kept after the change, it is left not fitted; the unit change is never
+  refused for it. A predefined model drops the start values it can guess anew,
+  as before (0041), with a result or without, and also where it then cannot be
+  fitted: they are in the old units. Held ones stay; undo brings all back.
+- Breaks are converted **panel by panel**, like the range typed on an axis,
+  also beside data in other units; so where each panel of a shared axis holds
+  one dataset, converting them all converts every break (0072 kept them while
+  any panel showed other data). **Not solved:** a panel that holds two
+  datasets itself, or none, keeps its range and breaks, and where it is the
+  first of the panels sharing the axis its breaks are drawn. Which unit the
+  typed numbers are in cannot be told from the model.
+- The fit dialog keeps every stored number it shows rounded, unless its text
+  is changed.
+
+### Alternatives considered
+
+**Draw a fit that gave up, marked as such**: the script cannot draw it without
+code that no person would write. **Convert a formula's start values**: not
+possible for a formula in general.

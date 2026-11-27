@@ -84,6 +84,8 @@ class FitDialog(QDialog):
         self.target = target
         self.existing = fit
         self.x_limits = x_limits
+        self._exact: dict[QLineEdit, tuple[str, float | None]] = {}
+        """The fields filled from a stored value, as they were shown."""
         # In the units the plot shows, as the parameters will be read.
         self.shown = shown = plot_data(target, data)
         self.x, self.y = shown.x, shown.y
@@ -335,12 +337,12 @@ class FitDialog(QDialog):
         self.label.setText(fit.label or "")
         self.label.setModified(True)  # not replaced by the model's name
         if fit.fit_range is not None:
-            self.range_low.setText(_shown(fit.fit_range[0]))
-            self.range_high.setText(_shown(fit.fit_range[1]))
+            self._show(self.range_low, fit.fit_range[0])
+            self._show(self.range_high, fit.fit_range[1])
         self.extend.setChecked(fit.extend_curve)
         if fit.curve_range is not None:
-            self.curve_low.setText(_shown(fit.curve_range[0]))
-            self.curve_high.setText(_shown(fit.curve_range[1]))
+            self._show(self.curve_low, fit.curve_range[0])
+            self._show(self.curve_high, fit.curve_range[1])
         self.to_limits.blockSignals(True)
         self.to_limits.setChecked(fit.curve_to_limits)
         self.to_limits.blockSignals(False)
@@ -358,11 +360,11 @@ class FitDialog(QDialog):
         self.choose(key)  # fills the start values with guesses, and fits
         for name, line in self.start.items():
             if name in fit.initial_values:
-                line.setText(f"{fit.initial_values[name]:.6g}")
+                self._show(line, fit.initial_values[name])
                 line.setModified(True)  # the user's, as before
             low, high = fit.parameter_bounds.get(name, (None, None))
-            self.lower[name].setText("" if low is None else f"{low:.6g}")
-            self.upper[name].setText("" if high is None else f"{high:.6g}")
+            self._show(self.lower[name], low)
+            self._show(self.upper[name], high)
             box = self.fixed[name]
             box.blockSignals(True)
             box.setChecked(name in fit.fixed)
@@ -456,21 +458,25 @@ class FitDialog(QDialog):
         if not all(texts):
             raise FitError("enter both ends of the fit range, or neither")
         try:
-            low, high = self._ends(texts, "fit_range")
+            low, high = map(self._number, (self.range_low, self.range_high))
         except ValueError as exc:
             raise FitError(f"the fit range: {exc}") from None
         if not low < high:
             raise FitError("the lower end of the fit range is not below the upper")
         return low, high
 
-    def _ends(self, texts: list[str], name: str) -> list[float]:
-        """The numbers typed as the two ends of the range `name`. An end still
-        shown as the fit had it keeps its exact value."""
-        had = getattr(self.existing, name, None) or (None, None)
-        return [
-            stored if stored is not None and text == _shown(stored) else number(text)
-            for text, stored in zip(texts, had, strict=True)
-        ]
+    def _show(self, line: QLineEdit, value: float | None) -> None:
+        """Write a stored value into a field, six digits of it."""
+        text = "" if value is None else _shown(value)
+        line.setText(text)
+        self._exact[line] = (text, value)
+
+    def _number(self, line: QLineEdit) -> float:
+        """What the field says; a stored value still shown as it was keeps all
+        its digits."""
+        text = line.text().strip()
+        shown, value = self._exact.get(line, (None, None))
+        return value if value is not None and text == shown else number(text)
 
     def curve_range(self) -> tuple[float, float] | None:
         """The typed range to draw the curve over; None to follow the data."""
@@ -481,7 +487,7 @@ class FitDialog(QDialog):
             if not all(texts):
                 raise FitError("enter both ends of the curve's range, or neither")
             try:
-                low, high = self._ends(texts, "curve_range")
+                low, high = map(self._number, (self.curve_low, self.curve_high))
             except ValueError as exc:
                 raise FitError(f"the curve's range: {exc}") from None
             if not low < high:
@@ -633,9 +639,8 @@ class FitDialog(QDialog):
                 ("lower", self.lower[name]),
                 ("upper", self.upper[name]),
             ):
-                text = line.text().strip()
                 try:
-                    ends.append(number(text) if text else None)
+                    ends.append(self._number(line) if line.text().strip() else None)
                 except ValueError as exc:
                     raise FitError(f"the {side} bound of {name}: {exc}") from None
             if ends != [None, None]:
@@ -646,7 +651,7 @@ class FitDialog(QDialog):
         values = {}
         for name, line in self.start.items():
             try:
-                values[name] = number(line.text())
+                values[name] = self._number(line)
             except ValueError as exc:
                 raise FitError(f"the start value of {name}: {exc}") from None
         return values
@@ -684,7 +689,7 @@ class FitDialog(QDialog):
     def _doubt(result) -> str:
         """What a usable result still lacks: convergence or uncertainties."""
         if not result.converged:
-            return "The fit did not converge."
+            return "The fit did not converge; no curve is drawn for it."
         unknown = [
             GREEK.get(name, name)
             for name, error in result.uncertainties.items()

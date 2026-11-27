@@ -355,12 +355,34 @@ def test_breaks_follow_a_conversion_on_every_panel_sharing_the_axis(
     assert dumps(project) == before
 
 
-def test_breaks_stay_while_a_panel_sharing_the_axis_shows_other_data() -> None:
+_SECONDS = [(12000.0, 13000.0), (14000.0, 15000.0)]
+
+
+def test_breaks_follow_panel_by_panel_beside_other_data() -> None:
+    """Like the range typed on it: a panel follows unless it shows other data
+    against the axis, so that once each is converted all are."""
     project = _broken(LinePlot(x=col("t"), y=col("V")))
-    plot = _parts(project)[1][0]
-    History(project).push(set_conversion(project, plot.id, "x", HOURS, data))
+    before = dumps(project)
+    history = History(project)
+    first = _parts(project)[1][0]
+    second = project.figures[0].axes[1].artists[0]
+
+    history.push(set_conversion(project, first.id, "x", HOURS, data))
+    top, below = project.figures[0].axes
+    assert top.x.breaks != _SECONDS and below.x.breaks == _SECONDS
+
+    history.push(set_conversion(project, second.id, "x", HOURS, data))
+    top, below = project.figures[0].axes
+    assert np.array(top.x.breaks) == pytest.approx(np.array(below.x.breaks))
+    assert top.x.breaks[0][0] < 12000.0 / 1000
+
+    history.push(set_conversion(project, second.id, "x", None, data))
+    history.push(set_conversion(project, first.id, "x", None, data))
     for axes in project.figures[0].axes:
-        assert axes.x.breaks == [(12000.0, 13000.0), (14000.0, 15000.0)]
+        assert np.array(axes.x.breaks) == pytest.approx(np.array(_SECONDS))
+    for _ in range(4):
+        history.undo()
+    assert dumps(project) == before
 
 
 # --- panels that share the axis ------------------------------------------------

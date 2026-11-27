@@ -13,7 +13,7 @@ import copy
 from pathlib import Path
 
 from figscribe.commands import Command, Macro, SetField
-from figscribe.fit import FitError, refit
+from figscribe.fit import FitError, keeps, refit
 from figscribe.io import DataError, load_data
 from figscribe.io.refresh import source_state
 from figscribe.model import FitCurve, Project
@@ -108,7 +108,7 @@ def fits_follow(project: Project, command: Command, base_dir: str | Path) -> Com
         new = _inputs(staging, fit)
         # One left not fitted is tried again once its file is found elsewhere,
         # too: Locate may change nothing but the path.
-        moved = fit.result is None and _paths(staging, fit) != paths
+        moved = fit.drawn_result() is None and _paths(staging, fit) != paths
         if new == inputs and not moved:
             continue
         again, why = [], "the files cannot be read"
@@ -169,9 +169,14 @@ def run_again(
             text = exc.args[0] if isinstance(exc, KeyError) and exc.args else exc
             why = why or str(text).rstrip(".")
             continue
-        if next(s for s in again.steps if s.path == ("result",)).value.converged:
+        result = next(s for s in again.steps if s.path == ("result",)).value
+        if keeps(fit.model, fit.drawn_result(), result):
             return again.steps, None
-        why = why or "the fit did not converge"
+        why = why or (
+            "the data do not decide its parameters"
+            if result.converged
+            else "the fit did not converge"
+        )
     return [], why
 
 

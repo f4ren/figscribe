@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib.colors
 import pytest
 from PySide6.QtWidgets import QDialogButtonBox, QLabel
 
 from figscribe.commands import InsertItem, SetField
-from figscribe.fit import FitError, add_fit, parameter_names, refit
+from figscribe.fit import FitError, add_fit, parameter_names, refit, update_fit
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.app import create_window
 from figscribe.gui.fitdialog import FitDialog
+from figscribe.gui.outline import COLOR_ROLE
 from figscribe.gui.properties import PropertyPanel
 from figscribe.io.refresh import use_new_version
 from figscribe.model import (
@@ -450,6 +452,36 @@ def test_ends_that_look_alike_when_rounded_are_no_error(
     assert _ok(dialog) and dialog.fit().curve_range == ends
 
 
+def test_untouched_start_values_and_bounds_are_kept_exactly(
+    qtbot, document: Document
+) -> None:
+    """Shown with six digits; OK must not write the rounded values back, which
+    for a held value changes the result."""
+    fit = FitCurve(
+        target=_data(document).id,
+        model=PredefinedFit(name="gaussian"),
+        initial_values={"a": 1.0, "mu": 5.000000123, "sigma": 1.2, "c": 0.0123456789},
+        fixed=["c"],
+        parameter_bounds={"sigma": (0.100000009, 5.00000001)},
+    )
+    document.push(add_fit(document.project, fit))
+    document.push(refit(document.project, fit.id, document.data))
+    before = document.figure.axes[0].artists[1]
+    dialog = FitDialog(_data(document), document.data, fit=before)
+    qtbot.addWidget(dialog)
+    dialog.label.setText("another name")
+    changed = dialog.fit()
+    assert changed.initial_values == before.initial_values
+    assert changed.parameter_bounds == before.parameter_bounds
+    steps = update_fit(document.project, fit.id, changed).steps
+    assert [step.path for step in steps] == [("label",)]
+    # A value that is typed over counts as typed.
+    dialog.start["mu"].setText("4.5")
+    dialog.start["mu"].setModified(True)
+    dialog.start["mu"].editingFinished.emit()
+    assert dialog.fit().initial_values["mu"] == 4.5
+
+
 # --- left-out points and outliers ---------------------------------------------------
 
 
@@ -697,3 +729,26 @@ def test_every_model_can_be_read_chosen_or_with_the_focus(
         assert tile.isDefault()  # the premise: focus makes a button default
         for other in tiles:
             assert readable(other) >= 4.5, (tile.text(), other.text())
+
+
+def test_the_contents_colors_skip_a_fit_that_is_not_drawn(
+    window: MainWindow,
+) -> None:
+    from figscribe.model import ColumnRef, LinePlot
+
+    document = window.document
+    data = _data(document)
+    fit = FitCurve(target=data.id, model=PredefinedFit(name="linear"))
+    document.push(add_fit(document.project, fit))  # never run: not drawn
+    source = data.y.source
+    line = LinePlot(
+        x=ColumnRef(source=source, column="t"),
+        y=ColumnRef(source=source, column="U"),
+    )
+    axes = document.figure.axes[0]
+    document.push(InsertItem(axes.id, "artists", line))
+    item = window.outline.item_for(line.id)
+    shown = item.data(0, COLOR_ROLE)
+    assert shown.lower() == matplotlib.colors.to_hex(
+        window.preview.drawn_color(line.id)
+    )

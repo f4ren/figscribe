@@ -730,7 +730,7 @@ def _inside_fits(artist, artists: Mapping, x: np.ndarray) -> np.ndarray:
             and fit.target == artist.id
             and fit.outside_as_left_out
             and fit.fit_range is not None
-            and fit.result is not None
+            and fit.drawn_result() is not None
         ):
             inside &= in_range(x, fit.fit_range)
     return inside
@@ -951,7 +951,7 @@ def _draw_fit(
     from figscribe.fit import evaluate, fitted_points
 
     target = _referenced(artists, fit.target, FIT_TARGETS, "fit")
-    if fit.result is None:
+    if fit.drawn_result() is None:
         return
     shown = plot_data(target, data)
     if not fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range).any():
@@ -1031,7 +1031,7 @@ def _draw_residuals(
             linestyle=residuals.zero_linestyle,
             zorder=1,
         )
-    if fit.result is None:
+    if fit.drawn_result() is None:
         return
     shown = plot_data(target, data)
     x, y, yerr = shown.x, shown.y, shown.yerr

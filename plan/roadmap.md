@@ -54,9 +54,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **B8** is done but for its follow-ups: ratios that no longer match the
   grid; a lower bound for font sizes and the figure size; marking columns of
   another length.
-- **B10** faults found in the reviews of 2026-11-26 and 27, left for later:
-  fits that did not converge, rounded start values, units and own formulas,
-  two on the assistant, breaks after a unit change.
+- **B10** faults found in the reviews of 2026-11-26 and 27: items 1 to 4 are
+  done but for what is left of 3 (`[decide]`); open are also two on the
+  assistant (5 and 6).
 
 **Phase 1 — The settings** (U1 to U5 and U7 to U12 are done)
 - **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
@@ -105,12 +105,12 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Phase 5** is later and optional.
 
-**Where to start** (rule 1; the user, 2026-11-27): first the items of B10
-that can give a wrong figure (1 to 4), then new features of Phase 2: F15 (ask
-its `[decide]` first), F6 several files as one series, F1.5 a confidence band,
-and a legend entry for the part of a curve beyond the data. **The release of
-0.4 (R9) waits** until the user says so; no 0.3.1. B7 item 5, the GUI at small
-sizes, needs no answer. The lab user's requests of 2026-11-04 are all done.
+**Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2:
+F15 (ask its `[decide]` first), F6 several files as one series, F1.5 a
+confidence band, and a legend entry for the part of a curve beyond the data.
+**The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B10 items
+5 and 6 and B7 item 5, the GUI at small sizes, need no answer. The lab user's
+requests of 2026-11-04 are all done.
 
 ---
 
@@ -675,22 +675,16 @@ messages name the file plainly.
 
 ### B10 Faults found in review, left for later — S each
 
-Noted in the reviews of 2026-11-26 and 27, beside what they changed. 3 came
-with the broken axes and is not released; the others are older and in 0.3.0
-too. Test first for each.
+Noted in the reviews of 2026-11-26 and 27, beside what they changed. Test
+first for each.
 
-1. **A fit that did not converge is stored** when leaving rows out, a range or
-   a unit change fits again: the window draws its start values, the script
-   fails. 0076 leaves such a fit unfitted only where its rule fits it; do the
-   same here, or refuse the change.
-2. **A unit change drops an own formula's start values**, so it starts from
-   ones and may converge to nonsense that looks like a result (0041, 0076).
-   `[decide]` keep them and leave the fit unfitted where it does not converge.
-3. **Breaks keep their old numbers** where two panels with data of their own
-   share a broken axis and the units change (0072).
-4. **Change the fit… rounds** start values, held values and bounds to six
-   digits on *Update fit*, which can change the result (the two ranges were
-   fixed).
+1. to 4. **Done** (2026-11-27, decision 0077): a fit that did not converge is
+   drawn nowhere; own formulas keep their start values across units; breaks
+   follow a unit change panel by panel; the fit dialog keeps untouched
+   numbers exact. **Left of 3:** a panel with two datasets of its own, or with
+   none, keeps its range and breaks across unit changes (as ranges did in
+   0.3.0), and leads a shared axis if it is first. Solving it means storing
+   the unit typed numbers are in. `[decide]` whether that is worth it.
 5. **The assistant may set a fit's `result`** itself, or insert a fit that has
    one, which nothing computed: make it read-only there.
 6. **The assistant's check for too many ticks** judges the changed project
@@ -2046,7 +2040,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.6 | answered 2026-11-26: x and y, several breaks; the rest decided and built (0072) |
 | F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
-| B10.2 | A unit change on an own formula: keep its start values and leave the fit unfitted where it does not converge? |
+| B10.3 | A panel with two datasets or none keeps its breaks and range across units: store the unit typed numbers are in, or leave it? |
 | F15 | A function's constants: named values the panel edits, or typed in the formula? Can it also be fitted? |
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | answered 2026-11-26: another file for the same figure (0075) |
