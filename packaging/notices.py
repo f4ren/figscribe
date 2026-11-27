@@ -15,10 +15,16 @@ installer must not leave out what a license asks to be handed on.
 Two things no wheel carries are added: Qt for Python (PySide6 and shiboken6 say
 LGPL in their metadata but ship no text) and the Python the program runs on.
 The texts of the LGPL and the GPL are in `packaging/licenses`.
+
+Wheels with compiled Rust code carry the license of the Python package only,
+and a list of the Rust libraries (crates) compiled in, in their `sboms` folder.
+Each crate is listed with the license it is taken under, and the standard texts
+of those (`packaging/licenses/spdx`) follow (decision 0080).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -45,6 +51,27 @@ QT_SOURCE = (
 )
 QT_SOURCE_OF_QT = "https://download.qt.io/official_releases/qt/"
 QT_THIRD_PARTY = "https://doc.qt.io/qt-6/licenses-used-in-qt.html"
+
+# Where a crate offers a choice, the first of these that is offered is taken;
+# with each, the files of its text in `licenses/spdx`.
+LICENSE_TEXTS = {
+    "MIT": ("MIT",),
+    "Apache-2.0": ("Apache-2.0",),
+    "BSD-3-Clause": ("BSD-3-Clause",),
+    "BSD-2-Clause": ("BSD-2-Clause",),
+    "Zlib": ("Zlib",),
+    "Unicode-3.0": ("Unicode-3.0",),
+    "Unicode-DFS-2016": ("Unicode-DFS-2016",),
+    "Apache-2.0 WITH LLVM-exception": ("Apache-2.0", "LLVM-exception"),
+}
+
+CRATES_INTRO = """\
+Some of the packages above contain compiled code from the Rust libraries
+(crates) listed here, as each package's own list of its parts names them. Where
+a crate offers a choice of licenses, figscribe takes it under the one named.
+Each crate's source, with its copyright notices, is at the address given. The
+texts of the licenses follow.
+"""
 
 Find = Callable[[str], metadata.Distribution]
 
@@ -110,6 +137,71 @@ def license_files(dist: metadata.Distribution) -> list[tuple[str, str]]:
         )
         files.append((name, text.strip("\n")))
     return sorted(files)
+
+
+def crates(dists: dict[str, metadata.Distribution]) -> list[dict]:
+    """The Rust crates compiled into the packages `dists`, from the lists
+    (CycloneDX) in their metadata, each once, with the packages it is "in"."""
+    found: dict[tuple[str, str], dict] = {}
+    for _, dist in sorted(dists.items()):
+        for file in dist.files or []:
+            if "sboms" not in file.parts or file.suffix != ".json":
+                continue
+            path = Path(dist.locate_file(file))
+            for part in json.loads(path.read_text("utf-8")).get("components", []):
+                if not part.get("purl", "").startswith("pkg:cargo/"):
+                    continue  # other parts have their texts in the package
+                key = (part["name"], part["version"])
+                crate = found.setdefault(key, {**part, "in": []})
+                if dist.metadata["Name"] not in crate["in"]:
+                    crate["in"].append(dist.metadata["Name"])
+    return [found[key] for key in sorted(found)]
+
+
+def choose(expression: str) -> list[str]:
+    """The licenses figscribe takes of an SPDX `expression`: of each part of
+    an AND, the first in `LICENSE_TEXTS` that an OR offers."""
+    chosen = []
+    for part in expression.split(" AND "):
+        offered = part.strip("() ").split(" OR ")
+        taken_here = next((name for name in LICENSE_TEXTS if name in offered), None)
+        if taken_here is None:
+            raise SystemExit(
+                f"no license text for {part!r} of {expression!r}; add it to "
+                "packaging/licenses/spdx and LICENSE_TEXTS"
+            )
+        chosen.append(taken_here)
+    return chosen
+
+
+def taken(crate: dict) -> list[str]:
+    """The licenses the crate is taken under."""
+    named = [
+        entry.get("expression") or entry.get("license", {}).get("id")
+        for entry in crate.get("licenses", [])
+    ]
+    if not named or not all(named):
+        raise SystemExit(f"the crate {crate['name']} names no license")
+    return list(dict.fromkeys(n for text in named for n in choose(text)))
+
+
+def _crate_sections(found: list[dict]) -> list[str]:
+    lines, files = [], []
+    for crate in found:
+        names = taken(crate)
+        files += [file for name in names for file in LICENSE_TEXTS[name]]
+        author = f" by {crate['author']}" if crate.get("author") else ""
+        lines.append(
+            f"{crate['name']} {crate['version']} ({', '.join(names)}){author}\n"
+            f"    in {', '.join(crate['in'])}; "
+            f"https://crates.io/crates/{crate['name']}/{crate['version']}"
+        )
+    body = CRATES_INTRO + "\n" + "\n".join(lines)
+    sections = [_section("Rust code compiled into these packages", body)]
+    for file in dict.fromkeys(files):
+        text = (LICENSES / "spdx" / f"{file}.txt").read_text(encoding="utf-8")
+        sections.append(_section(f"License text: {file}", text))
+    return sections
 
 
 def python_license() -> str:
@@ -197,6 +289,8 @@ def render(dists: dict[str, metadata.Distribution], python_license: str) -> str:
             "no license file in the metadata of " + ", ".join(missing) + "; "
             "an installer must carry its license (decision 0066)"
         )
+    if found := crates(dists):
+        sections += _crate_sections(found)
     sections.append(_section("Python", python_license))
     return "\n".join(sections)
 

@@ -3843,3 +3843,32 @@ per format besides. **openpyxl and odfpy**: two packages, no `.xls`, and odfpy
 is slow. **An optional extra** or **"save as CSV"**: the user wants the files
 to open. **Converting to CSV on import**: the script and the figure would no
 longer follow the file that is edited.
+
+---
+
+## 0080 — Licenses of Rust code in the installers
+
+2026-11-27. Accepted (the user: do what needs no question before 0.4).
+
+### Context
+
+Wheels with compiled Rust code (python-calamine; since 0.3.0 pydantic-core,
+rpds-py, jiter and cryptography through the extras) carry the license of the
+Python package alone. The libraries compiled in, 168 of them, ask for theirs to
+go along. The wheels list them in a CycloneDX file with their licenses and
+authors, but without their license files or copyright lines.
+
+### Decision
+
+`packaging/notices.py` reads those lists when an installer is built: each crate
+with its version, authors, address of its source and the license taken (the
+most permissive offered, MIT first), followed by the standard texts from the
+SPDX license list, kept in `packaging/licenses/spdx`. A crate without a license,
+or with one that has no text there, stops the build.
+
+### Alternatives considered
+
+**Downloading every crate while building** to copy its own license file with
+the copyright lines: the build would depend on a second package index; the
+source address is given instead. If more is ever asked for, this is the next
+step. **cargo-about or similar**: needs the sources and a Rust toolchain.

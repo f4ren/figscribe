@@ -59,6 +59,7 @@ def license_problem(system: str) -> str | None:
             "GNU LESSER GENERAL PUBLIC LICENSE",
             "numpy",
             "matplotlib",
+            "crates.io/crates/calamine/",  # the Rust code in the readers
         ):
             if word not in text:
                 return f"{notices} does not mention {word}"
