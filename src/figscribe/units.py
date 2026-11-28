@@ -17,8 +17,9 @@ from typing import Literal
 import numpy as np
 
 from figscribe.commands import Command, CommandError, Macro, SetField, find
-from figscribe.convert import convert, linear, start
+from figscribe.convert import convert, linear, plot_data, start
 from figscribe.fit import FitError, refit_in_edit
+from figscribe.io.errors import DataError
 from figscribe.model import (
     AllanDeviationPlot,
     Annotation,
@@ -38,9 +39,11 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
     ShadedSpan,
+    Smoothing,
 )
 from figscribe.model.sharing import sharing_group
 from figscribe.model.timeaxes import date_axis, time_columns_of
+from figscribe.process import measured, processes
 from figscribe.times import date_text
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
@@ -89,15 +92,11 @@ def set_conversion(
         if axis == "x" and fit.curve_range is not None:
             ends = _ends(fit.curve_range, remap)
             steps.append(SetField(fit.id, ("curve_range",), ends))
-        # Start values in the old units would mislead the fit, with a result or
-        # without, also where it then fails: they are not left lying for a
-        # later fit to start from. Held ones are the user's and stay as typed.
-        # An own formula keeps them all: nothing can be guessed for it, and
-        # from ones it can "converge" to nonsense.
-        held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
-        if fit.model.kind == "predefined" and held != fit.initial_values:
-            steps.append(SetField(fit.id, ("initial_values",), held))
+    steps += _start_values_afresh(project, plot_id)
     keeps = _kept_for_dates(project, plot, axis, old, conversion, data)
+    if axis == "y" and getattr(plot, "normalize", None) is not None:
+        # Normalised values and their axis do not change with the unit.
+        keeps = _always
     steps += _axis_follows(project, plot, axis, old, conversion, remap, rescale, keeps)
     # An own formula keeps start values in the old units; where it cannot be
     # fitted from them it is left not fitted rather than keep the units.
@@ -107,6 +106,10 @@ def set_conversion(
             SetField(fit.id, ("result",), None) for fit in _fits_of(project, plot_id)
         ]
         return Macro(_describe(axis, conversion), steps)
+    plot_after = _after(project, steps)
+    check_computable(plot_after, plot_id, data)
+    if getattr(plot, "normalize", None) is not None:
+        steps += _normalised_axis_follows(plot_after, plot, plot_id, data)
     return _with_fits_again(
         project, plot_id, _describe(axis, conversion), steps, data, may_fail=own
     )
@@ -131,7 +134,139 @@ def set_range(
         low, high = (date_text(e) if dates else f"{e:g}" for e in x_range)
         text = f"Use only x from {low} to {high}"
     steps: list[Command] = [SetField(plot_id, ("x_range",), x_range)]
+    check_computable(_after(project, steps), plot_id, data)
     return _with_fits_again(project, plot_id, text, steps, data)
+
+
+PROCESSING = {
+    "smoothing": "Smooth the values",
+    "normalize": "Normalise the y values",
+}
+"""The settings of a plot that compute from its data, and what turning each on
+is called."""
+
+
+def set_processing(
+    project: Project, plot_id: str, name: str, value, data: DataProvider
+) -> Macro:
+    """Set `name`, one of PROCESSING, and fit the plot's fits again, as one
+    step. Normalising takes the y axis along, as a unit does. A FitError,
+    changing nothing, if it cannot be computed from the data or a fit then
+    fails."""
+    plot = _plot(project, plot_id)
+    if name not in type(plot).model_fields:
+        raise FitError(f"a {plot.kind} plot has no {name}")
+    text = PROCESSING[name]
+    if value is None:
+        text = {"smoothing": "Remove the smoothing", "normalize": "Stop normalising"}[
+            name
+        ]
+    steps: list[Command] = [SetField(plot_id, (name,), value)]
+    staging = project.model_copy(deep=True)
+    for step in steps:
+        step.apply(staging)
+    changed = _plot(staging, plot_id)
+    if value is not None:  # taking a setting off is never refused
+        check_computable(staging, plot_id, data)
+    if name == "normalize":
+        steps += _start_values_afresh(project, plot_id)
+        steps += _normalised_axis(project, plot, changed, data)
+    return _with_fits_again(
+        project,
+        plot_id,
+        text,
+        steps,
+        data,
+        may_fail=_fits_that_may_fail(project, plot_id, value),
+    )
+
+
+def _fits_that_may_fail(project: Project, plot_id: str, value) -> set[str]:
+    """Taking a setting off is never refused, also where a fit then fails."""
+    if value is not None:
+        return set()
+    return {fit.id for fit in _fits_of(project, plot_id)}
+
+
+def _start_values_afresh(project: Project, plot_id: str) -> list[Command]:
+    """Start values in the old units would mislead the fit, with a result or
+    without, also where it then fails: they are not left lying for a later fit
+    to start from. Held ones are the user's and stay as typed. An own formula
+    keeps them all: nothing can be guessed for it, and from ones it can
+    "converge" to nonsense."""
+    steps: list[Command] = []
+    for fit in _fits_of(project, plot_id):
+        held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
+        if fit.model.kind == "predefined" and held != fit.initial_values:
+            steps.append(SetField(fit.id, ("initial_values",), held))
+    return steps
+
+
+def _normalised_move(old, new, data):
+    """(remap, rescale) from the y values `old` shows to those `new` does, which
+    differ by a factor and an offset: normalising, the x unit under an area, or
+    a unit with an offset. None if either cannot be computed or nothing says."""
+    try:
+        before, after = (
+            plot_data(p.model_copy(update={"reduction": None}), data).y
+            for p in (old, new)
+        )
+    except (FitError, DataError):
+        return None
+    finite = np.isfinite(before) & np.isfinite(after)
+    if not finite.any():
+        return None
+    was, becomes = before[finite], after[finite]
+    low, high = int(np.argmin(was)), int(np.argmax(was))
+    if was[high] == was[low]:
+        return None
+    factor = float((becomes[high] - becomes[low]) / (was[high] - was[low]))
+    offset = float(becomes[low] - factor * was[low])
+    if abs(offset) <= 1e-12 * float(np.abs(becomes).max()):
+        offset = 0.0  # rounding, where it is a factor alone
+
+    def remap(value: float) -> float:
+        return float(factor * value + offset)
+
+    def rescale(width: float) -> float:
+        return float(abs(factor) * width)
+
+    return remap, rescale
+
+
+def _normalised_axis_follows(project, old, plot_id: str, data) -> list[Command]:
+    """The y axis of a normalised plot follows its values where a change of
+    units moves them; `project` is as it is after that change."""
+    new = _plot(project, plot_id)
+    move = _normalised_move(old, new, data)
+    if move is None or all(move[0](v) == v for v in (0.0, 1.0)):
+        return []
+    return _axis_follows(
+        project, new, "y", None, None, *move, lambda panel_id, field: False
+    )
+
+
+def _normalised_axis(project: Project, old, new, data) -> list[Command]:
+    """The y axis follows into normalised values and out of them: no unit, and
+    what is typed on it converted. A unit typed on the axis does not come back,
+    only that of the plot's conversion: as with a unit, the file's own is not
+    known here."""
+    axes = _panel_of(project, old.id)
+    right = old.axis == "right" and axes.y_right is not None
+    spec = axes.y_right if right else axes.y
+    move = _normalised_move(old, new, data)
+    if move is None:
+        return []
+
+    unit = old.y_conversion.unit if old.y_conversion else None
+    was, becomes = None, None
+    if old.normalize is None and spec.unit is not None:
+        was = Conversion(unit=spec.unit)
+    elif new.normalize is None and unit is not None:
+        becomes = Conversion(unit=unit)
+    return _axis_follows(
+        project, old, "y", was, becomes, *move, lambda panel_id, field: False
+    )
 
 
 ALLAN_POINTS = ("values", "data_type", "sample_interval", "time", "taus", "error_bars")
@@ -203,6 +338,48 @@ def _mapping(plot, axis: str, old, new, data):
         return float(width / old_factor * new_factor)
 
     return remap, rescale
+
+
+def check_computable(project: Project, plot_id: str, data) -> None:
+    """A FitError if what the plot computes from its data cannot be, after a
+    change of what it uses."""
+    plot = _plot(project, plot_id)
+    if processes(plot):
+        plot_data(plot, data)
+
+
+def _after(project: Project, steps: list[Command]) -> Project:
+    staging = project.model_copy(deep=True)
+    for step in steps:
+        step.apply(staging)
+    return staging
+
+
+def default_smoothing(plot, data) -> Smoothing:
+    """The smoothing a plot starts with: 11 points of order 3, fewer where the
+    plot has not as many."""
+    bare = plot.model_copy(
+        update={"smoothing": None, "normalize": None, "reduction": None}
+    )
+    count = int(measured(bare, plot_data(bare, data)).sum())
+    window = min(11, count if count % 2 else count - 1)
+    if window < 3:
+        raise FitError(f"smoothing needs at least 3 points; the plot has {count}")
+    return Smoothing(window=window, order=min(3, window - 1))
+
+
+def changed_smoothing(how: Smoothing, name: str, value) -> dict:
+    """The settings of `how` with `name` set to `value`. Choosing Savitzky-Golay
+    lowers an order that the window does not take, which could not be edited
+    while it was a moving average."""
+    changed = {**how.model_dump(), name: value}
+    if name == "method" and value == "savgol":
+        changed["order"] = min(changed["order"], changed["window"] - 1)
+    return changed
+
+
+def _always(panel_id: str, field: str) -> bool:
+    return True
 
 
 def _kept_for_dates(project, plot, axis: str, old, new, data):

@@ -190,3 +190,10 @@ def test_the_same_range_is_not_given_across_dates_and_numbers(
     assert [a.id for a in skipped] == [panels[1 - source].id]
     command.apply(project)
     assert project.figures[0].axes[1 - source].x.limits is None
+
+
+def test_an_area_over_dates_is_not_computed(tmp_path: Path) -> None:
+    project, _ = project_of(tmp_path, line(normalize="area"))
+    assert any("area over dates" in p for p in _problems(project, tmp_path))
+    project, _ = project_of(tmp_path, line(normalize="max"))
+    assert _problems(project, tmp_path) == []

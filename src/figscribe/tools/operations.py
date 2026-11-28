@@ -56,6 +56,7 @@ from figscribe.model import (
     FitModel,
     FunctionPlot,
     Project,
+    Smoothing,
     validate_references,
 )
 from figscribe.model.artists import Artist
@@ -63,7 +64,14 @@ from figscribe.render import render
 from figscribe.render.figure import style_context, tick_ranges
 from figscribe.render.ticks import as_drawn, counted_interval, too_many_ticks
 from figscribe.tools.workspace import DataProvider, Workspace, column_choices
-from figscribe.units import CONVERTIBLE, set_conversion, set_range
+from figscribe.units import (
+    CONVERTIBLE,
+    PROCESSING,
+    changed_smoothing,
+    set_conversion,
+    set_processing,
+    set_range,
+)
 
 PROTECTED_SOURCE_FIELDS = frozenset(
     {
@@ -220,6 +228,17 @@ class Toolbox:
             except FitError as exc:
                 raise ToolError(str(exc)) from exc
         plot = find(project, object_id)
+        if path[0] in PROCESSING and isinstance(plot, CONVERTIBLE):
+            value = command.value  # checked already, unless one setting of it
+            if len(path) == 2:
+                whole = changed_smoothing(plot.smoothing, path[1], value)
+                value = _validate(Smoothing, whole, path[0])
+            try:
+                return set_processing(
+                    project, plot.id, path[0], value, self._data(project)
+                )
+            except FitError as exc:
+                raise ToolError(str(exc)) from exc
         if path == ["expression"] and isinstance(plot, FunctionPlot):
             return set_expression(project, object_id, command.value)
         if path[0] in UNIT_FIELDS and isinstance(plot, CONVERTIBLE):

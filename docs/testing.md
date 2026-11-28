@@ -265,6 +265,11 @@ note the platform, the screen scaling and the theme in the pull request.
     and placing a line from the right-click menu work; *x in: h since the start*
     and back keeps the range and the marks; zoom and pan work. Export the script
     and run it.
+40. **Smoothing and normalising** (decision 0083): on a measured spectrum with
+    noise, switch smoothing on, change method and window and see that the
+    peaks keep a sensible height; normalise to the maximum and to the area and
+    back, with typed axis limits; fit a smoothed plot and read the problem
+    list. Export the script and run it.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

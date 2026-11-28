@@ -42,6 +42,7 @@ from figscribe.model import (
     Reduction,
     ReferenceLine,
     ResidualPlot,
+    Smoothing,
     validate_references,
 )
 from figscribe.render.figure import render
@@ -408,6 +409,12 @@ CASES: dict[tuple, Case] = {
             ("left_out_linestyle", ":"),
         )
     },
+    ("LinePlot", ("smoothing", "order")): (
+        _alone(lambda: _line(smoothing=Smoothing(method="moving", window=5))),
+        2,
+        ("smoothing", "method"),
+        "savgol",
+    ),
     ("LinePlot", ("reduction", "count")): (
         _alone(lambda: _line(reduction=Reduction(method="interval", width=1.0))),
         3,

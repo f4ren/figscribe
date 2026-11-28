@@ -5,6 +5,11 @@ release open in every later one.
 
 ## Unreleased
 
+- **Smoothing and normalising** a line, points or error bar plot: Savitzky–Golay
+  or a moving average over a window of points, and division by the maximum or
+  by the area under the points. Fits use the computed values; the Python script
+  computes them with the same SciPy and NumPy calls; the data file stays as it
+  is (decision 0083).
 - **Date and time axes.** Columns of ISO dates in text files, date cells of
   spreadsheets, `datetime64` in NumPy files and `datetime64` or ISO text in HDF5
   files give a date axis, with numbers only (`2026-11-01`, `12:30`). Limits,
@@ -13,6 +18,8 @@ release open in every later one.
   the other tools need. A time zone is read as written, not converted. The
   Python script reads and plots the same dates (decision 0082).
 - Fixed: a NumPy file of `datetime64` was read as large integers.
+- Fixed (in 0.3.0 too): giving a shaded range the same two ends was refused but
+  kept all the same.
 - Fixed (in 0.3.0 too): the assistant could write a fit's result itself, which
   was then drawn as if figscribe had computed it; and its check for too many
   ticks did not look at a new version of a data file.

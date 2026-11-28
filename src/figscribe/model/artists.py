@@ -92,6 +92,28 @@ class Reduction(StrictModel):
     The error counts only the measured rows."""
 
 
+class Smoothing(StrictModel):
+    """The y values smoothed over their neighbours in the file's order (decision
+    0083); fits use the smoothed values. The data file stays as it is."""
+
+    method: Literal["savgol", "moving"] = "savgol"
+    """"savgol", a Savitzky–Golay filter, which keeps the height and width of
+    peaks better, or "moving", the average of the window."""
+    window: int = Field(11, ge=3)
+    """Points in the window, an odd number; the data should be evenly spaced."""
+    order: int = Field(3, ge=0, le=9)
+    """Order of the polynomial of "savgol", below the window; not used by
+    "moving"."""
+
+    @model_validator(mode="after")
+    def _window_fits(self) -> Smoothing:
+        if self.window % 2 == 0:
+            raise ValueError("the window needs an odd number of points")
+        if self.method == "savgol" and self.order >= self.window:
+            raise ValueError("the order must be below the number of points")
+        return self
+
+
 class ArtistBase(Identified):
     label: str | None = None
     """Legend entry; None means the artist is not listed."""
@@ -143,6 +165,12 @@ class LinePlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    smoothing: Smoothing | None = None
+    """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
@@ -181,6 +209,12 @@ class ScatterPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    smoothing: Smoothing | None = None
+    """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
@@ -246,6 +280,12 @@ class ErrorbarPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    smoothing: Smoothing | None = None
+    """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
