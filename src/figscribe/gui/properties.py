@@ -103,6 +103,7 @@ from figscribe.model import (
     PredefinedFit,
     Project,
     Reduction,
+    Smoothing,
 )
 from figscribe.model.styles import style_problem
 from figscribe.model.timeaxes import time_columns_of
@@ -111,8 +112,10 @@ from figscribe.render.ticks import PREFIXES
 from figscribe.units import (
     ALLAN_POINTS,
     CONVERTIBLE,
+    PROCESSING,
     set_allan_field,
     set_conversion,
+    set_processing,
     set_range,
 )
 
@@ -196,6 +199,7 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "colorbar": Colorbar,
     "panel_labels": PanelLabels,
     "band": ErrorBand,
+    "smoothing": Smoothing,
     "reduction": Reduction,
 }
 """Optional nested models switched on and off with a check box; when on, their
@@ -253,6 +257,7 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 
 SECTIONS = {
+    "smoothing": "Data",
     "reduction": "Data",
     "x_conversion": "Data",
     "y_conversion": "Data",
@@ -342,6 +347,7 @@ SECTION_NAMES = {
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
     "band": "Error band",
+    "smoothing": "Smoothing",
     "reduction": "Fewer points",
     "layout": "Panel layout",
     "inset": "Place in panel",
@@ -382,6 +388,7 @@ BASIC = {
         "x_conversion",
         "y_conversion",
         "x_range",
+        "smoothing",
         "reduction",
         "color",
         "marker",
@@ -401,6 +408,7 @@ BASIC = {
         "x_conversion",
         "y_conversion",
         "x_range",
+        "smoothing",
         "reduction",
         "color",
         "edgecolor",
@@ -420,6 +428,7 @@ BASIC = {
         "x_conversion",
         "y_conversion",
         "x_range",
+        "smoothing",
         "reduction",
         "color",
         "marker",
@@ -821,6 +830,14 @@ TIPS = {
     "PanelLabels.style": "How the letters are written.",
     "band": "Shade the y errors as a band around the line instead of drawing bars, "
     "for dense data; x errors stay bars.",
+    "smoothing": "Smooth the y values over their neighbours in the file's order. "
+    "The data file stays as it is; fits use the smoothed values.",
+    "Smoothing.method": "Savitzky–Golay fits a polynomial in each window and "
+    "keeps the height and width of peaks better; the moving average takes the "
+    "mean of the window.",
+    "Smoothing.window": "Points in the window, an odd number. The data should be "
+    "evenly spaced in x.",
+    "Smoothing.order": "Order of the polynomial, below the number of points.",
     "reduction": "Draw fewer points: groups of rows averaged or thinned. The data "
     "file stays as it is; the figure, the export and the script show the reduced "
     "points, and fits use them.",
@@ -940,6 +957,7 @@ OTHER_FACTOR = "another factor"
 FORMULA = "a formula"
 
 CAPTIONS = {
+    ("Smoothing", "method"): "Method",
     ("PanelLabels", "fontsize"): "Letter size (pt)",
     ("LinePlot", "label"): "Legend entry",
     ("ScatterPlot", "label"): "Legend entry",
@@ -1014,6 +1032,7 @@ PLOT_SECTIONS = {
     "x_conversion": "Units and rows",
     "y_conversion": "Units and rows",
     "x_range": "Units and rows",
+    "smoothing": "Units and rows",
     "reduction": "Units and rows",
     "color": "Look",
     "edgecolor": "Look",
@@ -1172,7 +1191,7 @@ IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS, *ELEMENT_SECTIONS}
 """Kinds of object whose settings are shown in the order of `BASIC`, not of the
 model, so that what belongs together is next to each other."""
 
-INLINE = {"panel_labels", "band", "reduction", "colorbar"}
+INLINE = {"panel_labels", "band", "smoothing", "reduction", "colorbar"}
 """Optional parts whose settings follow their check box in its own section
 instead of having a section of their own."""
 
@@ -1500,17 +1519,20 @@ class PropertyPanel(QScrollArea):
         plots drawn against it, a data file is read again when how it is
         read changes, and units and a range keep the plot's axis and fits in
         step."""
+        if path[0] in PROCESSING and isinstance(obj, CONVERTIBLE):
+            if path == ("smoothing",):
+                value = Smoothing() if value else None
+            elif len(path) == 2:
+                changed = {**getattr(obj, path[0]).model_dump(), path[1]: value}
+                value = _checked(OPTIONAL_PARTS[path[0]], changed, path[1])
+            data = self.document.data
+            return set_processing(self.document.project, obj.id, path[0], value, data)
         if path[0] in CONVERSIONS and isinstance(obj, CONVERTIBLE):
             conversion = value
             if len(path) == 2:
                 current = getattr(obj, path[0]).model_dump()
-                try:
-                    conversion = Conversion.model_validate({**current, path[1]: value})
-                except ValidationError as exc:
-                    reason = "; ".join(
-                        e["msg"].removeprefix("Value error, ") for e in exc.errors()
-                    )
-                    raise CommandError(f"{field_name(path[1])}: {reason}") from None
+                changed = {**current, path[1]: value}
+                conversion = _checked(Conversion, changed, path[1])
             data = self.document.data
             axis = path[0][0]
             return set_conversion(self.document.project, obj.id, axis, conversion, data)
@@ -2190,6 +2212,7 @@ CHOICES = {
         ("both", "both"),
     ],
 }
+SMOOTHING_METHODS = [("Savitzky–Golay", "savgol"), ("moving average", "moving")]
 CHOICES["method"] = [
     ("mean of n rows", "mean"),
     ("median of n rows", "median"),
@@ -2501,6 +2524,16 @@ class ConversionEditor(Editor):
             self.commit(Conversion(factor=factor, from_start=start, unit=unit))
 
 
+def _checked(model: type[BaseModel], values: dict, field: str) -> BaseModel:
+    """`model` of `values`; a CommandError with the reason, about the field
+    that was changed."""
+    try:
+        return model.model_validate(values)
+    except ValidationError as exc:
+        reason = "; ".join(e["msg"].removeprefix("Value error, ") for e in exc.errors())
+        raise CommandError(f"{field_name(field)}: {reason}") from None
+
+
 def _of_times(project, obj: BaseModel, name: str) -> bool:
     """Whether the conversion `name` of `obj` is of a column of dates."""
     if name not in type(obj).model_fields or isinstance(obj, AllanDeviationPlot):
@@ -2638,6 +2671,8 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         names = _parts_of(panel.document, name)
         if names:
             return ChoiceEditor(spec, path, panel, [(n, n) for n in names])
+    if path == ("smoothing", "method"):
+        return ChoiceEditor(spec, path, panel, SMOOTHING_METHODS)
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
@@ -2791,6 +2826,7 @@ def _shape(obj: BaseModel) -> tuple:
             "colorbar",
             "panel_labels",
             "band",
+            "smoothing",
             "reduction",
             "inset",
             "result",

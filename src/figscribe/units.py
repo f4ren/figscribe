@@ -17,7 +17,7 @@ from typing import Literal
 import numpy as np
 
 from figscribe.commands import Command, CommandError, Macro, SetField, find
-from figscribe.convert import convert, linear, start
+from figscribe.convert import convert, linear, plot_data, start
 from figscribe.fit import FitError, refit_in_edit
 from figscribe.model import (
     AllanDeviationPlot,
@@ -131,6 +131,31 @@ def set_range(
         low, high = (date_text(e) if dates else f"{e:g}" for e in x_range)
         text = f"Use only x from {low} to {high}"
     steps: list[Command] = [SetField(plot_id, ("x_range",), x_range)]
+    return _with_fits_again(project, plot_id, text, steps, data)
+
+
+PROCESSING = {"smoothing": "Smooth the values"}
+"""The settings of a plot that compute from its data, and what turning each on
+is called."""
+
+
+def set_processing(
+    project: Project, plot_id: str, name: str, value, data: DataProvider
+) -> Macro:
+    """Set `name`, one of PROCESSING, and fit the plot's fits again, as one
+    step. A FitError, changing nothing, if it cannot be computed from the data
+    or a fit then fails."""
+    plot = _plot(project, plot_id)
+    if name not in type(plot).model_fields:
+        raise FitError(f"a {plot.kind} plot has no {name}")
+    text = PROCESSING[name]
+    if value is None:
+        text = f"Remove the {name}"
+    steps: list[Command] = [SetField(plot_id, (name,), value)]
+    staging = project.model_copy(deep=True)
+    for step in steps:
+        step.apply(staging)
+    plot_data(_plot(staging, plot_id), data)  # refused here with the reason
     return _with_fits_again(project, plot_id, text, steps, data)
 
 

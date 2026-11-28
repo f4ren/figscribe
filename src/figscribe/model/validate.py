@@ -161,6 +161,10 @@ def validate_references(
                     why = _text_where_numbers_are_plotted(artist, drawn)
                     if why is not None:
                         issues.append(ReferenceIssue(tpath, artist.id, why))
+                if drawn is not None and isinstance(artist, FITTABLE):
+                    why = _cannot_compute(artist, drawn)
+                    if why is not None:
+                        issues.append(ReferenceIssue(tpath, artist.id, why))
                 if drawn is not None and isinstance(artist, FIT_TARGETS):
                     why = _unequal_or_unreadable(artist, drawn)
                     if why is not None:
@@ -258,6 +262,15 @@ def validate_references(
                             )
                         )
                     _check_fit_parameters(artist, tpath, issues)
+
+                if isinstance(artist, FitCurve):
+                    target = artists_by_id.get(artist.target)
+                    if getattr(target, "smoothing", None) is not None:
+                        why = (
+                            "fits smoothed data: neighbouring points are no longer "
+                            "independent, so its uncertainties and χ²ᵣ say nothing"
+                        )
+                        issues.append(ReferenceIssue(tpath, artist.id, why))
 
                 if isinstance(artist, ResidualPlot) and artist.target not in fit_ids:
                     issues.append(
@@ -370,6 +383,24 @@ def _text_where_numbers_are_plotted(artist, data) -> str | None:
             return str(exc)
         except DataError:
             continue  # a missing column or file is told elsewhere
+    return None
+
+
+def _cannot_compute(artist, data) -> str | None:
+    """Why what the plot computes from its data cannot be, if it asks for
+    something."""
+    # Imported here: the data package imports the model.
+    from figscribe.convert import plot_data
+    from figscribe.process import ProcessError, processes
+
+    if not processes(artist):
+        return None
+    try:
+        plot_data(artist, data)
+    except ProcessError as exc:
+        return str(exc)
+    except ValueError:  # an unreadable file, other lengths: told elsewhere
+        return None
     return None
 
 

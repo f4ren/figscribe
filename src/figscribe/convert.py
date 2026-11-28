@@ -229,9 +229,9 @@ class PlotData:
 
 
 def plot_data(plot, data: Callable[[ColumnRef], np.ndarray]) -> PlotData:
-    """The plot's columns converted to the units it shows them in, every row
-    of the file, and which rows its x range keeps; with a reduction, its
-    reduced points."""
+    """The plot's columns converted to the units it shows them in and, if it
+    asks, smoothed; every row of the file, and which rows its x range keeps;
+    with a reduction, its reduced points."""
     if isinstance(plot, AllanDeviationPlot):
         return _allan_data(plot, data)
     x = convert(data(plot.x), plot.x_conversion)
@@ -244,6 +244,10 @@ def plot_data(plot, data: Callable[[ColumnRef], np.ndarray]) -> PlotData:
         yerr=None if yerr is None else scale(data(yerr), plot.y_conversion),
         used=within(x, plot.x_range),
     )
+    from figscribe.process import processed, processes
+
+    if processes(plot):
+        shown = processed(plot, shown)
     if plot.reduction is None:
         return shown
     from figscribe.reduce import reduced

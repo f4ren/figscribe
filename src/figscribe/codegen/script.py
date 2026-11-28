@@ -286,6 +286,8 @@ class _Writer:
             self.reserved |= HDF5_NAMES
         if any(getattr(s, "time_columns", None) for s in project.sources):
             self.reserved |= TIME_NAMES
+        if any(getattr(a, "smoothing", None) for a in self.artists.values()):
+            self.reserved |= PROCESS_NAMES
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
         self.unit_lines: list[tuple[str, str, str]] = []
@@ -294,6 +296,8 @@ class _Writer:
         """{(plot id, field): variable of the column as the plot shows it}."""
         self.used = self._name_used()
         """{plot id: name of the mask of the rows within the plot's range}."""
+        self._retired: set[str] = set()
+        """Names a section such as "Fewer points" defines or uses up."""
         self.held: dict[str, str] = {}
         """{fit id: name of the model with its fixed parameters held}."""
         self.ranges: dict[str, str] = {}
@@ -302,9 +306,10 @@ class _Writer:
         """Masks defined while drawing, so that each gets a name of its own."""
         self.kept = self._name_kept()
         """{plot id: name of the mask of its rows that are not left out}."""
-        self._retired: set[str] = set()
-        """Names the section "Fewer points" defines or uses up."""
         self.allan: dict[str, dict[str, str]] = {}  # named below, once data is known
+        self.processed = self._name_processed()
+        """{plot id: {name: variable}} of the columns a smoothed plot reads (x,
+        y_in) and defines (y)."""
         self.reduced_from: dict[str, dict[str, str]] = {}
         """{plot id: {field: variable}} of the columns a reduction reads."""
         self.reduced = self._name_reduced()
@@ -492,6 +497,24 @@ class _Writer:
             return self.allan[plot.id]["tau" if field == "x" else "adev"]
         return self.units.get((plot.id, field)) or self.column(getattr(plot, field))
 
+    def _name_processed(self) -> dict[str, dict[str, str]]:
+        """The variables of smoothed values: U_smooth. Everything after reads
+        them as the plot's column, so they are entered as such."""
+        names: dict[str, dict[str, str]] = {}
+        for plot in self.artists.values():
+            if getattr(plot, "smoothing", None) is None:
+                continue
+            before = {"x": self.shown(plot, "x"), "y_in": self.shown(plot, "y")}
+            name = f"{before['y_in']}_smooth"
+            number = 2
+            while name in self._taken():
+                name = f"{before['y_in']}_smooth{number}"
+                number += 1
+            self._retired.add(name)
+            names[plot.id] = before | {"y": name}
+            self.units[(plot.id, "y")] = name
+        return names
+
     def _name_reduced(self) -> dict[str, dict[str, str]]:
         """The variables of the reduced points of each reduced plot: t_h_red,
         U_red, U_err. Plots, fits and residuals read these as the plot's
@@ -652,6 +675,7 @@ class _Writer:
         self._data(script_dir)
         self._units()
         self._left_out()
+        self._process()
         self._reduce()
         self._allan_deviations()
         self._fit_models()
@@ -669,7 +693,7 @@ class _Writer:
     def _header(self) -> None:
         figure = self.figure
         packages = ["NumPy", "Matplotlib"]
-        if self.fits or self._grouped():
+        if self.fits or self._grouped() or self.processed:
             packages.append("SciPy")
         if self._sheets():
             packages.append("python-calamine")
@@ -741,8 +765,13 @@ class _Writer:
             self.emit("from matplotlib.lines import Line2D")
         if self._sheets():
             self.emit("from python_calamine import CalamineWorkbook")
+        methods = {self.artists[i].smoothing.method for i in self.processed}
+        if "moving" in methods:
+            self.emit("from scipy.ndimage import uniform_filter1d")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
+        if "savgol" in methods:
+            self.emit("from scipy.signal import savgol_filter")
         if self._grouped():
             self.emit("from scipy.stats import binned_statistic")
         self.emit("", "HERE = Path(__file__).resolve().parent")
@@ -1249,6 +1278,52 @@ class _Writer:
                 f"{Path(source.path).name} left out; the file is unchanged.",
                 f"{name} = np.ones({x}.size, dtype=bool)",
                 f"{name}[{plot.left_out}] = False",
+            )
+
+    def _process(self) -> None:
+        """Smoothing (decision 0083): the same calls as `figscribe.process`."""
+        if not self.processed:
+            return
+        self.section("Smoothing")
+        several = len(self.processed) > 1
+        for number, (plot_id, names) in enumerate(self.processed.items(), start=1):
+            plot = self.artists[plot_id]
+            how = plot.smoothing
+            x, before, after = names["x"], names["y_in"], names["y"]
+            parts = [m for m in (self.kept.get(plot_id), self.used.get(plot_id)) if m]
+            finite = self._all_finite([plot.x, plot.y])
+            if not finite:
+                parts += [f"np.isfinite({x})", f"np.isfinite({before})"]
+            if how.method == "savgol":
+                told = (
+                    f"Savitzky–Golay over {how.window} points with a polynomial "
+                    f"of order {how.order}"
+                )
+                function, rest = "savgol_filter", f"{how.window}, {how.order}"
+            else:
+                told = f"the average of {how.window} points"
+                function, rest = "uniform_filter1d", f'{how.window}, mode="nearest"'
+            if number > 1:
+                self.emit("")
+            self.emit(
+                *textwrap.wrap(
+                    f"{_describe(plot).capitalize()}: {before} smoothed, {told}.",
+                    WIDTH,
+                    initial_indent="# ",
+                    subsequent_indent="# ",
+                )
+            )
+            if not parts:
+                self.emit(f"{after} = {function}({before}, {rest})")
+                continue
+            if len(parts) == 1 and finite:
+                mask = parts[0]
+            else:
+                mask = self._scratch("measured", f"_{number}" if several else "")
+                self.emit(f"{mask} = " + " & ".join(parts))
+            self.emit(
+                f"{after} = {before}.copy()",
+                f"{after}[{mask}] = {function}({before}[{mask}], {rest})",
             )
 
     def _grouped(self) -> bool:
@@ -2880,6 +2955,9 @@ does the same, step by step."""
 
 
 # What the script reads an HDF5 file with, as `io.hdf5file` does.
+PROCESS_NAMES = {"savgol_filter", "uniform_filter1d"}
+"""Names the script uses to smooth, taken only in a project that does."""
+
 TIME_NAMES = {
     "mdates",
     "re",

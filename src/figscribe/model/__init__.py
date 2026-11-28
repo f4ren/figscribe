@@ -30,6 +30,7 @@ from figscribe.model.artists import (
     ResidualPlot,
     ScatterPlot,
     ShadedSpan,
+    Smoothing,
 )
 from figscribe.model.axes import Axes, AxisSpec, Inset, Legend
 from figscribe.model.base import Identified, StrictModel, new_id
@@ -99,6 +100,7 @@ __all__ = [
     "SchemaVersionError",
     "ScatterPlot",
     "ShadedSpan",
+    "Smoothing",
     "StrictModel",
     "dumps",
     "loads",

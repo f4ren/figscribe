@@ -187,6 +187,12 @@ RULES: list[Rule] = [
     ),
     Rule(
         (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("smoothing", "order"),),
+        "a moving average has no polynomial",
+        lambda plot, _: plot.smoothing.method != "savgol",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
         (("reduction", "count"),),
         "the points are averaged over intervals of x, not counted in rows",
         lambda plot, _: plot.reduction.method == "interval",

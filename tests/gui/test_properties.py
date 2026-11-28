@@ -710,6 +710,7 @@ def test_the_basic_settings_come_first_the_rest_under_more(
         "x_conversion",
         "y_conversion",
         "x_range",
+        "smoothing",
         "reduction",
     ]
     assert fields["Left-out points"] == [

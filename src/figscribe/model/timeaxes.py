@@ -140,6 +140,8 @@ def _points(artist, dates: dict[str, bool], is_time: IsTime) -> str | None:
             return f"the {name} errors are dates, not durations"
         if dates[name]:
             return f"dates cannot have {name} errors; {SINCE_START}"
+    if artist.smoothing is not None and dates["y"]:
+        return "dates cannot be smoothed"
     if artist.reduction is not None and (dates["x"] or dates["y"]):
         return f"dates cannot be shown with fewer points; {SINCE_START}"
     return None

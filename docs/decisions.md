@@ -3986,3 +3986,51 @@ type, but the script would convert there and back, and a column of times would
 look like any other. **Fits on a date axis**, in days since 1970: the
 parameters would mean nothing and the fit would be badly conditioned; a fit in
 the time since the start of the plot can follow if asked for.
+
+## 0083 — Baseline, smoothing, normalising and peaks (F10)
+
+2026-11-28. Accepted for what the user chose: all four, as proposed to them
+(a baseline fitted in x ranges they give, a moving average or Savitzky–Golay,
+normalising to a maximum or an area, peaks marked with their x; a fixed order;
+fits on the processed values). The rest is the proposal this is built with.
+Two steps: smoothing and normalising first, then the baseline and the peaks.
+
+### Context
+
+Roadmap F10: light analysis when plotting measurements, judged by decision
+0036 — standard figures of many fields, a few lines of NumPy and SciPy in the
+script, settings on a plot with nothing computed stored.
+
+### Decision
+
+- **Settings of a line, points or error bar plot**; the data file stays
+  untouched. One module, `figscribe/process.py`, which `plot_data` calls, so
+  that the renderer, the fits, the dialogs and the script compute the same.
+- **Order:** unit conversion, x range, rows left out and not finite, then
+  baseline, smoothing, normalising, and then fewer points (0045).
+- **Rows.** Smoothing and normalising use the rows that are measured: in the
+  range, not left out, x and y finite. Smoothing runs over these in the order
+  of the file; the other rows keep their values. A window and Savitzky–Golay
+  count points, so they assume evenly spaced data.
+- **Smoothing:** `scipy.signal.savgol_filter` (its default ends), or
+  `scipy.ndimage.uniform_filter1d` with the ends continued. The window is odd,
+  at least 3 and at most the number of rows used.
+- **Errors** stay as they are when smoothed, and are scaled with the values
+  when normalised. Neighbours of a smoothed series are no longer independent,
+  so a fit to it is listed as a problem: its uncertainties and χ²ᵣ say nothing.
+- **Normalising** divides by the maximum, or by the area under the points
+  (trapezoids, x sorted). It is a setting of its own, shown beside *y in*, since
+  it comes after the baseline. The unit leaves the y axis's label, and typed
+  limits and marks on the axis are converted along, as for a unit (0041).
+- **On date axes** smoothing and the maximum work; an area over dates, like the
+  baseline and the peaks, needs the time since the start.
+- **A change that cannot be computed** (a window longer than the data, nothing
+  above zero to normalise to) is refused with the reason.
+
+### Alternatives considered
+
+**Normalising as a choice of the unit conversion:** it would run before the
+baseline, against the wrong maximum. **Smoothed curves as plots of their own**
+that refer to another plot: one more kind of plot, while a second plot of the
+same columns shows raw and smoothed data already. **Propagating errors through
+the filter:** the points stay correlated, which a fit cannot be told.
