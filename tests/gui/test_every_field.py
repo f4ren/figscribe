@@ -109,14 +109,15 @@ EXPECTED = {
 """Fields whose right outcome in this project is not a visible change: the
 start of what the test reports, and why."""
 
-RISING = {
-    "line",
-    "points",
-    "error bars",
-    "error band",
-    "fewer points",
+UNCHANGED = {
+    # Their columns rise steadily: marking their peaks marks none.
+    *((name, "peaks") for name in ("line", "points", "error bars")),
+    ("error band", "peaks"),
+    ("fewer points", "peaks"),
+    # Its values are normalised, which a unit's factor does not change.
+    ("processed", "y_conversion"),
 }
-"""Objects whose columns rise steadily: marking their peaks marks none."""
+"""(object, field) of the settings that rightly draw the same here."""
 
 KNOWN = {}
 """Fields with a problem that is planned to be fixed: the roadmap item."""
@@ -188,7 +189,7 @@ def test_every_field_works(qtbot, project_file: Path, name: str) -> None:
             if outcome is None or not outcome.startswith(expected):
                 got = outcome or "a visible change"
                 problems.append(f"{field}: expected {expected!r} ({why}), got {got}")
-        elif field == "peaks" and name in RISING:
+        elif (name, field) in UNCHANGED:
             if outcome != "nothing drawn changes":
                 problems.append(f"{field}: {outcome or 'a visible change'}")
         elif key in KNOWN:
