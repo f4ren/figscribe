@@ -50,6 +50,7 @@ from figscribe.model import (
 from figscribe.model.artists import LIKE_THE_PLOT
 from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
 from figscribe.model.sharing import sharing_group, typed_limits
+from figscribe.model.timeaxes import date_axis, not_on_dates
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
 from figscribe.render.breaks import (
     break_ticks,
@@ -74,6 +75,7 @@ from figscribe.render.ticks import (
     CommaLogFormatter,
     MinorLogNumbers,
     comma_formatter,
+    date_ticks,
     grid_calls,
     minor_numbers,
     minor_ticks,
@@ -141,13 +143,29 @@ def _render(
         )
 
         artists = {a.id: a for axes in figure.axes for a in axes.artists}
+
+        def is_time(ref: ColumnRef) -> bool:
+            return np.asarray(data(ref)).dtype.kind == "M"
+
+        dated = {
+            (i, field)
+            for i, axes in enumerate(figure.axes)
+            for field in ("x", "y", "y_right")
+            if getattr(axes, field) is not None and date_axis(figure, i, field, is_time)
+        }
+        skipped = {
+            a.id
+            for i, axes in enumerate(figure.axes)
+            for a in axes.artists
+            if not_on_dates(figure, i, a, is_time)
+        }
         # Where each function is drawn and whether it scales its axis: from the
         # model and the data, never from what is on the axes so far.
         places = {
             a.id: (x_span(figure, i, a, data), sets_limits(figure, i, a))
             for i, axes in enumerate(figure.axes)
             for a in axes.artists
-            if isinstance(a, FunctionPlot)
+            if isinstance(a, FunctionPlot) and a.id not in skipped
         }
         axs: dict[int, MplAxes] = {}
         ticked: list[tuple[MplAxes, str, AxisSpec]] = []
@@ -181,6 +199,8 @@ def _render(
                 tuple(cuts[axes.id, name] for name in ("x", "y")),
                 typed_limits(figure, i, "x"),
                 places,
+                {field for j, field in dated if j == i},
+                skipped,
             )
             if len(drawn) > 2:
                 twins[i] = drawn[2][0]
@@ -190,7 +210,12 @@ def _render(
             ticked += drawn
             axs[i] = ax
 
-        broken = _break_scales(figure, axs, twins)
+        broken = _break_scales(figure, axs, twins, dated)
+        # The gids and sides of the date axes.
+        date_sides = {
+            (figure.axes[i].id + (RIGHT if field == "y_right" else ""), field[0])
+            for i, field in dated
+        }
 
         # Only now are the automatic ranges known that decide whether a tick
         # step fits. A style with axes.autolimit_mode "round_numbers" rounds
@@ -218,7 +243,10 @@ def _render(
                 fitting = ticks_that_fit(spec, interval)
             others = shared[key]
             comma = figure.decimal_comma
-            _apply_ticks(ax, name, fitting, comma, others, key in broken)
+            if key in date_sides:
+                _apply_date_ticks(ax, name, fitting)
+            else:
+                _apply_ticks(ax, name, fitting, comma, others, key in broken)
             if rounded:
                 ax.autoscale_view(scalex=name == "x", scaley=name == "y")
 
@@ -253,7 +281,10 @@ def _render(
 
 
 def _break_scales(
-    figure: Figure, axs: dict[int, MplAxes], twins: dict[int, MplAxes]
+    figure: Figure,
+    axs: dict[int, MplAxes],
+    twins: dict[int, MplAxes],
+    dated: set[tuple[int, str]],
 ) -> dict[tuple[str, str], tuple]:
     """Give each broken axis its scale; returns (breaks drawn, width of their
     gaps, range if it was automatic) by (gid, "x" or "y"). Panels sharing an
@@ -268,6 +299,8 @@ def _break_scales(
             group = sharing_group(figure, i, name)
             if i != group[0] or not (breaks := effective_breaks(figure, i, name)):
                 continue
+            if (i, name) in dated:
+                continue  # no breaks on a date axis
             first = axs[i]
             given = any(getattr(figure.axes[j], name).limits for j in group)
             if given:
@@ -412,26 +445,30 @@ def _draw_axes(
     breaks: tuple[Breaks, Breaks] = ([], []),
     x_limits: tuple[float, float] | None = None,
     places: Mapping[str, tuple] | None = None,
+    dated: set[str] = frozenset(),
+    skipped: set[str] = frozenset(),
 ) -> list[tuple[MplAxes, str, AxisSpec]]:
     """Draw one panel; returns its axes whose ticks are still to be placed."""
     if axes.title is not None:
         size = {"fontsize": axes.title_size} if axes.title_size else {}
         ax.set_title(axes.title, **size)
-    _apply_axis(ax, "x", axes.x, unit_format)
-    _apply_axis(ax, "y", axes.y, unit_format)
+    _apply_axis(ax, "x", axes.x, unit_format, "x" in dated)
+    _apply_axis(ax, "y", axes.y, unit_format, "y" in dated)
     right = None
     if axes.y_right is not None:
         right = ax.twinx()
         right.set_gid(f"{axes.id}{RIGHT}")
         if open_frame:
             right.spines["right"].set_visible(True)  # the frame left it out
-        _apply_axis(right, "y", axes.y_right, unit_format)
+        _apply_axis(right, "y", axes.y_right, unit_format, "y_right" in dated)
     for style in grid_calls(axes):
         if style.get("linewidth", 0) is None:  # half the style's
             style["linewidth"] = matplotlib.rcParams["grid.linewidth"] / 2
         ax.grid(True, axis=axes.grid_axis, **style)
 
     for artist in axes.artists:
+        if artist.id in skipped:
+            continue  # the list of problems says why
         # Without a right axis, a plot meant for it is drawn against the left
         # one; validate_references reports it.
         target = right if artist.axis == "right" and right is not None else ax
@@ -449,7 +486,9 @@ def _draw_axes(
     return ticked
 
 
-def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> None:
+def _apply_axis(
+    ax: MplAxes, name: str, spec: AxisSpec, unit_format: str, dates: bool = False
+) -> None:
     axis = ax.xaxis if name == "x" else ax.yaxis
     label = axis_label(spec, unit_format)
     if label is not None:
@@ -463,7 +502,10 @@ def _apply_axis(ax: MplAxes, name: str, spec: AxisSpec, unit_format: str) -> Non
     )
     # A new axis is linear, and the script says nothing then either. Setting
     # "linear" on a shared axis would reset the ticks a panel sharing it has set.
-    if spec.scale == "symlog" and spec.symlog_linthresh is not None:
+    if dates:
+        # Numbers are then days since 1970; a date axis has no other scale.
+        (ax.xaxis_date if name == "x" else ax.yaxis_date)()
+    elif spec.scale == "symlog" and spec.symlog_linthresh is not None:
         set_scale("symlog", linthresh=spec.symlog_linthresh)
     elif spec.scale != "linear":
         set_scale(spec.scale)
@@ -520,6 +562,22 @@ def _apply_ticks(
         axis.set_minor_formatter(MinorLogNumbers(axis.get_major_formatter()))
     if spec.tick_size is not None:
         ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
+
+
+def _apply_date_ticks(ax: MplAxes, name: str, spec: AxisSpec) -> None:
+    """The ticks of a date axis: its own numbers; a tick step, a number format
+    and a factor are for numbers."""
+    axis = ax.xaxis if name == "x" else ax.yaxis
+    if spec.tick_size is not None:  # first: it decides how many labels fit
+        ax.tick_params(axis=name, which="both", labelsize=spec.tick_size)
+    date_ticks(axis, spec)
+    how, value = minor_ticks(spec)
+    if how == "parts":
+        axis.set_minor_locator(AutoMinorLocator(value))
+    elif how == "on":
+        axis.set_minor_locator(AutoMinorLocator())
+    else:
+        axis.minorticks_off()
 
 
 def _comma_numbers(axis, kind: str, minor: bool) -> None:

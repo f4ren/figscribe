@@ -3961,8 +3961,8 @@ refused, a CSV file with dates could not be read at all, and a NumPy array of
 - **Time zones are cut off, not converted** (`+01:00`, `Z`): a time is read as
   written. NumPy alone would convert to UTC without a word. A series across a
   change to summer time then repeats or skips an hour.
-- **A duration cell** of a spreadsheet is a number of seconds. A time of day
-  without a date stays refused.
+- **A time of day without a date, and a duration cell**, stay refused: a
+  column of numbers, such as the seconds since the start, says what is meant.
 - **Times stay `datetime64[us]`** from the reader to the plot, and the script
   reads and plots them as a person would.
 - **A converted time column counts from its start**: the existing choices s,

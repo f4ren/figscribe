@@ -21,7 +21,7 @@ import numpy as np
 
 from figscribe import __version__
 from figscribe.allan import samples
-from figscribe.convert import expression, plot_data, scale_expression
+from figscribe.convert import expression, plot_data, scale_expression, time_expression
 from figscribe.fit import (
     fitted_points,
     free_parameters,
@@ -74,6 +74,12 @@ from figscribe.model import (
 )
 from figscribe.model.breaks import Breaks, effective_breaks
 from figscribe.model.sharing import sharing_group, typed_limits
+from figscribe.model.timeaxes import (
+    as_dates,
+    date_axis,
+    not_on_dates,
+    time_columns_of,
+)
 from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
@@ -103,6 +109,8 @@ from figscribe.render.layout import (
     sharing_specs,
 )
 from figscribe.render.ticks import (
+    DATE_FORMATS,
+    DATE_STEPS,
     comma_formatter,
     counted_interval,
     grid_calls,
@@ -113,6 +121,7 @@ from figscribe.render.ticks import (
     ticks_that_fit,
     zero_below,
 )
+from figscribe.times import ZONE, date_text
 
 WIDTH = 88
 DEFAULT_ZORDER = {
@@ -157,6 +166,13 @@ RESERVED = {
     "CommaLogFormatter",
     "MinorLogNumbers",
     "colorbar",
+    "mdates",
+    "re",
+    "date",
+    "date_ticks",
+    "iso_times",
+    "sheet_times",
+    "ZONE",
     *(f"colorbar{i}" for i in range(2, 100)),
     "squeezed",
     "across_breaks",
@@ -239,7 +255,28 @@ class _Writer:
         self._paths: dict[str, tuple[Path, str]] = {}
         """{path variable: (file, hash) it holds and has checked}."""
         self._mappables = 0
-        self.artists = {a.id: a for axes in figure.axes for a in axes.artists}
+        self.is_time = time_columns_of(project)
+        self.dated = {
+            (i, field)
+            for i, axes in enumerate(figure.axes)
+            for field in ("x", "y", "y_right")
+            if getattr(axes, field) is not None
+            and date_axis(figure, i, field, self.is_time)
+        }
+        """(panel index, field) of the date axes."""
+        self.skipped = {
+            a.id: why
+            for i, axes in enumerate(figure.axes)
+            for a in axes.artists
+            if (why := not_on_dates(figure, i, a, self.is_time))
+        }
+        """{plot id: why dates keep it from being drawn}."""
+        self.artists = {
+            a.id: a
+            for axes in figure.axes
+            for a in axes.artists
+            if a.id not in self.skipped
+        }
         self.sources = {s.id: s for s in project.sources}
         self.reserved = RESERVED | {
             f"{_stem(s.path)}_path" for s in project.sources if hasattr(s, "path")
@@ -289,12 +326,13 @@ class _Writer:
             a.id: (x_span(figure, i, a, data), sets_limits(figure, i, a))
             for i, axes in enumerate(figure.axes)
             for a in axes.artists
-            if isinstance(a, FunctionPlot)
+            if isinstance(a, FunctionPlot) and a.id not in self.skipped
         }
         """{function id: (its x range or None, which limits it sets)}."""
         self.functions = self._name_functions()
         """{function id: name of the def} of the functions that are drawn."""
         self.axis_specs = self._ticks_that_fit()
+        self._date_ticks: list[tuple] = []
         self._shared_ticks: list[tuple] = []
         self._broken_later: list[tuple] = []
         self._cut: tuple[Breaks, Breaks] = ([], [])
@@ -307,6 +345,8 @@ class _Writer:
         refs: list[ColumnRef] = []
         for axes in self.figure.axes:
             for artist in axes.artists:
+                if artist.id in self.skipped:
+                    continue
                 for field in ("x", "y", "xerr", "yerr", "values", "time"):
                     ref = getattr(artist, field, None)
                     if isinstance(ref, ColumnRef) and ref not in refs:
@@ -344,6 +384,8 @@ class _Writer:
         taken = set(self.reserved) | set(self.columns.values())
         for axes in self.figure.axes:
             for artist in axes.artists:
+                if artist.id in self.skipped:
+                    continue
                 for field in ("data", "c"):
                     ref = getattr(artist, field, None)
                     if not isinstance(ref, ArrayRef):
@@ -421,14 +463,15 @@ class _Writer:
                         name, number = f"{base}{number}", number + 1
                     taken.add(name)
                     defined[key] = name
-                    text = (
-                        scale_expression(raw, conversion)
-                        if error
-                        else expression(raw, conversion)
-                    )
-                    self.unit_lines.append(
-                        (name, text, _unit_comment(conversion, error))
-                    )
+                    comment = _unit_comment(conversion, error)
+                    if self.is_time(ref):
+                        text = time_expression(raw, conversion)
+                        comment = f"{conversion.unit or 'scaled'} since the start"
+                    elif error:
+                        text = scale_expression(raw, conversion)
+                    else:
+                        text = expression(raw, conversion)
+                    self.unit_lines.append((name, text, comment))
                 names[(artist.id, field)] = defined[key]
         return names
 
@@ -610,6 +653,7 @@ class _Writer:
         self._header()
         self._imports()
         self._sheet_helpers()
+        self._time_helpers()
         self._data(script_dir)
         self._units()
         self._left_out()
@@ -619,6 +663,7 @@ class _Writer:
         self._function_defs()
         self._fits()
         self._tick_helpers()
+        self._date_helpers()
         self._figure()
         self.section("Save")
         self.emit(f"fig.savefig(HERE / {_str(output)})")
@@ -672,9 +717,15 @@ class _Writer:
             self.emit("import hashlib")
         if self._sheets() or self._hdf5_used():
             self.emit("import io")
+        if self._zones():
+            self.emit("import re")
+        if self._sheet_times():
+            self.emit("from datetime import date")
         self.emit("from pathlib import Path", "")
         if self._hdf5_used():
             self.emit("import h5py")
+        if self._date_formats():
+            self.emit("import matplotlib.dates as mdates")
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
         locators = self._locators()
         if locators:
@@ -743,15 +794,22 @@ class _Writer:
         drawn = render(self.figure, self.data)
         return drawn.figscribe_breaks, drawn.figscribe_break_ticks
 
+    def _date_keys(self) -> set[tuple[str, str]]:
+        """(Axes.id, field) of the date axes, which have no number formats."""
+        return {(self.figure.axes[i].id, field) for i, field in self.dated}
+
+    def _number_specs(self) -> dict[tuple[str, str], AxisSpec]:
+        dates = self._date_keys()
+        return {k: s for k, s in self.axis_specs.items() if k not in dates}
+
     def _locators(self) -> list[str]:
         """The tick locators and formatters the script needs to import."""
-        specs = list(self.axis_specs.values())
+        numbers = self._number_specs()
+        specs = list(numbers.values())
         # A broken axis places each of its ticks itself.
-        placed = [
-            s for key, s in self.axis_specs.items() if key not in self.break_ticks
-        ]
+        placed = [s for key, s in numbers.items() if key not in self.break_ticks]
         needed = []
-        if any(minor_ticks(s)[0] == "parts" for s in placed):
+        if any(minor_ticks(s)[0] == "parts" for s in self.axis_specs.values()):
             needed.append("AutoMinorLocator")
         if any(scaling(s) is not None for s in specs):
             needed.append("FuncFormatter")
@@ -781,7 +839,7 @@ class _Writer:
             )
             for i, axes in enumerate(self.figure.axes)
             for field in ("x", "y", "y_right")
-            if (axes.id, field) in self.axis_specs
+            if (axes.id, field) in self._number_specs()
         }
         if comma:
             kinds |= {
@@ -794,7 +852,7 @@ class _Writer:
 
     def _tick_helpers(self) -> None:
         """The functions and formatters the tick numbers are written with."""
-        own = [s for s in self.axis_specs.values() if scaling(s) is not None]
+        own = [s for s in self._number_specs().values() if scaling(s) is not None]
         kinds = self._comma_kinds()
         helpers = []
         if kinds or (own and self.figure.decimal_comma):
@@ -824,6 +882,77 @@ class _Writer:
         if any(source.decimal != "." for source in sheets):
             column = SHEET_COLUMN_WITH_MARK
         self.emit(*f"{ROWS_OF_SHEET}\n\n\n{column}".splitlines())
+
+    # --- dates and times (decision 0082) ----------------------------------------
+
+    def _time_refs(self) -> list[ColumnRef]:
+        """The columns of times the script reads."""
+        return [ref for ref in self._refs() if self.is_time(ref)]
+
+    def _sheet_times(self) -> bool:
+        return any(
+            isinstance(self.sources[r.source], SheetSource) for r in self._time_refs()
+        )
+
+    def _zones(self) -> bool:
+        """Whether the script takes time zones off, with a regular expression."""
+        return any(
+            isinstance(source, SheetSource | Hdf5Source)
+            or getattr(source, "trim_times", False)
+            for source in (self.sources[r.source] for r in self._time_refs())
+        )
+
+    def _date_formats(self) -> bool:
+        """Whether a date axis labels its ticks in the script."""
+        specs = self.axis_specs
+        return any(
+            specs[self.figure.axes[i].id, field].tick_labels is None
+            for i, field in self.dated
+        )
+
+    def _time_helpers(self) -> None:
+        helpers = []
+        if self._zones():
+            helpers.append(ZONE_CONSTANT)
+        if self._sheet_times():
+            helpers.append(SHEET_TIMES)
+        if any(
+            isinstance(self.sources[r.source], Hdf5Source) for r in self._time_refs()
+        ):
+            helpers.append(ISO_TIMES)
+        if helpers:
+            self.section("Reading dates")
+            self.emit(*"\n\n\n".join(helpers).splitlines())
+
+    def _date_helpers(self) -> None:
+        if not self._date_formats():
+            return
+        self.section("Date axes")
+        self.emit(*_date_ticks_helper().splitlines())
+
+    def _date_axis_of(self, artist, name: str) -> bool:
+        """Whether the artist's x or y (`name`) is on a date axis."""
+        right = artist.axis == "right" and self._panel_axes.y_right is not None
+        field = "y_right" if name == "y" and right else name
+        return (self._panel_index, field) in self.dated
+
+    def _position(self, artist, name: str, value: float) -> str:
+        """A place along the artist's x or y axis: a date on a date axis."""
+        if self._date_axis_of(artist, name):
+            return _date(value)
+        return _num(value)
+
+    def _blank(self, artist, name: str, variable: str) -> str:
+        """The variable of a column of dates as day numbers, so that gaps (NaN)
+        can be put into it."""
+        if not as_dates(artist, name, self.is_time):
+            return variable
+        days = self._beside(f"{variable}_days")
+        self.emit(
+            "# As days since 1970, so that gaps (NaN) can be put into them.",
+            f"{days} = mdates.date2num({variable})",
+        )
+        return days
 
     def _data(self, script_dir: Path) -> None:
         used = [s for s in self.project.sources if self._used(s.id)]
@@ -876,6 +1005,9 @@ class _Writer:
         if isinstance(source, Hdf5Source):
             self._hdf5(source, stem, refs, indices)
             return
+        self._csv(source, path, location, refs, indices)
+
+    def _csv(self, source, path: str, location: Path, refs, indices) -> None:
         kwargs: dict[str, str] = {}
         if source.delimiter is not None:
             kwargs["delimiter"] = _str(source.delimiter)
@@ -894,6 +1026,16 @@ class _Writer:
             kwargs["encoding"] = _str(source.encoding)
         elif (encoding := _utf8_flavour(location)) is not None:
             kwargs["encoding"] = _str(encoding)
+        numbers = []
+        for ref, index in zip(refs, indices, strict=True):
+            if index in source.time_columns:
+                self._csv_times(source, path, ref, index, dict(kwargs))
+            else:
+                numbers.append((ref, index))
+        if source.time_columns and refs and not numbers:
+            return
+        refs = [ref for ref, _ in numbers]
+        indices = [index for _, index in numbers]
         table = self.arrays.get((source.id, None))
         if table is not None:
             # The whole table is plotted as an image; columns are slices of it.
@@ -914,6 +1056,25 @@ class _Writer:
         kwargs["unpack"] = "True"
         targets = ", ".join(name for _, name in refs)
         self.call(f"{targets} = np.loadtxt", path, **kwargs)
+
+    def _csv_times(self, source, path: str, ref, index: int, kwargs: dict) -> None:
+        """One column of dates, read by itself."""
+        kwargs.pop("converters", None)  # a decimal mark is for numbers
+        column, name = ref
+        kwargs["usecols"] = str(index)
+        if self._single_row([ref], source):
+            kwargs["ndmin"] = "1"
+        if not source.trim_times:
+            self.call(f"{name} = np.loadtxt", path, **kwargs, dtype=_TIME_TYPE)
+            return
+        text = self._free(f"{name}_text")
+        self.call(f"{text} = np.loadtxt", path, **kwargs, dtype="str")
+        self.emit("# The times as written: a time zone is not converted.")
+        self.call(
+            f"{name} = np.array",
+            f'[re.sub(ZONE, "", s.strip()) for s in {text}]',
+            dtype=_TIME_TYPE,
+        )
 
     def _sheet(self, source: SheetSource, path: str, stem: str, refs, indices) -> None:
         """The sheet's rows of data, and the columns of them that are used."""
@@ -943,10 +1104,10 @@ class _Writer:
             return
         for (_, name), index in zip(refs, indices, strict=True):
             at = source.first_column + index
-            self.emit(
-                f"{name} = sheet_column({rows}, {at}{decimal})"
-                f"  # column {column_letters(at)}"
-            )
+            read = f"sheet_column({rows}, {at}{decimal})"
+            if index in source.time_columns:
+                read = f"sheet_times({rows}, {at})"
+            self.emit(f"{name} = {read}  # column {column_letters(at)}")
 
     def _hdf5(self, source: Hdf5Source, stem: str, refs, indices) -> None:
         """The datasets used, as floats like figscribe reads them."""
@@ -962,8 +1123,8 @@ class _Writer:
             self.emit(opened, f"    {records} = h5[{item()}][()]")
             if table is None:
                 for (_, name), index in zip(refs, indices, strict=True):
-                    field = _str(source.columns[index])
-                    self.emit(f"{name} = {records}[{field}].astype(float)")
+                    read = f"{records}[{_str(source.columns[index])}]"
+                    self.emit(f"{name} = {_hdf5_values(source, index, read)}")
                 return
             fields = ", ".join(_str(field) for field in source.columns)
             self.emit(
@@ -990,7 +1151,7 @@ class _Writer:
                         read = f"h5[{item()}][()]"
                     else:
                         read = f"h5[{item()}][:, {index}]"
-                    self.emit(f"    {name} = {read}.astype(float)")
+                    self.emit(f"    {name} = {_hdf5_values(source, index, read)}")
                 return
         # The whole table is plotted as an image; columns are slices of it.
         for (_, name), index in zip(refs, indices, strict=True):
@@ -1021,7 +1182,8 @@ class _Writer:
                 self.arrays[(source.id, key)] = name
             wanted = key or source.array
             item = f"[{_str(wanted)}]" if source.format == "npz" else ""
-            self.emit(f"{name} = np.load({path}){item}.astype(float)")
+            kind = _TIME_TYPE if source.time_columns else "float"
+            self.emit(f"{name} = np.load({path}){item}.astype({kind})")
         base = self.arrays.get((source.id, None))
         for (_, name), index in zip(refs, indices, strict=True):
             self.emit(f"{name} = {base}" if flat else f"{name} = {base}[:, {index}]")
@@ -1042,10 +1204,16 @@ class _Writer:
             plot = self.artists[plot_id]
             x = self.reduced_from.get(plot_id, {}).get("x") or self.shown(plot, "x")
             low, high = plot.x_range
+            if as_dates(plot, "x", self.is_time):
+                ends = [_date(end) for end in plot.x_range]
+                told = f"{date_text(low)} to {date_text(high)}"
+            else:
+                ends = [_num(end) for end in plot.x_range]
+                told = f"{low:g} to {high:g}"
             self.emit(
                 f"# {_describe(plot).capitalize()}: only the rows with {x} from "
-                f"{low:g} to {high:g} are drawn and fitted.",
-                f"{mask} = ({x} >= {_num(low)}) & ({x} <= {_num(high)})",
+                f"{told} are drawn and fitted.",
+                f"{mask} = ({x} >= {ends[0]}) & ({x} <= {ends[1]})",
             )
 
     def _left_out(self) -> None:
@@ -1410,8 +1578,15 @@ class _Writer:
             values = self.column(plot.values)
             kind = "phase in s" if plot.data_type == "phase" else "fractional frequency"
             self.emit("", f"# {_describe(plot)}: {values} is {kind}.")
+            times = None
             if plot.time is not None:
                 times = self.column(plot.time)
+                if self.is_time(plot.time):
+                    seconds = self._free(f"{times}_s")
+                    self.emit(
+                        f'{seconds} = ({times} - {times}[0]) / np.timedelta64(1, "s")'
+                    )
+                    times = seconds
                 self.emit(
                     f"# The sample interval is the median step of {times}.",
                     f"{tau0} = np.median(np.diff({times}))",
@@ -1421,8 +1596,8 @@ class _Writer:
             if plot.x_range is not None:
                 since, kept = names["since"], names["samples"]
                 elapsed = (
-                    f"({self.column(plot.time)} - {self.column(plot.time)}[0])"
-                    if plot.time is not None
+                    f"({times} - {times}[0])"
+                    if times is not None
                     else f"np.arange({values}.size) * {tau0}"
                 )
                 shown = plot.x_conversion
@@ -1655,6 +1830,10 @@ class _Writer:
             self.call(f"{name} = fig.add_subplot", *where, **kwargs)
         for i in creation_order(figure):
             self._panel(i, figure.axes[i])
+        if self._date_ticks:
+            self.emit("", "# Date axes, now that everything is plotted.")
+            for axis in self._date_ticks:
+                self._dates(*axis)
         if self._shared_ticks:
             self.emit(
                 "",
@@ -1761,6 +1940,7 @@ class _Writer:
         self.call("ax.annotate", "label", indent="    ", **options)
 
     def _panel(self, index: int, axes: Axes) -> None:
+        self._panel_index, self._panel_axes = index, axes
         ax = self.axes_names[index]
         title = (
             f"Panel {_letter(index).upper()}" if len(self.figure.axes) > 1 else "Plot"
@@ -1788,6 +1968,14 @@ class _Writer:
             self.broken.get((axes.id, name), ([],))[0] for name in ("x", "y")
         )
         for artist in axes.artists:
+            if artist.id in self.skipped:
+                told = f"{_describe(artist)} is not drawn: {self.skipped[artist.id]}."
+                self.emit(
+                    *textwrap.wrap(
+                        told, WIDTH, initial_indent="# ", subsequent_indent="# "
+                    )
+                )
+                continue
             on_right = artist.axis == "right" and right is not None
             # The breaks of the y axis are the left one's.
             self._cut = (x_breaks, [] if on_right else y_breaks)
@@ -1827,6 +2015,9 @@ class _Writer:
             if spec.labelpad is not None:
                 size["labelpad"] = _num(spec.labelpad)
             self.call(f"{ax}.set_{name}label", _str(label), **size)
+        if (index, field) in self.dated:
+            self._date_axis(ax, name, spec)
+            return
         if spec.scale == "symlog" and spec.symlog_linthresh is not None:
             self.emit(
                 f'{ax}.set_{name}scale("symlog", '
@@ -1855,6 +2046,47 @@ class _Writer:
             self._shared_ticks.append((ax, name, spec, shared, key))
         else:
             self._ticks(ax, name, spec, shared, key)
+
+    def _date_axis(self, ax: str, name: str, spec: AxisSpec) -> None:
+        """A date axis, as far as it is set before plotting."""
+        self.emit(f"{ax}.{name}axis_date()  # dates along {name}")
+        if spec.limits is not None:
+            low, high = spec.limits
+            if spec.inverted and low < high:
+                low, high = high, low
+            self.emit(f"{ax}.set_{name}lim({_date(low)}, {_date(high)})")
+        elif spec.inverted:
+            self.emit(f"{ax}.{name}axis.set_inverted(True)")
+        if spec.ticks is not None:
+            kwargs = {}
+            if spec.tick_labels is not None:
+                kwargs["labels"] = _value(spec.tick_labels)
+            ticks = f"[{', '.join(_date(t) for t in spec.ticks)}]"
+            self.call(f"{ax}.set_{name}ticks", ticks, **kwargs)
+        self._date_ticks.append((ax, name, spec))
+
+    def _dates(self, ax: str, name: str, spec: AxisSpec) -> None:
+        """The ticks of a date axis, as `_apply_date_ticks` of the renderer."""
+        axis = f"{ax}.{name}axis"
+        if spec.tick_size is not None:
+            self.call(
+                f"{ax}.tick_params",
+                axis=_str(name),
+                which='"both"',
+                labelsize=_num(spec.tick_size),
+            )
+        if spec.tick_labels is None:
+            fixed = (
+                "" if spec.ticks is None else f", locator={axis}.get_major_locator()"
+            )
+            self.emit(f"date_ticks({axis}{fixed})")
+        how, value = minor_ticks(spec)
+        if how == "parts":
+            self.emit(f"{axis}.set_minor_locator(AutoMinorLocator({value}))")
+        elif how == "on":
+            self.emit(f"{axis}.minorticks_on()")
+        elif self.figure.stylesheet is not None or tick_style(self.figure):
+            self.emit(f"{axis}.minorticks_off()")
 
     def _broken_scale(
         self, ax: str, name: str, breaks: Breaks, width: float, fixed: tuple | None
@@ -2048,9 +2280,10 @@ class _Writer:
             self._annotation(ax, artist, common)
         elif isinstance(artist, ReferenceLine):
             draw = "axvline" if artist.orientation == "vertical" else "axhline"
+            along = "x" if artist.orientation == "vertical" else "y"
             self.call(
                 f"{ax}.{draw}",
-                _num(artist.at),
+                self._position(artist, along, artist.at),
                 color=_str(artist.color),
                 linestyle=_str(artist.linestyle),
                 linewidth=_num(artist.linewidth),
@@ -2058,10 +2291,11 @@ class _Writer:
             )
         elif isinstance(artist, ShadedSpan):
             draw = "axvspan" if artist.orientation == "vertical" else "axhspan"
+            along = "x" if artist.orientation == "vertical" else "y"
             self.call(
                 f"{ax}.{draw}",
-                _num(artist.start),
-                _num(artist.end),
+                self._position(artist, along, artist.start),
+                self._position(artist, along, artist.end),
                 color=_str(artist.color),
                 linewidth="0",
                 **common,
@@ -2084,11 +2318,18 @@ class _Writer:
     def _annotation(self, ax: str, note: Annotation, common: dict[str, str]) -> None:
         coords = COORDS[note.coords]
         point = note.arrow_to if note.arrow_to is not None else note.position
-        kwargs = {"xy": _value(tuple(point))}
+
+        def place(at) -> str:
+            if coords != "data":
+                return _value(tuple(at))
+            x, y = (self._position(note, n, v) for n, v in zip("xy", at, strict=True))
+            return f"({x}, {y})"
+
+        kwargs = {"xy": place(point)}
         if coords != "data":
             kwargs["xycoords"] = _str(coords)
         if note.arrow_to is not None:
-            kwargs["xytext"] = _value(tuple(note.position))
+            kwargs["xytext"] = place(note.position)
             if coords != "data":
                 kwargs["textcoords"] = _str(coords)
             props = {"arrowstyle": "->"}
@@ -2183,6 +2424,9 @@ class _Writer:
         spread = errors.pop("yerr", None) if banded(artist) else None
         mask = self._shown(artist)
         used = self.used.get(artist.id)
+        if mask is not None or self._cut != ([], []):
+            x = self._blank(artist, "x", x)
+            y = self._blank(artist, "y", y)
         shown = f"np.where({mask}, {y}, np.nan)" if mask else y
         # The band takes the line's color; one from the color cycle is known
         # only once the line is drawn.
@@ -2886,6 +3130,85 @@ def _unit_comment(conversion: Conversion, error: bool) -> str:
             f", scaled by {factor}" if conversion.factor != 1 else ""
         )
     return f"in {unit}" if unit else f"scaled by {factor}"
+
+
+_TIME_TYPE = '"datetime64[us]"'
+"""The dtype of a column of times, as the script writes it."""
+
+
+def _date(number: float) -> str:
+    """A place along a date axis, in days as the model holds it."""
+    return f'np.datetime64("{date_text(number)}")'
+
+
+def _hdf5_values(source: Hdf5Source, index: int, read: str) -> str:
+    """The expression for a column of an HDF5 file: times or floats."""
+    if index in source.time_columns:
+        return f"iso_times({read})"
+    return f"{read}.astype(float)"
+
+
+ZONE_CONSTANT = (
+    f'# A time zone at the end of a time, such as Z or +01:00.\nZONE = r"{ZONE}"'
+)
+
+SHEET_TIMES = '''\
+def sheet_times(rows, column):
+    """A column of dates as written; empty cells are missing times."""
+    cells = [row[column] for row in rows]
+    texts = [c.isoformat() if isinstance(c, date) else str(c).strip() for c in cells]
+    return np.array([re.sub(ZONE, "", t) for t in texts], dtype="datetime64[us]")'''
+
+ISO_TIMES = '''\
+def iso_times(values):
+    """ISO text, or datetime64, from the file as times; a time zone is not
+    converted."""
+    if values.dtype.kind == "M":
+        return values.astype("datetime64[us]")
+    texts = [re.sub(ZONE, "", value.decode().strip()) for value in values]
+    return np.array(texts, dtype="datetime64[us]")'''
+
+
+def _date_ticks_helper() -> str:
+    """`date_ticks` of the script: `render.ticks.date_ticks`, written out."""
+    lines = [
+        "def date_ticks(axis, locator=None):",
+        '    """Ticks of dates and times, as many as fit unless `locator` places',
+        "    them, labelled with numbers only: month names depend on the system's",
+        '    language."""',
+        "    if locator is None:",
+        "        space = axis.get_tick_space()",
+        '        if axis.axis_name == "y":',
+        "            count = max(4, space)",
+        "        else:",
+        "            count = max(3, space) if space <= 4 else max(5, 3 * space // 4)",
+        "        locator = mdates.AutoDateLocator(minticks=2, maxticks=count)",
+        *(
+            f"        locator.intervald[mdates.{unit}] = {steps}"
+            for unit, steps in DATE_STEPS.items()
+        ),
+        "        axis.set_major_locator(locator)",
+        "    formatter = mdates.ConciseDateFormatter(",
+        "        locator,",
+        "        # Years, months, days, hours, minutes and seconds.",
+    ]
+    for name, formats in DATE_FORMATS.items():
+        written = ", ".join(_str(f) for f in formats)
+        one = f"        {name}=[{written}],"
+        if len(one) <= WIDTH:
+            lines.append(one)
+        else:
+            lines += [f"        {name}=["]
+            lines += textwrap.wrap(
+                written + ",",
+                WIDTH,
+                initial_indent=" " * 12,
+                subsequent_indent=" " * 12,
+                break_on_hyphens=False,
+            )
+            lines.append("        ],")
+    lines += ["    )", "    axis.set_major_formatter(formatter)"]
+    return "\n".join(lines)
 
 
 def _describe(artist) -> str:

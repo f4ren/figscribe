@@ -57,3 +57,18 @@ def needs_trimming(texts: Iterable[str]) -> bool:
         text != text.strip() or (len(text) > 10 and re.search(ZONE, text))
         for text in texts
     )
+
+
+def date_text(number: float) -> str:
+    """A day number as Matplotlib counts dates, as ISO text, as short as it
+    can be written: "2026-11-02", "2026-11-01T22:20". A float of days is
+    exact to about a microsecond."""
+    total = round(float(number) * 86_400e6)  # microseconds since 1970
+    if abs(total - round(total, -3)) <= 2:
+        total = round(total, -3)
+    stamp = np.datetime64(total, "us")
+    for unit, size in (("D", 86_400_000_000), ("m", 60_000_000), ("s", 1_000_000)):
+        if total % size == 0:
+            return str(np.datetime_as_string(stamp, unit=unit))
+    unit = "ms" if total % 1000 == 0 else "us"
+    return str(np.datetime_as_string(stamp, unit=unit))

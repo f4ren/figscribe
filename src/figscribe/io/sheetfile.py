@@ -3,8 +3,8 @@
 A source is one sheet: a row of column names, perhaps rows to skip below it,
 then the rows of data; wholly empty rows are left out. A column is made into
 numbers when it is used, so notes elsewhere do no harm; a column of dates is
-read as times (decision 0082) and a duration as seconds. The script the code
-generator writes reads the file the same way.
+read as times (decision 0082). The script the code generator writes reads the
+file the same way.
 
 Read with python-calamine, which takes what the file stores: a formula's
 result is the one saved with it, and a formula error reads as an empty cell.
@@ -208,12 +208,10 @@ def _number(cell: object, decimal: str) -> float:
             raise ValueError(f": {text!r} is not a number{hint}") from None
     if isinstance(cell, bool):
         raise ValueError(" holds TRUE or FALSE, not a number")
-    if isinstance(cell, timedelta):
-        return cell.total_seconds()
-    if isinstance(cell, time):
+    if isinstance(cell, time | timedelta):
         raise ValueError(
-            " holds a time of day without a date, which figscribe cannot plot; "
-            "put the date in the same cell"
+            " holds a time of day or a duration without a date, which figscribe "
+            "cannot plot; put the date in the same cell, or use numbers"
         )
     if isinstance(cell, date):
         raise ValueError(" holds a date, in a column that is not all dates")

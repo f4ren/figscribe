@@ -73,11 +73,17 @@ def samples(plot: AllanDeviationPlot, data) -> tuple[np.ndarray, float]:
     its sample interval. The range is in time since the first sample, in τ's
     shown unit; τ0 stays that of the whole series. A DataError for times
     that do not fit the values."""
-    values = np.asarray(data(plot.values), dtype=float)
+    values = np.asarray(data(plot.values))
+    if values.dtype.kind == "M":
+        raise DataError(f"values ({plot.values.column}) are dates, not a series")
+    values = values.astype(float)
     tau0 = plot.sample_interval
     since = None
     if plot.time is not None:
-        times = np.asarray(data(plot.time), dtype=float)
+        times = np.asarray(data(plot.time))
+        if times.dtype.kind == "M":  # seconds since the first (decision 0082)
+            times = (times - times[:1]) / np.timedelta64(1, "s")
+        times = times.astype(float)
         if len(times) != len(values):
             raise DataError(
                 f"time ({plot.time.column}) has {len(times)} values, values "

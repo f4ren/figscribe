@@ -200,9 +200,9 @@ def test_the_other_cells_of_times(monkeypatch, tmp_path: Path) -> None:
     source = sheetfile.sheet_source(tmp_path / "x.xlsx", tmp_path)
     assert source.time_columns == [0]
     _same(_read(source, tmp_path, "day"), _times("2026-11-01", "NaT"))
-    np.testing.assert_array_equal(_read(source, tmp_path, "took"), [120, 3600])
-    with pytest.raises(DataError, match="time of day without a date"):
-        _read(source, tmp_path, "clock")
+    for column in ("took", "clock"):
+        with pytest.raises(DataError, match="without a date"):
+            _read(source, tmp_path, column)
 
 
 @pytest.mark.parametrize("holds", ["group", "table", "column"])

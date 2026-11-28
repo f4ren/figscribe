@@ -11,6 +11,8 @@ import math
 from collections.abc import Sequence
 from typing import Literal
 
+from matplotlib import dates as mdates
+from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
 from matplotlib.ticker import (
     AutoLocator,
     FuncFormatter,
@@ -353,3 +355,55 @@ def ticks_that_fit(spec: AxisSpec, interval: tuple[float, float]) -> AxisSpec:
     while (problem := too_many_ticks(spec, interval)) is not None:
         spec = spec.model_copy(update={problem[0]: None})
     return spec
+
+
+DATE_FORMATS = {
+    # Numbers only (decision 0082): month names would follow the system's
+    # language in the window, but not in a script. By level: years, months,
+    # days, hours, minutes, seconds.
+    "formats": ["%Y", "%Y-%m", "%m-%d", "%H:%M", "%H:%M", "%S.%f"],
+    "zero_formats": ["", "%Y", "%m-%d", "%m-%d", "%H:%M", "%H:%M"],
+    "offset_formats": [
+        "",
+        "%Y",
+        "%Y-%m",
+        "%Y-%m-%d",
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M",
+    ],
+}
+"""How a date axis labels its ticks, as ConciseDateFormatter takes it."""
+
+
+DATE_STEPS = {
+    "MONTHLY": [1, 2, 3, 4, 6, 12],
+    "HOURLY": [1, 2, 3, 4, 6, 12, 24],
+    "MINUTELY": [1, 2, 5, 10, 15, 30, 60],
+    "SECONDLY": [1, 2, 5, 10, 15, 30, 60],
+}
+"""The steps between date ticks. Matplotlib's own lack the longest ones, which a
+narrow axis needs (it then warns), and jump from every minute to every fifth."""
+
+
+def date_label_count(space: int, name: str) -> int:
+    """How many date labels at most fit an axis with room for `space` numbers
+    (Matplotlib's get_tick_space): a date is wider than a number."""
+    if name == "y":
+        return max(4, space)  # side by side they are one line high
+    if space <= 4:
+        return max(3, space)
+    return max(5, 3 * space // 4)
+
+
+def date_ticks(axis, spec: AxisSpec) -> None:
+    """The ticks of a date axis and their numbers; typed ticks and labels
+    stay. The script does the same."""
+    if spec.ticks is None:
+        count = date_label_count(axis.get_tick_space(), axis.axis_name)
+        locator = AutoDateLocator(minticks=2, maxticks=count)
+        for unit, steps in DATE_STEPS.items():
+            locator.intervald[getattr(mdates, unit)] = steps
+        axis.set_major_locator(locator)
+    if spec.tick_labels is None:
+        locator = axis.get_major_locator()
+        axis.set_major_formatter(ConciseDateFormatter(locator, **DATE_FORMATS))
