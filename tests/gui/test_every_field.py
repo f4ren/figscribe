@@ -114,8 +114,6 @@ UNCHANGED = {
     *((name, "peaks") for name in ("line", "points", "error bars")),
     ("error band", "peaks"),
     ("fewer points", "peaks"),
-    # Its values are normalised, which a unit's factor does not change.
-    ("processed", "y_conversion"),
 }
 """(object, field) of the settings that rightly draw the same here."""
 

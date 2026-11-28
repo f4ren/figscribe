@@ -29,6 +29,7 @@ from figscribe.model import (
     Baseline,
     Colorbar,
     ColumnRef,
+    Conversion,
     ErrorBand,
     ErrorbarPlot,
     Figure,
@@ -411,6 +412,12 @@ CASES: dict[tuple, Case] = {
             ("left_out_linestyle", ":"),
         )
     },
+    ("LinePlot", ("y_conversion",)): (
+        _alone(lambda: _line(baseline=Baseline(), normalize="max")),
+        Conversion(factor=4.0),
+        ("normalize",),
+        None,
+    ),
     ("LinePlot", ("peaks", "decimals")): (
         _alone(lambda: _line(peaks=Peaks(labels=False))),
         2,

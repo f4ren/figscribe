@@ -187,6 +187,12 @@ RULES: list[Rule] = [
     ),
     Rule(
         (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("y_conversion",),),
+        "the plot subtracts a baseline and normalises: no unit changes its values",
+        lambda plot, _: plot.baseline is not None and plot.normalize is not None,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
         (("peaks", "decimals"),),
         "the peaks are marked without their x",
         lambda plot, _: not plot.peaks.labels,
