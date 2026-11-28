@@ -26,6 +26,7 @@ from figscribe.model import (
     ArrayRef,
     Axes,
     AxisSpec,
+    Baseline,
     Colorbar,
     ColumnRef,
     ErrorBand,
@@ -409,6 +410,12 @@ CASES: dict[tuple, Case] = {
             ("left_out_linestyle", ":"),
         )
     },
+    ("LinePlot", ("baseline", "degree")): (
+        _alone(lambda: _line(baseline=Baseline(shape="linear"))),
+        4,
+        ("baseline", "shape"),
+        "polynomial",
+    ),
     ("LinePlot", ("smoothing", "order")): (
         _alone(lambda: _line(smoothing=Smoothing(method="moving", window=5))),
         2,

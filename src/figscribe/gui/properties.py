@@ -89,6 +89,7 @@ from figscribe.model import (
     ArrayRef,
     Axes,
     AxisSpec,
+    Baseline,
     Colorbar,
     ColumnRef,
     Conversion,
@@ -201,6 +202,7 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "colorbar": Colorbar,
     "panel_labels": PanelLabels,
     "band": ErrorBand,
+    "baseline": Baseline,
     "smoothing": Smoothing,
     "reduction": Reduction,
 }
@@ -214,6 +216,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         return Spec("bins")
     if name in OPTIONAL_PARTS:
         return Spec("part", model=OPTIONAL_PARTS[name])
+    if name == "ranges":
+        return Spec("ranges")
     if name in CONVERSIONS:
         return Spec("conversion", optional=True)
     optional = False
@@ -259,6 +263,7 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 
 SECTIONS = {
+    "baseline": "Data",
     "smoothing": "Data",
     "normalize": "Data",
     "reduction": "Data",
@@ -350,6 +355,7 @@ SECTION_NAMES = {
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
     "band": "Error band",
+    "baseline": "Baseline",
     "smoothing": "Smoothing",
     "reduction": "Fewer points",
     "layout": "Panel layout",
@@ -392,6 +398,7 @@ BASIC = {
         "y_conversion",
         "normalize",
         "x_range",
+        "baseline",
         "smoothing",
         "reduction",
         "color",
@@ -413,6 +420,7 @@ BASIC = {
         "y_conversion",
         "normalize",
         "x_range",
+        "baseline",
         "smoothing",
         "reduction",
         "color",
@@ -434,6 +442,7 @@ BASIC = {
         "y_conversion",
         "normalize",
         "x_range",
+        "baseline",
         "smoothing",
         "reduction",
         "color",
@@ -836,6 +845,12 @@ TIPS = {
     "PanelLabels.style": "How the letters are written.",
     "band": "Shade the y errors as a band around the line instead of drawing bars, "
     "for dense data; x errors stay bars.",
+    "baseline": "Subtract a curve fitted to the y values: an offset, a drift or "
+    "a background under peaks. Fits use what is left.",
+    "Baseline.shape": "The curve that is fitted and subtracted.",
+    "Baseline.degree": "Degree of the polynomial.",
+    "Baseline.ranges": "The stretches of x, in the unit shown, that the curve is "
+    "fitted to: those without peaks, such as 0 to 5, 15 to 20.",
     "normalize": "Divide the y values by their maximum or by the area under "
     "them, after smoothing. The y axis loses its unit.",
     "smoothing": "Smooth the y values over their neighbours in the file's order. "
@@ -1041,6 +1056,7 @@ PLOT_SECTIONS = {
     "y_conversion": "Units and rows",
     "normalize": "Units and rows",
     "x_range": "Units and rows",
+    "baseline": "Units and rows",
     "smoothing": "Units and rows",
     "reduction": "Units and rows",
     "color": "Look",
@@ -1200,7 +1216,7 @@ IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS, *ELEMENT_SECTIONS}
 """Kinds of object whose settings are shown in the order of `BASIC`, not of the
 model, so that what belongs together is next to each other."""
 
-INLINE = {"panel_labels", "band", "smoothing", "reduction", "colorbar"}
+INLINE = {"panel_labels", "band", "baseline", "smoothing", "reduction", "colorbar"}
 """Optional parts whose settings follow their check box in its own section
 instead of having a section of their own."""
 
@@ -1532,9 +1548,14 @@ class PropertyPanel(QScrollArea):
             data = self.document.data
             if path == ("smoothing",):
                 value = default_smoothing(obj, data) if value else None
-            elif len(path) == 2:
+            elif path == ("baseline",):
+                value = Baseline() if value else None
+            elif path[0] == "smoothing" and len(path) == 2:
                 changed = changed_smoothing(obj.smoothing, path[1], value)
                 value = _checked(Smoothing, changed, path[1])
+            elif path[0] == "baseline" and len(path) == 2:
+                changed = {**obj.baseline.model_dump(), path[1]: value}
+                value = _checked(Baseline, changed, path[1])
             return set_processing(self.document.project, obj.id, path[0], value, data)
         if path[0] in CONVERSIONS and isinstance(obj, CONVERTIBLE):
             conversion = value
@@ -2221,6 +2242,11 @@ CHOICES = {
         ("both", "both"),
     ],
 }
+BASELINE_SHAPES = [
+    ("constant", "constant"),
+    ("straight line", "linear"),
+    ("polynomial", "polynomial"),
+]
 SMOOTHING_METHODS = [("Savitzky–Golay", "savgol"), ("moving average", "moving")]
 CHOICES["normalize"] = [("maximum = 1", "max"), ("area = 1", "area")]
 CHOICES["method"] = [
@@ -2683,6 +2709,12 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         names = _parts_of(panel.document, name)
         if names:
             return ChoiceEditor(spec, path, panel, [(n, n) for n in names])
+    if name == "ranges":
+        editor = TextEditor(spec, path, panel, _ranges, _ranges_text)
+        editor.line.setPlaceholderText("every point")
+        return editor
+    if path == ("baseline", "shape"):
+        return ChoiceEditor(spec, path, panel, BASELINE_SHAPES)
     if path == ("smoothing", "method"):
         return ChoiceEditor(spec, path, panel, SMOOTHING_METHODS)
     if name == "cmap":
@@ -2786,6 +2818,24 @@ def _pair(text: str) -> tuple[float, float]:
     return values[0], values[1]
 
 
+def _ranges(text: str) -> list[tuple[float, float]]:
+    """Stretches as typed: "0 to 5, 15 to 19", with semicolons between them
+    where numbers have decimal commas."""
+    if not text.strip():
+        return []
+    found = []
+    for part in text.split(";" if ";" in text else ","):
+        ends = part.split(" to ")
+        if len(ends) != 2:
+            raise ValueError("type the stretches such as 0 to 5, 15 to 19")
+        found.append((number(ends[0]), number(ends[1])))
+    return found
+
+
+def _ranges_text(ranges: list[tuple[float, float]]) -> str:
+    return ", ".join(f"{a:g} to {b:g}" for a, b in ranges)
+
+
 def _bins(text: str) -> int | list[float]:
     """A number of bins ("20") or their edges ("0, 1, 2.5" or "0; 1; 2,5")."""
     if "," not in text and ";" not in text:
@@ -2838,6 +2888,7 @@ def _shape(obj: BaseModel) -> tuple:
             "colorbar",
             "panel_labels",
             "band",
+            "baseline",
             "smoothing",
             "reduction",
             "inset",

@@ -19,6 +19,7 @@ from figscribe.model import (
     Annotation,
     Axes,
     AxisSpec,
+    Baseline,
     ColumnRef,
     Conversion,
     ErrorbarPlot,
@@ -38,6 +39,7 @@ from figscribe.units import (
     set_processing,
     set_range,
 )
+from tests.timedata import project_of
 
 X = np.arange(20.0)
 Y = np.sin(X / 2) + 2 + 0.1 * (-1) ** X
@@ -291,3 +293,89 @@ def test_smoothed_values_a_log_axis_cannot_show_are_listed(tmp_path: Path) -> No
     data = load_data(project, tmp_path)
     problems = [i.message for i in validate_references(project, data)]
     assert any("zero or below" in p for p in problems)
+
+
+def _line_under(folder: Path) -> tuple:
+    """A peak at x = 10 on the line 2 + 0.5 x."""
+    rows = "\n".join(
+        f"{a:g},{2 + 0.5 * a + 5 * np.exp(-((a - 10) ** 2) / 2):.6f},0.1" for a in X
+    )
+    project, _, plot = made(folder)
+    (folder / "d.csv").write_text(f"x,y,dy\n{rows}\n")
+    source = csv_source(folder / "d.csv", folder)
+    project.sources = [source.model_copy(update={"id": project.sources[0].id})]
+    return project, load_data(project, folder), plot
+
+
+@pytest.mark.parametrize(
+    ("shape", "degree"), [("constant", 0), ("linear", 1), ("polynomial", 3)]
+)
+def test_a_baseline_fitted_in_ranges_is_subtracted(tmp_path, shape, degree) -> None:
+    _, data, plot = _line_under(tmp_path)
+    ranges = [(0.0, 5.0), (15.0, 19.0)]
+    plot.baseline = Baseline(shape=shape, degree=3, ranges=ranges)
+    y = values(tmp_path)
+    used = (X <= 5) | (X >= 15)
+    curve = np.polynomial.Polynomial.fit(X[used], y[used], degree)(X)
+    shown = plot_data(plot, data)
+    np.testing.assert_array_equal(shown.y, y - curve)
+    np.testing.assert_array_equal(shown.yerr, np.full(20, 0.1))
+    if shape == "linear":  # the line is gone, the peak stays
+        np.testing.assert_allclose(shown.y[used], 0, atol=1e-4)  # the tails
+        assert shown.y[10] == pytest.approx(5, abs=1e-4)
+
+
+def test_a_baseline_without_ranges_takes_every_point(tmp_path: Path) -> None:
+    _, data, plot = made(tmp_path, baseline=Baseline(shape="constant"))
+    y = values(tmp_path)
+    np.testing.assert_allclose(plot_data(plot, data).y, y - y.mean())
+
+
+def test_the_baseline_comes_before_smoothing_and_normalising(tmp_path) -> None:
+    _, data, plot = _line_under(tmp_path)
+    plot.baseline = Baseline(ranges=[(0.0, 5.0), (15.0, 19.0)])
+    plot.smoothing = Smoothing(method="moving", window=3)
+    plot.normalize = "max"
+    assert plot_data(plot, data).y.max() == 1.0
+
+
+@pytest.mark.parametrize(
+    "baseline",
+    [
+        Baseline(ranges=[(30.0, 40.0)]),
+        Baseline(ranges=[(3.0, 3.0 + 1e-9)]),
+        Baseline(shape="polynomial", degree=5, ranges=[(0.0, 4.0)]),
+    ],
+    ids=["no point", "one point for a line", "five points for degree 5"],
+)
+def test_a_baseline_that_cannot_be_fitted_is_refused(tmp_path, baseline) -> None:
+    project, data, plot = made(tmp_path)
+    with pytest.raises(FitError, match="baseline"):
+        set_processing(project, plot.id, "baseline", baseline, data)
+
+
+def test_baseline_ranges_follow_the_x_unit_and_values_the_y_unit(tmp_path) -> None:
+    project, data, plot = _line_under(tmp_path)
+    plot.baseline = Baseline(ranges=[(0.0, 6.0), (12.0, 19.0)])
+    panel = project.figures[0].axes[0]
+    panel.y = AxisSpec(limits=(-1.0, 6.0), unit="V")
+    minutes = Conversion(factor=1 / 60, unit="min")
+    set_conversion(project, plot.id, "x", minutes, data).apply(project)
+    changed = project.figures[0].axes[0].artists[0]
+    np.testing.assert_allclose(changed.baseline.ranges[0], (0, 0.1))
+    # An offset in y is subtracted with the baseline: only the factor shows.
+    mv = Conversion(formula="x * 1000 + 7", unit="mV")
+    set_conversion(project, plot.id, "y", mv, data).apply(project)
+    panel = project.figures[0].axes[0]
+    assert panel.y.unit == "mV"
+    np.testing.assert_allclose(panel.y.limits, (-1000, 6000))
+
+
+def test_there_is_no_baseline_over_dates(tmp_path: Path) -> None:
+    project, _ = project_of(
+        tmp_path,
+        lambda ref: LinePlot(x=ref("time"), y=ref("T"), baseline=Baseline()),
+    )
+    data = load_data(project, tmp_path)
+    problems = [i.message for i in validate_references(project, data)]
+    assert any("no baseline over dates" in p for p in problems)

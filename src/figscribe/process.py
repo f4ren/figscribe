@@ -1,4 +1,4 @@
-"""Smoothing and normalising the values of a plot (decision 0083).
+"""Baseline, smoothing and normalising the values of a plot (decision 0083).
 
 `plot_data` calls this for a plot that asks for it, so the renderer, the fits,
 the dialogs and the code generator all get the same values. The script makes
@@ -13,10 +13,10 @@ import numpy as np
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import savgol_filter
 
-from figscribe.convert import PlotData, plot_data
+from figscribe.convert import PlotData, plot_data, within
 from figscribe.fit.run import FitError, kept
 from figscribe.io.errors import DataError
-from figscribe.model.artists import FitCurve, ResidualPlot, Smoothing
+from figscribe.model.artists import Baseline, FitCurve, ResidualPlot, Smoothing
 from figscribe.model.figure import Figure
 
 
@@ -56,7 +56,8 @@ def not_computable(figure: Figure, data) -> dict[str, str]:
 def processes(plot) -> bool:
     """Whether the plot's values are computed from its columns."""
     return any(
-        getattr(plot, name, None) is not None for name in ("smoothing", "normalize")
+        getattr(plot, name, None) is not None
+        for name in ("baseline", "smoothing", "normalize")
     )
 
 
@@ -76,6 +77,8 @@ def processed(plot, shown: PlotData) -> PlotData:
     plot computes from them; every row of the file still."""
     rows = measured(plot, shown)
     y, yerr = shown.y, shown.yerr
+    if plot.baseline is not None:
+        y = y - baseline_curve(plot.baseline, shown.x, y, rows)
     if plot.smoothing is not None:
         y = smoothed(plot.smoothing, y, rows)
     if plot.normalize is not None:
@@ -98,6 +101,29 @@ def divisor(how: str, x: np.ndarray, y: np.ndarray, rows: np.ndarray) -> float:
     if not by > 0:
         raise ProcessError(f"normalising needs a {what} above zero")
     return by
+
+
+def degree_of(how: Baseline) -> int:
+    return {"constant": 0, "linear": 1}.get(how.shape, how.degree)
+
+
+def baseline_curve(
+    how: Baseline, x: np.ndarray, y: np.ndarray, rows: np.ndarray
+) -> np.ndarray:
+    """The baseline at every x: a polynomial fitted by least squares to the
+    values of `rows` within its ranges, all of them without ranges."""
+    base = rows
+    if how.ranges:
+        base = rows & np.logical_or.reduce([within(x, ends) for ends in how.ranges])
+    degree = degree_of(how)
+    if np.unique(x[base]).size < degree + 1:
+        where = "its ranges hold" if how.ranges else "the plot has"
+        count = int(base.sum())
+        raise ProcessError(
+            f"the baseline needs at least {degree + 1} points at different x to "
+            f"fit; {where} {count}"
+        )
+    return np.polynomial.Polynomial.fit(x[base], y[base], degree)(x)
 
 
 def smoothed(how: Smoothing, y: np.ndarray, rows: np.ndarray) -> np.ndarray:

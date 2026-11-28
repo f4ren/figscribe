@@ -187,6 +187,12 @@ RULES: list[Rule] = [
     ),
     Rule(
         (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("baseline", "degree"),),
+        "only a polynomial has a degree to choose",
+        lambda plot, _: plot.baseline.shape != "polynomial",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
         (("smoothing", "order"),),
         "a moving average has no polynomial",
         lambda plot, _: plot.smoothing.method != "savgol",

@@ -8,7 +8,7 @@ import pytest
 
 from figscribe.commands import SetField
 from figscribe.gui import Document, MainWindow
-from figscribe.model import Smoothing
+from figscribe.model import Baseline, Smoothing
 from figscribe.tools.operations import Toolbox, ToolError
 from figscribe.tools.workspace import ProjectWorkspace
 from tests.test_process import made
@@ -119,3 +119,29 @@ def test_smoothing_a_short_series_can_be_turned_on(window) -> None:
     window.document.push(SetField(plot.id, ("left_out",), list(range(8, 20))))
     _editor(window, "smoothing").click()
     assert _plot(window).smoothing.window == 7
+
+
+def test_a_baseline_and_its_ranges_in_the_panel(window) -> None:
+    _editor(window, "baseline").click()
+    assert _plot(window).baseline == Baseline()
+    assert not _editor(window, "baseline", "degree").isEnabled()
+    line = _editor(window, "baseline", "ranges")
+    assert line.placeholderText() == "every point"
+    line.setText("0 to 5, 15 to 19")
+    line.editingFinished.emit()
+    assert _plot(window).baseline.ranges == [(0.0, 5.0), (15.0, 19.0)]
+    window.document.select(_plot(window).id)
+    assert _editor(window, "baseline", "ranges").text() == "0 to 5, 15 to 19"
+    _choose(_editor(window, "baseline", "shape"), "polynomial")
+    assert _editor(window, "baseline", "degree").isEnabled()
+    line = _editor(window, "baseline", "ranges")
+    line.setText("nonsense")
+    line.editingFinished.emit()
+    assert "such as 0 to 5" in window.properties.error
+    line.setText("0,5 to 4,5; 15 to 19")  # decimal commas
+    line.editingFinished.emit()
+    assert _plot(window).baseline.ranges == [(0.5, 4.5), (15.0, 19.0)]
+    line = _editor(window, "baseline", "ranges")
+    line.setText("")
+    line.editingFinished.emit()
+    assert _plot(window).baseline.ranges == []

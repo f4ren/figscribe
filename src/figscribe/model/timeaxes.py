@@ -140,6 +140,11 @@ def _points(artist, dates: dict[str, bool], is_time: IsTime) -> str | None:
             return f"the {name} errors are dates, not durations"
         if dates[name]:
             return f"dates cannot have {name} errors; {SINCE_START}"
+    if artist.baseline is not None:
+        if dates["y"]:
+            return "dates have no baseline"
+        if dates["x"]:
+            return f"there is no baseline over dates; {SINCE_START}"
     if artist.smoothing is not None and dates["y"]:
         return "dates cannot be smoothed"
     if artist.normalize is not None and dates["y"]:

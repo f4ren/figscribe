@@ -80,7 +80,7 @@ from figscribe.model.timeaxes import (
     not_on_dates,
     time_columns_of,
 )
-from figscribe.process import not_computable
+from figscribe.process import degree_of, not_computable
 from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
@@ -502,7 +502,7 @@ class _Writer:
         return self.units.get((plot.id, field)) or self.column(getattr(plot, field))
 
     def _name_processed(self) -> dict[str, dict[str, str]]:
-        """The variables of smoothed and normalised values: U_smooth, U_norm,
+        """The variables of processed values: U_corr, U_smooth, U_norm,
         dU_norm. Everything after reads them as the plot's columns, so they are
         entered as such."""
 
@@ -515,11 +515,14 @@ class _Writer:
 
         names: dict[str, dict[str, str]] = {}
         for plot in self.artists.values():
+            corr = getattr(plot, "baseline", None) is not None
             smooth = getattr(plot, "smoothing", None) is not None
             norm = getattr(plot, "normalize", None) is not None
-            if not smooth and not norm:
+            if not corr and not smooth and not norm:
                 continue
             entry = {"x": self.shown(plot, "x"), "y_in": self.shown(plot, "y")}
+            if corr:
+                entry["corr"] = entry["y"] = named(f"{entry['y_in']}_corr")
             if smooth:
                 entry["smooth"] = entry["y"] = named(f"{entry['y_in']}_smooth")
             if norm:
@@ -1303,17 +1306,21 @@ class _Writer:
             )
 
     def _process(self) -> None:
-        """Smoothing and normalising (decision 0083): the same calls as
-        `figscribe.process`."""
+        """Baselines, smoothing and normalising (decision 0083): the same calls
+        as `figscribe.process`."""
         if not self.processed:
             return
         plots = [self.artists[i] for i in self.processed]
         done = [
             word
-            for word, name in (("smoothing", "smoothing"), ("normalising", "normalize"))
+            for word, name in (
+                ("baseline", "baseline"),
+                ("smoothing", "smoothing"),
+                ("normalising", "normalize"),
+            )
             if any(getattr(p, name) is not None for p in plots)
         ]
-        self.section(" and ".join(done).capitalize())
+        self.section(_and(done).capitalize())
         several = len(self.processed) > 1
         for number, (plot_id, names) in enumerate(self.processed.items(), start=1):
             if number > 1:
@@ -1349,6 +1356,8 @@ class _Writer:
 
         if mask is not None and mask not in parts:
             self.emit(f"{mask} = " + " & ".join(parts))
+        if plot.baseline is not None:
+            before = self._baseline(plot, names, mask, suffix, told)
         how = plot.smoothing
         if how is not None:
             if how.method == "savgol":
@@ -1386,6 +1395,35 @@ class _Writer:
         self.emit(f"{names['y']} = {before} / {by}")
         if "yerr" in names:
             self.emit(f"{names['yerr']} = {names['yerr_in']} / {by}")
+
+    def _baseline(self, plot, names, mask, suffix: str, told) -> str:
+        """The baseline subtracted, as `process.baseline_curve`; the variable
+        of what is left."""
+        x, y, after = names["x"], names["y_in"], names["corr"]
+        how = plot.baseline
+        degree = degree_of(how)
+        shape = {0: "a constant", 1: "a straight line"}.get(
+            degree, f"a polynomial of degree {degree}"
+        )
+        where = "every point"
+        if how.ranges:
+            where = _and([f"{x} from {a:g} to {b:g}" for a, b in how.ranges])
+        told(f"{shape} fitted to {where} and subtracted from {y}")
+        parts = [mask] if mask else []
+        if how.ranges:
+            inside = " | ".join(
+                f"(({x} >= {_num(a)}) & ({x} <= {_num(b)}))" for a, b in how.ranges
+            )
+            parts.append(f"({inside})" if mask and len(how.ranges) > 1 else inside)
+        base = mask
+        if how.ranges:
+            base = self._scratch("base", suffix)
+            self.emit(f"{base} = " + " & ".join(parts))
+        fitted = f"{x}, {y}" if base is None else f"{x}[{base}], {y}[{base}]"
+        self.emit(
+            f"{after} = {y} - np.polynomial.Polynomial.fit({fitted}, {degree})({x})"
+        )
+        return after
 
     def _smooths(self) -> bool:
         return any(self.artists[i].smoothing is not None for i in self.processed)

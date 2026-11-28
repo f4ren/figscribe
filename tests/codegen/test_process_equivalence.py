@@ -10,6 +10,7 @@ from figscribe.fit import add_fit, refit
 from figscribe.io import load_data
 from figscribe.model import (
     AxisSpec,
+    Baseline,
     Conversion,
     ErrorBand,
     FitCurve,
@@ -118,3 +119,30 @@ def test_what_cannot_be_computed_is_left_out_by_both(tmp_path, broken) -> None:
     script = _assert_same(project, tmp_path)
     assert script.count("is not drawn:") == 3  # the plot, its fit, its residuals
     assert "savgol_filter(" not in script and "_norm" not in script
+
+
+BASELINES = {
+    "linear in ranges": {"baseline": Baseline(ranges=[(0.0, 5.0), (15.0, 19.0)])},
+    "constant of all": {"baseline": Baseline(shape="constant")},
+    "polynomial": {"baseline": Baseline(shape="polynomial", degree=3)},
+    "left out, range, smoothed, normalised": {
+        "baseline": Baseline(ranges=[(2.0, 8.0)]),
+        "smoothing": Smoothing(window=5),
+        "normalize": "max",
+        "left_out": [4, 9],
+        "x_range": (2.0, 15.0),
+        "band": ErrorBand(),
+    },
+    "conversion and reduction": {
+        "baseline": Baseline(ranges=[(0.0, 0.2)]),
+        "x_conversion": Conversion(factor=1 / 60, unit="min"),
+        "reduction": Reduction(count=4),
+    },
+}
+
+
+@pytest.mark.parametrize("case", BASELINES)
+def test_baselines(tmp_path: Path, case: str) -> None:
+    project, _, _ = made(tmp_path, **BASELINES[case])
+    script = _assert_same(project, tmp_path)
+    assert "Polynomial.fit(" in script

@@ -49,6 +49,7 @@ from figscribe.io.refresh import (
 )
 from figscribe.model import (
     Axes,
+    Baseline,
     Conversion,
     DataSource,
     Figure,
@@ -230,9 +231,12 @@ class Toolbox:
         plot = find(project, object_id)
         if path[0] in PROCESSING and isinstance(plot, CONVERTIBLE):
             value = command.value  # checked already, unless one setting of it
-            if len(path) == 2:
+            if len(path) == 2 and path[0] == "smoothing":
                 whole = changed_smoothing(plot.smoothing, path[1], value)
                 value = _validate(Smoothing, whole, path[0])
+            elif len(path) == 2:
+                whole = {**getattr(plot, path[0]).model_dump(), path[1]: value}
+                value = _validate(Baseline, whole, path[0])
             try:
                 return set_processing(
                     project, plot.id, path[0], value, self._data(project)

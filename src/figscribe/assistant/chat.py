@@ -93,6 +93,9 @@ draws bars); `smoothing` smooths the y values of a line, points or error \
 bar plot ({"method": "savgol", "window": 11, "order": 3} or {"method": \
 "moving", "window": 5}; the window is odd; null draws them as they are); \
 `normalize` ("max" or "area", null) divides them after smoothing; \
+`baseline` is subtracted before both ({"shape": "linear", "ranges": [[0, 5], \
+[15, 20]]}; "constant" or "polynomial" with "degree"; ranges in shown x, none \
+for every point); \
 `reduction` draws fewer points of a line, points or error bar \
 plot ({"method": "mean", "count": 10}; "median", "every" or "interval" with \
 "width" in x; null draws every row)

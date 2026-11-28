@@ -28,6 +28,7 @@ DATA_FIELDS = (
     "y_conversion",
     "x_range",
     "left_out",
+    "baseline",
     "smoothing",
     "normalize",
     "reduction",

@@ -114,6 +114,19 @@ class Smoothing(StrictModel):
         return self
 
 
+class Baseline(StrictModel):
+    """A curve fitted to the y values and subtracted from them, before smoothing
+    and normalising (decision 0083); fits use what is left. y errors stay."""
+
+    shape: Literal["constant", "linear", "polynomial"] = "linear"
+    """The curve: a constant, a straight line, or a polynomial of `degree`."""
+    degree: int = Field(2, ge=2, le=9)
+    """Degree of the polynomial; not used by the other shapes."""
+    ranges: list[Range] = Field(default_factory=list)
+    """(lower, upper) x ranges in the shown unit that the curve is fitted to,
+    stretches without peaks; empty fits every point."""
+
+
 class ArtistBase(Identified):
     label: str | None = None
     """Legend entry; None means the artist is not listed."""
@@ -165,6 +178,8 @@ class LinePlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    baseline: Baseline | None = None
+    """A baseline subtracted from the y values; None leaves them."""
     smoothing: Smoothing | None = None
     """The y values smoothed; None draws them as they are. Fits use them."""
     normalize: Literal["max", "area"] | None = None
@@ -209,6 +224,8 @@ class ScatterPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    baseline: Baseline | None = None
+    """A baseline subtracted from the y values; None leaves them."""
     smoothing: Smoothing | None = None
     """The y values smoothed; None draws them as they are. Fits use them."""
     normalize: Literal["max", "area"] | None = None
@@ -280,6 +297,8 @@ class ErrorbarPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    baseline: Baseline | None = None
+    """A baseline subtracted from the y values; None leaves them."""
     smoothing: Smoothing | None = None
     """The y values smoothed; None draws them as they are. Fits use them."""
     normalize: Literal["max", "area"] | None = None

@@ -86,6 +86,11 @@ def set_conversion(
     steps: list[Command] = [SetField(plot_id, (field,), conversion)]
     if axis == "x" and plot.x_range is not None:
         steps.append(SetField(plot_id, ("x_range",), _ends(plot.x_range, remap)))
+    baseline = getattr(plot, "baseline", None)
+    if axis == "x" and baseline is not None and baseline.ranges:
+        ranges = [_ends(ends, remap) for ends in baseline.ranges]
+        moved_ranges = baseline.model_copy(update={"ranges": ranges})
+        steps.append(SetField(plot_id, ("baseline",), moved_ranges))
     for fit in _fits_of(project, plot_id):
         if axis == "x" and fit.fit_range is not None:
             steps.append(SetField(fit.id, ("fit_range",), _ends(fit.fit_range, remap)))
@@ -97,6 +102,11 @@ def set_conversion(
     if axis == "y" and getattr(plot, "normalize", None) is not None:
         # Normalised values and their axis do not change with the unit.
         keeps = _always
+    elif axis == "y" and getattr(plot, "baseline", None) is not None:
+        # An offset is subtracted with the baseline: the values say what moves.
+        moved = _normalised_move(plot, _plot(_after(project, steps), plot_id), data)
+        if moved is not None:
+            remap, rescale = moved
     steps += _axis_follows(project, plot, axis, old, conversion, remap, rescale, keeps)
     # An own formula keeps start values in the old units; where it cannot be
     # fitted from them it is left not fitted rather than keep the units.
@@ -139,6 +149,7 @@ def set_range(
 
 
 PROCESSING = {
+    "baseline": "Subtract a baseline",
     "smoothing": "Smooth the values",
     "normalize": "Normalise the y values",
 }
@@ -158,9 +169,11 @@ def set_processing(
         raise FitError(f"a {plot.kind} plot has no {name}")
     text = PROCESSING[name]
     if value is None:
-        text = {"smoothing": "Remove the smoothing", "normalize": "Stop normalising"}[
-            name
-        ]
+        text = {
+            "baseline": "Remove the baseline",
+            "smoothing": "Remove the smoothing",
+            "normalize": "Stop normalising",
+        }[name]
     steps: list[Command] = [SetField(plot_id, (name,), value)]
     staging = project.model_copy(deep=True)
     for step in steps:
@@ -168,8 +181,9 @@ def set_processing(
     changed = _plot(staging, plot_id)
     if value is not None:  # taking a setting off is never refused
         check_computable(staging, plot_id, data)
-    if name == "normalize":
+    if name in ("baseline", "normalize"):  # the values are other numbers
         steps += _start_values_afresh(project, plot_id)
+    if name == "normalize":
         steps += _normalised_axis(project, plot, changed, data)
     return _with_fits_again(
         project,
