@@ -68,7 +68,7 @@ from figscribe.commands import (
     same_range,
 )
 from figscribe.commands.core import noun, walk
-from figscribe.datafile import columns_to_choose, sheets_to_choose, use_another_file
+from figscribe.datafile import columns_to_choose, parts_to_choose, use_another_file
 from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.function import new_function
@@ -116,6 +116,7 @@ from figscribe.model import (
     DataSource,
     Figure,
     FitCurve,
+    Hdf5Source,
     Histogram,
     ImagePlot,
     ResidualPlot,
@@ -205,6 +206,9 @@ class MainWindow(QMainWindow):
         )
         """Asks for the file to use instead of a source's; replaced in tests."""
         self.choose_sheet: Callable[[str, list[str]], str | None] = self._choose_sheet
+        self.choose_dataset: Callable[[str, list[str]], str | None] = (
+            self._choose_dataset
+        )
         """Asks which sheet of that file takes a sheet's place."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         self.ask_text: Callable[[str, str], str | None] = self._ask_text
@@ -1411,21 +1415,24 @@ class MainWindow(QMainWindow):
             return
         project, base_dir = self.document.project, self.document.base_dir
         try:
-            sheets = {}
-            asked = sheets_to_choose(project, oid, base_dir, path)
+            parts = {}
+            ask = self.choose_sheet
+            if isinstance(source, Hdf5Source):
+                ask = self.choose_dataset
+            asked = parts_to_choose(project, oid, base_dir, path)
             for old, names in asked.items():
-                chosen = self.choose_sheet(old, names)
+                chosen = ask(old, names)
                 if chosen is None:
                     return
-                sheets[old] = chosen
-            missing = columns_to_choose(project, oid, base_dir, path, sheets)
+                parts[old] = chosen
+            missing = columns_to_choose(project, oid, base_dir, path, parts)
             columns = None
             if missing:
                 dialog = ColumnDialog(path.name, missing, self)
                 if not self.run_dialog(dialog):
                     return
                 columns = dialog.chosen()
-            swap = use_another_file(project, oid, base_dir, path, columns, sheets)
+            swap = use_another_file(project, oid, base_dir, path, columns, parts)
         except DataError as exc:
             self.show_error("The file cannot be used", exc)
             return
@@ -1441,6 +1448,17 @@ class MainWindow(QMainWindow):
             "Which sheet?",
             f"The file has no sheet “{old}”. Which one takes its place?",
             names,
+            editable=False,
+        )
+        return chosen if ok else None
+
+    def _choose_dataset(self, old: str, paths: list[str]) -> str | None:
+        """Which dataset of the new file takes the place of `old`; None: cancel."""
+        chosen, ok = QInputDialog.getItem(
+            self,
+            "Which dataset?",
+            f"The file has nothing at “{old}”. What takes its place?",
+            paths,
             editable=False,
         )
         return chosen if ok else None

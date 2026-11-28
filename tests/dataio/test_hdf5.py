@@ -8,15 +8,27 @@ import h5py
 import numpy as np
 import pytest
 
+from figscribe.datafile import columns_to_choose, parts_to_choose, use_another_file
 from figscribe.io import DataChangedError, DataError, load_data
 from figscribe.io.hdf5file import entries, hdf5_source, units
+from figscribe.io.refresh import (
+    describe_change,
+    read_differently,
+    reading_options,
+    reread,
+    use_new_version,
+)
 from figscribe.model import (
     ArrayRef,
+    Axes,
     ColumnRef,
+    Figure,
     Hdf5Source,
+    LinePlot,
     Project,
     dumps,
     loads,
+    validate_references,
 )
 from tests.hdf5files import write_h5, write_scan
 
@@ -304,3 +316,139 @@ def test_the_project_keeps_the_source(scan: Path) -> None:
     source = hdf5_source(scan, scan.parent, dataset="/run1")
     project = Project(sources=[source])
     assert loads(dumps(project)).sources == [source]
+
+
+def _plotted(tmp_path: Path, runs=("run1",), x="t", y="U") -> Project:
+    """A figure of one line per run, each run a group with t and U."""
+    path = tmp_path / "scan.h5"
+    _write_runs(path, {run: [1.0, 2, 3] for run in runs})
+    sources = [hdf5_source(path, tmp_path, dataset=f"/{run}") for run in runs]
+    lines = [
+        LinePlot(
+            x=ColumnRef(source=source.id, column=x),
+            y=ColumnRef(source=source.id, column=y),
+            label=source.dataset,
+        )
+        for source in sources
+    ]
+    figure = Figure(name="scan", axes=[Axes(artists=lines)])
+    return Project(sources=sources, figures=[figure])
+
+
+def _write_runs(path: Path, runs: dict[str, list[float]], names=("t", "U")) -> Path:
+    first, second = names
+    datasets = {}
+    for run, values in runs.items():
+        datasets[f"{run}/{first}"] = np.array(values)
+        datasets[f"{run}/{second}"] = np.array(values) * 2
+    return write_h5(path, datasets)
+
+
+def _y(project: Project, tmp_path: Path, line: int = 0) -> np.ndarray:
+    return load_data(project, tmp_path)(project.figures[0].axes[0].artists[line].y)
+
+
+def test_how_a_file_is_read_is_the_dataset(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    assert reading_options(project.sources[0]) == ("dataset",)
+
+
+def test_another_dataset_of_the_same_file(tmp_path: Path) -> None:
+    path = tmp_path / "scan.h5"
+    _write_runs(path, {"run1": [1.0, 2, 3], "run2": [5.0, 6]})
+    source = hdf5_source(path, tmp_path, dataset="/run1")
+    project = Project(sources=[source])
+    command = read_differently(project, source.id, "dataset", "run2", tmp_path)
+    assert command.description == "Read scan.h5 with another dataset"
+    command.apply(project)
+    assert (project.sources[0].dataset, project.sources[0].row_count) == ("/run2", 2)
+
+
+def test_a_dataset_that_is_no_data_changes_nothing(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    with pytest.raises(DataError, match="no '/nope'"):
+        read_differently(project, project.sources[0].id, "dataset", "/nope", tmp_path)
+
+
+def test_the_new_version_of_a_changed_file(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    _write_runs(tmp_path / "scan.h5", {"run1": [1.0, 2, 3, 4]})
+    old = project.sources[0]
+    use_new_version(project, old.id, tmp_path).apply(project)
+    assert project.sources[0].row_count == 4
+    np.testing.assert_array_equal(_y(project, tmp_path), [2, 4, 6, 8])
+
+
+def test_the_only_group_with_the_columns_takes_the_place_of_a_renamed_one(
+    tmp_path: Path,
+) -> None:
+    project = _plotted(tmp_path)
+    _write_runs(tmp_path / "scan.h5", {"2026-11-28": [7.0, 8]})
+    old = project.sources[0].model_copy()  # the command changes it in place
+    use_new_version(project, old.id, tmp_path).apply(project)
+    new = project.sources[0]
+    assert new.dataset == "/2026-11-28"
+    assert "The dataset is now '/2026-11-28'" in describe_change(old, new)
+
+
+def test_a_dataset_that_is_gone_is_not_guessed_among_several(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    _write_runs(tmp_path / "scan.h5", {"a": [1.0], "b": [2.0]})
+    with pytest.raises(DataError, match="no '/run1'; it has .*/a.*/b"):
+        use_new_version(project, project.sources[0].id, tmp_path)
+
+
+def test_another_file_asks_which_dataset(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    path = _write_runs(tmp_path / "next.h5", {"a": [1.0, 2], "b": [3.0, 4]})
+    oid = project.sources[0].id
+    asked = parts_to_choose(project, oid, tmp_path, path)
+    assert list(asked) == ["/run1"]
+    assert asked["/run1"][:2] == ["/a", "/b"]  # those with the columns first
+    swap = use_another_file(project, oid, tmp_path, path, parts={"/run1": "/b"})
+    swap.command.apply(project)
+    assert (project.sources[0].path, project.sources[0].dataset) == ("next.h5", "/b")
+    np.testing.assert_array_equal(_y(project, tmp_path), [6, 8])
+
+
+def test_another_file_with_the_same_datasets_asks_nothing(tmp_path: Path) -> None:
+    project = _plotted(tmp_path, runs=("run1", "run2"))
+    path = _write_runs(tmp_path / "next.h5", {"run1": [9.0], "run2": [4.0, 5]})
+    oid = project.sources[0].id
+    assert parts_to_choose(project, oid, tmp_path, path) == {}
+    use_another_file(project, oid, tmp_path, path).command.apply(project)
+    assert [s.dataset for s in project.sources] == ["/run1", "/run2"]
+    np.testing.assert_array_equal(_y(project, tmp_path, 1), [8, 10])
+
+
+def test_another_file_with_other_names_asks_for_the_columns(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    path = _write_runs(tmp_path / "next.h5", {"run1": [1.0, 2]}, ("time", "volt"))
+    oid = project.sources[0].id
+    missing = columns_to_choose(project, oid, tmp_path, path)
+    assert [(m.name, m.choices) for m in missing] == [
+        ("U", ["time", "volt"]),
+        ("t", ["time", "volt"]),
+    ]
+
+
+def test_another_file_must_be_hdf5(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    (tmp_path / "next.csv").write_text("t,U\n1,2\n")
+    with pytest.raises(DataError, match="not an HDF5 file"):
+        use_another_file(
+            project, project.sources[0].id, tmp_path, tmp_path / "next.csv"
+        )
+
+
+def test_a_column_gone_from_the_new_version_is_a_problem(tmp_path: Path) -> None:
+    project = _plotted(tmp_path)
+    write_h5(tmp_path / "scan.h5", {"run1/t": [1.0, 2], "run1/other": [3.0, 4]})
+    use_new_version(project, project.sources[0].id, tmp_path).apply(project)
+    assert any("U" in str(problem) for problem in validate_references(project))
+
+
+def test_reread_reads_the_whole_of_nothing_it_does_not_plot(tmp_path: Path) -> None:
+    path = write_h5(tmp_path / "m.h5", {"f": np.arange(5.0), "t": np.arange(8.0)})
+    source = hdf5_source(path, tmp_path)
+    assert reread(source, tmp_path).columns == ["f", "t"]

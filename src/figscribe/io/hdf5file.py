@@ -80,6 +80,42 @@ def entries(raw: bytes, name: str) -> list[Entry]:
         return list(_walk(file))
 
 
+def holds(raw: bytes, name: str, path: str) -> bool:
+    """Whether the file has something at `path`, readable or not."""
+    with _opened(raw, name) as file:
+        return path in file
+
+
+def like(source: Hdf5Source, raw: bytes, name: str) -> list[str]:
+    """The entries that could take the place of the source's, those with all of
+    its columns first."""
+    found = [e for e in entries(raw, name) if not e.problem]
+    if not source.columns:
+        return [e.path for e in found if e.kind == "image"]
+    wanted = set(source.columns)
+    usable = [e for e in found if e.columns]
+    usable.sort(key=lambda e: not wanted <= set(e.columns))  # stable
+    return [e.path for e in usable]
+
+
+def only_like(source: Hdf5Source, raw: bytes, name: str) -> str | None:
+    """The one entry of the file that has the source's columns, where nothing is
+    at the source's own path: groups are often named after the run or the day."""
+    if holds(raw, name, source.dataset):
+        return None
+    fitting = [
+        e.path
+        for e in entries(raw, name)
+        if not e.problem
+        and (
+            set(source.columns) <= set(e.columns)
+            if source.columns
+            else e.kind == "image"
+        )
+    ]
+    return fitting[0] if len(fitting) == 1 else None
+
+
 def units(source: Hdf5Source, raw: bytes) -> list[str]:
     """The unit each column's dataset names in its attributes, "" for none.
     Fields of a table of records have no attributes of their own."""
