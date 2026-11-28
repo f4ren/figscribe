@@ -162,8 +162,12 @@ def validate_references(
                     if why is not None:
                         issues.append(ReferenceIssue(tpath, artist.id, why))
                 if drawn is not None and isinstance(artist, FITTABLE):
-                    why = _cannot_compute(artist, drawn)
+                    # Imported here: the data package imports the model.
+                    from figscribe.process import cannot_compute
+
+                    why = cannot_compute(artist, drawn)
                     if why is not None:
+                        why = f"is not drawn: {why}"
                         issues.append(ReferenceIssue(tpath, artist.id, why))
                 if drawn is not None and isinstance(artist, FIT_TARGETS):
                     why = _unequal_or_unreadable(artist, drawn)
@@ -383,24 +387,6 @@ def _text_where_numbers_are_plotted(artist, data) -> str | None:
             return str(exc)
         except DataError:
             continue  # a missing column or file is told elsewhere
-    return None
-
-
-def _cannot_compute(artist, data) -> str | None:
-    """Why what the plot computes from its data cannot be, if it asks for
-    something."""
-    # Imported here: the data package imports the model.
-    from figscribe.convert import plot_data
-    from figscribe.process import ProcessError, processes
-
-    if not processes(artist):
-        return None
-    try:
-        plot_data(artist, data)
-    except ProcessError as exc:
-        return str(exc)
-    except ValueError:  # an unreadable file, other lengths: told elsewhere
-        return None
     return None
 
 
@@ -709,6 +695,16 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
                     f"row {row + 1} is left out, but the data has {count} rows"
                 )
                 break
+    computed = None
+    if isinstance(artist, FITTABLE):
+        from figscribe.convert import plot_data
+        from figscribe.process import processes
+
+        if processes(artist):
+            try:
+                computed = plot_data(artist, data).y
+            except (DataError, ValueError):
+                return found  # told as what cannot be computed
     for name, reference, scale in shown:
         try:
             values = np.asarray(data(reference)).ravel()
@@ -718,6 +714,8 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
             f"{name} ({reference.column})" if isinstance(reference, ColumnRef) else name
         )
         values = convert(values, conversions[name])
+        if name == "y" and computed is not None:
+            values = computed
         finite = values[np.isfinite(values)]
         if values.size and not finite.size:
             found.append(f"{what} has no values to draw")

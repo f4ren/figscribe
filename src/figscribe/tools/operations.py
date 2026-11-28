@@ -67,6 +67,7 @@ from figscribe.tools.workspace import DataProvider, Workspace, column_choices
 from figscribe.units import (
     CONVERTIBLE,
     PROCESSING,
+    changed_smoothing,
     set_conversion,
     set_processing,
     set_range,
@@ -230,7 +231,7 @@ class Toolbox:
         if path[0] in PROCESSING and isinstance(plot, CONVERTIBLE):
             value = command.value  # checked already, unless one setting of it
             if len(path) == 2:
-                whole = {**getattr(plot, path[0]).model_dump(), path[1]: value}
+                whole = changed_smoothing(plot.smoothing, path[1], value)
                 value = _validate(Smoothing, whole, path[0])
             try:
                 return set_processing(

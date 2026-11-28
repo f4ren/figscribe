@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from figscribe.commands import SetField
 from figscribe.gui import Document, MainWindow
 from figscribe.model import Smoothing
 from figscribe.tools.operations import Toolbox, ToolError
@@ -93,3 +94,28 @@ def test_normalising_is_chosen_beside_the_unit(window) -> None:
     assert shown.index(("normalize",)) == shown.index(("y_conversion",)) + 1
     _choose(_editor(window, "normalize"), "no")
     assert _plot(window).normalize is None
+
+
+def test_a_method_that_needs_a_lower_order_gets_one(window) -> None:
+    _editor(window, "smoothing").click()
+    _choose(_editor(window, "smoothing", "method"), "moving average")
+    line = _editor(window, "smoothing", "window")
+    line.setText("3")
+    line.editingFinished.emit()
+    _choose(_editor(window, "smoothing", "method"), "Savitzky–Golay")
+    assert _plot(window).smoothing == Smoothing(window=3, order=2)
+
+
+def test_the_reason_names_the_setting(window) -> None:
+    _editor(window, "smoothing").click()
+    line = _editor(window, "smoothing", "order")
+    line.setText("11")
+    line.editingFinished.emit()
+    assert not window.properties.error.startswith("Draw")
+
+
+def test_smoothing_a_short_series_can_be_turned_on(window) -> None:
+    plot = _plot(window)
+    window.document.push(SetField(plot.id, ("left_out",), list(range(8, 20))))
+    _editor(window, "smoothing").click()
+    assert _plot(window).smoothing.window == 7

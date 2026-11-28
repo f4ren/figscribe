@@ -12,10 +12,11 @@ from scipy.signal import savgol_filter
 
 from figscribe.commands import find
 from figscribe.convert import plot_data
-from figscribe.fit import FitError, add_fit, refit
+from figscribe.fit import FitError, add_fit, refit, set_left_out
 from figscribe.io import load_data
 from figscribe.io.csvfile import csv_source
 from figscribe.model import (
+    Annotation,
     Axes,
     AxisSpec,
     ColumnRef,
@@ -31,7 +32,12 @@ from figscribe.model import (
     Smoothing,
     validate_references,
 )
-from figscribe.units import set_conversion, set_processing
+from figscribe.units import (
+    default_smoothing,
+    set_conversion,
+    set_processing,
+    set_range,
+)
 
 X = np.arange(20.0)
 Y = np.sin(X / 2) + 2 + 0.1 * (-1) ** X
@@ -191,3 +197,97 @@ def test_a_unit_of_normalised_values_leaves_their_axis(tmp_path: Path) -> None:
     set_conversion(project, plot.id, "y", mv, data).apply(project)
     panel = project.figures[0].axes[0]
     assert (panel.y.unit, panel.y.limits, panel.artists[1].at) == (None, (0, 1.2), 0.5)
+
+
+def test_a_missing_or_changed_file_still_lists_problems(tmp_path: Path) -> None:
+    project, _, _ = made(tmp_path, smoothing=Smoothing(), normalize="max")
+    for change in ("changed", "missing"):
+        if change == "changed":
+            (tmp_path / "d.csv").write_text("x,y,dy\n1,2,3\n")
+        else:
+            (tmp_path / "d.csv").unlink()
+        validate_references(project, load_data(project, tmp_path))  # no crash
+
+
+def test_removing_a_setting_is_never_refused(tmp_path: Path) -> None:
+    project, data, plot = made(tmp_path)
+    # Neither can be computed, as after a new version of the file.
+    plot.smoothing = Smoothing(window=21)
+    plot.normalize = "max"
+    plot.y_conversion = Conversion(formula="x - 10")
+    set_processing(project, plot.id, "normalize", None, data).apply(project)
+    set_processing(project, plot.id, "smoothing", None, data).apply(project)
+    assert project.figures[0].axes[0].artists[0].smoothing is None
+
+
+@pytest.mark.parametrize("change", ["range", "left out", "unit"])
+def test_what_would_stop_a_plot_being_computed_is_refused(tmp_path, change) -> None:
+    project, data, plot = made(tmp_path, smoothing=Smoothing(), normalize="max")
+    with pytest.raises(FitError, match="points|above zero"):
+        if change == "range":
+            set_range(project, plot.id, (0.0, 4.0), data)
+        elif change == "left out":
+            set_left_out(project, plot.id, list(range(12)), data)
+        else:
+            below = Conversion(formula="x - 10")
+            set_conversion(project, plot.id, "y", below, data)
+
+
+@pytest.mark.parametrize(
+    ("axis", "conversion"),
+    [
+        ("x", Conversion(factor=1 / 60, unit="min")),
+        ("y", Conversion(formula="x * 2 - 1")),
+    ],
+    ids=["an area over another x", "an offset in y"],
+)
+def test_limits_follow_normalised_values_that_change(
+    tmp_path: Path, axis: str, conversion: Conversion
+) -> None:
+    how = "area" if axis == "x" else "max"
+    project, data, plot = made(tmp_path, normalize=how)
+    panel = project.figures[0].axes[0]
+    panel.x = AxisSpec(limits=(0.0, 19.0))
+    before = plot_data(plot, data).y
+    panel.y = AxisSpec(limits=(float(before.min()), float(before.max())))
+    note = Annotation(text="n", position=(10.0, float(before.max())))
+    panel.artists.append(note)
+    set_conversion(project, plot.id, axis, conversion, data).apply(project)
+    panel = project.figures[0].axes[0]
+    after = plot_data(panel.artists[0], data).y
+    np.testing.assert_allclose(panel.y.limits, (after.min(), after.max()))
+    assert panel.artists[1].position[1] == pytest.approx(after.max())
+    if axis == "x":
+        assert panel.artists[1].position[0] == pytest.approx(10 / 60)
+        np.testing.assert_allclose(panel.x.limits, (0, 19 / 60))
+
+
+@pytest.mark.parametrize(("rows", "window", "order"), [(8, 7, 3), (3, 3, 2)])
+def test_smoothing_starts_with_a_window_that_fits(tmp_path, rows, window, order):
+    _, data, plot = made(tmp_path, left_out=list(range(rows, 20)))
+    assert default_smoothing(plot, data) == Smoothing(window=window, order=order)
+
+
+def test_too_few_points_to_smooth(tmp_path: Path) -> None:
+    _, data, plot = made(tmp_path, left_out=list(range(2, 20)))
+    with pytest.raises(FitError, match="at least 3"):
+        default_smoothing(plot, data)
+
+
+def test_smoothed_values_a_log_axis_cannot_show_are_listed(tmp_path: Path) -> None:
+    project, data, plot = made(tmp_path, y_conversion=Conversion(formula="x - 2"))
+    plot.y_conversion = None
+    plot.smoothing = Smoothing(window=19, order=0)
+    project.figures[0].axes[0].y = AxisSpec(scale="log")
+    plain = [i.message for i in validate_references(project, data)]
+    assert plain == []
+    spike = "x,y,dy\n" + "".join(
+        f"{i},{100 if i == 9 else 0.001},0.1\n" for i in range(20)
+    )
+    (tmp_path / "d.csv").write_text(spike)
+    source = csv_source(tmp_path / "d.csv", tmp_path)
+    project.sources = [source.model_copy(update={"id": project.sources[0].id})]
+    plot.smoothing = Smoothing(window=7, order=2)
+    data = load_data(project, tmp_path)
+    problems = [i.message for i in validate_references(project, data)]
+    assert any("zero or below" in p for p in problems)

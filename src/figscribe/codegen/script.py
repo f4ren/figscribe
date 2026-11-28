@@ -80,6 +80,7 @@ from figscribe.model.timeaxes import (
     not_on_dates,
     time_columns_of,
 )
+from figscribe.process import not_computable
 from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
@@ -263,7 +264,10 @@ class _Writer:
             for a in axes.artists
             if (why := not_on_dates(figure, i, a, self.is_time))
         }
-        """{plot id: why dates keep it from being drawn}."""
+        if data is not None:
+            self.skipped |= not_computable(figure, data)
+        """{plot id: why dates, or values that cannot be computed, keep it from
+        being drawn}."""
         self.artists = {
             a.id: a
             for axes in figure.axes

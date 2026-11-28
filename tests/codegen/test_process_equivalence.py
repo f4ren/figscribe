@@ -98,3 +98,23 @@ def test_a_smoothed_line_beside_the_raw_one(tmp_path: Path) -> None:
     project.figures[0].axes[0].artists.append(smooth)
     script = _assert_same(project, tmp_path)
     assert script.count("savgol_filter(") == 1
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"smoothing": Smoothing(window=15), "left_out": list(range(8, 20))},
+        {"normalize": "max", "y_conversion": Conversion(formula="x - 10")},
+        {"normalize": "area", "x_range": (50.0, 60.0)},
+    ],
+    ids=["too few rows", "nothing above zero", "no row in the range"],
+)
+def test_what_cannot_be_computed_is_left_out_by_both(tmp_path, broken) -> None:
+    project, _, plot = made(tmp_path, **broken)
+    other = LinePlot(x=plot.x, y=plot.y, color="C1", label="raw")
+    project.figures[0].axes[0].artists.append(other)
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert script.count("is not drawn:") == 3  # the plot, its fit, its residuals
+    assert "savgol_filter(" not in script and "_norm" not in script

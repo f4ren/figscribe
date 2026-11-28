@@ -132,6 +132,10 @@ def set_left_out(
     staging = project.model_copy(deep=True)
     steps = [SetField(plot_id, ("left_out",), rows)]
     steps[0].apply(staging)
+    # Imported here: the processing builds on the fits.
+    from figscribe.units import check_computable
+
+    check_computable(staging, plot_id, data)
     fits = [
         artist
         for figure in staging.figures

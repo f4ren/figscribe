@@ -113,6 +113,8 @@ from figscribe.units import (
     ALLAN_POINTS,
     CONVERTIBLE,
     PROCESSING,
+    changed_smoothing,
+    default_smoothing,
     set_allan_field,
     set_conversion,
     set_processing,
@@ -1527,12 +1529,12 @@ class PropertyPanel(QScrollArea):
         read changes, and units and a range keep the plot's axis and fits in
         step."""
         if path[0] in PROCESSING and isinstance(obj, CONVERTIBLE):
-            if path == ("smoothing",):
-                value = Smoothing() if value else None
-            elif len(path) == 2:
-                changed = {**getattr(obj, path[0]).model_dump(), path[1]: value}
-                value = _checked(OPTIONAL_PARTS[path[0]], changed, path[1])
             data = self.document.data
+            if path == ("smoothing",):
+                value = default_smoothing(obj, data) if value else None
+            elif len(path) == 2:
+                changed = changed_smoothing(obj.smoothing, path[1], value)
+                value = _checked(Smoothing, changed, path[1])
             return set_processing(self.document.project, obj.id, path[0], value, data)
         if path[0] in CONVERSIONS and isinstance(obj, CONVERTIBLE):
             conversion = value
@@ -2540,7 +2542,8 @@ def _checked(model: type[BaseModel], values: dict, field: str) -> BaseModel:
         return model.model_validate(values)
     except ValidationError as exc:
         reason = "; ".join(e["msg"].removeprefix("Value error, ") for e in exc.errors())
-        raise CommandError(f"{field_name(field)}: {reason}") from None
+        caption = CAPTIONS.get((model.__name__, field)) or field_name(field)
+        raise CommandError(f"{caption}: {reason}") from None
 
 
 def _of_times(project, obj: BaseModel, name: str) -> bool:

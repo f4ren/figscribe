@@ -4025,7 +4025,13 @@ script, settings on a plot with nothing computed stored.
 - **On date axes** smoothing and the maximum work; an area over dates, like the
   baseline and the peaks, needs the time since the start.
 - **A change that cannot be computed** (a window longer than the data, nothing
-  above zero to normalise to) is refused with the reason.
+  above zero to normalise to) is refused with the reason; taking a setting off
+  never is. A plot that can no longer be computed, as after a new version of
+  its file, is not drawn, nor are its fits, and is listed; the preview and the
+  script leave out the same.
+- **Where a change of units moves normalised values** (the x unit under an
+  area, a unit with an offset) the y axis follows. A unit typed on the y axis
+  does not come back when normalising ends, as with a unit conversion.
 
 ### Alternatives considered
 

@@ -16,7 +16,8 @@ from scipy.signal import savgol_filter
 from figscribe.convert import PlotData, plot_data
 from figscribe.fit.run import FitError, kept
 from figscribe.io.errors import DataError
-from figscribe.model.artists import Smoothing
+from figscribe.model.artists import FitCurve, ResidualPlot, Smoothing
+from figscribe.model.figure import Figure
 
 
 class ProcessError(FitError, DataError):
@@ -24,15 +25,32 @@ class ProcessError(FitError, DataError):
     it, and the data cannot be drawn."""
 
 
-def normaliser(plot, data) -> float:
-    """What the plot's y values are divided by now; 1 if not normalised."""
-    if plot.normalize is None:
-        return 1.0
-    shown = plot_data(
-        plot.model_copy(update={"normalize": None, "reduction": None}), data
-    )
-    rows = measured(plot, shown)
-    return divisor(plot.normalize, shown.x, shown.y, rows)
+def cannot_compute(plot, data) -> str | None:
+    """Why what the plot asks to compute cannot be, such as after a new version
+    of its file; None if it can, or if something else keeps it from being read,
+    which is told elsewhere."""
+    if not processes(plot):
+        return None
+    try:
+        plot_data(plot, data)
+    except ProcessError as exc:
+        return str(exc)
+    except (DataError, ValueError, KeyError, IndexError):
+        return None
+    return None
+
+
+def not_computable(figure: Figure, data) -> dict[str, str]:
+    """{artist id: why} of the plots of the figure that are not drawn because
+    their values cannot be computed, and of their fits and residuals. The
+    renderer and the code generator leave them out alike."""
+    artists = [a for axes in figure.axes for a in axes.artists]
+    found = {a.id: why for a in artists if (why := cannot_compute(a, data))}
+    for kind, what in ((FitCurve, "the plot it fits"), (ResidualPlot, "its fit")):
+        for artist in artists:
+            if isinstance(artist, kind) and artist.target in found:
+                found[artist.id] = f"{what} cannot be computed"
+    return found
 
 
 def processes(plot) -> bool:

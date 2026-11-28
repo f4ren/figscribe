@@ -52,6 +52,7 @@ from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
 from figscribe.model.sharing import sharing_group, typed_limits
 from figscribe.model.timeaxes import IsTime, as_dates, date_axis, not_on_dates
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
+from figscribe.process import not_computable
 from figscribe.render.breaks import (
     break_ticks,
     crossings,
@@ -218,7 +219,7 @@ def _render(
             for i, axes in enumerate(figure.axes)
             for a in axes.artists
             if not_on_dates(figure, i, a, is_time)
-        }
+        } | set(not_computable(figure, data))
         # Where each function is drawn and whether it scales its axis: from the
         # model and the data, never from what is on the axes so far.
         places = {
