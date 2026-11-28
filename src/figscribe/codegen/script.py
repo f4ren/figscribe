@@ -498,21 +498,35 @@ class _Writer:
         return self.units.get((plot.id, field)) or self.column(getattr(plot, field))
 
     def _name_processed(self) -> dict[str, dict[str, str]]:
-        """The variables of smoothed values: U_smooth. Everything after reads
-        them as the plot's column, so they are entered as such."""
+        """The variables of smoothed and normalised values: U_smooth, U_norm,
+        dU_norm. Everything after reads them as the plot's columns, so they are
+        entered as such."""
+
+        def named(base: str) -> str:
+            name, number = base, 2
+            while name in self._taken():
+                name, number = f"{base}{number}", number + 1
+            self._retired.add(name)
+            return name
+
         names: dict[str, dict[str, str]] = {}
         for plot in self.artists.values():
-            if getattr(plot, "smoothing", None) is None:
+            smooth = getattr(plot, "smoothing", None) is not None
+            norm = getattr(plot, "normalize", None) is not None
+            if not smooth and not norm:
                 continue
-            before = {"x": self.shown(plot, "x"), "y_in": self.shown(plot, "y")}
-            name = f"{before['y_in']}_smooth"
-            number = 2
-            while name in self._taken():
-                name = f"{before['y_in']}_smooth{number}"
-                number += 1
-            self._retired.add(name)
-            names[plot.id] = before | {"y": name}
-            self.units[(plot.id, "y")] = name
+            entry = {"x": self.shown(plot, "x"), "y_in": self.shown(plot, "y")}
+            if smooth:
+                entry["smooth"] = entry["y"] = named(f"{entry['y_in']}_smooth")
+            if norm:
+                entry["y"] = named(f"{entry['y_in']}_norm")
+                if getattr(plot, "yerr", None) is not None:
+                    entry["yerr_in"] = self.shown(plot, "yerr")
+                    entry["yerr"] = named(f"{entry['yerr_in']}_norm")
+            names[plot.id] = entry
+            for field in ("y", "yerr"):
+                if field in entry:
+                    self.units[(plot.id, field)] = entry[field]
         return names
 
     def _name_reduced(self) -> dict[str, dict[str, str]]:
@@ -693,7 +707,7 @@ class _Writer:
     def _header(self) -> None:
         figure = self.figure
         packages = ["NumPy", "Matplotlib"]
-        if self.fits or self._grouped() or self.processed:
+        if self.fits or self._grouped() or self._smooths():
             packages.append("SciPy")
         if self._sheets():
             packages.append("python-calamine")
@@ -765,7 +779,11 @@ class _Writer:
             self.emit("from matplotlib.lines import Line2D")
         if self._sheets():
             self.emit("from python_calamine import CalamineWorkbook")
-        methods = {self.artists[i].smoothing.method for i in self.processed}
+        methods = {
+            how.method
+            for i in self.processed
+            if (how := self.artists[i].smoothing) is not None
+        }
         if "moving" in methods:
             self.emit("from scipy.ndimage import uniform_filter1d")
         if self.fits:
@@ -1281,50 +1299,92 @@ class _Writer:
             )
 
     def _process(self) -> None:
-        """Smoothing (decision 0083): the same calls as `figscribe.process`."""
+        """Smoothing and normalising (decision 0083): the same calls as
+        `figscribe.process`."""
         if not self.processed:
             return
-        self.section("Smoothing")
+        plots = [self.artists[i] for i in self.processed]
+        done = [
+            word
+            for word, name in (("smoothing", "smoothing"), ("normalising", "normalize"))
+            if any(getattr(p, name) is not None for p in plots)
+        ]
+        self.section(" and ".join(done).capitalize())
         several = len(self.processed) > 1
         for number, (plot_id, names) in enumerate(self.processed.items(), start=1):
-            plot = self.artists[plot_id]
-            how = plot.smoothing
-            x, before, after = names["x"], names["y_in"], names["y"]
-            parts = [m for m in (self.kept.get(plot_id), self.used.get(plot_id)) if m]
-            finite = self._all_finite([plot.x, plot.y])
-            if not finite:
-                parts += [f"np.isfinite({x})", f"np.isfinite({before})"]
-            if how.method == "savgol":
-                told = (
-                    f"Savitzky–Golay over {how.window} points with a polynomial "
-                    f"of order {how.order}"
-                )
-                function, rest = "savgol_filter", f"{how.window}, {how.order}"
-            else:
-                told = f"the average of {how.window} points"
-                function, rest = "uniform_filter1d", f'{how.window}, mode="nearest"'
             if number > 1:
                 self.emit("")
+            self._process_plot(
+                self.artists[plot_id], names, f"_{number}" if several else ""
+            )
+
+    def _process_plot(self, plot, names: dict[str, str], suffix: str) -> None:
+        x, before = names["x"], names["y_in"]
+        parts = [m for m in (self.kept.get(plot.id), self.used.get(plot.id)) if m]
+        finite = self._all_finite([plot.x, plot.y])
+        if not finite:
+            parts += [f"np.isfinite({x})", f"np.isfinite({before})"]
+        mask = None
+        if parts:
+            mask = parts[0]
+            if len(parts) > 1 or not finite:
+                mask = self._scratch("measured", suffix)
+
+        def rows(variable: str) -> str:
+            return variable if mask is None else f"{variable}[{mask}]"
+
+        def told(text: str) -> None:
             self.emit(
                 *textwrap.wrap(
-                    f"{_describe(plot).capitalize()}: {before} smoothed, {told}.",
+                    f"{_describe(plot).capitalize()}: {text}.",
                     WIDTH,
                     initial_indent="# ",
                     subsequent_indent="# ",
                 )
             )
-            if not parts:
-                self.emit(f"{after} = {function}({before}, {rest})")
-                continue
-            if len(parts) == 1 and finite:
-                mask = parts[0]
+
+        if mask is not None and mask not in parts:
+            self.emit(f"{mask} = " + " & ".join(parts))
+        how = plot.smoothing
+        if how is not None:
+            if how.method == "savgol":
+                text = (
+                    f"{before} smoothed, Savitzky–Golay over {how.window} points "
+                    f"with a polynomial of order {how.order}"
+                )
+                function, rest = "savgol_filter", f"{how.window}, {how.order}"
             else:
-                mask = self._scratch("measured", f"_{number}" if several else "")
-                self.emit(f"{mask} = " + " & ".join(parts))
+                text = f"{before} smoothed, the average of {how.window} points"
+                function, rest = "uniform_filter1d", f'{how.window}, mode="nearest"'
+            told(text)
+            smooth = names["smooth"]
+            if mask is None:
+                self.emit(f"{smooth} = {function}({before}, {rest})")
+            else:
+                self.emit(
+                    f"{smooth} = {before}.copy()",
+                    f"{smooth}[{mask}] = {function}({rows(before)}, {rest})",
+                )
+            before = smooth
+        if plot.normalize is None:
+            return
+        if plot.normalize == "max":
+            by = self._scratch("top", suffix)
+            told(f"{before} normalised to a maximum of 1")
+            self.emit(f"{by} = np.max({rows(before)})")
+        else:
+            by, order = self._scratch("area", suffix), self._scratch("order", suffix)
+            told(f"{before} normalised to an area of 1 under the points")
             self.emit(
-                f"{after} = {before}.copy()",
-                f"{after}[{mask}] = {function}({before}[{mask}], {rest})",
+                f'{order} = np.argsort({rows(x)}, kind="stable")',
+                f"{by} = np.trapezoid({rows(before)}[{order}], {rows(x)}[{order}])",
             )
+        self.emit(f"{names['y']} = {before} / {by}")
+        if "yerr" in names:
+            self.emit(f"{names['yerr']} = {names['yerr_in']} / {by}")
+
+    def _smooths(self) -> bool:
+        return any(self.artists[i].smoothing is not None for i in self.processed)
 
     def _grouped(self) -> bool:
         """Whether a reduction averages groups, which takes SciPy."""

@@ -167,6 +167,10 @@ class LinePlot(ArtistBase):
     included, are drawn, fitted and counted; None uses every row."""
     smoothing: Smoothing | None = None
     """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
@@ -207,6 +211,10 @@ class ScatterPlot(ArtistBase):
     included, are drawn, fitted and counted; None uses every row."""
     smoothing: Smoothing | None = None
     """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
@@ -274,6 +282,10 @@ class ErrorbarPlot(ArtistBase):
     included, are drawn, fitted and counted; None uses every row."""
     smoothing: Smoothing | None = None
     """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""

@@ -80,3 +80,16 @@ def test_the_assistant_smooths_through_the_same_command(tmp_path: Path) -> None:
     assert workspace.project.figures[0].axes[0].artists[0].smoothing.window == 7
     with pytest.raises(ToolError, match="99 points"):
         tools.call("set_field", call | {"value": {"window": 99}})
+
+
+def test_normalising_is_chosen_beside_the_unit(window) -> None:
+    box = _editor(window, "normalize")
+    offered = [box.itemText(i) for i in range(box.count())]
+    assert offered == ["no", "maximum = 1", "area = 1"]
+    _choose(box, "maximum = 1")
+    assert _plot(window).normalize == "max"
+    window.document.select(_plot(window).id)
+    shown = list(window.properties.editors)
+    assert shown.index(("normalize",)) == shown.index(("y_conversion",)) + 1
+    _choose(_editor(window, "normalize"), "no")
+    assert _plot(window).normalize is None

@@ -140,6 +140,7 @@ FIELD_NAMES = {
     "panel_labels": "Panel labels",
     "band": "Error band",
     "smoothing": "Smooth",
+    "normalize": "Normalise y",
     "window": "Points (odd)",
     "order": "Polynomial order",
     "reduction": "Fewer points",

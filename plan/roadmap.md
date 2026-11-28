@@ -1492,6 +1492,12 @@ script, and a plot with a few settings; the model stores what is computed,
 never the result. The Allan deviation is the first (F4.9). The three above
 are judged by the same points when they come up.
 
+*Smoothing and normalising done* (2026-11-28, decision 0083; no schema bump):
+settings of a line, points or error bar plot in `figscribe/process.py`, called
+by `plot_data`. *Learned:* normalising has to be its own step after the
+baseline, not part of the unit conversion; a fit to smoothed data is listed,
+since its uncertainties say nothing. Next: the baseline and the peaks.
+
 ### F11 Units and a range per plot — M
 
 Asked for by the user (2026-10-26): show times in min, h or days, counted

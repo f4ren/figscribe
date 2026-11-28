@@ -29,6 +29,7 @@ DATA_FIELDS = (
     "x_range",
     "left_out",
     "smoothing",
+    "normalize",
     "reduction",
     "values",
     "data_type",

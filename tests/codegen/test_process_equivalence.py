@@ -42,6 +42,39 @@ CASES = {
     "band": {"smoothing": Smoothing(window=5), "band": ErrorBand()},
 }
 
+NORMALISED = {
+    "max": {"normalize": "max"},
+    "area": {"normalize": "area"},
+    "after smoothing": {"smoothing": Smoothing(window=5), "normalize": "max"},
+    "left out, range and band": {
+        "normalize": "area",
+        "left_out": [4, 9],
+        "x_range": (2.0, 15.0),
+        "band": ErrorBand(),
+    },
+    "conversion and reduction": {
+        "normalize": "max",
+        "x_conversion": Conversion(factor=1 / 60, unit="min"),
+        "reduction": Reduction(count=4),
+    },
+}
+
+
+@pytest.mark.parametrize("case", NORMALISED)
+def test_normalised(tmp_path: Path, case: str) -> None:
+    project, _, _ = made(tmp_path, **NORMALISED[case])
+    script = _assert_same(project, tmp_path)
+    assert "_norm" in script
+
+
+def test_a_fit_to_normalised_values(tmp_path: Path) -> None:
+    project, _, plot = made(tmp_path, normalize="max")
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "dy_norm" in script
+
 
 @pytest.mark.parametrize("case", CASES)
 def test_smoothed(tmp_path: Path, case: str) -> None:

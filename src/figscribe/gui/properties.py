@@ -258,6 +258,7 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 SECTIONS = {
     "smoothing": "Data",
+    "normalize": "Data",
     "reduction": "Data",
     "x_conversion": "Data",
     "y_conversion": "Data",
@@ -387,6 +388,7 @@ BASIC = {
         "y",
         "x_conversion",
         "y_conversion",
+        "normalize",
         "x_range",
         "smoothing",
         "reduction",
@@ -407,6 +409,7 @@ BASIC = {
         "y",
         "x_conversion",
         "y_conversion",
+        "normalize",
         "x_range",
         "smoothing",
         "reduction",
@@ -427,6 +430,7 @@ BASIC = {
         "yerr",
         "x_conversion",
         "y_conversion",
+        "normalize",
         "x_range",
         "smoothing",
         "reduction",
@@ -830,6 +834,8 @@ TIPS = {
     "PanelLabels.style": "How the letters are written.",
     "band": "Shade the y errors as a band around the line instead of drawing bars, "
     "for dense data; x errors stay bars.",
+    "normalize": "Divide the y values by their maximum or by the area under "
+    "them, after smoothing. The y axis loses its unit.",
     "smoothing": "Smooth the y values over their neighbours in the file's order. "
     "The data file stays as it is; fits use the smoothed values.",
     "Smoothing.method": "Savitzky–Golay fits a polynomial in each window and "
@@ -1031,6 +1037,7 @@ PLOT_SECTIONS = {
     "yerr": "Label and data",
     "x_conversion": "Units and rows",
     "y_conversion": "Units and rows",
+    "normalize": "Units and rows",
     "x_range": "Units and rows",
     "smoothing": "Units and rows",
     "reduction": "Units and rows",
@@ -2213,6 +2220,7 @@ CHOICES = {
     ],
 }
 SMOOTHING_METHODS = [("Savitzky–Golay", "savgol"), ("moving average", "moving")]
+CHOICES["normalize"] = [("maximum = 1", "max"), ("area = 1", "area")]
 CHOICES["method"] = [
     ("mean of n rows", "mean"),
     ("median of n rows", "median"),
@@ -2242,6 +2250,7 @@ CHOICES["tick_direction"] = [
 ]
 NONE_TEXT = {
     "stylesheet": "Matplotlib's default",
+    "normalize": "no",
     "x_conversion": "as in the file",
     "y_conversion": "as in the file",
     "tick_direction": "style default",

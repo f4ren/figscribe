@@ -41,6 +41,7 @@ from figscribe.model import (
 )
 from figscribe.model.sharing import sharing_group
 from figscribe.model.timeaxes import date_axis, time_columns_of
+from figscribe.process import normaliser
 from figscribe.times import date_text
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
@@ -89,15 +90,11 @@ def set_conversion(
         if axis == "x" and fit.curve_range is not None:
             ends = _ends(fit.curve_range, remap)
             steps.append(SetField(fit.id, ("curve_range",), ends))
-        # Start values in the old units would mislead the fit, with a result or
-        # without, also where it then fails: they are not left lying for a
-        # later fit to start from. Held ones are the user's and stay as typed.
-        # An own formula keeps them all: nothing can be guessed for it, and
-        # from ones it can "converge" to nonsense.
-        held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
-        if fit.model.kind == "predefined" and held != fit.initial_values:
-            steps.append(SetField(fit.id, ("initial_values",), held))
+    steps += _start_values_afresh(project, plot_id)
     keeps = _kept_for_dates(project, plot, axis, old, conversion, data)
+    if axis == "y" and getattr(plot, "normalize", None) is not None:
+        # Normalised values and their axis do not change with the unit.
+        keeps = _always
     steps += _axis_follows(project, plot, axis, old, conversion, remap, rescale, keeps)
     # An own formula keeps start values in the old units; where it cannot be
     # fitted from them it is left not fitted rather than keep the units.
@@ -134,7 +131,10 @@ def set_range(
     return _with_fits_again(project, plot_id, text, steps, data)
 
 
-PROCESSING = {"smoothing": "Smooth the values"}
+PROCESSING = {
+    "smoothing": "Smooth the values",
+    "normalize": "Normalise the y values",
+}
 """The settings of a plot that compute from its data, and what turning each on
 is called."""
 
@@ -143,20 +143,64 @@ def set_processing(
     project: Project, plot_id: str, name: str, value, data: DataProvider
 ) -> Macro:
     """Set `name`, one of PROCESSING, and fit the plot's fits again, as one
-    step. A FitError, changing nothing, if it cannot be computed from the data
-    or a fit then fails."""
+    step. Normalising takes the y axis along, as a unit does. A FitError,
+    changing nothing, if it cannot be computed from the data or a fit then
+    fails."""
     plot = _plot(project, plot_id)
     if name not in type(plot).model_fields:
         raise FitError(f"a {plot.kind} plot has no {name}")
     text = PROCESSING[name]
     if value is None:
-        text = f"Remove the {name}"
+        text = {"smoothing": "Remove the smoothing", "normalize": "Stop normalising"}[
+            name
+        ]
     steps: list[Command] = [SetField(plot_id, (name,), value)]
     staging = project.model_copy(deep=True)
     for step in steps:
         step.apply(staging)
-    plot_data(_plot(staging, plot_id), data)  # refused here with the reason
+    changed = _plot(staging, plot_id)
+    plot_data(changed, data)  # refused here with the reason
+    if name == "normalize":
+        steps += _start_values_afresh(project, plot_id)
+        steps += _normalised_axis(project, plot, changed, data)
     return _with_fits_again(project, plot_id, text, steps, data)
+
+
+def _start_values_afresh(project: Project, plot_id: str) -> list[Command]:
+    """Start values in the old units would mislead the fit, with a result or
+    without, also where it then fails: they are not left lying for a later fit
+    to start from. Held ones are the user's and stay as typed. An own formula
+    keeps them all: nothing can be guessed for it, and from ones it can
+    "converge" to nonsense."""
+    steps: list[Command] = []
+    for fit in _fits_of(project, plot_id):
+        held = {k: v for k, v in fit.initial_values.items() if k in fit.fixed}
+        if fit.model.kind == "predefined" and held != fit.initial_values:
+            steps.append(SetField(fit.id, ("initial_values",), held))
+    return steps
+
+
+def _normalised_axis(project: Project, old, new, data) -> list[Command]:
+    """The y axis follows into normalised values and out of them: no unit, and
+    what is typed on it converted."""
+    axes = _panel_of(project, old.id)
+    right = old.axis == "right" and axes.y_right is not None
+    spec = axes.y_right if right else axes.y
+    before, after = normaliser(old, data), normaliser(new, data)
+
+    def move(value: float) -> float:  # an offset or a width alike
+        return float(value * before / after)
+
+    unit = old.y_conversion.unit if old.y_conversion else None
+    # The unit's text goes with the first normalising and comes back at the end.
+    was, becomes = None, None
+    if old.normalize is None and spec.unit is not None:
+        was = Conversion(unit=spec.unit)
+    elif new.normalize is None and unit is not None:
+        becomes = Conversion(unit=unit)
+    return _axis_follows(
+        project, old, "y", was, becomes, move, move, lambda panel_id, field: False
+    )
 
 
 ALLAN_POINTS = ("values", "data_type", "sample_interval", "time", "taus", "error_bars")
@@ -228,6 +272,10 @@ def _mapping(plot, axis: str, old, new, data):
         return float(width / old_factor * new_factor)
 
     return remap, rescale
+
+
+def _always(panel_id: str, field: str) -> bool:
+    return True
 
 
 def _kept_for_dates(project, plot, axis: str, old, new, data):

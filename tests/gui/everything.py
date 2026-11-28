@@ -138,6 +138,7 @@ def build(folder: Path) -> Path:
                 y=col("U"),
                 label="smoothed",
                 smoothing=Smoothing(window=5),
+                normalize="max",
             ),
             ErrorbarPlot(
                 x=col("t"),
