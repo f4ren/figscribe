@@ -9,15 +9,17 @@ import numpy as np
 import pytest
 from matplotlib.dates import date2num
 
-from figscribe.commands import find
+from figscribe.commands import find, same_range
 from figscribe.fit import FitError, add_fit, refit
 from figscribe.io import load_data
 from figscribe.model import (
     Annotation,
     ArrayRef,
+    Axes,
     AxisSpec,
     Conversion,
     FitCurve,
+    GridLayout,
     Histogram,
     ImagePlot,
     LinePlot,
@@ -133,3 +135,58 @@ def test_a_range_of_dates_is_named_as_dates(tmp_path: Path) -> None:
     ends = (_day("2026-11-01T23:00"), _day("2026-11-02"))
     command = set_range(project, plot.id, ends, load_data(project, tmp_path))
     assert command.description == "Use only x from 2026-11-01T23:00 to 2026-11-02"
+
+
+def _stacked(tmp_path: Path, **plot):
+    """Two panels of the log over times that share x, with typed limits."""
+    limits = (_day("2026-11-01T23:00"), _day("2026-11-02T01:00"))
+    project, ref = project_of(tmp_path, line(**plot), x=AxisSpec(limits=limits))
+    figure = project.figures[0]
+    figure.layout = GridLayout(rows=2, cols=1, share_x="all")
+    figure.axes.append(
+        Axes(
+            row=1,
+            artists=[
+                LinePlot(x=ref("time"), y=ref("p")),
+                ReferenceLine(orientation="vertical", at=limits[0]),
+            ],
+        )
+    )
+    return project, limits
+
+
+def test_a_shared_axis_that_stays_a_date_axis_keeps_its_dates(tmp_path) -> None:
+    project, limits = _stacked(tmp_path)
+    data = load_data(project, tmp_path)
+    plot = project.figures[0].axes[0].artists[0]
+    set_conversion(project, plot.id, "x", MINUTE, data).apply(project)
+    top, bottom = project.figures[0].axes
+    assert top.x.limits == limits and top.x.unit is None
+    assert bottom.artists[1].at == limits[0]
+    # Back again, nothing has moved either.
+    set_conversion(project, plot.id, "x", None, data).apply(project)
+    top, bottom = project.figures[0].axes
+    assert top.x.limits == limits and bottom.artists[1].at == limits[0]
+
+
+def test_between_two_units_beside_dates_nothing_on_the_axis_moves(tmp_path) -> None:
+    project, limits = _stacked(tmp_path, x_conversion=HOUR)
+    data = load_data(project, tmp_path)
+    plot = project.figures[0].axes[0].artists[0]
+    set_conversion(project, plot.id, "x", MINUTE, data).apply(project)
+    assert project.figures[0].axes[0].x.limits == limits
+
+
+@pytest.mark.parametrize("source", [0, 1], ids=["from dates", "from numbers"])
+def test_the_same_range_is_not_given_across_dates_and_numbers(
+    tmp_path: Path, source: int
+) -> None:
+    project, ref = project_of(tmp_path, line())
+    figure = project.figures[0]
+    figure.layout = GridLayout(rows=2, cols=1)
+    figure.axes.append(Axes(row=1, artists=[LinePlot(x=ref("p"), y=ref("T"))]))
+    panels = figure.axes
+    command, skipped = same_range(project, panels[source].id, "x", (1.0, 2.0))
+    assert [a.id for a in skipped] == [panels[1 - source].id]
+    command.apply(project)
+    assert project.figures[0].axes[1 - source].x.limits is None

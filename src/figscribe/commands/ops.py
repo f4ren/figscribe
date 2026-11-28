@@ -26,6 +26,7 @@ from figscribe.model import (
     new_id,
 )
 from figscribe.model.sharing import sharing_group
+from figscribe.model.timeaxes import date_axis, time_columns_of
 from figscribe.model.validate import data_refs
 
 Side = Literal["right", "left", "above", "below", "inset"]
@@ -280,8 +281,8 @@ def same_range(
     range `limits`, as one undo step; and the panels left out.
 
     Left out are insets, which have a range of their own, and a panel whose
-    axis has another scale or another unit, where the same numbers would
-    mean something else.
+    axis has another scale or another unit, or shows dates where the other
+    shows numbers: the same numbers would mean something else.
     """
     if field not in ("x", "y"):
         raise CommandError(f"the axis is x or y, not {field!r}")
@@ -289,12 +290,15 @@ def same_range(
     shown = getattr(source, field)
     steps = []
     skipped = []
-    for axes in figure.axes:
+    is_time = time_columns_of(project)
+    dates = date_axis(figure, figure.axes.index(source), field, is_time)
+    for i, axes in enumerate(figure.axes):
         if axes.inset is not None:
             continue
         spec = getattr(axes, field)
         if axes is not source and (
             spec.scale != shown.scale
+            or date_axis(figure, i, field, is_time) != dates
             or (spec.unit and shown.unit and spec.unit != shown.unit)
         ):
             skipped.append(axes)

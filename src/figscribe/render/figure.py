@@ -50,7 +50,7 @@ from figscribe.model import (
 from figscribe.model.artists import LIKE_THE_PLOT
 from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
 from figscribe.model.sharing import sharing_group, typed_limits
-from figscribe.model.timeaxes import date_axis, not_on_dates
+from figscribe.model.timeaxes import IsTime, as_dates, date_axis, not_on_dates
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
 from figscribe.render.breaks import (
     break_ticks,
@@ -84,6 +84,7 @@ from figscribe.render.ticks import (
     tick_text,
     ticks_that_fit,
 )
+from figscribe.times import written_day
 
 DataProvider = Callable[[ColumnRef | ArrayRef], np.ndarray]
 """Resolves a column (1-D) or array (2-D) reference to its values; loading
@@ -104,6 +105,7 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
     a Matplotlib artist back to the model object. `view` shows some axes, by
     gid, at other ranges than the model's, as the preview does while zoomed.
     """
+    figure = _dates_as_written(figure, data)
     cuts = {
         (axes.id, name): line_breaks(figure, i, name)
         for i, axes in enumerate(figure.axes)
@@ -117,6 +119,64 @@ def render(figure: Figure, data: DataProvider, view: View | None = None) -> MplF
     # known once they are plotted. Plot again, cutting lines and curves at
     # those and no others, as the script does.
     return _render(figure, data, view, applied)
+
+
+def _dates_as_written(figure: Figure, data: DataProvider) -> Figure:
+    """The figure with every place on a date axis, and every range of dates of
+    a plot, as the script writes it."""
+
+    def is_time(ref: ColumnRef) -> bool:
+        return np.asarray(data(ref)).dtype.kind == "M"
+
+    panels = []
+    changed = False
+    for i, axes in enumerate(figure.axes):
+        dated = {
+            field
+            for field in ("x", "y", "y_right")
+            if getattr(axes, field) is not None and date_axis(figure, i, field, is_time)
+        }
+        update: dict = {}
+        for field in dated:
+            spec = getattr(axes, field)
+            places = {}
+            if spec.limits is not None:
+                places["limits"] = tuple(map(written_day, spec.limits))
+            if spec.ticks is not None:
+                places["ticks"] = [written_day(t) for t in spec.ticks]
+            update[field] = spec.model_copy(update=places)
+        artists = [_artist_as_written(a, axes, dated, is_time) for a in axes.artists]
+        if any(a is not b for a, b in zip(artists, axes.artists, strict=True)):
+            update["artists"] = artists
+        changed = changed or bool(update)
+        panels.append(axes.model_copy(update=update) if update else axes)
+    return figure.model_copy(update={"axes": panels}) if changed else figure
+
+
+def _artist_as_written(artist, axes: Axes, dated: set[str], is_time: IsTime):
+    """`artist` with its places on the date axes `dated` of `axes`, and its own
+    range of dates, as the script writes them; itself if it has none."""
+    if isinstance(artist, FITTABLE):
+        if artist.x_range is None or not as_dates(artist, "x", is_time):
+            return artist
+        ends = tuple(map(written_day, artist.x_range))
+        return artist.model_copy(update={"x_range": ends})
+    right = artist.axis == "right" and axes.y_right is not None
+    x, y = "x" in dated, ("y_right" if right else "y") in dated
+    places: dict = {}
+    if isinstance(artist, ReferenceLine | ShadedSpan):
+        if x if artist.orientation == "vertical" else y:
+            names = ("at",) if isinstance(artist, ReferenceLine) else ("start", "end")
+            places = {n: written_day(getattr(artist, n)) for n in names}
+    elif isinstance(artist, Annotation) and artist.coords == "data" and (x or y):
+        for name in ("position", "arrow_to"):
+            point = getattr(artist, name)
+            if point is not None:
+                places[name] = tuple(
+                    written_day(v) if on else v
+                    for v, on in zip(point, (x, y), strict=True)
+                )
+    return artist.model_copy(update=places) if places else artist
 
 
 def _render(

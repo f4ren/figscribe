@@ -166,13 +166,6 @@ RESERVED = {
     "CommaLogFormatter",
     "MinorLogNumbers",
     "colorbar",
-    "mdates",
-    "re",
-    "date",
-    "date_ticks",
-    "iso_times",
-    "sheet_times",
-    "ZONE",
     *(f"colorbar{i}" for i in range(2, 100)),
     "squeezed",
     "across_breaks",
@@ -291,6 +284,8 @@ class _Writer:
             self.reserved |= SHEET_NAMES
         if any(isinstance(s, Hdf5Source) for s in project.sources):
             self.reserved |= HDF5_NAMES
+        if any(getattr(s, "time_columns", None) for s in project.sources):
+            self.reserved |= TIME_NAMES
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
         self.unit_lines: list[tuple[str, str, str]] = []
@@ -2868,6 +2863,17 @@ does the same, step by step."""
 
 
 # What the script reads an HDF5 file with, as `io.hdf5file` does.
+TIME_NAMES = {
+    "mdates",
+    "re",
+    "date",
+    "date_ticks",
+    "iso_times",
+    "sheet_times",
+    "ZONE",
+}
+"""Names the script uses for dates, taken only in a project that has them."""
+
 HDF5_NAMES = {"h5", "h5py", "io"}
 
 # What the script reads a spreadsheet with, as `io.sheetfile` does.

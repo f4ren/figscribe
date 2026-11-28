@@ -1423,7 +1423,7 @@ class MainWindow(QMainWindow):
         if skipped:
             figure = self.document.figure
             names = ", ".join(panel_name(figure, each) for each in skipped)
-            message += f" Left out, as their axis has another scale or unit: {names}."
+            message += f" Left out, as their scale, unit or dates differ: {names}."
         self.statusBar().showMessage(message, 8000)
 
     def copy_figure(self) -> None:

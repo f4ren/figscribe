@@ -362,3 +362,55 @@ def test_a_range_typed_on_dates_on_the_y_axis_of_a_panel(tmp_path: Path) -> None
         y=AxisSpec(limits=ends),
     )
     _assert_same(_project(source, panel), tmp_path)
+
+
+def test_places_that_are_not_whole_microseconds(tmp_path: Path) -> None:
+    """The preview hands over such ranges, and unit switches compute them."""
+    source, ref = _log(tmp_path)
+    low = _day("2026-11-01T22:00")
+    odd = low + 0.15  # one bit beside the float of 2026-11-02 01:36
+    assert odd != _day("2026-11-02T01:36")
+    first = Axes(
+        artists=[
+            LinePlot(x=ref("time"), y=ref("T"), x_range=(low, odd), marker="o"),
+            ReferenceLine(orientation="vertical", at=low + 0.1),
+            ShadedSpan(orientation="vertical", start=low + 0.01, end=low + 0.07),
+            Annotation(text="n", position=(low + 0.03, 20.0)),
+        ],
+        x=AxisSpec(limits=(low - 0.01, odd), ticks=[low + 0.05, low + 0.1]),
+    )
+    second = Axes(row=1, artists=[LinePlot(x=ref("time"), y=ref("p"))])
+    layout = GridLayout(rows=2, cols=1, share_x="all")
+    _assert_same(_project(source, first, second, layout=layout), tmp_path)
+
+
+def test_names_of_numbers_stay_as_they_were(tmp_path: Path) -> None:
+    """Without dates the script reserves none of the names dates need."""
+    path = tmp_path / "log.csv"
+    path.write_text("date,re,mdates,ZONE\n1,2,3,4\n2,3,4,5\n")
+    source = csv_source(path, tmp_path)
+    artists = [
+        LinePlot(
+            x=ColumnRef(source=source.id, column="date"),
+            y=ColumnRef(source=source.id, column=name),
+        )
+        for name in ("re", "mdates", "ZONE")
+    ]
+    script = _assert_same(_project(source, Axes(artists=artists)), tmp_path)
+    assert "date, re, mdates, ZONE = np.loadtxt(" in script
+
+
+def test_columns_named_like_what_the_script_uses(tmp_path: Path) -> None:
+    path = tmp_path / "log.csv"
+    path.write_text(
+        "date,re,mdates,date_ticks\n2026-11-01T10:00Z,2,3,4\n2026-11-02T10:00Z,3,4,5\n"
+    )
+    source = csv_source(path, tmp_path)
+    artists = [
+        LinePlot(
+            x=ColumnRef(source=source.id, column="date"),
+            y=ColumnRef(source=source.id, column=name),
+        )
+        for name in ("re", "mdates", "date_ticks")
+    ]
+    _assert_same(_project(source, Axes(artists=artists)), tmp_path)

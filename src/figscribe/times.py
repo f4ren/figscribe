@@ -12,6 +12,7 @@ import re
 from collections.abc import Iterable
 
 import numpy as np
+from matplotlib.dates import date2num
 
 UNIT = "datetime64[us]"
 """One resolution for every file, not the one NumPy would pick from the text."""
@@ -72,3 +73,9 @@ def date_text(number: float) -> str:
             return str(np.datetime_as_string(stamp, unit=unit))
     unit = "ms" if total % 1000 == 0 else "us"
     return str(np.datetime_as_string(stamp, unit=unit))
+
+
+def written_day(number: float) -> float:
+    """A place on a date axis as the script writes it, by `date_text`: the
+    window draws with the very same float, not one a bit beside it."""
+    return float(date2num(np.datetime64(date_text(number))))
