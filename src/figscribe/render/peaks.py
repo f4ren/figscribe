@@ -8,6 +8,8 @@ MARK_OFFSET = 7
 """Points from a peak to its triangle."""
 LABEL_ROOM = 0.25
 """The y margin of an automatic range with labels, for those at its ends."""
+MARK_ROOM = 0.12
+"""The same for triangles."""
 
 
 def peak_label(dips: bool) -> dict:

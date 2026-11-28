@@ -103,13 +103,30 @@ def divisor(how: str, x: np.ndarray, y: np.ndarray, rows: np.ndarray) -> float:
     return by
 
 
+def peak_rows(plot, shown: PlotData) -> np.ndarray:
+    """The points of `shown` that are searched for peaks."""
+    rows = np.isfinite(shown.x) & np.isfinite(shown.y)
+    if not shown.reduced:  # fewer points have the rows taken out already
+        rows &= shown.used & kept(len(shown.x), plot.left_out)
+    return rows
+
+
+def outside_breaks(
+    places: np.ndarray, shown: PlotData, x_breaks, y_breaks
+) -> np.ndarray:
+    """The places not within a break of the axes the plot is drawn against."""
+    for values, ends in ((shown.x, x_breaks), (shown.y, y_breaks)):
+        for a, b in ends:
+            at = values[places]
+            places = places[~((at > a) & (at < b))]
+    return places
+
+
 def peaks_of(plot, shown: PlotData) -> np.ndarray:
     """The places, in `shown`, of the peaks the plot marks: of the points it
     draws that are measured and not left out."""
     how = plot.peaks
-    rows = np.isfinite(shown.x) & np.isfinite(shown.y)
-    if not shown.reduced:  # fewer points have the rows taken out already
-        rows &= shown.used & kept(len(shown.x), plot.left_out)
+    rows = peak_rows(plot, shown)
     places = np.flatnonzero(rows)
     values = -shown.y[rows] if how.dips else shown.y[rows]
     if values.size < 3:

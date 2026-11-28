@@ -186,3 +186,34 @@ def test_peaks_on_broken_axes_and_beside_another_panel(tmp_path: Path) -> None:
     panel.x = AxisSpec(breaks=[(8.0, 11.0)])
     panel.y = AxisSpec(limits=(0.5, 3.5))
     _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "plot",
+    [
+        {"peaks": Peaks(), "x_range": (100.0, 200.0)},
+        {"peaks": Peaks(), "left_out": list(range(20))},
+        {"peaks": Peaks(labels=False), "x_range": (100.0, 200.0)},
+    ],
+    ids=["no row in the range", "every row left out", "no triangles either"],
+)
+def test_peaks_of_nothing(tmp_path: Path, plot) -> None:
+    project, _, _ = made(tmp_path, **plot)
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize("labels", [True, False])
+def test_every_peak_within_a_break(tmp_path: Path, labels: bool) -> None:
+    peaks = Peaks(prominence=0.5, labels=labels)
+    project, _, _ = made(tmp_path, peaks=peaks)
+    project.figures[0].axes[0].x = AxisSpec(breaks=[(1.0, 18.5)])
+    _assert_same(project, tmp_path)
+
+
+def test_labels_and_triangles_in_one_panel(tmp_path: Path) -> None:
+    project, _, plot = made(tmp_path, peaks=Peaks(prominence=0.1))
+    other = LinePlot(x=plot.x, y=plot.y, color="C1", peaks=Peaks(labels=False))
+    project.figures[0].axes[0].artists.append(other)
+    script = _assert_same(project, tmp_path)
+    assert script.count(".margins(y=") == 1
+    assert "marked with triangles" in script

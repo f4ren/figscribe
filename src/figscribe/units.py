@@ -116,10 +116,15 @@ def set_conversion(
             SetField(fit.id, ("result",), None) for fit in _fits_of(project, plot_id)
         ]
         return Macro(_describe(axis, conversion), steps)
-    if axis == "y":
-        steps += _prominence_follows(plot, rescale)
     plot_after = _after(project, steps)
     check_computable(plot_after, plot_id, data)
+    if getattr(plot, "normalize", None) is not None:
+        # The unit tells nothing about normalised values: they say it.
+        moved = _normalised_move(plot, _plot(plot_after, plot_id), data)
+        if moved is not None:
+            steps += _prominence_follows(plot, moved[1])
+    elif axis == "y":
+        steps += _prominence_follows(plot, rescale)
     if getattr(plot, "normalize", None) is not None:
         steps += _normalised_axis_follows(plot_after, plot, plot_id, data)
     return _with_fits_again(

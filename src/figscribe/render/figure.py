@@ -59,7 +59,7 @@ from figscribe.model.timeaxes import (
     peaks_on_dates,
 )
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
-from figscribe.process import not_computable, peak_text, peaks_of
+from figscribe.process import not_computable, outside_breaks, peak_text, peaks_of
 from figscribe.render.breaks import (
     break_ticks,
     crossings,
@@ -81,6 +81,7 @@ from figscribe.render.layout import (
 from figscribe.render.peaks import (
     LABEL_ROOM,
     MARK_OFFSET,
+    MARK_ROOM,
     peak_label,
     peak_mark,
 )
@@ -233,12 +234,6 @@ def _render(
             for a in axes.artists
             if not_on_dates(figure, i, a, is_time)
         } | set(not_computable(figure, data))
-        unmarked = {
-            a.id
-            for i, axes in enumerate(figure.axes)
-            for a in axes.artists
-            if peaks_on_dates(figure, i, a, is_time)
-        }
         unmarked = {
             a.id
             for i, axes in enumerate(figure.axes)
@@ -690,6 +685,7 @@ def _mark_peaks(
 ) -> None:
     """The peaks of the panel's plots that ask for them, once all are drawn."""
     right = drawn[2][0] if len(drawn) > 2 else None
+    rooms: dict[MplAxes, float] = {}
     for artist in axes.artists:
         how = getattr(artist, "peaks", None)
         if how is None or not artist.visible or artist.id in unmarked:
@@ -698,14 +694,12 @@ def _mark_peaks(
         target = right if on_right else ax
         spec = axes.y_right if on_right else axes.y
         shown = plot_data(artist, data)
-        places = peaks_of(artist, shown)
-        for name in ("x", "y"):
-            if name == "y" and on_right:
-                continue  # breaks of the y axis are the left one's
-            values = getattr(shown, name)[places]
-            for a, b in cuts[axes.id, name]:
-                inside = (values > a) & (values < b)
-                places, values = places[~inside], values[~inside]
+        places = outside_breaks(
+            peaks_of(artist, shown),
+            shown,
+            cuts[axes.id, "x"],
+            [] if on_right else cuts[axes.id, "y"],  # those are the left one's
+        )
         for x, y in zip(shown.x[places], shown.y[places], strict=True):
             if how.labels:
                 note = target.annotate(
@@ -727,8 +721,11 @@ def _mark_peaks(
                     x, y, transform=raised, zorder=artist.zorder, **peak_mark(how.dips)
                 )
                 mark.set_gid(artist.id)
-        if how.labels and places.size and spec.limits is None:
-            target.margins(y=LABEL_ROOM)  # for the labels of the outermost ones
+        if places.size and spec.limits is None:
+            room = LABEL_ROOM if how.labels else MARK_ROOM
+            rooms[target] = max(room, rooms.get(target, 0.0))
+    for target, room in rooms.items():  # for what stands at the outermost ones
+        target.margins(y=room)
 
 
 def _draw_artist(

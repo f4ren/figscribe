@@ -467,3 +467,38 @@ def test_a_prominence_follows_the_y_unit(tmp_path: Path) -> None:
     set_processing(project, plot.id, "normalize", "max", data).apply(project)
     prominence = project.figures[0].axes[0].artists[0].peaks.prominence
     assert prominence == pytest.approx(3 / top)
+
+
+def test_the_triangles_stay_inside_the_frame(tmp_path: Path) -> None:
+    project, data, _ = _two_peaks(tmp_path, peaks=Peaks(labels=False))
+    figure = render(project.figures[0], data)
+    ax = figure.axes[0]
+    _, top = ax.get_ylim()
+    high = 6.0  # the higher peak
+    points = ax.transData.transform([(5.0, high), (5.0, top)])
+    room = (points[1][1] - points[0][1]) * 72 / figure.dpi
+    assert room > 10  # 7 pt to the triangle, and half of it
+
+
+@pytest.mark.parametrize(
+    ("normalize", "axis", "conversion", "factor"),
+    [
+        ("max", "y", Conversion(factor=1000.0, unit="mV"), 1.0),
+        ("area", "y", Conversion(factor=1000.0, unit="mV"), 1.0),
+        ("area", "x", Conversion(factor=1 / 60, unit="min"), 60.0),
+        (None, "y", Conversion(factor=1000.0, unit="mV"), 1000.0),
+    ],
+    ids=["maximum, y", "area, y", "area, x", "as they are, y"],
+)
+def test_a_prominence_goes_with_the_values(
+    tmp_path: Path, normalize, axis, conversion, factor
+) -> None:
+    project, data, plot = _two_peaks(
+        tmp_path, normalize=normalize, peaks=Peaks(prominence=0.01)
+    )
+    found = _found(plot, data)
+    assert found
+    set_conversion(project, plot.id, axis, conversion, data).apply(project)
+    changed = project.figures[0].axes[0].artists[0]
+    assert changed.peaks.prominence == pytest.approx(0.01 * factor)
+    assert len(_found(changed, data)) == len(found)

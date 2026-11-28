@@ -160,3 +160,34 @@ def test_peaks_in_the_panel(window) -> None:
     assert not _editor(window, "peaks", "decimals").isEnabled()
     _editor(window, "peaks").click()
     assert _plot(window).peaks is None
+
+
+def test_a_peaks_label_is_no_note_of_its_own(window, qtbot) -> None:
+    plot = _plot(window)
+    window.document.push(SetField(plot.id, ("peaks",), Peaks(prominence=0.05)))
+    window.show()
+    qtbot.waitExposed(window)
+    preview = window.preview
+    ax = preview._figure.axes[0]
+    label = ax.texts[0]
+    box = label.get_window_extent(preview._figure.canvas.get_renderer())
+    point = preview._to_widget(*box.get_points().mean(axis=0))
+    assert preview._note_at(point) is None
+    found = preview.text_at(point)
+    assert found is None or found.path != ("text",)
+    preview.context_menu(point)  # no crash
+    before = window.document.project.model_dump_json()
+    preview.move_note(label.get_gid(), 10, 10)
+    assert window.document.project.model_dump_json() == before
+
+
+def test_one_stretch_may_be_typed_with_decimal_commas(window) -> None:
+    _editor(window, "baseline").click()
+    for typed, ranges in (
+        ("0,5 to 4,5", [(0.5, 4.5)]),
+        ("0 to 5,15 to 19", [(0.0, 5.0), (15.0, 19.0)]),
+    ):
+        line = _editor(window, "baseline", "ranges")
+        line.setText(typed)
+        line.editingFinished.emit()
+        assert _plot(window).baseline.ranges == ranges

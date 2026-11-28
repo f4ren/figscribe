@@ -2856,8 +2856,14 @@ def _ranges(text: str) -> list[tuple[float, float]]:
     where numbers have decimal commas."""
     if not text.strip():
         return []
+    if ";" in text:
+        parts = text.split(";")
+    else:  # a comma and a blank part stretches: "0,5 to 4,5" is one
+        parts = re.split(r",\s+", text)
+        if any(part.count(" to ") != 1 for part in parts):
+            parts = text.split(",")
     found = []
-    for part in text.split(";" if ";" in text else ","):
+    for part in parts:
         ends = part.split(" to ")
         if len(ends) != 2:
             raise ValueError("type the stretches such as 0 to 5, 15 to 19")

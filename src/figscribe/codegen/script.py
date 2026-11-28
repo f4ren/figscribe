@@ -81,7 +81,14 @@ from figscribe.model.timeaxes import (
     peaks_on_dates,
     time_columns_of,
 )
-from figscribe.process import PROMINENCE, degree_of, not_computable, peaks_of
+from figscribe.process import (
+    PROMINENCE,
+    degree_of,
+    not_computable,
+    outside_breaks,
+    peak_rows,
+    peaks_of,
+)
 from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
@@ -113,6 +120,7 @@ from figscribe.render.layout import (
 from figscribe.render.peaks import (
     LABEL_ROOM,
     MARK_OFFSET,
+    MARK_ROOM,
     peak_label,
     peak_mark,
 )
@@ -1460,8 +1468,9 @@ class _Writer:
             for a in axes.artists
         )
 
-    def _peaks(self, ax: str, plot, spec: AxisSpec, cuts) -> None:
-        """The peaks of a plot, as `process.peaks_of` and the renderer."""
+    def _peaks(self, ax: str, plot, cuts) -> bool:
+        """The peaks of a plot, as `process.peaks_of` and the renderer; whether
+        any is marked, as far as the data tells."""
         how = plot.peaks
         x, y = self.shown(plot, "x"), self.shown(plot, "y")
         shown = None if self.data is None else plot_data(plot, self.data)
@@ -1471,10 +1480,13 @@ class _Writer:
         if shown is None or not np.all(np.isfinite(shown.x) & np.isfinite(shown.y)):
             parts += [f"np.isfinite({x})", f"np.isfinite({y})"]
         mask = parts[0] if parts else None
+        what = f"The {'dips' if how.dips else 'peaks'} of {_describe(plot)}"
+        if shown is not None and peak_rows(plot, shown).sum() < 3:
+            self.emit(f"# {what}: too few points to have any.")
+            return False
         self.emit(
             *textwrap.wrap(
-                f"The {'dips' if how.dips else 'peaks'} of {_describe(plot)}, "
-                "marked with their x.",
+                f"{what}, marked with {'their x' if how.labels else 'triangles'}.",
                 WIDTH,
                 initial_indent="# ",
                 subsequent_indent="# ",
@@ -1546,9 +1558,9 @@ class _Writer:
                 zorder=_num(plot.zorder),
                 **{k: _value(v) for k, v in peak_mark(how.dips).items()},
             )
-        count = 0 if shown is None else peaks_of(plot, shown).size
-        if how.labels and spec.limits is None and (shown is None or count):
-            self.emit(f"{ax}.margins(y={LABEL_ROOM})  # room for the labels")
+        if shown is None:
+            return True
+        return outside_breaks(peaks_of(plot, shown), shown, *cuts).size > 0
 
     def _smooths(self) -> bool:
         return any(self.artists[i].smoothing is not None for i in self.processed)
@@ -2294,12 +2306,18 @@ class _Writer:
             # The breaks of the y axis are the left one's.
             self._cut = (x_breaks, [] if on_right else y_breaks)
             self._artist(right if on_right else ax, artist)
+        rooms: dict[str, float] = {}
         for artist in axes.artists:  # once all are drawn, as in the window
             if self._marks_peaks(index, artist):
                 on_right = artist.axis == "right" and right is not None
                 spec = axes.y_right if on_right else axes.y
                 cuts = (x_breaks, [] if on_right else y_breaks)
-                self._peaks(right if on_right else ax, artist, spec, cuts)
+                target = right if on_right else ax
+                if self._peaks(target, artist, cuts) and spec.limits is None:
+                    room = LABEL_ROOM if artist.peaks.labels else MARK_ROOM
+                    rooms[target] = max(room, rooms.get(target, 0.0))
+        for target, room in rooms.items():
+            self.emit(f"{target}.margins(y={room})  # room at the outermost peaks")
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)
 
