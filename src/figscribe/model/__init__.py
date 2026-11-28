@@ -34,6 +34,7 @@ from figscribe.model.artists import (
 from figscribe.model.axes import Axes, AxisSpec, Inset, Legend
 from figscribe.model.base import Identified, StrictModel, new_id
 from figscribe.model.data import (
+    BY_COLUMN_SOURCES,
     FILE_SOURCES,
     ArrayRef,
     ColumnRef,
@@ -87,6 +88,7 @@ __all__ = [
     "NumpySource",
     "SheetSource",
     "FILE_SOURCES",
+    "BY_COLUMN_SOURCES",
     "PanelLabels",
     "PredefinedFit",
     "Project",
