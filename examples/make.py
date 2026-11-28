@@ -1190,11 +1190,12 @@ def pendulum(folder: Path) -> Project:
         project,
         folder,
         points,
-        PredefinedFit(name="linear"),
+        # Through the origin, as the law says: T^2 = (4 pi^2 / g) L.
+        ExpressionFit(expression="a * x", parameters=["a"]),
         color="C1",
         curve_to_limits=True,
         mark_extrapolated=True,
-        label="straight line",
+        label="line through the origin",
     )
     slope = fit.result.parameters["a"]
     project.figures[0].axes[0].artists.append(

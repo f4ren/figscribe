@@ -174,7 +174,7 @@
             },
             {
               "id": "1a90ff098926",
-              "label": "straight line",
+              "label": "line through the origin",
               "visible": true,
               "zorder": 2.0,
               "alpha": 1.0,
@@ -182,13 +182,14 @@
               "kind": "fit",
               "target": "5a433a143daf",
               "model": {
-                "kind": "predefined",
-                "name": "linear",
-                "degree": null
+                "kind": "expression",
+                "expression": "a * x",
+                "parameters": [
+                  "a"
+                ]
               },
               "initial_values": {
-                "b": -0.0005975343434337253,
-                "a": 4.023147545454546
+                "a": 1.0
               },
               "fixed": [],
               "parameter_bounds": {},
@@ -203,14 +204,12 @@
               "extrapolated_linewidth": null,
               "result": {
                 "parameters": {
-                  "a": 4.025142479867718,
-                  "b": -0.002186837415198446
+                  "a": 4.022017603360013
                 },
                 "uncertainties": {
-                  "a": 0.01990186496958438,
-                  "b": 0.012035916028758913
+                  "a": 0.01001445312085243
                 },
-                "reduced_chi_square": 1.2276262379761909,
+                "reduced_chi_square": 1.108164834567788,
                 "converged": true
               },
               "color": "C1",
@@ -225,7 +224,7 @@
               "alpha": 1.0,
               "axis": "left",
               "kind": "annotation",
-              "text": "$g = 4\\pi^2/a$ = 9.81 m/s²",
+              "text": "$g = 4\\pi^2/a$ = 9.82 m/s²",
               "position": [
                 0.42,
                 0.07

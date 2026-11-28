@@ -957,3 +957,77 @@ def test_the_assistant_draws_a_function(tools, workspace) -> None:
     assert function.parameters == {"a": 1.0, "c": 1.0}
     with pytest.raises(ToolError, match="cannot be read"):
         tools.call("set_field", {**path, "value": "a +"})
+
+
+# --- a fit's result is computed, never given (B10.5) ----------------------------
+
+
+def _fitted(tools, workspace) -> tuple[str, str, dict]:
+    _, axes, plot, _ = _ids(workspace)
+    info = tools.call(
+        "fit", {"target_id": plot, "model": {"kind": "predefined", "name": "linear"}}
+    )
+    return axes, info["id"], info["result"]
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (["result"], None),
+        (["result"], "invented"),
+        (["result", "converged"], True),
+        (["result", "parameters"], {"a": 1.0, "b": 2.0}),
+    ],
+)
+def test_a_fit_result_cannot_be_set(tools, workspace, path, value) -> None:
+    _, fit, result = _fitted(tools, workspace)
+    if value == "invented":
+        value = {**result, "parameters": {"a": 1.0, "b": 2.0}}
+    before = dumps(workspace.project)
+    call = {"object_id": fit, "path": path, "value": value}
+    with pytest.raises(ToolError, match="computed by figscribe"):
+        tools.call("set_field", call)
+    with pytest.raises(ToolError, match="computed by figscribe"):
+        tools.call(
+            "apply_changes",
+            {"description": "x", "operations": [{"op": "set_field", **call}]},
+        )
+    assert dumps(workspace.project) == before
+
+
+@pytest.mark.parametrize("what", ["artists", "axes", "figures"])
+def test_a_fit_result_cannot_be_brought_along(tools, workspace, what) -> None:
+    axes, fit, _ = _fitted(tools, workspace)
+    figure = workspace.project.figures[0]
+    made = find(workspace.project, fit).model_dump() | {"id": "invented"}
+    made["result"]["parameters"] = {"a": 1.0, "b": 2.0}
+    before = dumps(workspace.project)
+    if what == "artists":
+        call = ("insert", {"parent_id": axes, "field": what, "object": made})
+    else:
+        panel = {"id": "p2", "row": 1, "artists": [made]}
+        if what == "axes":
+            call = ("insert", {"parent_id": figure.id, "field": what, "object": panel})
+        else:
+            new = {"id": "f2", "name": "Other", "axes": [panel | {"row": 0}]}
+            call = ("insert", {"parent_id": None, "field": what, "object": new})
+    with pytest.raises(ToolError, match="computed by figscribe"):
+        tools.call(*call)
+    assert dumps(workspace.project) == before
+
+
+# --- ticks are judged with the data the change leaves (B10.6) ------------------
+
+
+def test_ticks_are_judged_with_the_new_data(tools, workspace) -> None:
+    _, axes, _, source = _ids(workspace)
+    tools.call(
+        "set_field", {"object_id": axes, "path": ["x", "major_step"], "value": 0.5}
+    )
+    csv = workspace.base_dir / "scan.csv"
+    lines = csv.read_text(encoding="utf-8").splitlines()
+    csv.write_text("\n".join([*lines, "100000,1.0,0.1"]) + "\n", encoding="utf-8")
+    before = dumps(workspace.project)
+    with pytest.raises(ToolError, match="at most 50"):
+        tools.call("use_new_data_version", {"source_id": source})
+    assert dumps(workspace.project) == before

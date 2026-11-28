@@ -54,9 +54,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **B8** is done but for its follow-ups: ratios that no longer match the
   grid; a lower bound for font sizes and the figure size; marking columns of
   another length.
-- **B10** faults found in the reviews of 2026-11-26 and 27: items 1 to 4 are
-  done but for what is left of 3 (`[decide]`); open are also two on the
-  assistant (5 and 6).
+- **B10** faults found in the reviews of 2026-11-26 and 27: done but for what
+  is left of 3 (`[decide]`).
 
 **Phase 1 — The settings** (U1 to U5 and U7 to U12 are done)
 - **U6** gaps between panels in mm (`[decide]`: model fields in mm, schema
@@ -107,9 +106,10 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2.
 F15 is done (0078), and Excel and Calc files (F7.3, 0079, asked for by the
 user 2026-11-27); then F6 several files as one series, F1.5 a confidence
-band, and a legend entry for the part of a curve beyond the data.
-**The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B10 items
-5 and 6 and B7 item 5, the GUI at small sizes, need no answer. The lab user's
+band, and a legend entry for the part of a curve beyond the data. Before
+those, HDF5 (F7.1; the user, 2026-11-27).
+**The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B7 item 5,
+the GUI at small sizes, needs no answer. The lab user's
 requests of 2026-11-04 are all done.
 
 ---
@@ -685,10 +685,11 @@ first for each.
    none, keeps its range and breaks across unit changes (as ranges did in
    0.3.0), and leads a shared axis if it is first. Solving it means storing
    the unit typed numbers are in. `[decide]` whether that is worth it.
-5. **The assistant may set a fit's `result`** itself, or insert a fit that has
-   one, which nothing computed: make it read-only there.
-6. **The assistant's check for too many ticks** judges the changed project
-   with the data from before the change (`Toolbox._refuse_too_many_ticks`).
+5. ~~**The assistant may set a fit's `result`**~~ **Done** (2026-11-27):
+   setting it, or inserting a fit that has one, is refused.
+6. ~~**The assistant's check for too many ticks** with old data~~ **Done**
+   (2026-11-27): a change to the data files is judged with the new data; before,
+   it was not judged at all, as the old record did not read the new file.
 
 ---
 
@@ -1424,9 +1425,8 @@ measurement at ten temperatures". The script loads them in a loop.
    workbook is a changed file; data files named like `2026-11-27 run.csv` gave
    scripts that did not run (fixed on the way, in 0.3.0 too). *Open:* try files
    saved by a real Excel and LibreOffice (the tests write their own); date and
-   time columns wait for F5.5; the installers' notices name the license of the
-   Python binding only, not of the Rust parts compiled into it, listed in its
-   `sboms/` (before R9). *Follow-ups, only if asked:* `u(x)` recognised as the
+   time columns wait for F5.5. The installers' notices name the Rust parts
+   compiled in since 0080. *Follow-ups, only if asked:* `u(x)` recognised as the
    error of x; several sheets imported at once.
 
 ### F8 Several figures in one project — M
@@ -2022,9 +2022,10 @@ Waits for the user's word (2026-11-27). It carries everything under
 1. Add what is new to the manual checklist (`docs/testing.md`): a broken axis,
    number format and decimal comma, minor grid lines, a curve beyond the data,
    *Use another file…* with other column names, a changed file with a fit,
-   *Check for Updates…*, a sheet from a real Excel and LibreOffice. Add the
-   licenses of python-calamine's Rust parts to the installers' notices. Then go
-   through the checklist (B7.5), on macOS at least.
+   *Check for Updates…*, a sheet from a real Excel and LibreOffice. Then go
+   through the checklist (B7.5), on macOS at least. *Open:* the AppImage also
+   takes system libraries from the Linux build machine (so did 0.3.0); no list
+   names their licenses. Check what is in it before releasing.
 2. Version 0.4.0; date the changelog's section, and say first that a project
    saved with 0.3.0 after a change of a fit's data may hold an old curve:
    *Fit again with the current data*.

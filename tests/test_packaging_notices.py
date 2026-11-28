@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from importlib import metadata
 from pathlib import Path
@@ -30,6 +31,7 @@ def make_dist(
     requires: tuple[str, ...] = (),
     files: dict[str, str] | None = None,
     license_expression: str = "MIT",
+    sbom: list[dict] | None = None,
 ) -> metadata.Distribution:
     """A distribution on disk, as pip leaves one: `files` are relative to the
     `licenses` folder of its dist-info."""
@@ -49,6 +51,11 @@ def make_dist(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
         record.append(f"{info.name}/licenses/{relative},,")
+    if sbom is not None:
+        path = info / "sboms" / f"{name}.cyclonedx.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps({"bomFormat": "CycloneDX", "components": sbom}))
+        record.append(f"{info.name}/sboms/{path.name},,")
     (info / "RECORD").write_text("\n".join(record) + "\n")
     return metadata.PathDistribution(info)
 
@@ -213,3 +220,145 @@ def test_the_pythons_license_is_found_next_to_the_standard_library() -> None:
 def test_the_texts_that_no_wheel_carries_are_committed() -> None:
     for name in ("LGPL-3.0.txt", "GPL-3.0.txt"):
         assert (PACKAGING / "licenses" / name).read_text().strip()
+
+
+# --- Rust code compiled into packages -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("expression", "chosen"),
+    [
+        ("MIT", ["MIT"]),
+        ("Apache-2.0 OR MIT", ["MIT"]),
+        ("Apache-2.0 OR GPL-2.0-only", ["Apache-2.0"]),
+        ("MIT OR Apache-2.0 OR LGPL-2.1-or-later", ["MIT"]),
+        ("(MIT OR Apache-2.0) AND Unicode-3.0", ["MIT", "Unicode-3.0"]),
+        ("(Apache-2.0 OR MIT) AND BSD-3-Clause", ["MIT", "BSD-3-Clause"]),
+        ("Apache-2.0 WITH LLVM-exception", ["Apache-2.0 WITH LLVM-exception"]),
+        ("Zlib", ["Zlib"]),
+    ],
+)
+def test_the_license_taken_where_there_is_a_choice(expression, chosen) -> None:
+    assert notices.choose(expression) == chosen
+
+
+@pytest.mark.parametrize("expression", ["GPL-3.0-only", "MIT AND Nobody-1.0", ""])
+def test_a_license_without_a_text_stops_the_build(expression: str) -> None:
+    with pytest.raises(SystemExit, match="license"):
+        notices.choose(expression)
+
+
+def _crate(name: str, expression: str | None, **fields) -> dict:
+    licenses = [] if expression is None else [{"expression": expression}]
+    return {
+        "name": name,
+        "version": "1.2.3",
+        "purl": f"pkg:cargo/{name}@1.2.3",
+        "licenses": licenses,
+        **fields,
+    }
+
+
+def test_the_notices_list_the_crates_compiled_into_a_package(site: Site) -> None:
+    site.add(
+        "app",
+        files={"LICENSE": "App."},
+        sbom=[
+            _crate("reader", "MIT", author="A. Writer <a@example.org>"),
+            _crate("codec", "(MIT OR Apache-2.0) AND Unicode-3.0"),
+        ],
+    )
+
+    text = notices.render(notices.closure(["app"], find=site), python_license="x")
+
+    assert "reader 1.2.3 (MIT) by A. Writer <a@example.org>" in text
+    assert "codec 1.2.3 (MIT, Unicode-3.0)" in text
+    assert "https://crates.io/crates/reader/1.2.3" in text
+    assert "Permission is hereby granted, free of charge" in text
+    assert "UNICODE LICENSE V3" in text
+    assert "UNICODE LICENSE" not in text.split("UNICODE LICENSE V3", 1)[1]
+    assert "Apache License" not in text  # nothing was taken under it
+
+
+def test_a_crate_that_names_no_license_stops_the_build(site: Site) -> None:
+    site.add("app", files={"LICENSE": "App."}, sbom=[_crate("mystery", None)])
+
+    with pytest.raises(SystemExit, match="mystery"):
+        notices.render(notices.closure(["app"], find=site), python_license="x")
+
+
+def test_the_license_of_every_crate_installed_here_has_its_text() -> None:
+    """A new version of a package may bring a license without a text: found here
+    rather than when an installer is built."""
+    try:
+        dists = notices.closure([notices.ROOT])
+    except SystemExit as exc:  # without the extras the installers have
+        pytest.skip(str(exc))
+    notices.other_parts(dists)  # every other part is known, too
+    crates = notices.crates(dists)
+    # Older versions of the package carry no list of their parts.
+    if any("sboms" in f.parts for f in dists["python-calamine"].files):
+        assert any(crate["name"] == "calamine" for crate in crates)
+    for crate in crates:
+        assert notices.taken(crate), crate["name"]
+
+
+# --- parts that are no Rust crates --------------------------------------------
+
+
+def _part(name: str, **fields) -> dict:
+    return {"name": name, "version": "4.0", "purl": "", **fields}
+
+
+def test_openssl_is_named_with_its_license(site: Site) -> None:
+    site.add("app", requires=("cryptography",), files={"LICENSE": "App."})
+    site.add("cryptography", files={"LICENSE": "C."}, sbom=[_part("openssl")])
+
+    text = notices.render(notices.closure(["app"], find=site), python_license="x")
+
+    assert "openssl 4.0 (Apache-2.0)" in text and "in cryptography" in text
+    assert "License text: Apache-2.0" in text and "Apache License" in text
+
+
+def test_parts_a_package_names_itself_or_does_not_ship_are_not_repeated(
+    site: Site,
+) -> None:
+    parts = [_part("FreeType"), _part("libimagequant")]
+    site.add("pillow", files={"LICENSE": "P."}, sbom=parts)
+
+    text = notices.render(notices.closure(["pillow"], find=site), python_license="x")
+
+    assert "FreeType" not in text and "libimagequant" not in text
+
+
+def test_an_unknown_part_stops_the_build(site: Site) -> None:
+    site.add("app", files={"LICENSE": "A."}, sbom=[_part("libsurprise")])
+
+    with pytest.raises(SystemExit, match="libsurprise"):
+        notices.render(notices.closure(["app"], find=site), python_license="x")
+
+
+def test_a_library_no_list_names_is_found_by_its_file(site: Site) -> None:
+    dist = site.add("pillow", files={"LICENSE": "P."})
+    info = dist._path
+    library = info.parent / "pillow.libs" / "libXau-154567c4.so.6"
+    library.parent.mkdir()
+    library.write_bytes(b"")
+    with (info / "RECORD").open("a") as record:
+        record.write("pillow.libs/libXau-154567c4.so.6,,\n")
+
+    dists = {"pillow": metadata.PathDistribution(info)}
+    text = notices.render(dists, python_license="x")
+
+    assert "libXau (MIT-open-group)" in text and "The Open Group" in text
+
+
+def test_a_package_may_list_itself(site: Site) -> None:
+    """As the lists auditwheel adds to Linux wheels do."""
+    own = _part("Pillow", purl="pkg:pypi/pillow@13.0.0?file_name=pillow.whl")
+    module = _part("PIL._webp", purl="pkg:pypi/pillow@13.0.0#c-ext/PIL._webp")
+    site.add("pillow", files={"LICENSE": "P."}, sbom=[own, module, _part("libXau")])
+    site.add("scipy", files={"LICENSE": "S."}, sbom=[_part("libgfortran")])
+    site.add("app", requires=("pillow", "scipy"), files={"LICENSE": "A."})
+
+    assert notices.other_parts(notices.closure(["app"], find=site)) == []

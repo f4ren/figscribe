@@ -15,10 +15,16 @@ installer must not leave out what a license asks to be handed on.
 Two things no wheel carries are added: Qt for Python (PySide6 and shiboken6 say
 LGPL in their metadata but ship no text) and the Python the program runs on.
 The texts of the LGPL and the GPL are in `packaging/licenses`.
+
+Wheels with compiled Rust code carry the license of the Python package only,
+and a list of the Rust libraries (crates) compiled in, in their `sboms` folder.
+Each crate is listed with the license it is taken under, and the standard texts
+of those (`packaging/licenses/spdx`) follow (decision 0080).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -45,6 +51,76 @@ QT_SOURCE = (
 )
 QT_SOURCE_OF_QT = "https://download.qt.io/official_releases/qt/"
 QT_THIRD_PARTY = "https://doc.qt.io/qt-6/licenses-used-in-qt.html"
+
+# Where a crate offers a choice, the first of these that is offered is taken;
+# with each, the files of its text in `licenses/spdx`.
+LICENSE_TEXTS = {
+    "MIT": ("MIT",),
+    "Apache-2.0": ("Apache-2.0",),
+    "BSD-3-Clause": ("BSD-3-Clause",),
+    "BSD-2-Clause": ("BSD-2-Clause",),
+    "Zlib": ("Zlib",),
+    "Unicode-3.0": ("Unicode-3.0",),
+    "Unicode-DFS-2016": ("Unicode-DFS-2016",),
+    "Apache-2.0 WITH LLVM-exception": ("Apache-2.0", "LLVM-exception"),
+    "MIT-open-group": ("MIT-open-group",),
+}
+
+# The parts of a package's list that are no Rust crates: the license under
+# which the notices name one themselves, or None where there is nothing to add,
+# because the package's own license files name it, it is the package's own code,
+# or it is not in what the package ships. A part not named here stops the build.
+PARTS: dict[str, dict[str, str | None]] = {
+    "cryptography": {"openssl": "Apache-2.0"},  # in no file of the package
+    "pillow": dict.fromkeys(
+        [
+            # named in Pillow's license file
+            "FreeType",
+            "HarfBuzz",
+            "libavif",
+            "libjpeg / libjpeg-turbo",
+            "libtiff",
+            "libwebp",
+            "libxcb",
+            "Little CMS 2",
+            "OpenJPEG",
+            "raqm",
+            "zlib",
+            # Pillow's own, or needing no notice (0BSD)
+            "fribidi-shim",
+            "pythoncapi_compat",
+            # used to build it, not in it
+            "pybind11",
+            # not in the wheels: loaded from the system where it is there, and
+            # left out for its license; smoke.py checks that neither is frozen
+            "FriBiDi",
+            "libimagequant",
+            # in the Linux wheels, added from UNLISTED where the file is
+            "libXau",
+        ]
+    ),
+    # copied into the Linux wheels, named in SciPy's license files
+    "scipy": {"libgfortran": None, "libquadmath": None},
+}
+
+# Libraries a package ships that neither its license files nor its list name,
+# found by the start of their file names.
+UNLISTED = {
+    "pillow": {
+        "libXau": (
+            "MIT-open-group",
+            "Copyright 1988, 1993, 1994, 1998 The Open Group",
+        )
+    }
+}
+
+CRATES_INTRO = """\
+Some of the packages above contain compiled code from the Rust libraries
+(crates) listed here, as each package's own list of its parts names them. Where
+a crate offers a choice of licenses, figscribe takes it under the one named.
+Each crate's source, with its copyright notices, is at the address given. The
+texts of the licenses follow.
+"""
 
 Find = Callable[[str], metadata.Distribution]
 
@@ -110,6 +186,116 @@ def license_files(dist: metadata.Distribution) -> list[tuple[str, str]]:
         )
         files.append((name, text.strip("\n")))
     return sorted(files)
+
+
+def crates(dists: dict[str, metadata.Distribution]) -> list[dict]:
+    """The Rust crates compiled into the packages `dists`, from the lists
+    (CycloneDX) in their metadata, each once, with the packages it is "in"."""
+    found: dict[tuple[str, str], dict] = {}
+    for _, dist in sorted(dists.items()):
+        for file in dist.files or []:
+            if "sboms" not in file.parts or file.suffix != ".json":
+                continue
+            path = Path(dist.locate_file(file))
+            for part in json.loads(path.read_text("utf-8")).get("components", []):
+                if not part.get("purl", "").startswith("pkg:cargo/"):
+                    continue  # other parts have their texts in the package
+                key = (part["name"], part["version"])
+                crate = found.setdefault(key, {**part, "in": []})
+                if dist.metadata["Name"] not in crate["in"]:
+                    crate["in"].append(dist.metadata["Name"])
+    return [found[key] for key in sorted(found)]
+
+
+def choose(expression: str) -> list[str]:
+    """The licenses figscribe takes of an SPDX `expression`: of each part of
+    an AND, the first in `LICENSE_TEXTS` that an OR offers."""
+    chosen = []
+    for part in expression.split(" AND "):
+        offered = part.strip("() ").split(" OR ")
+        taken_here = next((name for name in LICENSE_TEXTS if name in offered), None)
+        if taken_here is None:
+            raise SystemExit(
+                f"no license text for {part!r} of {expression!r}; add it to "
+                "packaging/licenses/spdx and LICENSE_TEXTS"
+            )
+        chosen.append(taken_here)
+    return chosen
+
+
+def taken(crate: dict) -> list[str]:
+    """The licenses the crate is taken under."""
+    named = [
+        entry.get("expression") or entry.get("license", {}).get("id")
+        for entry in crate.get("licenses", [])
+    ]
+    if not named or not all(named):
+        raise SystemExit(f"the crate {crate['name']} names no license")
+    return list(dict.fromkeys(n for text in named for n in choose(text)))
+
+
+OTHERS_INTRO = """\
+Libraries compiled into or shipped with the packages above whose license files
+do not name them, under the licenses whose texts follow.
+"""
+
+
+def _compiled_sections(found: list[dict], others: list[tuple[str, str]]) -> list[str]:
+    lines, files = [], []
+    for crate in found:
+        names = taken(crate)
+        files += [file for name in names for file in LICENSE_TEXTS[name]]
+        author = f" by {crate['author']}" if crate.get("author") else ""
+        lines.append(
+            f"{crate['name']} {crate['version']} ({', '.join(names)}){author}\n"
+            f"    in {', '.join(crate['in'])}; "
+            f"https://crates.io/crates/{crate['name']}/{crate['version']}"
+        )
+    sections = []
+    if found:
+        body = CRATES_INTRO + "\n" + "\n".join(lines)
+        sections.append(_section("Rust code compiled into these packages", body))
+    if others:
+        body = OTHERS_INTRO + "\n" + "\n".join(line for line, _ in others)
+        sections.append(_section("Further libraries in these packages", body))
+        for _, name in others:
+            files += LICENSE_TEXTS[name]
+    for file in dict.fromkeys(files):
+        text = (LICENSES / "spdx" / f"{file}.txt").read_text(encoding="utf-8")
+        sections.append(_section(f"License text: {file}", text))
+    return sections
+
+
+def other_parts(dists: dict[str, metadata.Distribution]) -> list[tuple[str, str]]:
+    """(lines to add to the notices, license) for every part compiled into the
+    packages that is no Rust crate and that no license file of its names."""
+    found = []
+    for name, dist in sorted(dists.items()):
+        known = PARTS.get(name, {})
+        for file in dist.files or []:
+            if "sboms" not in file.parts or file.suffix != ".json":
+                continue
+            path = Path(dist.locate_file(file))
+            for part in json.loads(path.read_text("utf-8")).get("components", []):
+                purl = part.get("purl", "").lower()
+                if purl.startswith("pkg:cargo/") or purl.startswith(
+                    f"pkg:pypi/{name}@"
+                ):
+                    continue  # a crate, or the package itself and its modules
+                if part["name"] not in known:
+                    raise SystemExit(
+                        f"{name} has a part the notices do not know: "
+                        f"{part['name']}; see whether it ships and who names its "
+                        "license, then add it to PARTS in packaging/notices.py"
+                    )
+                if license_ := known[part["name"]]:
+                    title = f"{part['name']} {part.get('version', '')}"
+                    found.append((f"{title} ({license_})\n    in {name}", license_))
+        for library, (license_, holder) in UNLISTED.get(name, {}).items():
+            if any(file.name.startswith(library) for file in dist.files or []):
+                line = f"{library} ({license_})\n    in {name}; {holder}"
+                found.append((line, license_))
+    return found
 
 
 def python_license() -> str:
@@ -197,6 +383,7 @@ def render(dists: dict[str, metadata.Distribution], python_license: str) -> str:
             "no license file in the metadata of " + ", ".join(missing) + "; "
             "an installer must carry its license (decision 0066)"
         )
+    sections += _compiled_sections(crates(dists), other_parts(dists))
     sections.append(_section("Python", python_license))
     return "\n".join(sections)
 
