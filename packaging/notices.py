@@ -106,12 +106,24 @@ PARTS: dict[str, dict[str, str | None]] = {
 # Libraries a package ships that neither its license files nor its list name,
 # found by the start of their file names.
 UNLISTED = {
+    # The HDF5 library's own are named in h5py's license files, what it is
+    # built with is not: libaec on Linux (with libsz, its szip interface),
+    # zlib on macOS and Windows.
+    "h5py": {
+        "libaec": (
+            "BSD-2-Clause",
+            "Copyright 2026 Mathis Rosenhauer, Moritz Hanke, Joerg Behrens, "
+            "Luis Kornblueh",
+        ),
+        "libz.": ("Zlib", "(C) 1995-2026 Jean-loup Gailly and Mark Adler"),
+        "z.dll": ("Zlib", "(C) 1995-2026 Jean-loup Gailly and Mark Adler"),
+    },
     "pillow": {
         "libXau": (
             "MIT-open-group",
             "Copyright 1988, 1993, 1994, 1998 The Open Group",
         )
-    }
+    },
 }
 
 CRATES_INTRO = """\
@@ -293,7 +305,7 @@ def other_parts(dists: dict[str, metadata.Distribution]) -> list[tuple[str, str]
                     found.append((f"{title} ({license_})\n    in {name}", license_))
         for library, (license_, holder) in UNLISTED.get(name, {}).items():
             if any(file.name.startswith(library) for file in dist.files or []):
-                line = f"{library} ({license_})\n    in {name}; {holder}"
+                line = f"{library.rstrip('.')} ({license_})\n    in {name}; {holder}"
                 found.append((line, license_))
     return found
 
