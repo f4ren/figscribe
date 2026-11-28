@@ -67,6 +67,9 @@ TYPED = {
     "major_value": ["1"],
     "minor_tick_length": ["4"],  # 2 pt is Matplotlib's own
     "formula": ["x * 3 - 1", "x + 4"],  # linear, rising, and not the one it has
+    "ranges": ["0 to 2"],
+    "window": ["7"],
+    "distance": ["12"],  # more than the points between two ripples
 }
 """What is typed instead into fields where those texts would not do, tried
 in turn like the entries of a list until what is drawn changes."""
@@ -106,6 +109,15 @@ EXPECTED = {
 """Fields whose right outcome in this project is not a visible change: the
 start of what the test reports, and why."""
 
+RISING = {
+    "line",
+    "points",
+    "error bars",
+    "error band",
+    "fewer points",
+}
+"""Objects whose columns rise steadily: marking their peaks marks none."""
+
 KNOWN = {}
 """Fields with a problem that is planned to be fixed: the roadmap item."""
 
@@ -131,6 +143,7 @@ OBJECTS: dict[str, Callable[[Project], str]] = {
     "points": _artist("scatter"),
     "error bars": _artist("errorbar"),
     "fewer points": _artist("errorbar", 1),
+    "processed": _artist("line", 2),
     "error band": _artist("errorbar", 2),
     "fit": _artist("fit"),
     "residuals": _artist("residual"),
@@ -175,6 +188,9 @@ def test_every_field_works(qtbot, project_file: Path, name: str) -> None:
             if outcome is None or not outcome.startswith(expected):
                 got = outcome or "a visible change"
                 problems.append(f"{field}: expected {expected!r} ({why}), got {got}")
+        elif field == "peaks" and name in RISING:
+            if outcome != "nothing drawn changes":
+                problems.append(f"{field}: {outcome or 'a visible change'}")
         elif key in KNOWN:
             if outcome is None:
                 problems.append(f"{field}: works now; take {key} out of KNOWN")

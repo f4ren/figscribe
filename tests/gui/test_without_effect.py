@@ -38,6 +38,7 @@ from figscribe.model import (
     ImagePlot,
     Legend,
     LinePlot,
+    Peaks,
     PredefinedFit,
     Project,
     Reduction,
@@ -410,6 +411,12 @@ CASES: dict[tuple, Case] = {
             ("left_out_linestyle", ":"),
         )
     },
+    ("LinePlot", ("peaks", "decimals")): (
+        _alone(lambda: _line(peaks=Peaks(labels=False))),
+        2,
+        ("peaks", "labels"),
+        True,
+    ),
     ("LinePlot", ("baseline", "degree")): (
         _alone(lambda: _line(baseline=Baseline(shape="linear"))),
         4,

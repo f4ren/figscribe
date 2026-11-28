@@ -101,6 +101,7 @@ from figscribe.model import (
     FunctionPlot,
     Histogram,
     PanelLabels,
+    Peaks,
     PredefinedFit,
     Project,
     Reduction,
@@ -205,6 +206,7 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "baseline": Baseline,
     "smoothing": Smoothing,
     "reduction": Reduction,
+    "peaks": Peaks,
 }
 """Optional nested models switched on and off with a check box; when on, their
 fields get a section of their own."""
@@ -267,6 +269,7 @@ SECTIONS = {
     "smoothing": "Data",
     "normalize": "Data",
     "reduction": "Data",
+    "peaks": "Data",
     "x_conversion": "Data",
     "y_conversion": "Data",
     "x_range": "Data",
@@ -358,6 +361,7 @@ SECTION_NAMES = {
     "baseline": "Baseline",
     "smoothing": "Smoothing",
     "reduction": "Fewer points",
+    "peaks": "Peaks",
     "layout": "Panel layout",
     "inset": "Place in panel",
 }
@@ -401,6 +405,7 @@ BASIC = {
         "baseline",
         "smoothing",
         "reduction",
+        "peaks",
         "color",
         "marker",
         "markersize",
@@ -423,6 +428,7 @@ BASIC = {
         "baseline",
         "smoothing",
         "reduction",
+        "peaks",
         "color",
         "edgecolor",
         "marker",
@@ -445,6 +451,7 @@ BASIC = {
         "baseline",
         "smoothing",
         "reduction",
+        "peaks",
         "color",
         "marker",
         "markersize",
@@ -621,6 +628,8 @@ COLLAPSED = {
 folds with a click on its title, and stays as the user left it."""
 
 PLACEHOLDERS = {
+    "prominence": "a tenth of the span",
+    "decimals": "4 digits",
     "band.color": "the plot's",
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
@@ -845,6 +854,15 @@ TIPS = {
     "PanelLabels.style": "How the letters are written.",
     "band": "Shade the y errors as a band around the line instead of drawing bars, "
     "for dense data; x errors stay bars.",
+    "peaks": "Mark the peaks of the values shown, with their x.",
+    "Peaks.prominence": "How far a peak must stand out from its surroundings, "
+    "in the y unit shown.",
+    "Peaks.distance": "Of two peaks closer than this many points only the "
+    "higher is marked.",
+    "Peaks.dips": "Mark the dips instead, as in a transmission spectrum.",
+    "Peaks.labels": "Write each peak's x beside it; off marks the peaks with "
+    "triangles.",
+    "Peaks.decimals": "Decimals of the x written at a peak.",
     "baseline": "Subtract a curve fitted to the y values: an offset, a drift or "
     "a background under peaks. Fits use what is left.",
     "Baseline.shape": "The curve that is fitted and subtracted.",
@@ -980,6 +998,8 @@ OTHER_FACTOR = "another factor"
 FORMULA = "a formula"
 
 CAPTIONS = {
+    ("Peaks", "distance"): "Points apart",
+    ("Peaks", "labels"): "Write x",
     ("Smoothing", "method"): "Method",
     ("PanelLabels", "fontsize"): "Letter size (pt)",
     ("LinePlot", "label"): "Legend entry",
@@ -1059,6 +1079,7 @@ PLOT_SECTIONS = {
     "baseline": "Units and rows",
     "smoothing": "Units and rows",
     "reduction": "Units and rows",
+    "peaks": "Units and rows",
     "color": "Look",
     "edgecolor": "Look",
     "marker": "Look",
@@ -1216,7 +1237,15 @@ IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS, *ELEMENT_SECTIONS}
 """Kinds of object whose settings are shown in the order of `BASIC`, not of the
 model, so that what belongs together is next to each other."""
 
-INLINE = {"panel_labels", "band", "baseline", "smoothing", "reduction", "colorbar"}
+INLINE = {
+    "panel_labels",
+    "band",
+    "baseline",
+    "smoothing",
+    "reduction",
+    "peaks",
+    "colorbar",
+}
 """Optional parts whose settings follow their check box in its own section
 instead of having a section of their own."""
 
@@ -1593,6 +1622,10 @@ class PropertyPanel(QScrollArea):
                     "Letter the panels", [SetField(obj.id, path, PanelLabels())]
                 )
             return Macro("Remove the panel labels", [SetField(obj.id, path, None)])
+        if path == ("peaks",):
+            if value:
+                return Macro("Mark the peaks", [SetField(obj.id, path, Peaks())])
+            return Macro("Remove the peak marks", [SetField(obj.id, path, None)])
         if path == ("reduction",):
             if value:
                 return Macro("Draw fewer points", [SetField(obj.id, path, Reduction())])
@@ -2891,6 +2924,7 @@ def _shape(obj: BaseModel) -> tuple:
             "baseline",
             "smoothing",
             "reduction",
+            "peaks",
             "inset",
             "result",
         )

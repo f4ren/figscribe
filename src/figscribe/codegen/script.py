@@ -78,9 +78,10 @@ from figscribe.model.timeaxes import (
     as_dates,
     date_axis,
     not_on_dates,
+    peaks_on_dates,
     time_columns_of,
 )
-from figscribe.process import degree_of, not_computable
+from figscribe.process import PROMINENCE, degree_of, not_computable, peaks_of
 from figscribe.render.breaks import curve_parts, overlapping
 from figscribe.render.figure import (
     COORDS,
@@ -108,6 +109,12 @@ from figscribe.render.layout import (
     inset_parent,
     share_partner,
     sharing_specs,
+)
+from figscribe.render.peaks import (
+    LABEL_ROOM,
+    MARK_OFFSET,
+    peak_label,
+    peak_mark,
 )
 from figscribe.render.ticks import (
     DATE_FORMATS,
@@ -292,6 +299,8 @@ class _Writer:
             self.reserved |= TIME_NAMES
         if any(getattr(a, "smoothing", None) for a in self.artists.values()):
             self.reserved |= PROCESS_NAMES
+        if any(getattr(a, "peaks", None) for a in self.artists.values()):
+            self.reserved |= PEAK_NAMES
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
         self.unit_lines: list[tuple[str, str, str]] = []
@@ -714,7 +723,7 @@ class _Writer:
     def _header(self) -> None:
         figure = self.figure
         packages = ["NumPy", "Matplotlib"]
-        if self.fits or self._grouped() or self._smooths():
+        if self.fits or self._grouped() or self._smooths() or self._any_peaks():
             packages.append("SciPy")
         if self._sheets():
             packages.append("python-calamine")
@@ -784,6 +793,8 @@ class _Writer:
             )
         if any(self.places[oid][1] != "both" for oid in self.functions):
             self.emit("from matplotlib.lines import Line2D")
+        if self._any_peaks(labels=False):
+            self.emit("from matplotlib.transforms import offset_copy")
         if self._sheets():
             self.emit("from python_calamine import CalamineWorkbook")
         methods = {
@@ -795,8 +806,16 @@ class _Writer:
             self.emit("from scipy.ndimage import uniform_filter1d")
         if self.fits:
             self.emit("from scipy.optimize import curve_fit")
-        if "savgol" in methods:
-            self.emit("from scipy.signal import savgol_filter")
+        signals = [
+            name
+            for name, wanted in (
+                ("find_peaks", self._any_peaks()),
+                ("savgol_filter", "savgol" in methods),
+            )
+            if wanted
+        ]
+        if signals:
+            self.emit(f"from scipy.signal import {', '.join(signals)}")
         if self._grouped():
             self.emit("from scipy.stats import binned_statistic")
         self.emit("", "HERE = Path(__file__).resolve().parent")
@@ -1424,6 +1443,112 @@ class _Writer:
             f"{after} = {y} - np.polynomial.Polynomial.fit({fitted}, {degree})({x})"
         )
         return after
+
+    def _marks_peaks(self, index: int, artist) -> bool:
+        return (
+            getattr(artist, "peaks", None) is not None
+            and artist.visible
+            and artist.id not in self.skipped
+            and not peaks_on_dates(self.figure, index, artist, self.is_time)
+        )
+
+    def _any_peaks(self, labels: bool | None = None) -> bool:
+        """Whether a panel marks peaks; with `labels`, in that way."""
+        return any(
+            self._marks_peaks(i, a) and labels in (None, a.peaks.labels)
+            for i, axes in enumerate(self.figure.axes)
+            for a in axes.artists
+        )
+
+    def _peaks(self, ax: str, plot, spec: AxisSpec, cuts) -> None:
+        """The peaks of a plot, as `process.peaks_of` and the renderer."""
+        how = plot.peaks
+        x, y = self.shown(plot, "x"), self.shown(plot, "y")
+        shown = None if self.data is None else plot_data(plot, self.data)
+        parts = []
+        if plot.id not in self.reduced:  # fewer points have the rows taken out
+            parts = [m for m in (self.kept.get(plot.id), self.used.get(plot.id)) if m]
+        if shown is None or not np.all(np.isfinite(shown.x) & np.isfinite(shown.y)):
+            parts += [f"np.isfinite({x})", f"np.isfinite({y})"]
+        mask = parts[0] if parts else None
+        self.emit(
+            *textwrap.wrap(
+                f"The {'dips' if how.dips else 'peaks'} of {_describe(plot)}, "
+                "marked with their x.",
+                WIDTH,
+                initial_indent="# ",
+                subsequent_indent="# ",
+            )
+        )
+        if len(parts) > 1 or (parts and parts[0].startswith("np.isfinite")):
+            mask = self._free("measured")
+            self.emit(f"{mask} = " + " & ".join(parts))
+        values = y if mask is None else f"{y}[{mask}]"
+        span = f"np.ptp({values})"
+        prominence = (
+            f"{PROMINENCE} * {span}" if how.prominence is None else _num(how.prominence)
+        )
+        options = [f"prominence={prominence}"]
+        if how.distance > 1:
+            options.append(f"distance={how.distance}")
+        places = self._free("peaks")
+        searched = f"-{values}" if how.dips else values
+        found = places if mask is None else self._free("found")
+        self.call(f"{found}, _ = find_peaks", searched, *options)
+        if mask is not None:
+            self.emit(f"{places} = np.flatnonzero({mask})[{found}]")
+        for name, ends in zip((x, y), cuts, strict=True):
+            for a, b in ends:
+                self.emit(
+                    f"{places} = {places}[~(({name}[{places}] > {_num(a)}) & "
+                    f"({name}[{places}] < {_num(b)}))]  # not within a break"
+                )
+        head = f"for xp, yp in zip({x}[{places}], {y}[{places}]):"
+        self.emit(head)
+        if how.labels:
+            text = (
+                'f"{xp:.4g}"' if how.decimals is None else f'f"{{xp:.{how.decimals}f}}"'
+            )
+            if self.figure.decimal_comma:
+                text = f'{text}.replace(".", ",")'
+            options = {
+                k: _value(v)
+                for k, v in peak_label(how.dips).items()
+                if k != "arrowprops"
+            }
+            arrow = peak_label(how.dips)["arrowprops"]
+            options["arrowprops"] = (
+                "{"
+                + ", ".join(f"{_str(k)}: {_value(v)}" for k, v in arrow.items())
+                + "}"
+            )
+            self.call(
+                f"note = {ax}.annotate",
+                text,
+                "(xp, yp)",
+                indent="    ",
+                **options,
+                zorder=_num(plot.zorder),
+            )
+            self.emit("    note.set_in_layout(False)  # it must not squeeze the panel")
+        else:
+            offset = -MARK_OFFSET if how.dips else MARK_OFFSET
+            self.emit(
+                f"    raised = offset_copy({ax}.transData, fig=fig, y={offset}, "
+                'units="points")'
+            )
+            self.call(
+                f"{ax}.plot",
+                "xp",
+                "yp",
+                indent="    ",
+                transform="raised",
+                zorder=_num(plot.zorder),
+                **{k: _value(v) for k, v in peak_mark(how.dips).items()},
+            )
+        count = 0 if shown is None else peaks_of(plot, shown).size
+        if how.labels and spec.limits is None and (shown is None or count):
+            self.emit(f"{ax}.margins(y={LABEL_ROOM})  # room for the labels")
 
     def _smooths(self) -> bool:
         return any(self.artists[i].smoothing is not None for i in self.processed)
@@ -2169,6 +2294,12 @@ class _Writer:
             # The breaks of the y axis are the left one's.
             self._cut = (x_breaks, [] if on_right else y_breaks)
             self._artist(right if on_right else ax, artist)
+        for artist in axes.artists:  # once all are drawn, as in the window
+            if self._marks_peaks(index, artist):
+                on_right = artist.axis == "right" and right is not None
+                spec = axes.y_right if on_right else axes.y
+                cuts = (x_breaks, [] if on_right else y_breaks)
+                self._peaks(right if on_right else ax, artist, spec, cuts)
         if axes.legend.visible:
             self._legend(ax, axes.legend, right)
 
@@ -3059,6 +3190,9 @@ does the same, step by step."""
 # What the script reads an HDF5 file with, as `io.hdf5file` does.
 PROCESS_NAMES = {"savgol_filter", "uniform_filter1d"}
 """Names the script uses to smooth, taken only in a project that does."""
+
+PEAK_NAMES = {"find_peaks", "offset_copy", "xp", "yp", "note", "raised"}
+"""Names the script uses to mark peaks, taken only in a project that does."""
 
 TIME_NAMES = {
     "mdates",

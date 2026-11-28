@@ -128,6 +128,17 @@ def _about(figure: Figure, oid: str):
     return None
 
 
+def peaks_on_dates(figure: Figure, index: int, artist, is_time: IsTime) -> bool:
+    """Whether the peaks of the plot cannot be marked: its axes show dates."""
+    if getattr(artist, "peaks", None) is None:
+        return False
+    axes = figure.axes[index]
+    right = artist.axis == "right" and axes.y_right is not None
+    return date_axis(figure, index, "x", is_time) or date_axis(
+        figure, index, "y_right" if right else "y", is_time
+    )
+
+
 def _points(artist, dates: dict[str, bool], is_time: IsTime) -> str | None:
     for name in ("x", "y"):
         if dates[name] and not as_dates(artist, name, is_time):

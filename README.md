@@ -133,8 +133,9 @@ script.
 - HDF5 (`.h5`, `.hdf5`, `.he5`, `.nxs`) files: a group with its datasets as columns, a
   table of records, or one dataset of one or two dimensions, with the units
   from its attributes. Values kept in other files are not followed.
-- A plot's values smoothed (Savitzky–Golay or a moving average) and
-  normalised to their maximum or area, computed in the script as well.
+- A baseline fitted in given ranges and subtracted, values smoothed
+  (Savitzky–Golay or a moving average) and normalised to their maximum or area,
+  and peaks marked with their x; the script computes the same.
 - Columns of dates and times (ISO text such as `2026-11-01 12:30`, date cells
   of spreadsheets, `datetime64` in NumPy and HDF5 files) give a date axis;
   *x in: h since the start* turns them into numbers. A time zone is read as
@@ -401,8 +402,7 @@ Design decisions and their reasons are recorded in
 
 ## Scope
 
-Planned beyond what exists: several files as one series, peak finding and
-baselines, a second x axis on top, more fit models and
+Planned beyond what exists: several files as one series, a second x axis on top, more fit models and
 a confidence band, step plots and bar charts, style templates for journals,
 snapping and alignment guides, signed installers.
 

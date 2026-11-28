@@ -4024,6 +4024,17 @@ script, settings on a plot with nothing computed stored.
   limits and marks on the axis are converted along, as for a unit (0041).
 - **On date axes** smoothing and the maximum work; an area over dates, like the
   baseline and the peaks, needs the time since the start.
+- **Baseline:** a constant, a straight line or a polynomial of degree 2 to 9,
+  fitted by least squares (`numpy.polynomial.Polynomial.fit`, which scales x)
+  to the measured points in the x ranges given, all of them without ranges, and
+  subtracted from every value. y errors stay: the uncertainty of the curve is
+  not added. The ranges follow the x unit; a change of the y unit moves the axis
+  by its factor only, since an offset is subtracted with the curve.
+- **Peaks** change no value. `scipy.signal.find_peaks` runs over the points the
+  plot draws; the prominence is in the y unit shown (a tenth of the span unless
+  given, and it follows the unit), the distance counts points, as that function
+  does. Each peak gets its x above it with a short line, or a triangle; the
+  automatic y range gets room for the labels. No peaks on date axes.
 - **A change that cannot be computed** (a window longer than the data, nothing
   above zero to normalise to) is refused with the reason; taking a setting off
   never is. A plot that can no longer be computed, as after a new version of

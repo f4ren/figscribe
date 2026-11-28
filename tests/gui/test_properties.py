@@ -714,6 +714,7 @@ def test_the_basic_settings_come_first_the_rest_under_more(
         "baseline",
         "smoothing",
         "reduction",
+        "peaks",
     ]
     assert fields["Left-out points"] == [
         "left_out_color",

@@ -95,7 +95,9 @@ bar plot ({"method": "savgol", "window": 11, "order": 3} or {"method": \
 `normalize` ("max" or "area", null) divides them after smoothing; \
 `baseline` is subtracted before both ({"shape": "linear", "ranges": [[0, 5], \
 [15, 20]]}; "constant" or "polynomial" with "degree"; ranges in shown x, none \
-for every point); \
+for every point); `peaks` marks the peaks with their x ({} for the defaults; \
+"prominence" in the shown y unit, "distance" in points, "dips", "labels", \
+"decimals"); \
 `reduction` draws fewer points of a line, points or error bar \
 plot ({"method": "mean", "count": 10}; "median", "every" or "interval" with \
 "width" in x; null draws every row)

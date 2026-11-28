@@ -116,6 +116,8 @@ def set_conversion(
             SetField(fit.id, ("result",), None) for fit in _fits_of(project, plot_id)
         ]
         return Macro(_describe(axis, conversion), steps)
+    if axis == "y":
+        steps += _prominence_follows(plot, rescale)
     plot_after = _after(project, steps)
     check_computable(plot_after, plot_id, data)
     if getattr(plot, "normalize", None) is not None:
@@ -185,6 +187,9 @@ def set_processing(
         steps += _start_values_afresh(project, plot_id)
     if name == "normalize":
         steps += _normalised_axis(project, plot, changed, data)
+        moved = _normalised_move(plot, changed, data)
+        if moved is not None:
+            steps += _prominence_follows(plot, moved[1])
     return _with_fits_again(
         project,
         plot_id,
@@ -390,6 +395,15 @@ def changed_smoothing(how: Smoothing, name: str, value) -> dict:
     if name == "method" and value == "savgol":
         changed["order"] = min(changed["order"], changed["window"] - 1)
     return changed
+
+
+def _prominence_follows(plot, rescale) -> list[Command]:
+    """A typed prominence is in the unit shown, and follows it."""
+    how = getattr(plot, "peaks", None)
+    if how is None or how.prominence is None:
+        return []
+    changed = how.model_copy(update={"prominence": abs(rescale(how.prominence))})
+    return [SetField(plot.id, ("peaks",), changed)]
 
 
 def _always(panel_id: str, field: str) -> bool:

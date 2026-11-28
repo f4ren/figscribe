@@ -127,6 +127,24 @@ class Baseline(StrictModel):
     stretches without peaks; empty fits every point."""
 
 
+class Peaks(StrictModel):
+    """Mark the peaks of the values the plot shows, found by
+    scipy.signal.find_peaks (decision 0083); the values stay as they are."""
+
+    prominence: float | None = Field(None, gt=0.0)
+    """How far a peak must stand out from its surroundings, in the y unit
+    shown; None takes a tenth of the span of the values."""
+    distance: int = Field(1, ge=1)
+    """The points two peaks must at least be apart; of two closer ones the
+    lower is not marked."""
+    dips: bool = False
+    """Mark the dips instead, as in a transmission spectrum."""
+    labels: bool = True
+    """Write each peak's x beside it; off marks them with a triangle."""
+    decimals: int | None = Field(None, ge=0, le=10)
+    """Decimals of the written x; None writes four significant digits."""
+
+
 class ArtistBase(Identified):
     label: str | None = None
     """Legend entry; None means the artist is not listed."""
@@ -189,6 +207,8 @@ class LinePlot(ArtistBase):
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
+    peaks: Peaks | None = None
+    """Mark the peaks of the values shown; None marks none."""
 
 
 class ScatterPlot(ArtistBase):
@@ -235,6 +255,8 @@ class ScatterPlot(ArtistBase):
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
+    peaks: Peaks | None = None
+    """Mark the peaks of the values shown; None marks none."""
 
 
 class ErrorBand(StrictModel):
@@ -308,6 +330,8 @@ class ErrorbarPlot(ArtistBase):
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
+    peaks: Peaks | None = None
+    """Mark the peaks of the values shown; None marks none."""
 
 
 class Histogram(ArtistBase):

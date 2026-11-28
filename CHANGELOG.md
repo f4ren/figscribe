@@ -5,6 +5,12 @@ release open in every later one.
 
 ## Unreleased
 
+- **Baseline and peaks.** A constant, straight line or polynomial fitted in
+  the x ranges you give (stretches without peaks) is subtracted before smoothing
+  and normalising; peaks (or dips) of the values shown are marked with their x
+  or with triangles, found by `scipy.signal.find_peaks` with a prominence and a
+  distance in points. The Python script does both with the same calls
+  (decision 0083).
 - **Smoothing and normalising** a line, points or error bar plot: Savitzky–Golay
   or a moving average over a window of points, and division by the maximum or
   by the area under the points. Fits use the computed values; the Python script

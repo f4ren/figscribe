@@ -270,6 +270,11 @@ note the platform, the screen scaling and the theme in the pull request.
     peaks keep a sensible height; normalise to the maximum and to the area and
     back, with typed axis limits; fit a smoothed plot and read the problem
     list. Export the script and run it.
+41. **Baseline and peaks** (decision 0083): on a measured spectrum with a
+    sloping background, give ranges without peaks, try line and polynomial,
+    mark peaks and dips, change prominence and distance, and look whether the
+    labels keep clear of the frame, each other and the curve at the figure's
+    real size. Export the script and run it.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

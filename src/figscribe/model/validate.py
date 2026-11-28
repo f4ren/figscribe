@@ -43,10 +43,12 @@ from figscribe.model.project import Project
 from figscribe.model.sharing import sharing_group, typed_limits
 from figscribe.model.styles import style_problems
 from figscribe.model.timeaxes import (
+    SINCE_START,
     IsTime,
     as_dates,
     date_axis,
     not_on_dates,
+    peaks_on_dates,
     time_columns_of,
 )
 from figscribe.times import date_text
@@ -161,6 +163,9 @@ def validate_references(
                     why = _text_where_numbers_are_plotted(artist, drawn)
                     if why is not None:
                         issues.append(ReferenceIssue(tpath, artist.id, why))
+                if dates_why is None and peaks_on_dates(figure, ai, artist, is_time):
+                    why = f"there are no peaks over dates; {SINCE_START}"
+                    issues.append(ReferenceIssue(tpath, artist.id, why))
                 if drawn is not None and isinstance(artist, FITTABLE):
                     # Imported here: the data package imports the model.
                     from figscribe.process import cannot_compute

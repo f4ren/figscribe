@@ -59,6 +59,7 @@ LOOK_FIELDS = (
     "capsize",
     "elinewidth",
     "band",
+    "peaks",
     "left_out_color",
     "left_out_marker",
     "left_out_linestyle",

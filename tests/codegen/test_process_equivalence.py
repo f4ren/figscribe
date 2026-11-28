@@ -15,6 +15,7 @@ from figscribe.model import (
     ErrorBand,
     FitCurve,
     LinePlot,
+    Peaks,
     PredefinedFit,
     Reduction,
     Smoothing,
@@ -146,3 +147,42 @@ def test_baselines(tmp_path: Path, case: str) -> None:
     project, _, _ = made(tmp_path, **BASELINES[case])
     script = _assert_same(project, tmp_path)
     assert "Polynomial.fit(" in script
+
+
+PEAKS = {
+    "labels": {"peaks": Peaks(prominence=0.1)},
+    "markers only": {"peaks": Peaks(prominence=0.1, labels=False), "color": "C2"},
+    "dips with decimals": {"peaks": Peaks(prominence=0.1, dips=True, decimals=2)},
+    "further apart, left out and range": {
+        "peaks": Peaks(distance=4),
+        "left_out": [4],
+        "x_range": (2.0, 15.0),
+    },
+    "after everything": {
+        "baseline": Baseline(shape="constant"),
+        "smoothing": Smoothing(window=5),
+        "normalize": "max",
+        "peaks": Peaks(),
+    },
+    "of fewer points": {
+        "reduction": Reduction(count=2),
+        "peaks": Peaks(prominence=0.05),
+    },
+}
+
+
+@pytest.mark.parametrize("comma", [False, True], ids=["point", "comma"])
+@pytest.mark.parametrize("case", PEAKS)
+def test_peaks(tmp_path: Path, case: str, comma: bool) -> None:
+    project, _, _ = made(tmp_path, **PEAKS[case])
+    project.figures[0].decimal_comma = comma
+    script = _assert_same(project, tmp_path)
+    assert "find_peaks(" in script
+
+
+def test_peaks_on_broken_axes_and_beside_another_panel(tmp_path: Path) -> None:
+    project, _, _ = made(tmp_path, peaks=Peaks(prominence=0.1))
+    panel = project.figures[0].axes[0]
+    panel.x = AxisSpec(breaks=[(8.0, 11.0)])
+    panel.y = AxisSpec(limits=(0.5, 3.5))
+    _assert_same(project, tmp_path)

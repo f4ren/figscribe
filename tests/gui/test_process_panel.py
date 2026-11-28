@@ -8,7 +8,7 @@ import pytest
 
 from figscribe.commands import SetField
 from figscribe.gui import Document, MainWindow
-from figscribe.model import Baseline, Smoothing
+from figscribe.model import Baseline, Peaks, Smoothing
 from figscribe.tools.operations import Toolbox, ToolError
 from figscribe.tools.workspace import ProjectWorkspace
 from tests.test_process import made
@@ -145,3 +145,18 @@ def test_a_baseline_and_its_ranges_in_the_panel(window) -> None:
     line.setText("")
     line.editingFinished.emit()
     assert _plot(window).baseline.ranges == []
+
+
+def test_peaks_in_the_panel(window) -> None:
+    _editor(window, "peaks").click()
+    assert _plot(window).peaks == Peaks()
+    line = _editor(window, "peaks", "prominence")
+    assert line.placeholderText() == "a tenth of the span"
+    line.setText("0.5")
+    line.editingFinished.emit()
+    assert _plot(window).peaks.prominence == 0.5
+    _editor(window, "peaks", "labels").click()
+    window.document.select(_plot(window).id)
+    assert not _editor(window, "peaks", "decimals").isEnabled()
+    _editor(window, "peaks").click()
+    assert _plot(window).peaks is None

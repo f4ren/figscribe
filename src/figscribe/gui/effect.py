@@ -187,6 +187,12 @@ RULES: list[Rule] = [
     ),
     Rule(
         (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("peaks", "decimals"),),
+        "the peaks are marked without their x",
+        lambda plot, _: not plot.peaks.labels,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
         (("baseline", "degree"),),
         "only a polynomial has a degree to choose",
         lambda plot, _: plot.baseline.shape != "polynomial",

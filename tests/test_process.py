@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import savgol_filter
 
-from figscribe.commands import find
+from figscribe.commands import SetField, find
 from figscribe.convert import plot_data
 from figscribe.fit import FitError, add_fit, refit, set_left_out
 from figscribe.io import load_data
@@ -26,6 +26,7 @@ from figscribe.model import (
     Figure,
     FitCurve,
     LinePlot,
+    Peaks,
     PredefinedFit,
     Project,
     Reduction,
@@ -33,6 +34,8 @@ from figscribe.model import (
     Smoothing,
     validate_references,
 )
+from figscribe.process import peaks_of
+from figscribe.render import render
 from figscribe.units import (
     default_smoothing,
     set_conversion,
@@ -379,3 +382,88 @@ def test_there_is_no_baseline_over_dates(tmp_path: Path) -> None:
     data = load_data(project, tmp_path)
     problems = [i.message for i in validate_references(project, data)]
     assert any("no baseline over dates" in p for p in problems)
+
+
+def _two_peaks(folder: Path, **plot):
+    """Peaks of height 5 at x = 5 and 2 at x = 14, on 1."""
+    y = 1 + 5 * np.exp(-((X - 5) ** 2)) + 2 * np.exp(-((X - 14) ** 2))
+    rows = "\n".join(f"{a:g},{b:.6f},0.1" for a, b in zip(X, y, strict=True))
+    project, _, line = made(folder, **plot)
+    (folder / "d.csv").write_text(f"x,y,dy\n{rows}\n")
+    source = csv_source(folder / "d.csv", folder)
+    project.sources = [source.model_copy(update={"id": project.sources[0].id})]
+    return project, load_data(project, folder), line
+
+
+def _found(plot, data) -> list[float]:
+    shown = plot_data(plot, data)
+    return list(shown.x[peaks_of(plot, shown)])
+
+
+def test_the_peaks_of_a_plot(tmp_path: Path) -> None:
+    _, data, plot = _two_peaks(tmp_path, peaks=Peaks())
+    assert _found(plot, data) == [5.0, 14.0]
+
+
+@pytest.mark.parametrize(
+    ("peaks", "found"),
+    [
+        (Peaks(prominence=3.0), [5.0]),
+        (Peaks(distance=10), [5.0]),
+        (Peaks(dips=True, prominence=0.001), []),
+    ],
+    ids=["a higher prominence", "further apart", "dips"],
+)
+def test_what_counts_as_a_peak(tmp_path: Path, peaks: Peaks, found) -> None:
+    _, data, plot = _two_peaks(tmp_path, peaks=peaks)
+    assert [x for x in _found(plot, data) if not 8 < x < 11] == found
+
+
+def test_peaks_of_dips_and_of_what_is_left_out(tmp_path: Path) -> None:
+    _, data, plot = _two_peaks(
+        tmp_path, peaks=Peaks(dips=True), y_conversion=Conversion(formula="x")
+    )
+    plot.y_conversion = None
+    plot.peaks = Peaks()
+    plot.left_out = [5]
+    assert 5.0 not in _found(plot, data)
+    plot.x_range = (10.0, 19.0)
+    assert _found(plot, data) == [14.0]
+
+
+def test_peaks_do_not_change_the_values_or_the_fits(tmp_path: Path) -> None:
+    project, data, plot = _two_peaks(tmp_path)
+    before = plot_data(plot, data).y
+    SetField(plot.id, ("peaks",), Peaks()).apply(project)
+    plot = project.figures[0].axes[0].artists[0]
+    np.testing.assert_array_equal(plot_data(plot, data).y, before)
+
+
+def test_there_are_no_peaks_over_dates(tmp_path: Path) -> None:
+    project, _ = project_of(
+        tmp_path, lambda ref: LinePlot(x=ref("time"), y=ref("T"), peaks=Peaks())
+    )
+    data = load_data(project, tmp_path)
+    problems = [i.message for i in validate_references(project, data)]
+    assert any("peaks over dates" in p for p in problems)
+
+
+def test_the_labels_are_written_next_to_the_peaks(tmp_path: Path) -> None:
+    project, data, _ = _two_peaks(tmp_path, peaks=Peaks(decimals=1))
+    figure = render(project.figures[0], data)
+    texts = [t.get_text() for t in figure.axes[0].texts]
+    assert texts == ["5.0", "14.0"]
+    project.figures[0].decimal_comma = True
+    figure = render(project.figures[0], data)
+    assert [t.get_text() for t in figure.axes[0].texts] == ["5,0", "14,0"]
+
+
+def test_a_prominence_follows_the_y_unit(tmp_path: Path) -> None:
+    project, data, plot = _two_peaks(tmp_path, peaks=Peaks(prominence=3.0))
+    top = plot_data(plot, data).y.max()
+    mv = Conversion(factor=1000.0, unit="mV")
+    set_conversion(project, plot.id, "y", mv, data).apply(project)
+    assert project.figures[0].axes[0].artists[0].peaks.prominence == 3000
+    set_processing(project, plot.id, "normalize", "max", data).apply(project)
+    prominence = project.figures[0].axes[0].artists[0].peaks.prominence
+    assert prominence == pytest.approx(3 / top)

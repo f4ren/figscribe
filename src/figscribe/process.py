@@ -11,7 +11,7 @@ from dataclasses import replace
 
 import numpy as np
 from scipy.ndimage import uniform_filter1d
-from scipy.signal import savgol_filter
+from scipy.signal import find_peaks, savgol_filter
 
 from figscribe.convert import PlotData, plot_data, within
 from figscribe.fit.run import FitError, kept
@@ -101,6 +101,32 @@ def divisor(how: str, x: np.ndarray, y: np.ndarray, rows: np.ndarray) -> float:
     if not by > 0:
         raise ProcessError(f"normalising needs a {what} above zero")
     return by
+
+
+def peaks_of(plot, shown: PlotData) -> np.ndarray:
+    """The places, in `shown`, of the peaks the plot marks: of the points it
+    draws that are measured and not left out."""
+    how = plot.peaks
+    rows = np.isfinite(shown.x) & np.isfinite(shown.y)
+    if not shown.reduced:  # fewer points have the rows taken out already
+        rows &= shown.used & kept(len(shown.x), plot.left_out)
+    places = np.flatnonzero(rows)
+    values = -shown.y[rows] if how.dips else shown.y[rows]
+    if values.size < 3:
+        return places[:0]
+    prominence = how.prominence or PROMINENCE * np.ptp(values)
+    found, _ = find_peaks(values, prominence=prominence, distance=how.distance)
+    return places[found]
+
+
+PROMINENCE = 0.1
+"""Of the span of the values: how far a peak stands out unless it is said."""
+
+
+def peak_text(value: float, decimals: int | None, comma: bool) -> str:
+    """The x of a peak as it is written beside it."""
+    text = f"{value:.4g}" if decimals is None else f"{value:.{decimals}f}"
+    return text.replace(".", ",") if comma else text
 
 
 def degree_of(how: Baseline) -> int:
