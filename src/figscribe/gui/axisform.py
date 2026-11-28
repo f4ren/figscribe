@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QCheckBox,
     QComboBox,
     QFormLayout,
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from figscribe.commands import CommandError, Macro, SetField, set_breaks
 from figscribe.gui.breaks import current_breaks, panel_index, proposed_break
+from figscribe.gui.dates import axis_on_dates, date_label, date_number
 from figscribe.gui.numbers import number, numbers
 from figscribe.gui.widgets import label
 from figscribe.model import AxisSpec
@@ -187,6 +189,7 @@ class AxisForm:
         row = QWidget()
         line = QHBoxLayout(row)
         line.setContentsMargins(0, 0, 0, 0)
+        self._range_layout = line
         self.low = QLineEdit()
         self.high = QLineEdit()
         line.addWidget(self.low, 1)
@@ -266,6 +269,17 @@ class AxisForm:
     def show(self, spec: AxisSpec) -> None:
         """Show `spec`; called again after every change of the model."""
         self.spec = spec
+        self.dated = axis_on_dates(
+            self.panel.document.project, self.axes_id, self.field
+        )
+        """Whether the axis shows dates: its places are typed as such, and what
+        is for numbers is hidden."""
+        step = self.major.findData("step")
+        if self.dated and step >= 0:
+            self.major.removeItem(step)
+        elif not self.dated and step < 0:
+            text, value = next(m for m in MAJOR_MODES if m[1] == "step")
+            self.major.insertItem(1, text, value)
         widgets = [
             self.label,
             self.unit,
@@ -318,11 +332,26 @@ class AxisForm:
         self.high.setPlaceholderText(self._shown(now[1]) if now else "automatic")
         self.reverse.setChecked(reversed_axis(spec))
         self._show_breaks()
-        self._visible(self.linthresh, spec.scale == "symlog")
+        self._visible(self.linthresh, spec.scale == "symlog" and not self.dated)
         _text(self.linthresh, self._shown(spec.symlog_linthresh))
         self._show_number_format(spec)
+        # A date and time needs a line of its own.
+        direction = QBoxLayout.Direction.TopToBottom
+        if not self.dated:
+            direction = QBoxLayout.Direction.LeftToRight
+        self._range_layout.setDirection(direction)
+        for widget in (self.prefix, self.number_format):
+            self._visible(widget, not self.dated)
+        # A scale or breaks left from before the dates stay, to be taken off.
+        self._visible(self.scale, not self.dated or spec.scale != "linear")
+        cut = self.field != "y_right" and (not self.dated or bool(spec.breaks))
+        self._visible(self.breaks_holder, cut)
+        if self.dated:
+            self._visible(self.decimals, False)
 
         mode = major_mode(spec)
+        if self.dated and mode == "step":
+            mode = "auto"
         self.major.setCurrentIndex(self.major.findData(mode))
         self._visible(self.major_value, mode != "auto")
         self._visible(self.tick_labels, mode == "values")
@@ -586,7 +615,10 @@ class AxisForm:
             if self.major.currentData() == "step":
                 self._set(ticks=None, tick_labels=None, major_step=self._parsed(text))
             else:
-                values = [value * self._factor() for value in numbers(text)]
+                if self.dated:
+                    values = [date_number(part) for part in text.split(",")]
+                else:
+                    values = [value * self._factor() for value in numbers(text)]
                 self._set(ticks=values, major_step=None)
         except ValueError as exc:
             self.panel.report(str(exc))
@@ -629,10 +661,15 @@ class AxisForm:
         """A value in data units as the axis shows it."""
         if value is None:
             return ""
+        if self.dated:
+            return date_label(value)
         return f"{value / self._factor():.6g}"
 
     def _parsed(self, text: str) -> float:
-        """A number typed in the shown unit, in data units."""
+        """A number typed in the shown unit, in data units; a date on a date
+        axis."""
+        if self.dated:
+            return date_number(text)
         return number(text) * self._factor()
 
     # --- widgets ------------------------------------------------------------------
@@ -705,22 +742,24 @@ def _number_text(value: float | None) -> str | None:
     return None if value is None else f"{value:g}"
 
 
-def axis_summary(spec: AxisSpec) -> str:
+def axis_summary(spec: AxisSpec, dated: bool = False) -> str:
     """One line about an axis for a panel's form: "f (kHz) · linear · auto"."""
     unit = unit_shown(spec)
     name = plain(spec.label) if spec.label else "no label"
     unit = plain(unit) if unit else unit
     if unit:
         name = f"{name} ({unit})"
-    if spec.limits is not None:
+    if spec.limits is not None and dated:
+        shown = " – ".join(date_label(v) for v in spec.limits)
+    elif spec.limits is not None:
         factor = 10.0 ** PREFIXES[spec.prefix] if spec.prefix else 1.0
         low, high = (v / factor for v in spec.limits)
         shown = f"{low:g} – {high:g}"
     else:
         shown = "automatic range"
-    scale = dict((v, t) for t, v in SCALES)[spec.scale]
+    scale = "dates" if dated else dict((v, t) for t, v in SCALES)[spec.scale]
     summary = f"{name} · {scale} · {shown}"
-    if spec.breaks:
+    if spec.breaks and not dated:
         factor = 10.0 ** PREFIXES[spec.prefix] if spec.prefix else 1.0
         cut = ", ".join(f"{a / factor:g} – {b / factor:g}" for a, b in spec.breaks)
         summary += f" · broken at {cut}"

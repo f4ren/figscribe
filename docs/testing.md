@@ -259,6 +259,12 @@ note the platform, the screen scaling and the theme in the pull request.
     plot make sense; another entry in the dialog and in the panel works. Export
     the script and run it. With a large file (some 100 MB), note how long the
     dialog takes to open and to change the entry.
+39. **Dates** (decision 0082): import a logger's file with timestamps and a
+    spreadsheet with date cells saved by Excel or Calc. The axis reads well at
+    the figure's real size, for hours, days and months of data; typing the range
+    and placing a line from the right-click menu work; *x in: h since the start*
+    and back keeps the range and the marks; zoom and pan work. Export the script
+    and run it.
 
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

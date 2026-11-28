@@ -5,7 +5,8 @@ from __future__ import annotations
 import math
 from string import ascii_uppercase
 
-from figscribe.model import Axes, Figure, FitCurve
+from figscribe.gui.dates import date_label, places_on_dates
+from figscribe.model import Axes, Figure, FitCurve, Project
 
 KIND_NAMES = {
     "line": "Line",
@@ -155,6 +156,8 @@ FIELD_NAMES = {
     "path": "File",
     "sha256": "Fingerprint",
     "row_count": "Rows of data",
+    "time_columns": "Date columns",
+    "trim_times": "Dates to trim",
     "x_conversion": "x in",
     "y_conversion": "y in",
     "from_start": "Start at 0",
@@ -229,8 +232,9 @@ def field_name(name: str) -> str:
     return FIELD_NAMES.get(name, name.replace("_", " ").capitalize())
 
 
-def artist_name(artist) -> str:
-    """The artist's legend label, or what it is."""
+def artist_name(artist, project: Project | None = None) -> str:
+    """The artist's legend label, or what it is; with `project`, a place on a
+    date axis is named as a date."""
     if artist.label:
         return artist.label
     if isinstance(artist, FitCurve):
@@ -242,14 +246,21 @@ def artist_name(artist) -> str:
         return f"f(x) = {artist.expression}"
     if artist.kind in ("refline", "span"):
         axis = "x" if artist.orientation == "vertical" else "y"
+        told = _number
+        if project is not None and any(places_on_dates(project, artist)):
+            told = date_label
         if artist.kind == "refline":
-            return f"Line at {axis} = {artist.at:g}"
+            return f"Line at {axis} = {told(artist.at)}"
         low, high = sorted((artist.start, artist.end))
-        return f"Range of {axis} from {low:g} to {high:g}"
+        return f"Range of {axis} from {told(low)} to {told(high)}"
     if artist.kind == "annotation":
         first, *more = artist.text.split("\n")
         return f"Note: {first} …" if more else f"Note: {first}"
     return KIND_NAMES.get(artist.kind, artist.kind)
+
+
+def _number(value: float) -> str:
+    return f"{value:g}"
 
 
 def panel_name(figure: Figure, axes: Axes) -> str:

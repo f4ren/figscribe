@@ -29,10 +29,11 @@ from PySide6.QtWidgets import (
 from figscribe.gui import theme
 from figscribe.gui.names import ENCODINGS
 from figscribe.gui.widgets import label, rule
-from figscribe.io.csvfile import csv_source, detect_encoding, read_csv
+from figscribe.io.csvfile import CsvTable, csv_source, detect_encoding, read_csv
 from figscribe.io.errors import DataError
 from figscribe.model import CsvSource, DataSource
 from figscribe.suggest import Suggestion, error_columns, suggest, units_line
+from figscribe.times import is_time
 
 DELIMITERS: list[tuple[str, str | None]] = [
     ("Comma", ","),
@@ -71,7 +72,9 @@ def guess_options(text: str) -> dict:
     def numeric(line: str) -> bool:
         fields = line.split() if delimiter is None else line.split(delimiter)
         try:
-            [float(f.strip().replace(decimal, ".")) for f in fields if f.strip()]
+            for field in (f.strip() for f in fields):
+                if field and not is_time(field):  # a date is data too
+                    float(field.replace(decimal, "."))
         except ValueError:
             return False
         return True
@@ -328,11 +331,31 @@ class DataDialog(QDialog):
 
     def _cell(self, value) -> str:
         """One value of the table as the preview shows it."""
+        if isinstance(value, np.datetime64):
+            return time_cell(value)
         return f"{value:g}"
 
     def _numbers_note(self, source: DataSource, table: np.ndarray) -> list[str]:
         """What to say about the table's values, a sentence each."""
-        return [f"All {table.shape[0]} rows read as numbers."]
+        if not source.time_columns:
+            return [f"All {table.shape[0]} rows read as numbers."]
+        return [f"All {table.shape[0]} rows read.", *self._dates_note(source)]
+
+    def _date_names(self, source: DataSource) -> list[str | int]:
+        """The columns that are dates, as a plot refers to them."""
+        return [
+            source.columns[i] if i < len(source.columns) else i
+            for i in source.time_columns
+        ]
+
+    def _dates_note(self, source: DataSource) -> list[str]:
+        names = self._date_names(source)
+        if not names:
+            return []
+        notes = [f"{', '.join(map(str, names))} read as dates."]
+        if getattr(source, "trim_times", False):
+            notes.append("A time zone is not converted: times are read as written.")
+        return notes
 
     def _size(self, source: DataSource, table: np.ndarray) -> tuple[int, int]:
         """The rows and columns of the data, of which `table` may be the start."""
@@ -364,6 +387,16 @@ class DataDialog(QDialog):
         for r in range(rows):
             for c in range(cols):
                 self.table.setItem(r, c, QTableWidgetItem(self._cell(table[r, c])))
+        # Each column of dates alike: midnight too with its time of day.
+        for c in range(cols):
+            dates = [v for v in table[:, c] if isinstance(v, np.datetime64)]
+            if not dates:
+                continue
+            unit = time_unit_shown(np.array(dates))
+            for r in range(rows):
+                if isinstance(table[r, c], np.datetime64):
+                    self.table.item(r, c).setText(time_cell(table[r, c], unit))
+            self.table.resizeColumnToContents(c)
         count, width = self._size(source, table)
         self.summary.setText(f"{count} rows · {width} columns · {self._advice()}")
         notes = self._numbers_note(source, table)
@@ -397,7 +430,17 @@ class DataDialog(QDialog):
     def _suggested(self) -> list[Suggestion]:
         """The first plots to offer for the data."""
         columns = self._plottable()
+        if columns and self._source.time_columns:
+            columns = self._dates_first(columns)
         return suggest(columns) if columns else []
+
+    def _dates_first(self, columns: list) -> list:
+        """The first column of dates as x, then the numbers: dates are not
+        plotted against dates, and alone they give no first plot."""
+        dates = self._date_names(self._source)
+        numbers = [c for c in columns if c not in dates]
+        found = [c for c in columns if c in dates]
+        return [*found[:1], *numbers] if numbers and found else numbers
 
     def _show_suggestions(self) -> None:
         found = self._suggested()
@@ -490,7 +533,14 @@ class ImportDialog(DataDialog):
             self.path, self.base_dir or self.path.parent, **self.options()
         )
         source = self._relative_to_project(source)
-        return source, read_csv(source, self._raw, self.path.name)
+        if not source.time_columns:
+            return source, read_csv(source, self._raw, self.path.name)
+        found = CsvTable(source, self._raw, self.path.name)
+        columns = [found.column(i) for i in range(found.width)]
+        table = np.empty((len(columns[0]), found.width), dtype=object)
+        for i, values in enumerate(columns):
+            table[:, i] = list(values)  # each stays a NumPy value
+        return source, table
 
     def _read_units(self, source: CsvSource, count: int) -> list[str] | None:
         if source.header_row is None or source.skip_rows < 1:
@@ -520,6 +570,24 @@ class ImportDialog(DataDialog):
         if options["encoding"] != "utf-8-sig":
             texts.append(f"{self.encoding.currentText()} text")
         return texts
+
+
+def time_unit_shown(values: np.ndarray) -> str:
+    """The finest part of the dates that says something: days, minutes,
+    seconds or milliseconds."""
+    values = values[~np.isnat(values)]
+    for unit in ("D", "m", "s"):
+        if np.array_equal(values.astype(f"datetime64[{unit}]"), values):
+            return unit
+    return "ms"
+
+
+def time_cell(value: np.datetime64, unit: str | None = None) -> str:
+    """A date as a preview shows it, to `unit`; "" for none."""
+    if np.isnat(value):
+        return ""
+    unit = unit or time_unit_shown(np.array([value]))
+    return str(np.datetime_as_string(value, unit=unit)).replace("T", " ")
 
 
 def _decimal_box() -> QComboBox:

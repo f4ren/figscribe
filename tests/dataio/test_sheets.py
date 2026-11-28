@@ -85,15 +85,16 @@ def test_a_cell_that_is_no_number_is_named_when_its_column_is_used(book: Path) -
 @pytest.mark.parametrize(
     ("value", "why"),
     [
-        (datetime(2026, 3, 4), "F2 holds a date or time"),
-        (True, "F2 holds TRUE or FALSE"),
-        ("n/a", "F2: 'n/a' is not a number"),
+        (datetime(2026, 3, 4), "F3 holds a date, in a column that is not all"),
+        (True, "F3 holds TRUE or FALSE"),
+        ("n/a", "F3: 'n/a' is not a number"),
     ],
 )
 @pytest.mark.parametrize("kind", WRITERS)
 def test_what_is_refused(tmp_path: Path, kind: str, value, why: str) -> None:
     path = tmp_path / f"a.{kind}"
-    WRITERS[kind](path, {"s": [["a", "b", "c", "d", "e", "f"], [1, 1, 1, 1, 1, value]]})
+    rows = [["a", "b", "c", "d", "e", "f"], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, value]]
+    WRITERS[kind](path, {"s": rows})
     source = sheet_source(path, tmp_path)
     with pytest.raises(DataError, match=why):
         _load(tmp_path, source, "f")

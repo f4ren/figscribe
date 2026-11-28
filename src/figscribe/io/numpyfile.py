@@ -14,6 +14,7 @@ import numpy as np
 from figscribe.io.errors import DataError
 from figscribe.io.files import sha256_of, stored_path
 from figscribe.model import NumpySource
+from figscribe.times import UNIT
 
 
 def numpy_source(
@@ -39,7 +40,12 @@ def numpy_source(
         array=array,
     )
     values = read_numpy(source, raw, path.name)  # refuse what cannot be plotted
-    return source.model_copy(update={"row_count": values.shape[0]})
+    times = []
+    if values.dtype.kind == "M":
+        times = list(range(values.shape[1] if values.ndim == 2 else 1))
+    return source.model_copy(
+        update={"row_count": values.shape[0], "time_columns": times}
+    )
 
 
 def array_names(raw: bytes, name: str) -> list[str]:
@@ -58,7 +64,7 @@ def read_numpy(
     source: NumpySource, raw: bytes, name: str, key: str | None = None
 ) -> np.ndarray:
     """The source's array (an .npz file's `key`, or the source's own) as
-    floats, at most two-dimensional."""
+    floats or as times, at most two-dimensional."""
     try:
         loaded = np.load(io.BytesIO(raw), allow_pickle=False)
         if isinstance(loaded, np.lib.npyio.NpzFile):
@@ -69,7 +75,10 @@ def read_numpy(
                 array = loaded[wanted]
         else:
             array = loaded
-        array = np.asarray(array, dtype=float)
+        if array.dtype.kind == "M":
+            array = array.astype(UNIT)  # as floats they would be huge integers
+        else:
+            array = np.asarray(array, dtype=float)
     except (OSError, ValueError, TypeError) as exc:
         raise DataError(f"cannot read {name}: {exc}") from exc
     if array.ndim not in (1, 2):

@@ -2,8 +2,9 @@
 
 A source is one sheet: a row of column names, perhaps rows to skip below it,
 then the rows of data; wholly empty rows are left out. A column is made into
-numbers when it is used, so notes and dates elsewhere do no harm. The script
-the code generator writes reads the file the same way.
+numbers when it is used, so notes elsewhere do no harm; a column of dates is
+read as times (decision 0082). The script the code generator writes reads the
+file the same way.
 
 Read with python-calamine, which takes what the file stores: a formula's
 result is the one saved with it, and a formula error reads as an empty cell.
@@ -23,6 +24,7 @@ from python_calamine import CalamineWorkbook, SheetTypeEnum, SheetVisibleEnum
 from figscribe.io.errors import CellError, DataError
 from figscribe.io.files import sha256_of, stored_path
 from figscribe.model import SheetSource
+from figscribe.times import parse_times
 
 FORMATS = {".xlsx": "xlsx", ".xlsm": "xlsx", ".xls": "xls", ".ods": "ods"}
 """The file name endings that are read as sheets, with the format of each."""
@@ -56,6 +58,11 @@ def sheet_source(
         skip_rows=skip_rows,
         decimal=decimal,
         first_column=first_column,
+        time_columns=[
+            i
+            for i in range(len(columns))
+            if _times(_cells(rows, first_column + i)) is not None
+        ],
         columns=columns,
         row_count=len(rows),
     )
@@ -103,10 +110,20 @@ class SheetTable:
     first_column: int
     width: int
     decimal: str
+    time_columns: tuple[int, ...] = ()
 
     def column(self, index: int) -> np.ndarray:
-        """The column `index` of the table (from 0) as floats; NaN for empty."""
+        """The column `index` of the table (from 0): floats, NaN for empty; or
+        times, NaT for empty."""
         at = self.first_column + index
+        if index in self.time_columns:
+            times = _times(_cells([row for _, row in self.rows], at))
+            if times is None:
+                raise CellError(
+                    f"cannot read {self.name}: sheet {self.sheet!r}, column "
+                    f"{column_letters(at)} is not all dates"
+                )
+            return times
         values = np.empty(len(self.rows))
         for i, (number, cells) in enumerate(self.rows):
             cell = cells[at] if at < len(cells) else ""
@@ -121,6 +138,11 @@ class SheetTable:
 
     def array(self) -> np.ndarray:
         """Every column, as 2-D data for images and color meshes."""
+        if self.time_columns:
+            raise CellError(
+                f"{self.name}, sheet {self.sheet!r}, holds dates, so it is no table "
+                "of numbers"
+            )
         return np.column_stack([self.column(i) for i in range(self.width)])
 
 
@@ -138,7 +160,13 @@ def read_sheet(source: SheetSource, raw: bytes, name: str) -> SheetTable:
     right = max(_last_filled(row) for _, row in rows) + 1
     width = max(len(source.columns), right - source.first_column, 1)
     return SheetTable(
-        name, source.sheet, rows, source.first_column, width, source.decimal
+        name,
+        source.sheet,
+        rows,
+        source.first_column,
+        width,
+        source.decimal,
+        tuple(source.time_columns),
     )
 
 
@@ -180,12 +208,30 @@ def _number(cell: object, decimal: str) -> float:
             raise ValueError(f": {text!r} is not a number{hint}") from None
     if isinstance(cell, bool):
         raise ValueError(" holds TRUE or FALSE, not a number")
-    if isinstance(cell, date | time | timedelta):
+    if isinstance(cell, time | timedelta):
         raise ValueError(
-            " holds a date or time, which figscribe cannot plot yet; add a column "
-            "of numbers, such as the time since the start"
+            " holds a time of day or a duration without a date, which figscribe "
+            "cannot plot; put the date in the same cell, or use numbers"
         )
+    if isinstance(cell, date):
+        raise ValueError(" holds a date, in a column that is not all dates")
     return float(cell)
+
+
+def _cells(rows: list[list[object]], at: int) -> list[object]:
+    return [row[at] if at < len(row) else "" for row in rows]
+
+
+def _times(cells: list[object]) -> np.ndarray | None:
+    """The cells as times, if every filled one is a date or ISO text of one."""
+    texts = []
+    for cell in cells:
+        if isinstance(cell, date):  # and so a date with a time of day
+            cell = cell.isoformat()
+        if not isinstance(cell, str):
+            return None
+        texts.append(cell)
+    return parse_times(texts)
 
 
 def _blank(cell: object) -> bool:

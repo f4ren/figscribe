@@ -70,7 +70,13 @@ from figscribe.commands import (
 from figscribe.commands.core import noun, walk
 from figscribe.datafile import columns_to_choose, parts_to_choose, use_another_file
 from figscribe.examples import gallery
-from figscribe.fit import FitError, add_fit, set_left_out, update_fit
+from figscribe.fit import (
+    FitError,
+    add_fit,
+    dates_refuse_a_fit,
+    set_left_out,
+    update_fit,
+)
 from figscribe.function import new_function
 from figscribe.gui import clipboard, markings, recovery, reveal, theme
 from figscribe.gui.about import about_text
@@ -79,6 +85,7 @@ from figscribe.gui.chatpanel import ChatPanel
 from figscribe.gui.codepanel import CodePanel
 from figscribe.gui.columndialog import ColumnDialog
 from figscribe.gui.databar import DataBar
+from figscribe.gui.dates import axis_on_dates
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.figures import FigureTabs, move_figure
@@ -803,7 +810,7 @@ class MainWindow(QMainWindow):
             return False
         steps = [InsertItem(None, "sources", source)]
         figure = self.document.figure
-        if values.ndim != 2 or figure is None:
+        if values.ndim != 2 or figure is None or source.time_columns:
             self._push(Macro(f"Add {path.name}", steps))
             self.document.select(source.id)
             return True
@@ -916,6 +923,13 @@ class MainWindow(QMainWindow):
         if target is None:
             self.show_error("Nothing to fit", "Select the plot to fit, then try again.")
             return
+        try:
+            why = dates_refuse_a_fit(target, self.document.data)
+        except DataError as exc:
+            why = exc
+        if why is not None:
+            self.show_error("Cannot fit", why)
+            return
         figure = self.document.figure
         axes = next(a for a in figure.axes if target in a.artists)
         below = any(
@@ -955,6 +969,9 @@ class MainWindow(QMainWindow):
         try:
             fit = find(self.document.project, fit_id)
             target = find(self.document.project, fit.target)
+            if why := dates_refuse_a_fit(target, self.document.data):
+                self.show_error("Cannot change the fit", why)
+                return
             dialog = FitDialog(
                 target,
                 self.document.data,
@@ -1029,7 +1046,8 @@ class MainWindow(QMainWindow):
         shown = self.preview.axis_limits(axis_id(axes.id, field))
         low, high = sorted(shown or spec.limits or (0.0, 1.0))
         log = spec.scale == "log" and low > 0
-        made = markings.marking(kind, orientation, low, high, log=log)
+        dates = axis_on_dates(self.document.project, axes.id, field)
+        made = markings.marking(kind, orientation, low, high, log=log, dates=dates)
         self._push(markings.add(axes.id, made))
         self.document.select(made.id)
 
@@ -1408,7 +1426,7 @@ class MainWindow(QMainWindow):
         if skipped:
             figure = self.document.figure
             names = ", ".join(panel_name(figure, each) for each in skipped)
-            message += f" Left out, as their axis has another scale or unit: {names}."
+            message += f" Left out, as their scale, unit or dates differ: {names}."
         self.statusBar().showMessage(message, 8000)
 
     def copy_figure(self) -> None:

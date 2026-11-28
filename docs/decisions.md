@@ -3934,3 +3934,55 @@ not on the next. **Choosing single datasets one by one**, each a source: a run
 with ten channels would be ten imports. **Opening the file by its path** after
 hashing it: saves memory, but figure and hash could come from different
 versions of a file that a measurement is still writing.
+
+## 0082 — Date and time axes (F5.5)
+
+2026-11-28. Accepted for what the user chose: a date and time axis, switched
+per plot to the time since the start; ISO text, date cells of spreadsheets and
+the timestamps of NumPy and HDF5 files; time zones not converted. The rest is
+the proposal this is built with.
+
+### Context
+
+Logged data carries timestamps. Until now a date cell of a spreadsheet was
+refused, a CSV file with dates could not be read at all, and a NumPy array of
+`datetime64` was silently read as large integers.
+
+### Decision
+
+- **A source records which columns are times** (`time_columns`, by index),
+  found on import, so that the model alone says what an axis shows and a script
+  can be written without the file. No schema bump: without the field nothing
+  changes.
+- **What counts as a time:** ISO text, `YYYY-MM-DD` with an optional time of
+  day after `T` or a blank; date and date-time cells of a spreadsheet;
+  `datetime64` in NumPy and HDF5 files. A column is a time column when every
+  filled cell is a time. Empty cells are missing values.
+- **Time zones are cut off, not converted** (`+01:00`, `Z`): a time is read as
+  written. NumPy alone would convert to UTC without a word. A series across a
+  change to summer time then repeats or skips an hour.
+- **A time of day without a date, and a duration cell**, stay refused: a
+  column of numbers, such as the seconds since the start, says what is meant.
+- **Times stay `datetime64[us]`** from the reader to the plot, and the script
+  reads and plots them as a person would.
+- **A converted time column counts from its start**: the existing choices s,
+  min, h and days then always start at the earliest time, and the result is a
+  column of numbers for which everything works as before.
+- **An unconverted time column makes its axis a date axis.** Limits and ranges
+  are stored as days since 1970-01-01, as Matplotlib counts them, and typed as
+  dates. Tick labels are numbers only (`2026-11-01`, `12:00`): month names
+  would follow the system's language in the window but not in the script.
+- **On a date axis:** lines, points, error bars, reference lines, ranges and
+  notes. Listed as a problem, pointing to the time since the start: fits and
+  residuals, functions, histograms of times, reduced points, broken axes,
+  logarithmic scale, errors of a time, images and color meshes, and times and
+  numbers on one axis.
+- **The times of an Allan deviation** may be a time column.
+
+### Alternatives considered
+
+**Seconds since 1970 as plain numbers** all the way: no code would see a new
+type, but the script would convert there and back, and a column of times would
+look like any other. **Fits on a date axis**, in days since 1970: the
+parameters would mean nothing and the fit would be badly conditioned; a fit in
+the time since the start of the plot can follow if asked for.

@@ -91,7 +91,8 @@ class Hdf5Dialog(DataDialog):
         # "" beside a column that ends before the others.
         table = np.full((rows, len(columns)), "", dtype=object)
         for i, values in enumerate(columns):
-            table[: len(values), i] = [float(v) for v in values]
+            dates = values.dtype.kind == "M"
+            table[: len(values), i] = list(values) if dates else values.tolist()
         return source, table
 
     def _size(self, source: Hdf5Source, table: np.ndarray) -> tuple[int, int]:
@@ -105,11 +106,11 @@ class Hdf5Dialog(DataDialog):
         return found if any(found) else None
 
     def _cell(self, value) -> str:
-        return "" if isinstance(value, str) else f"{value:g}"
+        return "" if isinstance(value, str) else super()._cell(value)
 
     def _numbers_note(self, source: Hdf5Source, table: np.ndarray) -> list[str]:
         entry = self._entries[source.dataset]
-        notes = []
+        notes = self._dates_note(source)
         if entry.left_out:
             what = ", ".join(f"{n} ({why})" for n, why in entry.left_out.items())
             notes.append(f"Left out: {what}.")
@@ -141,6 +142,8 @@ class Hdf5Dialog(DataDialog):
             name = self._source.dataset.rsplit("/", 1)[-1]
             return [Suggestion("image", "", name)]
         columns = self._plottable()
+        if columns and self._source.time_columns:
+            return suggest(self._dates_first(columns))
         return suggest(self._x_first(columns)) if columns else []
 
     def _x_first(self, columns: list[str]) -> list[str]:

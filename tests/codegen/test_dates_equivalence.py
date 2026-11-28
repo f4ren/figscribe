@@ -1,0 +1,464 @@
+"""Date axes: the script draws what the preview draws (decision 0082)."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+
+import h5py
+import numpy as np
+import pytest
+from matplotlib.dates import date2num
+
+from figscribe.fit import add_fit, refit
+from figscribe.io import load_data
+from figscribe.io.csvfile import csv_source
+from figscribe.io.hdf5file import hdf5_source
+from figscribe.io.numpyfile import numpy_source
+from figscribe.io.sheetfile import sheet_source
+from figscribe.model import (
+    AllanDeviationPlot,
+    Annotation,
+    ArrayRef,
+    Axes,
+    AxisSpec,
+    ColumnRef,
+    Conversion,
+    ErrorBand,
+    ErrorbarPlot,
+    Figure,
+    FitCurve,
+    GridLayout,
+    Histogram,
+    ImagePlot,
+    Legend,
+    LinePlot,
+    PredefinedFit,
+    Project,
+    ReferenceLine,
+    ScatterPlot,
+    ShadedSpan,
+    validate_references,
+)
+from figscribe.units import set_conversion
+from tests.codegen.test_equivalence import _assert_same
+from tests.hdf5files import write_h5
+from tests.sheetfiles import write_ods, write_xlsx
+from tests.timedata import log_file
+
+HOUR = Conversion(factor=1 / 3600, from_start=True, unit="h")
+
+
+def _day(text: str) -> float:
+    return float(date2num(np.datetime64(text)))
+
+
+def _project(source, *panels, **figure) -> Project:
+    return Project(
+        figscribe_version="test",
+        sources=[source],
+        figures=[Figure(axes=list(panels), **figure)],
+    )
+
+
+def _log(folder: Path, **options):
+    source = csv_source(log_file(folder, **options), folder)
+
+    def ref(column: str) -> ColumnRef:
+        return ColumnRef(source=source.id, column=column)
+
+    return source, ref
+
+
+@pytest.mark.parametrize("zone", ["", "+01:00"])
+def test_a_date_axis_from_a_csv(tmp_path: Path, zone: str) -> None:
+    source, ref = _log(tmp_path, zone=zone)
+    panel = Axes(
+        artists=[
+            LinePlot(x=ref("time"), y=ref("T"), label="T"),
+            ReferenceLine(orientation="vertical", at=_day("2026-11-02")),
+            ShadedSpan(
+                orientation="vertical",
+                start=_day("2026-11-01T23:00"),
+                end=_day("2026-11-01T23:30"),
+            ),
+            Annotation(text="midnight", position=(_day("2026-11-02"), 20.0)),
+            Annotation(
+                text="here",
+                position=(_day("2026-11-02T00:30"), 20.5),
+                arrow_to=(_day("2026-11-02T01:00"), 19.5),
+            ),
+        ],
+        legend=Legend(),
+    )
+    script = _assert_same(_project(source, panel), tmp_path)
+    assert 'dtype="datetime64[us]"' in script or "re.sub" in script
+    assert ("re.sub" in script) == bool(zone)
+    assert 'np.datetime64("2026-11-02")' in script
+    assert "ax.xaxis" in script and "date_ticks(" in script
+
+
+def test_limits_ticks_range_and_style(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    ends = (_day("2026-11-01T22:30"), _day("2026-11-02T01:30"))
+    first = Axes(
+        artists=[ErrorbarPlot(x=ref("time"), y=ref("T"), yerr=ref("dT"), x_range=ends)],
+        x=AxisSpec(limits=(_day("2026-11-01T22:00"), _day("2026-11-02T02:00"))),
+    )
+    second = Axes(
+        row=1,
+        artists=[ScatterPlot(x=ref("time"), y=ref("p"))],
+        x=AxisSpec(
+            ticks=[_day("2026-11-01T23:00"), _day("2026-11-02T01:00")],
+            tick_size=6,
+            minor_ticks=False,
+        ),
+    )
+    project = _project(
+        source,
+        first,
+        second,
+        layout=GridLayout(rows=2, cols=1),
+        stylesheet="ggplot",
+    )
+    _assert_same(project, tmp_path)
+
+
+def test_shared_date_axes_and_a_right_axis(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path, step=3600 * 7)
+    first = Axes(artists=[LinePlot(x=ref("time"), y=ref("T"))])
+    second = Axes(
+        row=1,
+        y_right=AxisSpec(),
+        artists=[
+            LinePlot(x=ref("time"), y=ref("p")),
+            LinePlot(
+                x=ref("time"),
+                y=ref("T"),
+                axis="right",
+                color="C1",
+            ),
+        ],
+    )
+    layout = GridLayout(rows=2, cols=1, share_x="col")
+    project = _project(source, first, second, layout=layout)
+    _assert_same(project, tmp_path)
+
+
+def test_dates_on_the_y_axis_and_a_band(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    panel = Axes(artists=[LinePlot(x=ref("T"), y=ref("time"))])
+    other = Axes(
+        col=1,
+        artists=[
+            ErrorbarPlot(x=ref("time"), y=ref("T"), yerr=ref("dT"), band=ErrorBand())
+        ],
+    )
+    project = _project(source, panel, other, layout=GridLayout(rows=1, cols=2))
+    _assert_same(project, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "conversion",
+    [
+        HOUR,
+        Conversion(factor=1.0, from_start=True, unit="s"),
+        Conversion(factor=1 / 60, from_start=True, unit="min"),
+        Conversion(factor=1 / 86400, from_start=True, unit="d"),
+        Conversion(factor=0.25, from_start=True, unit="x"),
+        Conversion(formula="x / 3600 + 1", from_start=True, unit="h"),
+    ],
+    ids=["h", "s", "min", "d", "factor", "formula"],
+)
+def test_time_since_the_start(tmp_path: Path, conversion: Conversion) -> None:
+    source, ref = _log(tmp_path)
+    line = LinePlot(x=ref("time"), y=ref("T"), x_conversion=conversion)
+    script = _assert_same(_project(source, Axes(artists=[line])), tmp_path)
+    assert "np.timedelta64" in script and "date_ticks" not in script
+
+
+def test_what_is_not_drawn_is_said_in_the_script(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    panel = Axes(
+        artists=[
+            LinePlot(x=ref("time"), y=ref("T")),
+            LinePlot(x=ref("p"), y=ref("T"), label="numbers"),
+            Histogram(values=ref("time")),
+        ],
+        x=AxisSpec(scale="log"),
+    )
+    script = _assert_same(_project(source, panel), tmp_path)
+    assert "# numbers is not drawn: its x are numbers" in script
+    assert "set_xscale" not in script
+
+
+def test_gaps_in_the_times(tmp_path: Path) -> None:
+    path = tmp_path / "gaps.csv"
+    path.write_text(
+        "time,T\n2026-11-01 22:00,1\n,2\n2026-11-01 23:00,3\n2026-11-02,4\n"
+    )
+    source = csv_source(path, tmp_path)
+    line = LinePlot(
+        x=ColumnRef(source=source.id, column="time"),
+        y=ColumnRef(source=source.id, column="T"),
+        marker="o",
+    )
+    _assert_same(_project(source, Axes(artists=[line])), tmp_path)
+
+
+def _stamps(count: int = 12) -> list[datetime]:
+    return [datetime(2026, 11, 1, 10 + i % 12, 5 * i % 60) for i in range(count)]
+
+
+@pytest.mark.parametrize("write", [write_xlsx, write_ods])
+def test_dates_of_a_spreadsheet(tmp_path: Path, write) -> None:
+    path = tmp_path / ("log.ods" if write is write_ods else "log.xlsx")
+    rows = [["time", "T"]] + [[s, float(i)] for i, s in enumerate(_stamps())]
+    write(path, {"s": rows})
+    source = sheet_source(path, tmp_path)
+    line = LinePlot(
+        x=ColumnRef(source=source.id, column="time"),
+        y=ColumnRef(source=source.id, column="T"),
+    )
+    script = _assert_same(_project(source, Axes(artists=[line])), tmp_path)
+    assert "sheet_times(" in script
+
+
+@pytest.mark.parametrize("kind", ["npy", "npz"])
+def test_dates_of_numpy(tmp_path: Path, kind: str) -> None:
+    stamps = np.array(_stamps(), dtype="datetime64[s]")
+    path = tmp_path / f"t.{kind}"
+    if kind == "npz":
+        np.savez(path, t=stamps, y=np.arange(12.0))
+    else:
+        np.save(path, stamps)
+    times = numpy_source(path, tmp_path)
+    np.save(tmp_path / "y.npy", np.arange(12.0))
+    values = numpy_source(tmp_path / "y.npy", tmp_path)
+    line = LinePlot(
+        x=ColumnRef(source=times.id, column=0),
+        y=ColumnRef(source=values.id, column=0),
+    )
+    project = Project(
+        figscribe_version="test",
+        sources=[times, values],
+        figures=[Figure(axes=[Axes(artists=[line])])],
+    )
+    script = _assert_same(project, tmp_path)
+    assert 'astype("datetime64[us]")' in script
+
+
+@pytest.mark.parametrize("holds", ["group", "table"])
+def test_dates_of_hdf5(tmp_path: Path, holds: str) -> None:
+    stamps = np.array(_stamps(), dtype="datetime64[us]")
+    text = np.array([f"{s}+01:00".encode() for s in stamps])
+    path = tmp_path / "log.h5"
+    if holds == "table":
+        records = np.zeros(12, dtype=[("time", text.dtype), ("T", "f8")])
+        records["time"], records["T"] = text, np.arange(12.0)
+        write_h5(path, {"run": records})
+        names = ["time"]
+    else:
+        opaque = stamps.astype(h5py.opaque_dtype(stamps.dtype))
+        write_h5(path, {"run/time": text, "run/stamp": opaque, "run/T": range(12)})
+        names = ["time", "stamp"]
+    source = hdf5_source(path, tmp_path)
+    artists = [
+        LinePlot(
+            x=ColumnRef(source=source.id, column=name),
+            y=ColumnRef(source=source.id, column="T"),
+        )
+        for name in names
+    ]
+    script = _assert_same(_project(source, Axes(artists=artists)), tmp_path)
+    assert "iso_times(" in script
+
+
+def test_an_allan_deviation_with_a_column_of_times(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path, step=60, count=60)
+    allan = AllanDeviationPlot(values=ref("T"), time=ref("time"), x_range=(0.0, 1800.0))
+    script = _assert_same(_project(source, Axes(artists=[allan])), tmp_path)
+    assert "np.timedelta64" in script
+
+
+def test_the_window_may_speak_german(tmp_path: Path, qapp) -> None:
+    """Qt sets the system's language for the process; numbers only keeps the
+    preview as the script draws it."""
+    import locale
+
+    before = locale.setlocale(locale.LC_TIME)
+    try:
+        for name in ("de_DE.UTF-8", "de_DE.utf8"):
+            try:
+                locale.setlocale(locale.LC_TIME, name)
+                break
+            except locale.Error:
+                continue
+        else:
+            pytest.skip("no German locale on this system")
+        source, ref = _log(tmp_path, step=86400 * 3)
+        line = LinePlot(x=ref("time"), y=ref("T"))
+        _assert_same(_project(source, Axes(artists=[line])), tmp_path)
+    finally:
+        locale.setlocale(locale.LC_TIME, before)
+
+
+@pytest.mark.parametrize("dates", [False, True], ids=["since the start", "dates"])
+def test_a_fit_to_times(tmp_path: Path, dates: bool) -> None:
+    source, ref = _log(tmp_path)
+    plot = ErrorbarPlot(x=ref("time"), y=ref("T"), yerr=ref("dT"), x_conversion=HOUR)
+    project = _project(source, Axes(artists=[plot]))
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    data = load_data(project, tmp_path)
+    refit(project, fit.id, data).apply(project)
+    if dates:
+        set_conversion(project, plot.id, "x", None, data).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert ("curve_fit(" in script) != dates
+    assert ("there is no fit to dates" in " ".join(script.split("\n# "))) == dates
+
+
+@pytest.mark.parametrize("on", ["x", "y"])
+@pytest.mark.parametrize("kind", ["line", "scatter", "errorbar", "band"])
+def test_rows_left_out_of_a_plot_of_times(tmp_path: Path, kind: str, on: str) -> None:
+    source, ref = _log(tmp_path)
+    columns = {"x": ref("time"), "y": ref("T")}
+    if on == "y":
+        columns = {"x": ref("T"), "y": ref("time")}
+    if kind in ("errorbar", "band") and on == "x":
+        columns["yerr"] = ref("dT")
+    if kind == "line":
+        plot = LinePlot(**columns, left_out=[3, 4], marker="o")
+    elif kind == "scatter":
+        plot = ScatterPlot(**columns, left_out=[3, 4])
+    else:
+        band = ErrorBand() if kind == "band" and on == "x" else None
+        plot = ErrorbarPlot(**columns, left_out=[3, 4], band=band)
+    _assert_same(_project(source, Axes(artists=[plot])), tmp_path)
+
+
+def test_a_broken_number_axis_beside_a_date_axis(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    line = LinePlot(x=ref("time"), y=ref("p"), marker="o")
+    panel = Axes(artists=[line], y=AxisSpec(breaks=[(1004.0, 1015.0)]))
+    _assert_same(_project(source, panel), tmp_path)
+
+
+def test_a_decimal_comma_and_a_font_size(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    line = LinePlot(x=ref("time"), y=ref("T"))
+    panel = Axes(artists=[line], x=AxisSpec(inverted=True, tick_labels=None))
+    project = _project(source, panel, decimal_comma=True, font_size=11)
+    _assert_same(project, tmp_path)
+
+
+def test_a_range_typed_on_dates_on_the_y_axis_of_a_panel(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    ends = (_day("2026-11-01T23:00"), _day("2026-11-02"))
+    panel = Axes(
+        artists=[
+            LinePlot(x=ref("T"), y=ref("time")),
+            ReferenceLine(orientation="horizontal", at=ends[0]),
+            ShadedSpan(orientation="horizontal", start=ends[0], end=ends[1]),
+        ],
+        y=AxisSpec(limits=ends),
+    )
+    _assert_same(_project(source, panel), tmp_path)
+
+
+def test_places_that_are_not_whole_microseconds(tmp_path: Path) -> None:
+    """The preview hands over such ranges, and unit switches compute them."""
+    source, ref = _log(tmp_path)
+    low = _day("2026-11-01T22:00")
+    odd = low + 0.15  # one bit beside the float of 2026-11-02 01:36
+    assert odd != _day("2026-11-02T01:36")
+    first = Axes(
+        artists=[
+            LinePlot(x=ref("time"), y=ref("T"), x_range=(low, odd), marker="o"),
+            ReferenceLine(orientation="vertical", at=low + 0.1),
+            ShadedSpan(orientation="vertical", start=low + 0.01, end=low + 0.07),
+            Annotation(text="n", position=(low + 0.03, 20.0)),
+        ],
+        x=AxisSpec(limits=(low - 0.01, odd), ticks=[low + 0.05, low + 0.1]),
+    )
+    second = Axes(row=1, artists=[LinePlot(x=ref("time"), y=ref("p"))])
+    layout = GridLayout(rows=2, cols=1, share_x="all")
+    _assert_same(_project(source, first, second, layout=layout), tmp_path)
+
+
+def test_names_of_numbers_stay_as_they_were(tmp_path: Path) -> None:
+    """Without dates the script reserves none of the names dates need."""
+    path = tmp_path / "log.csv"
+    path.write_text("date,re,mdates,ZONE\n1,2,3,4\n2,3,4,5\n")
+    source = csv_source(path, tmp_path)
+    artists = [
+        LinePlot(
+            x=ColumnRef(source=source.id, column="date"),
+            y=ColumnRef(source=source.id, column=name),
+        )
+        for name in ("re", "mdates", "ZONE")
+    ]
+    script = _assert_same(_project(source, Axes(artists=artists)), tmp_path)
+    assert "date, re, mdates, ZONE = np.loadtxt(" in script
+
+
+def test_columns_named_like_what_the_script_uses(tmp_path: Path) -> None:
+    path = tmp_path / "log.csv"
+    path.write_text(
+        "date,re,mdates,date_ticks\n2026-11-01T10:00Z,2,3,4\n2026-11-02T10:00Z,3,4,5\n"
+    )
+    source = csv_source(path, tmp_path)
+    artists = [
+        LinePlot(
+            x=ColumnRef(source=source.id, column="date"),
+            y=ColumnRef(source=source.id, column=name),
+        )
+        for name in ("re", "mdates", "date_ticks")
+    ]
+    _assert_same(_project(source, Axes(artists=artists)), tmp_path)
+
+
+@pytest.mark.parametrize("why", ["left out", "range"])
+def test_typed_tick_labels_and_gaps_in_a_plot_of_dates(tmp_path: Path, why) -> None:
+    source, ref = _log(tmp_path)
+    keep = {"left_out": [3]} if why == "left out" else {}
+    if why == "range":
+        keep = {"x_range": (_day("2026-11-01T23:00"), _day("2026-11-02"))}
+    line = LinePlot(x=ref("time"), y=ref("T"), **keep)
+    ticks = AxisSpec(ticks=[_day("2026-11-02")], tick_labels=["midnight"])
+    _assert_same(_project(source, Axes(artists=[line], x=ticks)), tmp_path)
+
+
+def test_residuals_of_a_fit_that_is_not_drawn(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    plot = LinePlot(x=ref("time"), y=ref("T"), x_conversion=HOUR)
+    project = _project(source, Axes(artists=[plot]))
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    project.figures[0].layout = GridLayout(rows=2, cols=1)  # x not shared
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    project.figures[0].axes[0].artists.insert(0, LinePlot(x=ref("time"), y=ref("T")))
+    script = _assert_same(project, tmp_path)
+    assert "not run yet" not in script
+    problems = [i.message for i in validate_references(project)]
+    assert sum("is not drawn" in p for p in problems) == 3  # plot, fit, residuals
+
+
+def test_broken_axes_without_dates_import_what_they_did(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    line = LinePlot(x=ref("p"), y=ref("T"))
+    panel = Axes(
+        artists=[line],
+        x=AxisSpec(breaks=[(1004.0, 1015.0)], minor_divisions=2),
+    )
+    script = _assert_same(_project(source, panel), tmp_path)
+    assert "AutoMinorLocator" not in script
+
+
+def test_numpy_arrays_beside_an_array_of_dates(tmp_path: Path) -> None:
+    stamps = np.array(_stamps(), dtype="datetime64[s]")
+    np.savez(tmp_path / "t.npz", t=stamps, z=np.arange(12.0).reshape(3, 4))
+    source = numpy_source(tmp_path / "t.npz", tmp_path, array="t")
+    image = ImagePlot(data=ArrayRef(source=source.id, key="z"))
+    _assert_same(_project(source, Axes(artists=[image])), tmp_path)

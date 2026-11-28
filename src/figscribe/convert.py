@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
+from matplotlib.dates import date2num
 
 from figscribe.model import AllanDeviationPlot, ColumnRef, Conversion
 
@@ -74,8 +75,13 @@ def linear(conversion: Conversion | None) -> tuple[float, float]:
 
 def convert(values, conversion: Conversion | None) -> np.ndarray:
     """`values` as shown: (value − start) × factor, or the formula of that, the
-    start being the smallest value (NaN skipped) when counting from the start."""
-    values = np.asarray(values, dtype=float)
+    start being the smallest value (NaN skipped) when counting from the start.
+    Times (decision 0082) are days since 1970, as Matplotlib counts dates, or,
+    with a conversion, the time since the earliest of them."""
+    values = np.asarray(values)
+    if values.dtype.kind == "M":
+        return _convert_times(values, conversion)
+    values = values.astype(float)
     if conversion is None:
         return values
     if conversion.from_start:
@@ -83,6 +89,41 @@ def convert(values, conversion: Conversion | None) -> np.ndarray:
     if conversion.formula is not None:
         return _formula(conversion.formula)(values)
     return _apply(values, conversion.factor)
+
+
+TIME_UNITS = {
+    None: "s",
+    ("/", 60): "m",
+    ("/", 3600): "h",
+    ("/", 86400): "D",
+    ("*", 1000): "ms",
+}
+"""NumPy's unit of time for the factors that are one of the usual choices."""
+
+
+def time_unit(conversion: Conversion) -> str | None:
+    """NumPy's unit the conversion counts in, if it is one: the script then
+    divides by it, as a person would write it."""
+    if conversion.formula is not None:
+        return None
+    return TIME_UNITS.get(operation(conversion.factor))
+
+
+def _convert_times(values: np.ndarray, conversion: Conversion | None) -> np.ndarray:
+    if conversion is None:
+        return np.asarray(date2num(values), dtype=float)
+    # A time always counts from the start: since 1970 would mean nothing.
+    filled = values[~np.isnat(values)]
+    if not filled.size:
+        return np.full(values.shape, np.nan)
+    since = values - filled.min()
+    unit = time_unit(conversion)
+    if unit is not None:
+        return since / np.timedelta64(1, unit)
+    seconds = since / np.timedelta64(1, "s")
+    if conversion.formula is not None:
+        return _formula(conversion.formula)(seconds)
+    return _apply(seconds, conversion.factor)
 
 
 def scale(errors, conversion: Conversion | None) -> np.ndarray:
@@ -116,6 +157,21 @@ def expression(name: str, conversion: Conversion) -> str:
     if operation(conversion.factor) is None:
         return shifted
     return scaled(f"({shifted})", conversion.factor)
+
+
+def time_expression(name: str, conversion: Conversion) -> str:
+    """The script's expression for the column of times `name` as shown, e.g.
+    '(t - np.nanmin(t)) / np.timedelta64(1, "h")'; as `convert` computes it."""
+    since = f"({name} - np.nanmin({name}))"
+    unit = time_unit(conversion)
+    if unit is not None:
+        return f'{since} / np.timedelta64(1, "{unit}")'
+    seconds = f'{since} / np.timedelta64(1, "s")'
+    if conversion.formula is not None:
+        from figscribe.fit.expression import numpy_source
+
+        return numpy_source(conversion.formula, seconds)
+    return scaled(seconds, conversion.factor)
 
 
 def scale_expression(text: str, conversion: Conversion) -> str:

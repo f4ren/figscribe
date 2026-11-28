@@ -156,8 +156,12 @@ TOOLS: list[ToolSpec] = [
         '["x", "limits"], value [0, 10]). A plot\'s x_conversion or '
         "y_conversion (a factor, e.g. 1/3600 for hours, from_start to count "
         "from the first value, and a unit) and its x_range (in the units shown) "
-        "keep its axis, marks and fits in step. One undo step. For more than "
-        "one change, prefer apply_changes.",
+        "keep its axis, marks and fits in step. Columns in a source's "
+        "time_columns are dates: on an axis showing them unconverted, limits, "
+        "ticks, x_range and places of lines and notes are days since "
+        "1970-01-01, and there is no fit; a conversion counts from the first "
+        "time, in s times its factor. One undo step. For more than one change, "
+        "prefer apply_changes.",
         {
             "type": "object",
             "properties": {

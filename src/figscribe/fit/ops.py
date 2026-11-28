@@ -53,6 +53,8 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
             f"the fit's target is a {target.kind!r}, which has no x and y data"
         )
 
+    if why := dates_refuse_a_fit(target, data):
+        raise FitError(why)
     # In the units the plot shows, so that the parameters are read off its axes.
     shown = plot_data(target, data)
     used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)
@@ -222,6 +224,21 @@ class Residuals:
     """Its data row, counted from 0."""
 
 
+def dates_refuse_a_fit(target, data: DataProvider) -> str | None:
+    """Why `target` cannot be fitted as it shows its data: dates, whose
+    parameters would mean nothing (decision 0082)."""
+    for name in ("x", "y"):
+        ref = getattr(target, name, None)
+        if ref is None or getattr(target, f"{name}_conversion") is not None:
+            continue
+        if np.asarray(data(ref)).dtype.kind == "M":
+            return (
+                f"there is no fit to dates; show {name} as the time since the "
+                "start instead"
+            )
+    return None
+
+
 def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | None:
     """The residuals of a fit that has been run; None before."""
     fit = _get(project, fit_id)
@@ -230,6 +247,8 @@ def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | 
     if not set(parameter_names(fit.model)) <= set(fit.result.parameters):
         return None  # a result from a file that lacks some parameters
     target = _get(project, fit.target)
+    if dates_refuse_a_fit(target, data):
+        return None
     shown = plot_data(target, data)
     x, y = shown.x, shown.y
     used = fitted_points(shown, getattr(target, "left_out", ()), fit.fit_range)

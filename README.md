@@ -133,6 +133,10 @@ script.
 - HDF5 (`.h5`, `.hdf5`, `.he5`, `.nxs`) files: a group with its datasets as columns, a
   table of records, or one dataset of one or two dimensions, with the units
   from its attributes. Values kept in other files are not followed.
+- Columns of dates and times (ISO text such as `2026-11-01 12:30`, date cells
+  of spreadsheets, `datetime64` in NumPy and HDF5 files) give a date axis;
+  *x in: h since the start* turns them into numbers. A time zone is read as
+  written, not converted.
 - A data file is removed with the plots that draw from it, in one undo step;
   figscribe asks first and names them.
 - Each data file is recorded with its SHA-256. If it changes later,
@@ -395,8 +399,8 @@ Design decisions and their reasons are recorded in
 
 ## Scope
 
-Planned beyond what exists: HDF5 import, several files as one series,
-number formats and inverted axes, a second x axis on top, more fit models and
+Planned beyond what exists: several files as one series, smoothing, peak
+finding, baselines and normalising, a second x axis on top, more fit models and
 a confidence band, step plots and bar charts, style templates for journals,
 snapping and alignment guides, signed installers.
 

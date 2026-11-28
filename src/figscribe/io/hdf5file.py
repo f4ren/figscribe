@@ -8,6 +8,9 @@ A source is one entry of the file, named by its path:
 - a one-dimensional dataset: one column;
 - a two-dimensional dataset: columns by number, as for a NumPy array.
 
+Text of ISO dates and datasets of NumPy's `datetime64` are columns of times
+(decision 0082).
+
 Only what the file itself holds is read. An external link, a virtual dataset
 and values stored in a file beside it are refused: the file's hash says nothing
 about them, and read from the hashed bytes in memory HDF5 would give other
@@ -30,6 +33,7 @@ import numpy as np
 from figscribe.io.errors import CellError, DataError
 from figscribe.io.files import stored_path
 from figscribe.model import Hdf5Source
+from figscribe.times import UNIT, is_time, parse_times
 
 SUFFIXES = (".h5", ".hdf5", ".he5", ".nxs")
 """The file name endings that are read as HDF5."""
@@ -53,6 +57,8 @@ class Entry:
     """{member or field that is no column: why}."""
     problem: str = ""
     """Why it cannot be chosen; "" if it can."""
+    times: list[int] = field(default_factory=list)
+    """Which columns are times."""
 
 
 def hdf5_source(
@@ -78,6 +84,7 @@ def hdf5_source(
         dataset=entry.path,
         holds=entry.kind,
         columns=entry.columns,
+        time_columns=entry.times,
         row_count=entry.rows,
     )
 
@@ -109,7 +116,7 @@ def head(
             read = [start[n] for n in names]
         else:
             read = [found[:rows]]
-        return [values.astype(float) for values in read], len(source.columns)
+        return [_values(values, name) for values in read], len(source.columns)
 
 
 def listed(path: str | Path) -> list[str]:
@@ -215,14 +222,14 @@ class Hdf5Table:
                 column = source.columns[index]
                 if column not in (found.dtype.names or ()):
                     raise DataError(f"{self._name}, {path}, has no field {column!r}")
-                why = _no_numbers(found.dtype[column])
+                why = _no_values(found.dtype[column], lambda: found[:LOOKED_AT][column])
                 values = None if why else found[()][column]
             else:
                 why = _no_column(found)
                 values = None if why else found[()]
             if why:
                 raise DataError(f"cannot plot {self._name}, {path}: {why}")
-        return values.astype(float)
+        return _values(values, self._name)
 
     def array(self) -> np.ndarray:
         """Every column, as 2-D data for images and color meshes; a single
@@ -231,8 +238,13 @@ class Hdf5Table:
             if self._image is None:
                 with _opened(self._raw, self._name) as file:
                     found = _resolved(file, self.source.dataset, self._name)
-                    self._image = found[()].astype(float)
+                    self._image = _values(found[()], self._name)
             return self._image
+        if self.source.time_columns:
+            raise CellError(
+                f"{self._name}, {self.source.dataset}, holds dates, so it is no "
+                "table of numbers"
+            )
         columns = [self.column(i) for i in range(self.width)]
         if len({len(values) for values in columns}) > 1:
             raise CellError(
@@ -320,6 +332,45 @@ def _no_numbers(dtype: np.dtype) -> str:
     return ""
 
 
+LOOKED_AT = 100
+"""How far into a column of text a first date is looked for."""
+
+
+def _no_values(dtype: np.dtype, start) -> str:
+    """Why values of `dtype` are no column to plot; "" if they are numbers or
+    times. `start` gives the first of them: text is a column of times if the
+    first filled one is a date."""
+    if dtype.kind == "M":
+        return ""
+    why = _no_numbers(dtype)
+    if why == "it holds text":
+        filled = (text for value in start() if (text := _text(value)).strip())
+        if is_time(next(filled, "")):
+            return ""
+    return why
+
+
+def _is_times(dtype: np.dtype) -> bool:
+    """Whether a column that can be plotted holds times."""
+    return dtype.kind == "M" or bool(_no_numbers(dtype))
+
+
+def _text(value: object) -> str:
+    return value.decode(errors="replace") if isinstance(value, bytes) else str(value)
+
+
+def _values(array: np.ndarray, name: str) -> np.ndarray:
+    """What a dataset holds, as floats or as times."""
+    if array.dtype.kind == "M":
+        return array.astype(UNIT)
+    if array.dtype.kind in "SUO":
+        times = parse_times([_text(value) for value in array])
+        if times is None:
+            raise CellError(f"cannot read {name}: a column of text is not all dates")
+        return times
+    return array.astype(float)
+
+
 def _unreadable(dataset: h5py.Dataset) -> str:
     """Why the values cannot be read; "" if they can, as far as can be told.
     A filter that is there is taken at its word: reading a value decompresses a
@@ -352,11 +403,11 @@ def _no_column(dataset) -> str:
         return "it holds one value only"
     if dataset.ndim > 1:
         return f"it has {dataset.ndim} dimensions"
-    if why := _no_numbers(dataset.dtype):
-        return why
     if not dataset.shape[0]:
-        return "it is empty"
-    return _unreadable(dataset)
+        return _no_numbers(dataset.dtype) or "it is empty"
+    if why := _unreadable(dataset):
+        return _no_numbers(dataset.dtype) or why
+    return _no_values(dataset.dtype, lambda: dataset[:LOOKED_AT])
 
 
 def _dataset_entry(dataset: h5py.Dataset, path: str) -> Entry:
@@ -376,14 +427,22 @@ def _described(dataset: h5py.Dataset, path: str) -> Entry:
         if len(shape) != 1:
             why = f"it holds records in {len(shape)} dimensions"
             return Entry(path, "other", shape, problem=why)
-        left_out = {
-            name: why
-            for name in dataset.dtype.names
-            if (why := _no_numbers(dataset.dtype[name]))
-        }
+        problem = "" if shape[0] else "it is empty"
+        problem = problem or _unreadable(dataset)
+        usable = bool(shape[0]) and not problem
+        left_out = {}
+        for name in dataset.dtype.names:
+            dtype = dataset.dtype[name]
+            if usable:
+                why = _no_values(dtype, lambda name=name: dataset[:LOOKED_AT][name])
+            else:
+                why = _no_numbers(dtype)
+            if why:
+                left_out[name] = why
         columns = [name for name in dataset.dtype.names if name not in left_out]
-        problem = "it holds no numbers" if not columns else ""
-        problem = problem or ("it is empty" if not shape[0] else _unreadable(dataset))
+        if not columns:
+            problem = "it holds no numbers"
+        times = [i for i, n in enumerate(columns) if _is_times(dataset.dtype[n])]
         return Entry(
             path,
             "table",
@@ -393,6 +452,7 @@ def _described(dataset: h5py.Dataset, path: str) -> Entry:
             shape[0],
             left_out,
             problem,
+            times,
         )
     if shape is not None and len(shape) == 2:
         problem = _no_numbers(dataset.dtype)
@@ -401,11 +461,12 @@ def _described(dataset: h5py.Dataset, path: str) -> Entry:
     if why := _no_column(dataset):
         return Entry(path, "other", shape, problem=why)
     leaf = path.rsplit("/", 1)[-1]
-    return Entry(path, "column", shape, [leaf], [shape[0]], shape[0])
+    times = [0] if _is_times(dataset.dtype) else []
+    return Entry(path, "column", shape, [leaf], [shape[0]], shape[0], times=times)
 
 
 def _group_entry(file: h5py.File, group: h5py.Group, path: str) -> Entry:
-    columns, lengths, left_out = [], [], {}
+    columns, lengths, left_out, times = [], [], {}, []
     for member in group:
         if isinstance(member, bytes):  # h5py gives a name it cannot decode so
             left_out[_shown(member)] = NOT_TEXT
@@ -424,11 +485,13 @@ def _group_entry(file: h5py.File, group: h5py.Group, path: str) -> Entry:
         if why:
             left_out[member] = why
         else:
+            if _is_times(found.dtype):
+                times.append(len(columns))
             columns.append(member)
             lengths.append(found.shape[0])
     problem = "" if columns else "it holds no one-dimensional numbers"
     rows = max(lengths, default=0)
-    return Entry(path, "group", None, columns, lengths, rows, left_out, problem)
+    return Entry(path, "group", None, columns, lengths, rows, left_out, problem, times)
 
 
 def _walk(file: h5py.File) -> Iterator[Entry]:

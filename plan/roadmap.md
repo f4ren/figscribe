@@ -72,14 +72,15 @@ here is done; its follow-ups ("only if asked") stay in its text.
   third column (5); waterfall (6); contours (7); bar chart (8).
 - **F5** axes: ~~number format and the decimal comma (1)~~ done; ~~inverted axes (2)~~ done;
   a second x axis on top that converts (3); hiding (done) and offsetting spines
-  (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
+  (4); ~~date axes (5)~~ done; which side an axis is on (7, `[decide]`);
   ~~broken axes (6)~~ done; ~~minor grid lines of their own, thinner than the
   major ones (10)~~ done.
 - **F6** several files as one series (M). **F7** data formats: ~~HDF5 (1)~~
   done, a check of whitespace-separated text (2); ~~Excel and Calc (3)~~ done.
   **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
-  (`[decide]`, judged by decision 0036).
+  (all four asked for by the user 2026-11-28; each gets a decision before
+  code).
 - **F14** fit an Allan deviation (M): built and accepted (0064); named
   noise-type models are open. ~~**F15** draw a function~~ done (0078).
 
@@ -106,8 +107,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 
 **Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2.
 F15 is done (0078), Excel and Calc files (F7.3, 0079, asked for by the user
-2026-11-27) and HDF5 (F7.1, 0081). Next: F6 several files as one series, F1.5
-a confidence band, and a legend entry for the part of a curve beyond the data.
+2026-11-27), HDF5 (F7.1, 0081) and date axes (F5.5, 0082). Next, asked for by
+the user 2026-11-28: F10. Then F6 several files as one series, F1.5 a
+confidence band, and a legend entry for the part of a curve beyond the data.
 **The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B7 item 5,
 the GUI at small sizes, needs no answer. The lab user's
 requests of 2026-11-04 are all done.
@@ -1284,7 +1286,18 @@ In order of demand:
    greyed out meanwhile. *Learned:* hiding the lines alone leaves the tick
    marks standing in the empty, and a style sheet such as `classic` turns them
    on again unless they are written off. *Open:* offsetting the spines.
-5. `[decide]` **Date and time** axes for logged data.
+5. ~~**Date and time** axes for logged data.~~ **Done** (2026-11-28, decision
+   0082; no schema bump): the sources record their time columns; a date axis
+   for line, points and error bars, the time since the start by a conversion.
+   *Learned:* Qt sets the system's language, so month names would differ
+   between window and script (numbers only); NumPy converts time zones without
+   a word; Matplotlib crowds date labels on narrow panels, so their number
+   follows the axis length. *Open:* try files of real loggers and of a real
+   Excel and Calc; date and time of day in two columns, and German dates, are
+   not read; durations (`timedelta64`) of a NumPy file are plotted as the raw
+   counts of their unit, as before 0082 (`[decide]`: refusing them would stop
+   a 0.3.0 project that plots them). *Follow-ups, only if asked:* fits, histograms, reduced points,
+   broken axes and color meshes over dates; a date format setting.
 6. **Broken axes.** **Done** (2026-11-26, decision 0072; no schema bump):
    `AxisSpec.breaks`, one Matplotlib axis with a squeezed scale and clipping
    instead of the separate axes sketched below. *Learned:* `set_xscale` does
@@ -2062,7 +2075,7 @@ answer in `docs/decisions.md` when the task is started.
 |---|---|
 | U6 | Gaps between panels in mm: new model fields in mm (schema bump), converted by the renderer and the code generator? |
 | F1.8 | Fit with x errors via `scipy.odr`, or document that x errors are ignored? |
-| F5.5 | Date and time axes? |
+| F5.5 | answered 2026-11-28: date and time axes, ISO, spreadsheets, NumPy and HDF5 (0082) |
 | F5.6 | answered 2026-11-26: x and y, several breaks; the rest decided and built (0072) |
 | F5.10 | answered 2026-11-26: half as thick when both are shown (0073) |
 | F11 | A conversion without a unit: empty the axis's unit text, or keep it? |
@@ -2073,7 +2086,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.1 | answered 2026-11-28: `h5py` built in, not an extra (0081) |
 | F7.3 | answered 2026-11-27: Excel and Calc with `python-calamine` (0079) |
-| F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
+| F10 | answered 2026-11-28: all four wanted; how each works is to be decided |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | answered 2026-11-05: PyInstaller, no signing for now, dmg (arm64) + Windows installer + AppImage (0066) |
 | Phase 5 | German user interface? |

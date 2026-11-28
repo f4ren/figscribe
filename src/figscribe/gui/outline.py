@@ -172,7 +172,8 @@ class Outline(QTreeWidget):
             if takes and self._drawn(artist):
                 cycles[family] += 1
             name = theme.ARTIST_ICONS.get(artist.kind, "line")
-            item = self._row(artist_name(artist), artist.id)
+            told = artist_name(artist, self.document.project)
+            item = self._row(told, artist.id)
             item.setIcon(0, theme.icon(name, shown if artist.visible else "#B5B5BA"))
             item.setData(0, VISIBLE_ROLE, artist.visible)
             item.setData(0, COLOR_ROLE, shown)
