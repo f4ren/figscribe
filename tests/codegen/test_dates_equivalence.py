@@ -10,6 +10,8 @@ import numpy as np
 import pytest
 from matplotlib.dates import date2num
 
+from figscribe.fit import add_fit, refit
+from figscribe.io import load_data
 from figscribe.io.csvfile import csv_source
 from figscribe.io.hdf5file import hdf5_source
 from figscribe.io.numpyfile import numpy_source
@@ -24,15 +26,18 @@ from figscribe.model import (
     ErrorBand,
     ErrorbarPlot,
     Figure,
+    FitCurve,
     GridLayout,
     Histogram,
     Legend,
     LinePlot,
+    PredefinedFit,
     Project,
     ReferenceLine,
     ScatterPlot,
     ShadedSpan,
 )
+from figscribe.units import set_conversion
 from tests.codegen.test_equivalence import _assert_same
 from tests.hdf5files import write_h5
 from tests.sheetfiles import write_ods, write_xlsx
@@ -293,3 +298,67 @@ def test_the_window_may_speak_german(tmp_path: Path, qapp) -> None:
         _assert_same(_project(source, Axes(artists=[line])), tmp_path)
     finally:
         locale.setlocale(locale.LC_TIME, before)
+
+
+@pytest.mark.parametrize("dates", [False, True], ids=["since the start", "dates"])
+def test_a_fit_to_times(tmp_path: Path, dates: bool) -> None:
+    source, ref = _log(tmp_path)
+    plot = ErrorbarPlot(x=ref("time"), y=ref("T"), yerr=ref("dT"), x_conversion=HOUR)
+    project = _project(source, Axes(artists=[plot]))
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    data = load_data(project, tmp_path)
+    refit(project, fit.id, data).apply(project)
+    if dates:
+        set_conversion(project, plot.id, "x", None, data).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert ("curve_fit(" in script) != dates
+    assert ("there is no fit to dates" in " ".join(script.split("\n# "))) == dates
+
+
+@pytest.mark.parametrize("on", ["x", "y"])
+@pytest.mark.parametrize("kind", ["line", "scatter", "errorbar", "band"])
+def test_rows_left_out_of_a_plot_of_times(tmp_path: Path, kind: str, on: str) -> None:
+    source, ref = _log(tmp_path)
+    columns = {"x": ref("time"), "y": ref("T")}
+    if on == "y":
+        columns = {"x": ref("T"), "y": ref("time")}
+    if kind in ("errorbar", "band") and on == "x":
+        columns["yerr"] = ref("dT")
+    if kind == "line":
+        plot = LinePlot(**columns, left_out=[3, 4], marker="o")
+    elif kind == "scatter":
+        plot = ScatterPlot(**columns, left_out=[3, 4])
+    else:
+        band = ErrorBand() if kind == "band" and on == "x" else None
+        plot = ErrorbarPlot(**columns, left_out=[3, 4], band=band)
+    _assert_same(_project(source, Axes(artists=[plot])), tmp_path)
+
+
+def test_a_broken_number_axis_beside_a_date_axis(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    line = LinePlot(x=ref("time"), y=ref("p"), marker="o")
+    panel = Axes(artists=[line], y=AxisSpec(breaks=[(1004.0, 1015.0)]))
+    _assert_same(_project(source, panel), tmp_path)
+
+
+def test_a_decimal_comma_and_a_font_size(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    line = LinePlot(x=ref("time"), y=ref("T"))
+    panel = Axes(artists=[line], x=AxisSpec(inverted=True, tick_labels=None))
+    project = _project(source, panel, decimal_comma=True, font_size=11)
+    _assert_same(project, tmp_path)
+
+
+def test_a_range_typed_on_dates_on_the_y_axis_of_a_panel(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    ends = (_day("2026-11-01T23:00"), _day("2026-11-02"))
+    panel = Axes(
+        artists=[
+            LinePlot(x=ref("T"), y=ref("time")),
+            ReferenceLine(orientation="horizontal", at=ends[0]),
+            ShadedSpan(orientation="horizontal", start=ends[0], end=ends[1]),
+        ],
+        y=AxisSpec(limits=ends),
+    )
+    _assert_same(_project(source, panel), tmp_path)

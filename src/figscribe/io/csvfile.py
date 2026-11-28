@@ -15,7 +15,7 @@ from typing import get_args
 
 import numpy as np
 
-from figscribe.io.errors import DataError
+from figscribe.io.errors import CellError, DataError
 from figscribe.io.files import sha256_of, stored_path
 from figscribe.model import CsvSource
 from figscribe.model.data import CsvEncoding
@@ -133,7 +133,7 @@ class CsvTable:
             self.column(index)
 
     def array(self) -> np.ndarray:
-        raise DataError(f"{self._name} holds dates, so it is no table of numbers")
+        raise CellError(f"{self._name} holds dates, so it is no table of numbers")
 
     def _load(self, **more) -> np.ndarray:
         source = self.source

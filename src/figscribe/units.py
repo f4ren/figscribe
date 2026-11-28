@@ -17,7 +17,7 @@ from typing import Literal
 import numpy as np
 
 from figscribe.commands import Command, CommandError, Macro, SetField, find
-from figscribe.convert import linear, start
+from figscribe.convert import convert, linear, start
 from figscribe.fit import FitError, refit_in_edit
 from figscribe.model import (
     AllanDeviationPlot,
@@ -40,6 +40,7 @@ from figscribe.model import (
     ShadedSpan,
 )
 from figscribe.model.sharing import sharing_group
+from figscribe.times import date_text
 
 DataProvider = Callable[[ColumnRef], np.ndarray]
 
@@ -76,6 +77,8 @@ def set_conversion(
     old = getattr(plot, field)
     remap, rescale = _mapping(plot, axis, old, conversion, data)
 
+    # Back to dates there is nothing to fit: the fits are left not fitted.
+    to_dates = conversion is None and _holds_times(plot, axis, data)
     steps: list[Command] = [SetField(plot_id, (field,), conversion)]
     if axis == "x" and plot.x_range is not None:
         steps.append(SetField(plot_id, ("x_range",), _ends(plot.x_range, remap)))
@@ -97,6 +100,11 @@ def set_conversion(
     # An own formula keeps start values in the old units; where it cannot be
     # fitted from them it is left not fitted rather than keep the units.
     own = {f.id for f in _fits_of(project, plot_id) if f.model.kind != "predefined"}
+    if to_dates and _fits_of(project, plot_id):
+        steps += [
+            SetField(fit.id, ("result",), None) for fit in _fits_of(project, plot_id)
+        ]
+        return Macro(_describe(axis, conversion), steps)
     return _with_fits_again(
         project, plot_id, _describe(axis, conversion), steps, data, may_fail=own
     )
@@ -110,12 +118,16 @@ def set_range(
 ) -> Macro:
     """Use only the plot's rows with x in `x_range` (None: every row). A
     FitError, changing nothing, if a fit of the plot then fails."""
-    _plot(project, plot_id)
-    text = (
-        "Use every row"
-        if x_range is None
-        else f"Use only x from {x_range[0]:g} to {x_range[1]:g}"
-    )
+    plot = _plot(project, plot_id)
+    text = "Use every row"
+    if x_range is not None:
+        dates = (
+            isinstance(plot, LinePlot | ScatterPlot | ErrorbarPlot)
+            and plot.x_conversion is None
+            and _holds_times(plot, "x", data)
+        )
+        low, high = (date_text(e) if dates else f"{e:g}" for e in x_range)
+        text = f"Use only x from {low} to {high}"
     steps: list[Command] = [SetField(plot_id, ("x_range",), x_range)]
     return _with_fits_again(project, plot_id, text, steps, data)
 
@@ -136,14 +148,48 @@ def set_allan_field(
     )
 
 
+def _column_of(plot, axis: str):
+    return getattr(plot, "values" if isinstance(plot, Histogram) else axis)
+
+
+def _holds_times(plot, axis: str, data) -> bool:
+    if isinstance(plot, AllanDeviationPlot):
+        return False  # its axes are τ and σ
+    return np.asarray(data(_column_of(plot, axis))).dtype.kind == "M"
+
+
+def _time_mapping(raw: np.ndarray, old, new):
+    """`_mapping` for a column of times: dates are days since 1970, a
+    conversion counts from the earliest time."""
+    filled = raw[~np.isnat(raw)]
+    first = float(convert(filled.min(), None)) if filled.size else 0.0
+    (old_factor, old_offset), (new_factor, new_offset) = linear(old), linear(new)
+
+    def remap(value: float) -> float:
+        if old is None:
+            seconds = (value - first) * 86400
+        else:
+            seconds = (value - old_offset) / old_factor
+        if new is None:
+            return float(first + seconds / 86400)
+        return float(seconds * new_factor + new_offset)
+
+    def rescale(width: float) -> float:
+        seconds = width * 86400 if old is None else width / old_factor
+        return float(seconds / 86400 if new is None else seconds * new_factor)
+
+    return remap, rescale
+
+
 def _mapping(plot, axis: str, old, new, data):
     """Functions taking a value, and a width such as a tick step, from the old
     shown units to the new."""
     if isinstance(plot, AllanDeviationPlot):
         old_start = new_start = 0.0  # τ starts at τ0 whatever the conversion says
     else:
-        column = getattr(plot, "values" if isinstance(plot, Histogram) else axis)
-        raw = data(column)
+        raw = np.asarray(data(_column_of(plot, axis)))
+        if raw.dtype.kind == "M":
+            return _time_mapping(raw, old, new)
         old_start, new_start = start(raw, old), start(raw, new)
     (old_factor, old_offset), (new_factor, new_offset) = linear(old), linear(new)
 

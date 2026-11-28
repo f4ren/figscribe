@@ -42,6 +42,14 @@ from figscribe.model.figure import Figure
 from figscribe.model.project import Project
 from figscribe.model.sharing import sharing_group, typed_limits
 from figscribe.model.styles import style_problems
+from figscribe.model.timeaxes import (
+    IsTime,
+    as_dates,
+    date_axis,
+    not_on_dates,
+    time_columns_of,
+)
+from figscribe.times import date_text
 
 FITTABLE = (LinePlot, ScatterPlot, ErrorbarPlot)
 """Plots of points with x and y columns: those whose rows can be left out."""
@@ -77,6 +85,7 @@ def validate_references(
     sources = {s.id: s for s in project.sources}
 
     _check_unique_ids(project, issues)
+    is_time = time_columns_of(project)
 
     for si, source in enumerate(project.sources):
         if isinstance(source, CsvSource) and source.decimal == source.delimiter:
@@ -106,6 +115,7 @@ def validate_references(
             apath = f"{fpath}.axes[{ai}]"
             _check_axis_ticks(figure, ai, apath, issues)
             _check_minor_grid(axes, apath, issues)
+            _check_date_axes(figure, ai, apath, is_time, issues)
 
             artists_by_id = {a.id: a for a in axes.artists}
             for field, why in style_problems(axes):
@@ -126,10 +136,16 @@ def validate_references(
                         )
                     )
 
-                if data is not None:
-                    for why in _in_a_break(figure, ai, artist, data):
+                dates_why = not_on_dates(figure, ai, artist, is_time)
+                if dates_why is not None:
+                    why = f"is not drawn: {dates_why}"
+                    issues.append(ReferenceIssue(tpath, artist.id, why))
+                # The checks of what the data gives are for what is drawn.
+                drawn = None if dates_why else data
+                if drawn is not None:
+                    for why in _in_a_break(figure, ai, artist, drawn):
                         issues.append(ReferenceIssue(tpath, artist.id, why))
-                why = _off_the_log_scale(artist, axes)
+                why = None if dates_why else _off_the_log_scale(artist, axes)
                 if why is not None:
                     issues.append(ReferenceIssue(tpath, artist.id, why))
                 if getattr(artist, "band", None) and artist.yerr is None:
@@ -141,16 +157,16 @@ def validate_references(
                         )
                     )
 
-                if data is not None:
-                    why = _text_where_numbers_are_plotted(artist, data)
+                if drawn is not None:
+                    why = _text_where_numbers_are_plotted(artist, drawn)
                     if why is not None:
                         issues.append(ReferenceIssue(tpath, artist.id, why))
-                if data is not None and isinstance(artist, FIT_TARGETS):
-                    why = _unequal_or_unreadable(artist, data)
+                if drawn is not None and isinstance(artist, FIT_TARGETS):
+                    why = _unequal_or_unreadable(artist, drawn)
                     if why is not None:
                         issues.append(ReferenceIssue(tpath, artist.id, why))
-                if data is not None:
-                    for why in _not_drawn(artist, axes, data):
+                if drawn is not None:
+                    for why in _not_drawn(artist, axes, drawn):
                         issues.append(ReferenceIssue(tpath, artist.id, why))
                     if isinstance(artist, FitCurve):
                         if artist.drawn_result() is None:
@@ -162,17 +178,17 @@ def validate_references(
                                 "it other start values, in Change the fit"
                             )
                             issues.append(ReferenceIssue(tpath, artist.id, why))
-                        why = _nothing_to_fit(artist, artists_by_id, data)
+                        why = _nothing_to_fit(artist, artists_by_id, drawn)
                         if why is not None:
                             issues.append(ReferenceIssue(tpath, artist.id, why))
 
                 if isinstance(artist, FunctionPlot):
-                    for field, why in _function_problems(figure, ai, artist, data):
+                    for field, why in _function_problems(figure, ai, artist, drawn):
                         where = f"{tpath}.{field}"
                         issues.append(ReferenceIssue(where, artist.id, why))
                 if isinstance(artist, FitCurve):
                     for field, why in _curve_problems(
-                        figure, ai, artist, artists_by_id, data
+                        figure, ai, artist, artists_by_id, drawn
                     ):
                         where = f"{tpath}.{field}"
                         issues.append(ReferenceIssue(where, artist.id, why))
@@ -218,14 +234,17 @@ def validate_references(
                             and artist.fit_range[1] <= target.x_range[1]
                         )
                     ):
-                        low, high = artist.fit_range
-                        plot_low, plot_high = target.x_range
+                        dates = as_dates(target, "x", is_time)
+                        low, high, plot_low, plot_high = (
+                            date_text(end) if dates else f"{end:g}"
+                            for end in (*artist.fit_range, *target.x_range)
+                        )
                         issues.append(
                             ReferenceIssue(
                                 f"{tpath}.fit_range",
                                 artist.id,
-                                f"the fit range {low:g} to {high:g} reaches beyond "
-                                f"the plot's range {plot_low:g} to {plot_high:g}; only "
+                                f"the fit range {low} to {high} reaches beyond "
+                                f"the plot's range {plot_low} to {plot_high}; only "
                                 "the points within both are fitted",
                             )
                         )
@@ -661,7 +680,7 @@ def _not_drawn(artist, axes: Axes, data) -> list[str]:
                 break
     for name, reference, scale in shown:
         try:
-            values = np.asarray(data(reference), dtype=float).ravel()
+            values = np.asarray(data(reference)).ravel()
         except DataError:
             return []  # a file that cannot be read is shown above the preview
         what = (
@@ -780,6 +799,32 @@ def _allan_not_drawn(artist: AllanDeviationPlot, data) -> list[str]:
             f"({3 - points + values.size} at the least)",
         ]
     return ignored
+
+
+def _check_date_axes(
+    figure: Figure,
+    index: int,
+    path: str,
+    is_time: IsTime,
+    issues: list[ReferenceIssue],
+) -> None:
+    """Settings that mean nothing on an axis of dates."""
+    axes = figure.axes[index]
+    for field, name in (("x", "x"), ("y", "y"), ("y_right", "right y")):
+        spec = getattr(axes, field)
+        if spec is None or not date_axis(figure, index, field, is_time):
+            continue
+        shows = f"the {name} axis shows dates, which"
+        for setting, why in (
+            ("scale" if spec.scale != "linear" else None, "have no logarithmic scale"),
+            ("breaks" if spec.breaks else None, "cannot have breaks yet"),
+        ):
+            if setting is not None:
+                issues.append(
+                    ReferenceIssue(
+                        f"{path}.{field}.{setting}", axes.id, f"{shows} {why}"
+                    )
+                )
 
 
 def _check_unique_ids(project: Project, issues: list[ReferenceIssue]) -> None:
