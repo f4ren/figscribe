@@ -709,8 +709,12 @@ def test_the_basic_settings_come_first_the_rest_under_more(
     assert fields["Units and rows"] == [
         "x_conversion",
         "y_conversion",
+        "normalize",
         "x_range",
+        "baseline",
+        "smoothing",
         "reduction",
+        "peaks",
     ]
     assert fields["Left-out points"] == [
         "left_out_color",

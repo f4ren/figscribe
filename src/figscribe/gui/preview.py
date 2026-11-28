@@ -1124,6 +1124,8 @@ class Preview(QWidget):
             for text in ax.texts:
                 if text.get_gid() and text.get_visible() and text.contains(event)[0]:
                     note = find(project, text.get_gid())
+                    if not isinstance(note, Annotation):
+                        continue  # the x written at a peak of a plot
                     return self._editable(text, note.id, ("text",), note.text, True)
             legend = ax.get_legend()
             if legend is not None and legend.get_visible():
@@ -1223,6 +1225,8 @@ class Preview(QWidget):
             note = find(self.document.project, note_id)
         except CommandError:
             return
+        if not isinstance(note, Annotation):
+            return
         found = [
             (ax, t)
             for ax in _all_axes(self._figure)
@@ -1244,9 +1248,21 @@ class Preview(QWidget):
         event = MouseEvent("button_press_event", self._figure.canvas, x, y)
         for ax in _all_axes(self._figure):
             for text in ax.texts:
-                if text.get_gid() and text.get_visible() and text.contains(event)[0]:
+                if (
+                    text.get_gid()
+                    and text.get_visible()
+                    and text.contains(event)[0]
+                    and self._is_note(text.get_gid())
+                ):
                     return text
         return None
+
+    def _is_note(self, oid: str) -> bool:
+        """Whether `oid` is a note: the x written at a peak carries its plot's."""
+        try:
+            return isinstance(find(self.document.project, oid), Annotation)
+        except CommandError:
+            return False
 
     def _legend_at(self, point: QPointF):
         x, y = self._to_display(point)

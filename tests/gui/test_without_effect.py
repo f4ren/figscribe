@@ -26,8 +26,10 @@ from figscribe.model import (
     ArrayRef,
     Axes,
     AxisSpec,
+    Baseline,
     Colorbar,
     ColumnRef,
+    Conversion,
     ErrorBand,
     ErrorbarPlot,
     Figure,
@@ -37,11 +39,13 @@ from figscribe.model import (
     ImagePlot,
     Legend,
     LinePlot,
+    Peaks,
     PredefinedFit,
     Project,
     Reduction,
     ReferenceLine,
     ResidualPlot,
+    Smoothing,
     validate_references,
 )
 from figscribe.render.figure import render
@@ -408,6 +412,30 @@ CASES: dict[tuple, Case] = {
             ("left_out_linestyle", ":"),
         )
     },
+    ("LinePlot", ("y_conversion",)): (
+        _alone(lambda: _line(baseline=Baseline(), normalize="max")),
+        Conversion(factor=4.0),
+        ("normalize",),
+        None,
+    ),
+    ("LinePlot", ("peaks", "decimals")): (
+        _alone(lambda: _line(peaks=Peaks(labels=False))),
+        2,
+        ("peaks", "labels"),
+        True,
+    ),
+    ("LinePlot", ("baseline", "degree")): (
+        _alone(lambda: _line(baseline=Baseline(shape="linear"))),
+        4,
+        ("baseline", "shape"),
+        "polynomial",
+    ),
+    ("LinePlot", ("smoothing", "order")): (
+        _alone(lambda: _line(smoothing=Smoothing(method="moving", window=5))),
+        2,
+        ("smoothing", "method"),
+        "savgol",
+    ),
     ("LinePlot", ("reduction", "count")): (
         _alone(lambda: _line(reduction=Reduction(method="interval", width=1.0))),
         3,

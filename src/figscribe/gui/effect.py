@@ -187,6 +187,30 @@ RULES: list[Rule] = [
     ),
     Rule(
         (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("y_conversion",),),
+        "the plot subtracts a baseline and normalises: no unit changes its values",
+        lambda plot, _: plot.baseline is not None and plot.normalize is not None,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("peaks", "decimals"),),
+        "the peaks are marked without their x",
+        lambda plot, _: not plot.peaks.labels,
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("baseline", "degree"),),
+        "only a polynomial has a degree to choose",
+        lambda plot, _: plot.baseline.shape != "polynomial",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
+        (("smoothing", "order"),),
+        "a moving average has no polynomial",
+        lambda plot, _: plot.smoothing.method != "savgol",
+    ),
+    Rule(
+        (LinePlot, ScatterPlot, ErrorbarPlot),
         (("reduction", "count"),),
         "the points are averaged over intervals of x, not counted in rows",
         lambda plot, _: plot.reduction.method == "interval",

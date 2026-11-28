@@ -92,6 +92,59 @@ class Reduction(StrictModel):
     The error counts only the measured rows."""
 
 
+class Smoothing(StrictModel):
+    """The y values smoothed over their neighbours in the file's order (decision
+    0083); fits use the smoothed values. The data file stays as it is."""
+
+    method: Literal["savgol", "moving"] = "savgol"
+    """"savgol", a Savitzky–Golay filter, which keeps the height and width of
+    peaks better, or "moving", the average of the window."""
+    window: int = Field(11, ge=3)
+    """Points in the window, an odd number; the data should be evenly spaced."""
+    order: int = Field(3, ge=0, le=9)
+    """Order of the polynomial of "savgol", below the window; not used by
+    "moving"."""
+
+    @model_validator(mode="after")
+    def _window_fits(self) -> Smoothing:
+        if self.window % 2 == 0:
+            raise ValueError("the window needs an odd number of points")
+        if self.method == "savgol" and self.order >= self.window:
+            raise ValueError("the order must be below the number of points")
+        return self
+
+
+class Baseline(StrictModel):
+    """A curve fitted to the y values and subtracted from them, before smoothing
+    and normalising (decision 0083); fits use what is left. y errors stay."""
+
+    shape: Literal["constant", "linear", "polynomial"] = "linear"
+    """The curve: a constant, a straight line, or a polynomial of `degree`."""
+    degree: int = Field(2, ge=2, le=9)
+    """Degree of the polynomial; not used by the other shapes."""
+    ranges: list[Range] = Field(default_factory=list)
+    """(lower, upper) x ranges in the shown unit that the curve is fitted to,
+    stretches without peaks; empty fits every point."""
+
+
+class Peaks(StrictModel):
+    """Mark the peaks of the values the plot shows, found by
+    scipy.signal.find_peaks (decision 0083); the values stay as they are."""
+
+    prominence: float | None = Field(None, gt=0.0)
+    """How far a peak must stand out from its surroundings, in the y unit
+    shown; None takes a tenth of the span of the values."""
+    distance: int = Field(1, ge=1)
+    """The points two peaks must at least be apart; of two closer ones the
+    lower is not marked."""
+    dips: bool = False
+    """Mark the dips instead, as in a transmission spectrum."""
+    labels: bool = True
+    """Write each peak's x beside it; off marks them with a triangle."""
+    decimals: int | None = Field(None, ge=0, le=10)
+    """Decimals of the written x; None writes four significant digits."""
+
+
 class ArtistBase(Identified):
     label: str | None = None
     """Legend entry; None means the artist is not listed."""
@@ -143,9 +196,19 @@ class LinePlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    baseline: Baseline | None = None
+    """A baseline subtracted from the y values; None leaves them."""
+    smoothing: Smoothing | None = None
+    """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
+    peaks: Peaks | None = None
+    """Mark the peaks of the values shown; None marks none."""
 
 
 class ScatterPlot(ArtistBase):
@@ -181,9 +244,19 @@ class ScatterPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    baseline: Baseline | None = None
+    """A baseline subtracted from the y values; None leaves them."""
+    smoothing: Smoothing | None = None
+    """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
+    peaks: Peaks | None = None
+    """Mark the peaks of the values shown; None marks none."""
 
 
 class ErrorBand(StrictModel):
@@ -246,9 +319,19 @@ class ErrorbarPlot(ArtistBase):
     x_range: Range | None = None
     """(lower, upper) of the shown x values: only the rows within it, both ends
     included, are drawn, fitted and counted; None uses every row."""
+    baseline: Baseline | None = None
+    """A baseline subtracted from the y values; None leaves them."""
+    smoothing: Smoothing | None = None
+    """The y values smoothed; None draws them as they are. Fits use them."""
+    normalize: Literal["max", "area"] | None = None
+    """The y values divided by their maximum ("max") or by the area under the
+    points ("area"), after smoothing; y errors alike. None draws them as they
+    are. Fits use the normalised values."""
     reduction: Reduction | None = None
     """Draw fewer points: groups of rows averaged or thinned; None draws every
     row. Fits use the reduced points."""
+    peaks: Peaks | None = None
+    """Mark the peaks of the values shown; None marks none."""
 
 
 class Histogram(ArtistBase):

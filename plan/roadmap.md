@@ -78,9 +78,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 - **F6** several files as one series (M). **F7** data formats: ~~HDF5 (1)~~
   done, a check of whitespace-separated text (2); ~~Excel and Calc (3)~~ done.
   **F9** a
-  data cursor (S). **F10** smoothing, peak finding, baseline and normalising
-  (all four asked for by the user 2026-11-28; each gets a decision before
-  code).
+  data cursor (S). ~~**F10** smoothing, peak finding, baseline and
+  normalising~~ done (0083).
 - **F14** fit an Allan deviation (M): built and accepted (0064); named
   noise-type models are open. ~~**F15** draw a function~~ done (0078).
 
@@ -108,8 +107,8 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2.
 F15 is done (0078), Excel and Calc files (F7.3, 0079, asked for by the user
 2026-11-27), HDF5 (F7.1, 0081) and date axes (F5.5, 0082). Next, asked for by
-the user 2026-11-28: F10. Then F6 several files as one series, F1.5 a
-confidence band, and a legend entry for the part of a curve beyond the data.
+the user 2026-11-28: F10 (done, 0083). Then F6 several files as one series,
+F1.5 a confidence band, and a legend entry for the part of a curve beyond the data.
 **The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B7 item 5,
 the GUI at small sizes, needs no answer. The lab user's
 requests of 2026-11-04 are all done.
@@ -1492,6 +1491,16 @@ script, and a plot with a few settings; the model stores what is computed,
 never the result. The Allan deviation is the first (F4.9). The three above
 are judged by the same points when they come up.
 
+*Smoothing and normalising done* (2026-11-28, decision 0083; no schema bump):
+settings of a line, points or error bar plot in `figscribe/process.py`, called
+by `plot_data`. *Learned:* normalising has to be its own step after the
+baseline, not part of the unit conversion; a fit to smoothed data is listed,
+since its uncertainties say nothing.
+*Baseline and peaks done* (2026-11-28, decision 0083). F10 is built. *Open:*
+try measured spectra; labels of close peaks can overlap. *Follow-ups, only if
+asked:* the baseline's ranges dragged in the preview; peaks over dates; the
+labels moved by hand; an asymmetric least squares baseline.
+
 ### F11 Units and a range per plot — M
 
 Asked for by the user (2026-10-26): show times in min, h or days, counted
@@ -2086,7 +2095,7 @@ answer in `docs/decisions.md` when the task is started.
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
 | F7.1 | answered 2026-11-28: `h5py` built in, not an extra (0081) |
 | F7.3 | answered 2026-11-27: Excel and Calc with `python-calamine` (0079) |
-| F10 | answered 2026-11-28: all four wanted; how each works is to be decided |
+| F10 | answered 2026-11-28: all four, as proposed (0083) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |
 | R4.2 | answered 2026-11-05: PyInstaller, no signing for now, dmg (arm64) + Windows installer + AppImage (0066) |
 | Phase 5 | German user interface? |

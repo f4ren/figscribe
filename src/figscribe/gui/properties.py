@@ -89,6 +89,7 @@ from figscribe.model import (
     ArrayRef,
     Axes,
     AxisSpec,
+    Baseline,
     Colorbar,
     ColumnRef,
     Conversion,
@@ -100,9 +101,11 @@ from figscribe.model import (
     FunctionPlot,
     Histogram,
     PanelLabels,
+    Peaks,
     PredefinedFit,
     Project,
     Reduction,
+    Smoothing,
 )
 from figscribe.model.styles import style_problem
 from figscribe.model.timeaxes import time_columns_of
@@ -111,8 +114,12 @@ from figscribe.render.ticks import PREFIXES
 from figscribe.units import (
     ALLAN_POINTS,
     CONVERTIBLE,
+    PROCESSING,
+    changed_smoothing,
+    default_smoothing,
     set_allan_field,
     set_conversion,
+    set_processing,
     set_range,
 )
 
@@ -196,7 +203,10 @@ OPTIONAL_PARTS: dict[str, type[BaseModel]] = {
     "colorbar": Colorbar,
     "panel_labels": PanelLabels,
     "band": ErrorBand,
+    "baseline": Baseline,
+    "smoothing": Smoothing,
     "reduction": Reduction,
+    "peaks": Peaks,
 }
 """Optional nested models switched on and off with a check box; when on, their
 fields get a section of their own."""
@@ -208,6 +218,8 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
         return Spec("bins")
     if name in OPTIONAL_PARTS:
         return Spec("part", model=OPTIONAL_PARTS[name])
+    if name == "ranges":
+        return Spec("ranges")
     if name in CONVERSIONS:
         return Spec("conversion", optional=True)
     optional = False
@@ -253,7 +265,11 @@ def spec_for(name: str, annotation: Any) -> Spec | None:
 
 
 SECTIONS = {
+    "baseline": "Data",
+    "smoothing": "Data",
+    "normalize": "Data",
     "reduction": "Data",
+    "peaks": "Data",
     "x_conversion": "Data",
     "y_conversion": "Data",
     "x_range": "Data",
@@ -342,7 +358,10 @@ SECTION_NAMES = {
     "colorbar": "Color bar",
     "panel_labels": "Panel labels",
     "band": "Error band",
+    "baseline": "Baseline",
+    "smoothing": "Smoothing",
     "reduction": "Fewer points",
+    "peaks": "Peaks",
     "layout": "Panel layout",
     "inset": "Place in panel",
 }
@@ -381,8 +400,12 @@ BASIC = {
         "y",
         "x_conversion",
         "y_conversion",
+        "normalize",
         "x_range",
+        "baseline",
+        "smoothing",
         "reduction",
+        "peaks",
         "color",
         "marker",
         "markersize",
@@ -400,8 +423,12 @@ BASIC = {
         "y",
         "x_conversion",
         "y_conversion",
+        "normalize",
         "x_range",
+        "baseline",
+        "smoothing",
         "reduction",
+        "peaks",
         "color",
         "edgecolor",
         "marker",
@@ -419,8 +446,12 @@ BASIC = {
         "yerr",
         "x_conversion",
         "y_conversion",
+        "normalize",
         "x_range",
+        "baseline",
+        "smoothing",
         "reduction",
+        "peaks",
         "color",
         "marker",
         "markersize",
@@ -597,6 +628,8 @@ COLLAPSED = {
 folds with a click on its title, and stays as the user left it."""
 
 PLACEHOLDERS = {
+    "prominence": "a tenth of the span",
+    "decimals": "4 digits",
     "band.color": "the plot's",
     "left_out_note": "no reason given",
     "left_out_color": "light grey",
@@ -821,6 +854,31 @@ TIPS = {
     "PanelLabels.style": "How the letters are written.",
     "band": "Shade the y errors as a band around the line instead of drawing bars, "
     "for dense data; x errors stay bars.",
+    "peaks": "Mark the peaks of the values shown, with their x.",
+    "Peaks.prominence": "How far a peak must stand out from its surroundings, "
+    "in the y unit shown.",
+    "Peaks.distance": "Of two peaks closer than this many points only the "
+    "higher is marked.",
+    "Peaks.dips": "Mark the dips instead, as in a transmission spectrum.",
+    "Peaks.labels": "Write each peak's x beside it; off marks the peaks with "
+    "triangles.",
+    "Peaks.decimals": "Decimals of the x written at a peak.",
+    "baseline": "Subtract a curve fitted to the y values: an offset, a drift or "
+    "a background under peaks. Fits use what is left.",
+    "Baseline.shape": "The curve that is fitted and subtracted.",
+    "Baseline.degree": "Degree of the polynomial.",
+    "Baseline.ranges": "The stretches of x, in the unit shown, that the curve is "
+    "fitted to: those without peaks, such as 0 to 5, 15 to 20.",
+    "normalize": "Divide the y values by their maximum or by the area under "
+    "them, after smoothing. The y axis loses its unit.",
+    "smoothing": "Smooth the y values over their neighbours in the file's order. "
+    "The data file stays as it is; fits use the smoothed values.",
+    "Smoothing.method": "Savitzky–Golay fits a polynomial in each window and "
+    "keeps the height and width of peaks better; the moving average takes the "
+    "mean of the window.",
+    "Smoothing.window": "Points in the window, an odd number. The data should be "
+    "evenly spaced in x.",
+    "Smoothing.order": "Order of the polynomial, below the number of points.",
     "reduction": "Draw fewer points: groups of rows averaged or thinned. The data "
     "file stays as it is; the figure, the export and the script show the reduced "
     "points, and fits use them.",
@@ -940,6 +998,9 @@ OTHER_FACTOR = "another factor"
 FORMULA = "a formula"
 
 CAPTIONS = {
+    ("Peaks", "distance"): "Points apart",
+    ("Peaks", "labels"): "Write x",
+    ("Smoothing", "method"): "Method",
     ("PanelLabels", "fontsize"): "Letter size (pt)",
     ("LinePlot", "label"): "Legend entry",
     ("ScatterPlot", "label"): "Legend entry",
@@ -1013,8 +1074,12 @@ PLOT_SECTIONS = {
     "yerr": "Label and data",
     "x_conversion": "Units and rows",
     "y_conversion": "Units and rows",
+    "normalize": "Units and rows",
     "x_range": "Units and rows",
+    "baseline": "Units and rows",
+    "smoothing": "Units and rows",
     "reduction": "Units and rows",
+    "peaks": "Units and rows",
     "color": "Look",
     "edgecolor": "Look",
     "marker": "Look",
@@ -1172,7 +1237,15 @@ IN_THE_ORDER_OF_BASIC = {"Figure", *PLOT_KINDS, *ELEMENT_SECTIONS}
 """Kinds of object whose settings are shown in the order of `BASIC`, not of the
 model, so that what belongs together is next to each other."""
 
-INLINE = {"panel_labels", "band", "reduction", "colorbar"}
+INLINE = {
+    "panel_labels",
+    "band",
+    "baseline",
+    "smoothing",
+    "reduction",
+    "peaks",
+    "colorbar",
+}
 """Optional parts whose settings follow their check box in its own section
 instead of having a section of their own."""
 
@@ -1500,17 +1573,25 @@ class PropertyPanel(QScrollArea):
         plots drawn against it, a data file is read again when how it is
         read changes, and units and a range keep the plot's axis and fits in
         step."""
+        if path[0] in PROCESSING and isinstance(obj, CONVERTIBLE):
+            data = self.document.data
+            if path == ("smoothing",):
+                value = default_smoothing(obj, data) if value else None
+            elif path == ("baseline",):
+                value = Baseline() if value else None
+            elif path[0] == "smoothing" and len(path) == 2:
+                changed = changed_smoothing(obj.smoothing, path[1], value)
+                value = _checked(Smoothing, changed, path[1])
+            elif path[0] == "baseline" and len(path) == 2:
+                changed = {**obj.baseline.model_dump(), path[1]: value}
+                value = _checked(Baseline, changed, path[1])
+            return set_processing(self.document.project, obj.id, path[0], value, data)
         if path[0] in CONVERSIONS and isinstance(obj, CONVERTIBLE):
             conversion = value
             if len(path) == 2:
                 current = getattr(obj, path[0]).model_dump()
-                try:
-                    conversion = Conversion.model_validate({**current, path[1]: value})
-                except ValidationError as exc:
-                    reason = "; ".join(
-                        e["msg"].removeprefix("Value error, ") for e in exc.errors()
-                    )
-                    raise CommandError(f"{field_name(path[1])}: {reason}") from None
+                changed = {**current, path[1]: value}
+                conversion = _checked(Conversion, changed, path[1])
             data = self.document.data
             axis = path[0][0]
             return set_conversion(self.document.project, obj.id, axis, conversion, data)
@@ -1541,6 +1622,10 @@ class PropertyPanel(QScrollArea):
                     "Letter the panels", [SetField(obj.id, path, PanelLabels())]
                 )
             return Macro("Remove the panel labels", [SetField(obj.id, path, None)])
+        if path == ("peaks",):
+            if value:
+                return Macro("Mark the peaks", [SetField(obj.id, path, Peaks())])
+            return Macro("Remove the peak marks", [SetField(obj.id, path, None)])
         if path == ("reduction",):
             if value:
                 return Macro("Draw fewer points", [SetField(obj.id, path, Reduction())])
@@ -2190,6 +2275,13 @@ CHOICES = {
         ("both", "both"),
     ],
 }
+BASELINE_SHAPES = [
+    ("constant", "constant"),
+    ("straight line", "linear"),
+    ("polynomial", "polynomial"),
+]
+SMOOTHING_METHODS = [("Savitzky–Golay", "savgol"), ("moving average", "moving")]
+CHOICES["normalize"] = [("maximum = 1", "max"), ("area = 1", "area")]
 CHOICES["method"] = [
     ("mean of n rows", "mean"),
     ("median of n rows", "median"),
@@ -2219,6 +2311,7 @@ CHOICES["tick_direction"] = [
 ]
 NONE_TEXT = {
     "stylesheet": "Matplotlib's default",
+    "normalize": "no",
     "x_conversion": "as in the file",
     "y_conversion": "as in the file",
     "tick_direction": "style default",
@@ -2501,6 +2594,17 @@ class ConversionEditor(Editor):
             self.commit(Conversion(factor=factor, from_start=start, unit=unit))
 
 
+def _checked(model: type[BaseModel], values: dict, field: str) -> BaseModel:
+    """`model` of `values`; a CommandError with the reason, about the field
+    that was changed."""
+    try:
+        return model.model_validate(values)
+    except ValidationError as exc:
+        reason = "; ".join(e["msg"].removeprefix("Value error, ") for e in exc.errors())
+        caption = CAPTIONS.get((model.__name__, field)) or field_name(field)
+        raise CommandError(f"{caption}: {reason}") from None
+
+
 def _of_times(project, obj: BaseModel, name: str) -> bool:
     """Whether the conversion `name` of `obj` is of a column of dates."""
     if name not in type(obj).model_fields or isinstance(obj, AllanDeviationPlot):
@@ -2638,6 +2742,14 @@ def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
         names = _parts_of(panel.document, name)
         if names:
             return ChoiceEditor(spec, path, panel, [(n, n) for n in names])
+    if name == "ranges":
+        editor = TextEditor(spec, path, panel, _ranges, _ranges_text)
+        editor.line.setPlaceholderText("every point")
+        return editor
+    if path == ("baseline", "shape"):
+        return ChoiceEditor(spec, path, panel, BASELINE_SHAPES)
+    if path == ("smoothing", "method"):
+        return ChoiceEditor(spec, path, panel, SMOOTHING_METHODS)
     if name == "cmap":
         choices = [(c, c) for c in COLORMAPS]
         return ChoiceEditor(spec, path, panel, choices, missing="")
@@ -2739,6 +2851,30 @@ def _pair(text: str) -> tuple[float, float]:
     return values[0], values[1]
 
 
+def _ranges(text: str) -> list[tuple[float, float]]:
+    """Stretches as typed: "0 to 5, 15 to 19", with semicolons between them
+    where numbers have decimal commas."""
+    if not text.strip():
+        return []
+    if ";" in text:
+        parts = text.split(";")
+    else:  # a comma and a blank part stretches: "0,5 to 4,5" is one
+        parts = re.split(r",\s+", text)
+        if any(part.count(" to ") != 1 for part in parts):
+            parts = text.split(",")
+    found = []
+    for part in parts:
+        ends = part.split(" to ")
+        if len(ends) != 2:
+            raise ValueError("type the stretches such as 0 to 5, 15 to 19")
+        found.append((number(ends[0]), number(ends[1])))
+    return found
+
+
+def _ranges_text(ranges: list[tuple[float, float]]) -> str:
+    return ", ".join(f"{a:g} to {b:g}" for a, b in ranges)
+
+
 def _bins(text: str) -> int | list[float]:
     """A number of bins ("20") or their edges ("0, 1, 2.5" or "0; 1; 2,5")."""
     if "," not in text and ";" not in text:
@@ -2791,7 +2927,10 @@ def _shape(obj: BaseModel) -> tuple:
             "colorbar",
             "panel_labels",
             "band",
+            "baseline",
+            "smoothing",
             "reduction",
+            "peaks",
             "inset",
             "result",
         )

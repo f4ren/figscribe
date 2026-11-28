@@ -128,6 +128,17 @@ def _about(figure: Figure, oid: str):
     return None
 
 
+def peaks_on_dates(figure: Figure, index: int, artist, is_time: IsTime) -> bool:
+    """Whether the peaks of the plot cannot be marked: its axes show dates."""
+    if getattr(artist, "peaks", None) is None:
+        return False
+    axes = figure.axes[index]
+    right = artist.axis == "right" and axes.y_right is not None
+    return date_axis(figure, index, "x", is_time) or date_axis(
+        figure, index, "y_right" if right else "y", is_time
+    )
+
+
 def _points(artist, dates: dict[str, bool], is_time: IsTime) -> str | None:
     for name in ("x", "y"):
         if dates[name] and not as_dates(artist, name, is_time):
@@ -140,6 +151,17 @@ def _points(artist, dates: dict[str, bool], is_time: IsTime) -> str | None:
             return f"the {name} errors are dates, not durations"
         if dates[name]:
             return f"dates cannot have {name} errors; {SINCE_START}"
+    if artist.baseline is not None:
+        if dates["y"]:
+            return "dates have no baseline"
+        if dates["x"]:
+            return f"there is no baseline over dates; {SINCE_START}"
+    if artist.smoothing is not None and dates["y"]:
+        return "dates cannot be smoothed"
+    if artist.normalize is not None and dates["y"]:
+        return "dates cannot be normalised"
+    if artist.normalize == "area" and dates["x"]:
+        return f"there is no area over dates; {SINCE_START}"
     if artist.reduction is not None and (dates["x"] or dates["y"]):
         return f"dates cannot be shown with fewer points; {SINCE_START}"
     return None

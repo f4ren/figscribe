@@ -21,6 +21,7 @@ from matplotlib.ticker import (
     MultipleLocator,
     NullFormatter,
 )
+from matplotlib.transforms import offset_copy
 
 from figscribe.convert import convert, plot_data, within
 from figscribe.function import evaluator, sets_limits, x_span
@@ -50,8 +51,15 @@ from figscribe.model import (
 from figscribe.model.artists import LIKE_THE_PLOT
 from figscribe.model.breaks import Breaks, effective_breaks, line_breaks
 from figscribe.model.sharing import sharing_group, typed_limits
-from figscribe.model.timeaxes import IsTime, as_dates, date_axis, not_on_dates
+from figscribe.model.timeaxes import (
+    IsTime,
+    as_dates,
+    date_axis,
+    not_on_dates,
+    peaks_on_dates,
+)
 from figscribe.model.validate import FIT_TARGETS, FITTABLE, unequal_columns
+from figscribe.process import not_computable, outside_breaks, peak_text, peaks_of
 from figscribe.render.breaks import (
     break_ticks,
     crossings,
@@ -69,6 +77,13 @@ from figscribe.render.layout import (
     inset_parent,
     share_partner,
     sharing_specs,
+)
+from figscribe.render.peaks import (
+    LABEL_ROOM,
+    MARK_OFFSET,
+    MARK_ROOM,
+    peak_label,
+    peak_mark,
 )
 from figscribe.render.ticks import (
     CommaFormatter,
@@ -218,6 +233,12 @@ def _render(
             for i, axes in enumerate(figure.axes)
             for a in axes.artists
             if not_on_dates(figure, i, a, is_time)
+        } | set(not_computable(figure, data))
+        unmarked = {
+            a.id
+            for i, axes in enumerate(figure.axes)
+            for a in axes.artists
+            if peaks_on_dates(figure, i, a, is_time)
         }
         # Where each function is drawn and whether it scales its axis: from the
         # model and the data, never from what is on the axes so far.
@@ -262,6 +283,7 @@ def _render(
                 {field for j, field in dated if j == i},
                 skipped,
             )
+            _mark_peaks(figure, axes, ax, drawn, data, skipped | unmarked, cuts)
             if len(drawn) > 2:
                 twins[i] = drawn[2][0]
             for part, name, _ in drawn:
@@ -650,6 +672,60 @@ def _comma_numbers(axis, kind: str, minor: bool) -> None:
     axis.set_major_formatter(CommaLogFormatter())
     if minor:
         axis.set_minor_formatter(CommaLogFormatter())
+
+
+def _mark_peaks(
+    figure: Figure,
+    axes: Axes,
+    ax: MplAxes,
+    drawn: list,
+    data: DataProvider,
+    unmarked: set[str],
+    cuts: Mapping[tuple[str, str], Breaks],
+) -> None:
+    """The peaks of the panel's plots that ask for them, once all are drawn."""
+    right = drawn[2][0] if len(drawn) > 2 else None
+    rooms: dict[MplAxes, float] = {}
+    for artist in axes.artists:
+        how = getattr(artist, "peaks", None)
+        if how is None or not artist.visible or artist.id in unmarked:
+            continue
+        on_right = artist.axis == "right" and right is not None
+        target = right if on_right else ax
+        spec = axes.y_right if on_right else axes.y
+        shown = plot_data(artist, data)
+        places = outside_breaks(
+            peaks_of(artist, shown),
+            shown,
+            cuts[axes.id, "x"],
+            [] if on_right else cuts[axes.id, "y"],  # those are the left one's
+        )
+        for x, y in zip(shown.x[places], shown.y[places], strict=True):
+            if how.labels:
+                note = target.annotate(
+                    peak_text(x, how.decimals, figure.decimal_comma),
+                    (x, y),
+                    **peak_label(how.dips),
+                    zorder=artist.zorder,
+                )
+                note.set_in_layout(False)  # a label must not squeeze the panel
+                note.set_gid(artist.id)
+            else:
+                raised = offset_copy(
+                    target.transData,
+                    fig=target.figure,
+                    y=-MARK_OFFSET if how.dips else MARK_OFFSET,
+                    units="points",
+                )
+                (mark,) = target.plot(
+                    x, y, transform=raised, zorder=artist.zorder, **peak_mark(how.dips)
+                )
+                mark.set_gid(artist.id)
+        if places.size and spec.limits is None:
+            room = LABEL_ROOM if how.labels else MARK_ROOM
+            rooms[target] = max(room, rooms.get(target, 0.0))
+    for target, room in rooms.items():  # for what stands at the outermost ones
+        target.margins(y=room)
 
 
 def _draw_artist(

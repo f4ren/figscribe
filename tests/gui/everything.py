@@ -19,6 +19,7 @@ from figscribe.model import (
     ArrayRef,
     Axes,
     AxisSpec,
+    Baseline,
     Colorbar,
     ColorMesh,
     ColumnRef,
@@ -35,6 +36,7 @@ from figscribe.model import (
     Legend,
     LinePlot,
     PanelLabels,
+    Peaks,
     PredefinedFit,
     Project,
     Reduction,
@@ -42,6 +44,7 @@ from figscribe.model import (
     ResidualPlot,
     ScatterPlot,
     ShadedSpan,
+    Smoothing,
     dumps,
 )
 from tests.hdf5files import write_h5
@@ -132,6 +135,15 @@ def build(folder: Path) -> Path:
             ),
             LinePlot(x=col("t"), y=col("T"), axis="right", label="temperature"),
             Annotation(text="peak", position=(2.0, 5.0), arrow_to=(2.5, 6.0)),
+            LinePlot(
+                x=col("t"),
+                y=col("U"),
+                label="smoothed",
+                baseline=Baseline(ranges=[(0.0, 10.0)]),
+                peaks=Peaks(prominence=0.05),
+                smoothing=Smoothing(window=5),
+                normalize="max",
+            ),
             ErrorbarPlot(
                 x=col("t"),
                 y=col("U"),
