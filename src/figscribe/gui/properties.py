@@ -73,7 +73,7 @@ from figscribe.gui.path import path_to
 from figscribe.gui.widgets import Section, TextBox, label
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path
-from figscribe.io.hdf5file import entries
+from figscribe.io.hdf5file import listed
 from figscribe.io.refresh import read_differently, reading_options
 from figscribe.io.sheetfile import column_letters, sheet_names
 from figscribe.model import (
@@ -2580,10 +2580,9 @@ def _parts_of(document: Document, field: str) -> list[str]:
     source = find(document.project, document.selected)
     path = resolve_path(source.path, document.base_dir)
     try:
-        raw = path.read_bytes()
         if field == "sheet":
-            return sheet_names(raw, path.name)
-        return [e.path for e in entries(raw, path.name) if not e.problem]
+            return sheet_names(path.read_bytes(), path.name)
+        return listed(path)
     except (OSError, DataError):
         return []
 

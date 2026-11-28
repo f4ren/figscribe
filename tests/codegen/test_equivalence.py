@@ -3064,3 +3064,64 @@ def test_files_of_one_name_in_two_folders_are_each_read(tmp_path: Path) -> None:
         [((0, "x"), (0, "y")), ((1, "x"), (1, "y")), ((0, "x"), (2, "z"))],
     )
     _assert_same(Project(sources=sources, figures=[figure]), tmp_path)
+
+
+def test_a_dataset_named_like_the_variable_of_a_table(tmp_path: Path) -> None:
+    table = np.zeros(3, dtype=[("a", "f8"), ("b", "f8")])
+    table["a"], table["b"] = [1, 2, 3], [2, 1, 3]
+    path = write_h5(
+        tmp_path / "scan.h5",
+        {"records": np.arange(6.0).reshape(2, 3), "tab": table},
+    )
+    image = hdf5_source(path, tmp_path, dataset="/records")
+    lines = hdf5_source(path, tmp_path, dataset="/tab")
+    column = {n: ColumnRef(source=lines.id, column=n) for n in "ab"}
+    figure = Figure(
+        dpi=100,
+        layout=GridLayout(cols=2),
+        axes=[
+            Axes(artists=[ImagePlot(data=ArrayRef(source=image.id))]),
+            Axes(col=1, artists=[LinePlot(x=column["a"], y=column["b"])]),
+        ],
+    )
+    _assert_same(Project(sources=[image, lines], figures=[figure]), tmp_path)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="there a program's lock keeps others from reading"
+)
+def test_an_hdf5_file_a_program_still_holds_open(tmp_path: Path) -> None:
+    path = write_scan(tmp_path / "scan.h5")
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import h5py, sys\n"
+            "with h5py.File(sys.argv[1], 'a'):\n"
+            "    print('open', flush=True)\n"
+            "    sys.stdin.read()\n",
+            str(path),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert holder.stdout.readline() == "open\n"
+        # Imported while it is held: opening it to write may change its bytes.
+        source = hdf5_source(path, tmp_path, dataset="/run1")
+        figure = _lines([source], [((0, "t"), (0, "U"))])
+        _assert_same(Project(sources=[source], figures=[figure]), tmp_path)
+    finally:
+        holder.communicate()
+
+
+def test_a_column_named_like_the_bytes_of_its_file(tmp_path: Path) -> None:
+    path = write_h5(
+        tmp_path / "scan.h5",
+        {"scan_bytes": [1.0, 2], "io": [2.0, 1], "g/x": [1.0, 3]},
+    )
+    sources = [hdf5_source(path, tmp_path, dataset=d) for d in ("/", "/g")]
+    figure = _lines(sources, [((0, "scan_bytes"), (0, "io")), ((1, "x"), (1, "x"))])
+    script = _assert_same(Project(sources=sources, figures=[figure]), tmp_path)
+    assert "with h5py.File(io.BytesIO(scan_bytes)) as h5:" in script

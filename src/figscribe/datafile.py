@@ -103,6 +103,10 @@ def parts_to_choose(
                 continue
         if len(used) == 1 and sole_part(source, target) is not None:
             continue
+        if not choices:
+            raise DataError(
+                f"{target.name} holds nothing that can take the place of {name!r}"
+            )
         asked[name] = choices
     return asked
 

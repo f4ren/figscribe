@@ -19,11 +19,13 @@ from figscribe.io.refresh import (
     use_new_version,
 )
 from figscribe.model import (
+    AllanDeviationPlot,
     ArrayRef,
     Axes,
     ColumnRef,
     Figure,
     Hdf5Source,
+    ImagePlot,
     LinePlot,
     Project,
     dumps,
@@ -452,3 +454,122 @@ def test_reread_reads_the_whole_of_nothing_it_does_not_plot(tmp_path: Path) -> N
     path = write_h5(tmp_path / "m.h5", {"f": np.arange(5.0), "t": np.arange(8.0)})
     source = hdf5_source(path, tmp_path)
     assert reread(source, tmp_path).columns == ["f", "t"]
+
+
+def _odd(tmp_path: Path) -> Path:
+    """A group with two good datasets and two that NumPy or Python stumble on:
+    a name in Latin-1, and HDF5's time type."""
+    path = tmp_path / "odd.h5"
+    with h5py.File(path, "w") as file:
+        file["g/t"] = [1.0, 2]
+        file["g/u"] = [3.0, 4]
+        file["g"].create_dataset(b"temp_\xb0C", data=[5.0, 6])
+        space = h5py.h5s.create_simple((2,))
+        h5py.h5d.create(file["g"].id, b"when", h5py.h5t.UNIX_D32LE, space)
+        file.create_group(b"run_\xb5")
+    return path
+
+
+def test_one_odd_member_does_not_spoil_the_file(tmp_path: Path) -> None:
+    path = _odd(tmp_path)
+    source = hdf5_source(path, tmp_path)
+    assert (source.dataset, source.columns) == ("/g", ["t", "u"])
+    np.testing.assert_array_equal(_column(tmp_path, source, "u"), [3, 4])
+    found = {e.path: e for e in entries(path.read_bytes(), path.name)}
+    assert found["/g"].left_out["temp_\\xb0C"] == "its name is not UTF-8 text"
+    assert "cannot be read" in found["/g"].left_out["when"]
+    assert "cannot be read" in found["/g/when"].problem
+
+
+def test_columns_plotted_from_what_has_become_an_image_are_a_problem(
+    tmp_path: Path,
+) -> None:
+    project = _plotted(tmp_path)
+    with h5py.File(tmp_path / "scan.h5", "a") as file:
+        file["img"] = np.zeros((3, 4))
+    source = hdf5_source(tmp_path / "scan.h5", tmp_path, dataset="/run1")
+    oid = project.sources[0].id
+    project.sources = [source.model_copy(update={"id": oid})]  # the file as it is
+    read_differently(project, oid, "dataset", "/img", tmp_path).apply(project)
+    problems = [str(p) for p in validate_references(project)]
+    assert any("'t'" in p for p in problems) and any("'U'" in p for p in problems)
+
+
+def test_an_image_of_a_group_of_different_lengths_is_a_problem(tmp_path: Path) -> None:
+    path = write_h5(tmp_path / "m.h5", {"g/f": np.arange(5.0), "g/t": np.arange(8.0)})
+    source = hdf5_source(path, tmp_path, dataset="/g")
+    image = ImagePlot(data=ArrayRef(source=source.id))
+    project = Project(sources=[source], figures=[Figure(axes=[Axes(artists=[image])])])
+    problems = validate_references(project, load_data(project, tmp_path))
+    assert any("different lengths" in str(p) for p in problems)
+
+
+def test_nothing_that_could_take_the_place_is_said(tmp_path: Path) -> None:
+    path = write_h5(tmp_path / "i.h5", {"img": np.zeros((2, 2))})
+    source = hdf5_source(path, tmp_path)
+    line = write_h5(tmp_path / "next.h5", {"t": [1.0, 2]})
+    with pytest.raises(DataError, match="next.h5 holds nothing .* '/img'"):
+        parts_to_choose(Project(sources=[source]), source.id, tmp_path, line)
+
+
+@pytest.mark.parametrize("dataset", ["/run1", "/run1/U"])
+def test_a_renamed_run_is_found_for_one_column_too(
+    tmp_path: Path, dataset: str
+) -> None:
+    path = write_h5(tmp_path / "r.h5", {"run1/U": [1.0, 2]})
+    source = hdf5_source(path, tmp_path, dataset=dataset)
+    write_h5(path, {"run2/U": [3.0, 4]})
+    project = Project(sources=[source])
+    use_new_version(project, source.id, tmp_path).apply(project)
+    assert project.sources[0].dataset == dataset.replace("run1", "run2")
+
+
+def test_the_list_of_a_file_is_read_once_until_the_file_changes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from figscribe.io import hdf5file
+
+    path = write_h5(tmp_path / "m.h5", {"a/t": [1.0, 2]})
+    opened = []
+    real = h5py.File
+
+    def counting(*args, **kwargs):
+        opened.append(args[0])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(hdf5file.h5py, "File", counting)
+    assert hdf5file.listed(path) == ["/a", "/a/t"]
+    assert hdf5file.listed(path) == ["/a", "/a/t"]
+    assert opened == [path]  # by its path: not the whole file into memory
+    monkeypatch.undo()
+    write_h5(path, {"b/long name of the run": [1.0, 2]})
+    assert hdf5file.listed(path) == ["/b", "/b/long name of the run"]
+
+
+def test_listing_a_file_reads_no_values(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / "m.h5"
+    with h5py.File(path, "w") as file:
+        for name in ("a", "b"):
+            file.create_dataset(f"g/{name}", data=np.arange(100.0), compression="gzip")
+        file.create_dataset("m", data=np.eye(3), compression="lzf", shuffle=True)
+
+    def read(*args, **kwargs):
+        raise AssertionError("values were read")
+
+    monkeypatch.setattr(h5py.Dataset, "__getitem__", read)
+    found = {e.path: e.problem for e in entries(path.read_bytes(), path.name)}
+    assert found == {"/": found["/"], "/g": "", "/g/a": "", "/g/b": "", "/m": ""}
+
+
+def test_an_allan_deviation_with_times_of_another_length_is_a_problem(
+    tmp_path: Path,
+) -> None:
+    path = write_h5(tmp_path / "m.h5", {"y": np.arange(16.0), "t": np.arange(12.0)})
+    source = hdf5_source(path, tmp_path)
+    plot = AllanDeviationPlot(
+        values=ColumnRef(source=source.id, column="y"),
+        time=ColumnRef(source=source.id, column="t"),
+    )
+    project = Project(sources=[source], figures=[Figure(axes=[Axes(artists=[plot])])])
+    problems = validate_references(project, load_data(project, tmp_path))
+    assert any("time (t) has 12 values, values (y) has 16" in str(p) for p in problems)

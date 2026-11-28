@@ -3921,7 +3921,11 @@ settled.
   Very large files are left to E1.
 - Units come from a dataset's `units` or `unit` attribute. Scale and offset
   attributes, as netCDF writes them, are not applied.
-- The script reads the same datasets with `h5py`, after the same hash check.
+- The script reads the same datasets with `h5py`, from the bytes it has hashed:
+  opened by its path, a file that a measuring program still holds open is
+  refused for its lock, though figscribe reads it.
+- Whether a dataset can be read is told from its filters, without reading it,
+  so that a large file lists quickly.
 
 ### Alternatives considered
 

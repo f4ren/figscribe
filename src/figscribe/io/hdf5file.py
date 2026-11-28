@@ -16,17 +16,19 @@ values than the script reading from disk.
 
 from __future__ import annotations
 
+import hashlib
 import io
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import h5py
 import numpy as np
 
-from figscribe.io.errors import DataError
-from figscribe.io.files import sha256_of, stored_path
+from figscribe.io.errors import CellError, DataError
+from figscribe.io.files import stored_path
 from figscribe.model import Hdf5Source
 
 SUFFIXES = (".h5", ".hdf5", ".he5", ".nxs")
@@ -54,12 +56,17 @@ class Entry:
 
 
 def hdf5_source(
-    path: str | Path, base_dir: str | Path, *, dataset: str | None = None
+    path: str | Path,
+    base_dir: str | Path,
+    *,
+    dataset: str | None = None,
+    contents: bytes | None = None,
 ) -> Hdf5Source:
     """Describe an entry of an HDF5 file for the model: hash the file and find
-    the columns. `dataset` None takes the first that looks like a table."""
+    the columns. `dataset` None takes the first that looks like a table;
+    `contents` are the file's bytes where they have been read already."""
     path = Path(path)
-    raw = path.read_bytes()
+    raw = path.read_bytes() if contents is None else contents
     with _opened(raw, path.name) as file:
         if dataset is None:
             entry = likely(list(_walk(file)), path.name)
@@ -67,7 +74,7 @@ def hdf5_source(
             entry = _chosen(file, _normal(dataset), path.name)
     return Hdf5Source(
         path=stored_path(path, base_dir),
-        sha256=sha256_of(path),
+        sha256=hashlib.sha256(raw).hexdigest(),
         dataset=entry.path,
         holds=entry.kind,
         columns=entry.columns,
@@ -105,6 +112,20 @@ def head(
         return [values.astype(float) for values in read], len(source.columns)
 
 
+def listed(path: str | Path) -> list[str]:
+    """The entries of the file at `path` that can be data. Read by its path, so
+    that only the tree is read and not the whole file, and once as long as the
+    file stays as it is: a form is made again and again."""
+    stat = Path(path).stat()
+    return list(_listed(Path(path), stat.st_mtime_ns, stat.st_size))
+
+
+@lru_cache(maxsize=8)
+def _listed(path: Path, changed: int, size: int) -> tuple[str, ...]:
+    with _opened(path, path.name) as file:
+        return tuple(e.path for e in _walk(file) if not e.problem)
+
+
 def has(raw: bytes, name: str, path: str) -> bool:
     """Whether the file has something at `path`, readable or not."""
     with _opened(raw, name) as file:
@@ -132,11 +153,8 @@ def only_like(source: Hdf5Source, raw: bytes, name: str) -> str | None:
         e.path
         for e in entries(raw, name)
         if not e.problem
-        and (
-            set(source.columns) <= set(e.columns)
-            if source.columns
-            else e.kind == "image"
-        )
+        and e.kind == source.holds  # a run's group, not a dataset inside it
+        and set(source.columns) <= set(e.columns)
     ]
     return fitting[0] if len(fitting) == 1 else None
 
@@ -217,11 +235,18 @@ class Hdf5Table:
             return self._image
         columns = [self.column(i) for i in range(self.width)]
         if len({len(values) for values in columns}) > 1:
-            raise DataError(
+            raise CellError(
                 f"{self._name}, {self.source.dataset}, holds datasets of different "
                 "lengths, which cannot be taken as one table"
             )
         return np.column_stack(columns)
+
+
+NOT_TEXT = "its name is not UTF-8 text"
+
+
+def _shown(member: bytes) -> str:
+    return member.decode(errors="backslashreplace")
 
 
 class _Refused(DataError):
@@ -233,11 +258,12 @@ class _Refused(DataError):
 
 
 @contextmanager
-def _opened(raw: bytes, name: str) -> Iterator[h5py.File]:
-    """The file contents `raw`, with every failure of the library as a
-    DataError: it raises OSError, KeyError, RuntimeError and more."""
+def _opened(raw: bytes | Path, name: str) -> Iterator[h5py.File]:
+    """The file contents `raw`, or the file at that path, with every failure of
+    the library as a DataError: it raises OSError, KeyError, RuntimeError and
+    more."""
     try:
-        with h5py.File(io.BytesIO(raw), "r") as file:
+        with h5py.File(raw if isinstance(raw, Path) else io.BytesIO(raw), "r") as file:
             yield file
     except (DataError, MemoryError):
         raise
@@ -295,9 +321,17 @@ def _no_numbers(dtype: np.dtype) -> str:
 
 
 def _unreadable(dataset: h5py.Dataset) -> str:
-    """Why the values cannot be read; "" if the first one can."""
+    """Why the values cannot be read; "" if they can, as far as can be told.
+    A filter that is there is taken at its word: reading a value decompresses a
+    whole chunk, which takes long over many datasets."""
+    plist = dataset.id.get_create_plist()
+    if all(
+        h5py.h5z.filter_avail(plist.get_filter(i)[0])
+        for i in range(plist.get_nfilters())
+    ):
+        return ""
     try:
-        dataset[:1]
+        dataset[:1]  # an optional filter that is missing may not have been used
     except MemoryError:
         raise
     except Exception as exc:
@@ -326,6 +360,17 @@ def _no_column(dataset) -> str:
 
 
 def _dataset_entry(dataset: h5py.Dataset, path: str) -> Entry:
+    """The entry of a dataset; one of a kind that NumPy or h5py cannot take
+    says so and spoils nothing else."""
+    try:
+        return _described(dataset, path)
+    except MemoryError:
+        raise
+    except Exception as exc:
+        return Entry(path, "other", problem=f"it cannot be read ({exc})")
+
+
+def _described(dataset: h5py.Dataset, path: str) -> Entry:
     shape = dataset.shape
     if shape is not None and dataset.dtype.names:
         if len(shape) != 1:
@@ -362,14 +407,21 @@ def _dataset_entry(dataset: h5py.Dataset, path: str) -> Entry:
 def _group_entry(file: h5py.File, group: h5py.Group, path: str) -> Entry:
     columns, lengths, left_out = [], [], {}
     for member in group:
+        if isinstance(member, bytes):  # h5py gives a name it cannot decode so
+            left_out[_shown(member)] = NOT_TEXT
+            continue
         try:
             found = _resolved(file, _join(path, member), "")
+            if not isinstance(found, h5py.Dataset):
+                continue  # a group is an entry of its own
+            why = _no_column(found)
         except _Refused as refused:
-            left_out[member] = refused.why
-            continue
-        if not isinstance(found, h5py.Dataset):
-            continue  # a group is an entry of its own
-        if why := _no_column(found):
+            why = refused.why
+        except MemoryError:
+            raise
+        except Exception as exc:
+            why = f"it cannot be read ({exc})"
+        if why:
             left_out[member] = why
         else:
             columns.append(member)
@@ -387,12 +439,21 @@ def _walk(file: h5py.File) -> Iterator[Entry]:
     def inside(group: h5py.Group, path: str) -> Iterator[Entry]:
         yield _group_entry(file, group, path)
         for member in group:
+            if isinstance(member, bytes):
+                child = _join(path, _shown(member))
+                yield Entry(child, "other", problem=NOT_TEXT)
+                continue
             child = _join(path, member)
-            held = isinstance(group.get(member, getlink=True), h5py.HardLink)
             try:
+                held = isinstance(group.get(member, getlink=True), h5py.HardLink)
                 found = _resolved(file, child, "")
             except _Refused as refused:
                 yield Entry(child, "other", problem=refused.why)
+                continue
+            except MemoryError:
+                raise
+            except Exception as exc:
+                yield Entry(child, "other", problem=f"it cannot be read ({exc})")
                 continue
             if isinstance(found, h5py.Dataset):
                 yield _dataset_entry(found, child)

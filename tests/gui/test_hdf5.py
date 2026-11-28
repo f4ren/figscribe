@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import h5py
@@ -263,3 +264,27 @@ def test_what_a_first_plot_has_as_x(qtbot, tmp_path: Path, columns, x: str) -> N
 def test_no_row_of_detected_settings(qtbot, scan: Path) -> None:
     dialog = _dialog(qtbot, scan)
     assert dialog.detected.isHidden() and dialog.chips.count() == 0
+
+
+@pytest.mark.parametrize("kind", ["group", "table"])
+def test_more_columns_than_the_preview_shows(qtbot, tmp_path: Path, kind) -> None:
+    names = [f"c{i:02}" for i in range(60)]
+    if kind == "group":
+        data = {f"g/{name}": np.arange(3.0) + i for i, name in enumerate(names)}
+    else:
+        table = np.zeros(3, dtype=[(name, "f8") for name in names])
+        data = {"g": table}
+    dialog = _dialog(qtbot, write_h5(tmp_path / "wide.h5", data))
+    assert _ok(dialog) and dialog.error.text() == ""
+    assert dialog.source().columns == names
+    assert dialog.table.columnCount() == 50
+    assert _headers(dialog)[:2] == ["c00", "c01"]
+    assert "3 rows · 60 columns" in dialog.summary.text()
+
+
+def test_the_source_records_the_file_the_preview_shows(qtbot, scan) -> None:
+    before = hashlib.sha256(scan.read_bytes()).hexdigest()
+    dialog = _dialog(qtbot, scan)
+    write_h5(scan, {"table": [1.0, 2]})  # rewritten while the dialog is open
+    dialog.tree.setCurrentItem(dialog.items["/run1/counts"])
+    assert dialog.source().sha256 == before

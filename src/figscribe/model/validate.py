@@ -37,7 +37,7 @@ from figscribe.model.artists import (
 )
 from figscribe.model.axes import Axes
 from figscribe.model.breaks import breaks_blocked, line_breaks, own_breaks
-from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource
+from figscribe.model.data import ArrayRef, ColumnRef, CsvSource, DataSource, Hdf5Source
 from figscribe.model.figure import Figure
 from figscribe.model.project import Project
 from figscribe.model.sharing import sharing_group, typed_limits
@@ -145,7 +145,7 @@ def validate_references(
                     why = _text_where_numbers_are_plotted(artist, data)
                     if why is not None:
                         issues.append(ReferenceIssue(tpath, artist.id, why))
-                if data is not None and isinstance(artist, FITTABLE):
+                if data is not None and isinstance(artist, FIT_TARGETS):
                     why = _unequal_or_unreadable(artist, data)
                     if why is not None:
                         issues.append(ReferenceIssue(tpath, artist.id, why))
@@ -296,23 +296,28 @@ def column_refs(artist: ArtistBase) -> list[tuple[str, ColumnRef]]:
 
 def _lacks(source: DataSource, column: ColumnRef) -> bool:
     """Whether `column` names a column the source's file does not have; files
-    without column names are addressed by number and not checked here."""
-    return (
-        isinstance(column.column, str)
-        and bool(source.columns)
-        and column.column not in source.columns
-    )
+    without column names are addressed by number and not checked here. Two
+    dimensions of an HDF5 file have none, so every name is missing there."""
+    if not isinstance(column.column, str):
+        return False
+    if isinstance(source, Hdf5Source) and source.holds == "image":
+        return True
+    return bool(source.columns) and column.column not in source.columns
 
 
 def unequal_columns(
-    artist: LinePlot | ScatterPlot | ErrorbarPlot,
+    artist: LinePlot | ScatterPlot | ErrorbarPlot | AllanDeviationPlot,
     data: Callable[[ColumnRef], Sized],
 ) -> str | None:
     """Why the columns of a plot cannot be drawn together: the first that has
-    another number of values than x. None if they all match."""
+    another number of values than x, or than the values of an Allan deviation.
+    None if they all match."""
+    fields = ("x", "y", "xerr", "yerr")
+    if isinstance(artist, AllanDeviationPlot):
+        fields = ("values", "time")
     (first, base), *others = [
         (name, ref)
-        for name in ("x", "y", "xerr", "yerr")
+        for name in fields
         if (ref := getattr(artist, name, None)) is not None
     ]
     count = len(data(base))

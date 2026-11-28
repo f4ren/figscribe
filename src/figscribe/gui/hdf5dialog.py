@@ -79,7 +79,10 @@ class Hdf5Dialog(DataDialog):
 
     def _read(self) -> tuple[Hdf5Source, np.ndarray]:
         source = hdf5_source(
-            self.path, self.base_dir or self.path.parent, dataset=self._chosen().path
+            self.path,
+            self.base_dir or self.path.parent,
+            dataset=self._chosen().path,
+            contents=self._raw,  # what is shown is what is recorded
         )
         source = self._relative_to_project(source)
         columns, self._width = head(source, self._raw, PREVIEW_ROWS, PREVIEW_COLUMNS)

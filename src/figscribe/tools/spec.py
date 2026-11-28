@@ -142,7 +142,7 @@ TOOLS: list[ToolSpec] = [
     ToolSpec(
         "get_python_script",
         "Return the standalone Python script (NumPy, Matplotlib, SciPy for fits, "
-        "python-calamine for spreadsheets) "
+        "python-calamine for spreadsheets, h5py for HDF5 files) "
         "that draws the shown figure exactly as figscribe does. Give it to the "
         "user when they ask for the code, or read it to explain how the figure "
         "is made.",

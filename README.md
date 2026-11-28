@@ -130,7 +130,7 @@ script.
   file cannot run code).
 - Excel (`.xlsx`, `.xls`) and LibreOffice Calc (`.ods`) files as they are: one
   sheet per data file, computed columns with the results saved in the file.
-- HDF5 (`.h5`, `.hdf5`, `.nxs`) files: a group with its datasets as columns, a
+- HDF5 (`.h5`, `.hdf5`, `.he5`, `.nxs`) files: a group with its datasets as columns, a
   table of records, or one dataset of one or two dimensions, with the units
   from its attributes. Values kept in other files are not followed.
 - A data file is removed with the plots that draw from it, in one undo step;

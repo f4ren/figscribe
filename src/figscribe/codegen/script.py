@@ -244,6 +244,11 @@ class _Writer:
         self.reserved = RESERVED | {
             f"{_stem(s.path)}_path" for s in project.sources if hasattr(s, "path")
         }
+        self.reserved |= {
+            f"{_stem(s.path)}_bytes"
+            for s in project.sources
+            if isinstance(s, Hdf5Source)
+        }
         """Names the script uses itself, which no variable of its data takes."""
         if any(isinstance(s, SheetSource) for s in project.sources):
             self.reserved |= SHEET_NAMES
@@ -374,6 +379,7 @@ class _Writer:
         return {
             *self.reserved,
             *self.columns.values(),
+            *getattr(self, "arrays", {}).values(),
             *getattr(self, "units", {}).values(),
             *getattr(self, "used", {}).values(),
             *getattr(self, "_retired", ()),
@@ -664,7 +670,7 @@ class _Writer:
         self.emit("")
         if self.columns or self.arrays:
             self.emit("import hashlib")
-        if self._sheets():
+        if self._sheets() or self._hdf5_used():
             self.emit("import io")
         self.emit("from pathlib import Path", "")
         if self._hdf5_used():
@@ -841,10 +847,19 @@ class _Writer:
         if self._paths.get(path) != (location, source.sha256):
             self._paths[path] = (location, source.sha256)
             self.emit(f"{path} = HERE / {_str(_relative(location, script_dir))}")
+            contents = f"{path}.read_bytes()"
+            if isinstance(source, Hdf5Source):
+                contents = f"{stem}_bytes"
+                self.emit(
+                    "# Read once and from memory, as figscribe does: also while a "
+                    "program",
+                    "# that writes the file holds it open.",
+                    f"{contents} = {path}.read_bytes()",
+                )
             self.emit(
                 "# The figure was made from exactly this file; delete the check to "
                 "plot a newer one.",
-                f"if hashlib.sha256({path}.read_bytes()).hexdigest() != (",
+                f"if hashlib.sha256({contents}).hexdigest() != (",
                 f'    "{source.sha256}"',
                 "):",
                 f'    raise SystemExit(f"{{{path}}} changed since the figure was '
@@ -859,7 +874,7 @@ class _Writer:
             self._sheet(source, path, stem, refs, indices)
             return
         if isinstance(source, Hdf5Source):
-            self._hdf5(source, path, stem, refs, indices)
+            self._hdf5(source, stem, refs, indices)
             return
         kwargs: dict[str, str] = {}
         if source.delimiter is not None:
@@ -933,7 +948,7 @@ class _Writer:
                 f"  # column {column_letters(at)}"
             )
 
-    def _hdf5(self, source: Hdf5Source, path: str, stem: str, refs, indices) -> None:
+    def _hdf5(self, source: Hdf5Source, stem: str, refs, indices) -> None:
         """The datasets used, as floats like figscribe reads them."""
         inside = source.dataset.strip("/")
 
@@ -941,7 +956,7 @@ class _Writer:
             return _str("/".join(part for part in (inside, *names) if part))
 
         table = self.arrays.get((source.id, None))
-        opened = f"with h5py.File({path}) as h5:"
+        opened = f"with h5py.File(io.BytesIO({stem}_bytes)) as h5:"
         if source.holds == "table":
             records = self._free(f"{stem}_records")
             self.emit(opened, f"    {records} = h5[{item()}][()]")
@@ -2609,7 +2624,7 @@ does the same, step by step."""
 
 
 # What the script reads an HDF5 file with, as `io.hdf5file` does.
-HDF5_NAMES = {"h5", "h5py"}
+HDF5_NAMES = {"h5", "h5py", "io"}
 
 # What the script reads a spreadsheet with, as `io.sheetfile` does.
 SHEET_NAMES = {"CalamineWorkbook", "io", "rows_of_sheet", "sheet_column"}

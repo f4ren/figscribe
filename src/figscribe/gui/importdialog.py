@@ -284,10 +284,11 @@ class DataDialog(QDialog):
             self.status.setText("")
             self.settings.show()
         else:
-            if source.columns and len(source.columns) != table.shape[1]:
+            width = self._size(source, table)[1]
+            if source.columns and len(source.columns) != width:
                 self.error.setText(
                     f"The header names {len(source.columns)} columns, "
-                    f"the data has {table.shape[1]}."
+                    f"the data has {width}."
                 )
                 self.settings.show()
             else:
@@ -346,8 +347,8 @@ class DataDialog(QDialog):
         self.table.setRowCount(rows)
         self.table.setColumnCount(cols)
         names = (
-            source.columns
-            if len(source.columns) == cols
+            source.columns[:cols]
+            if len(source.columns) == self._size(source, table)[1]
             else [str(i) for i in range(cols)]
         )
         self.errors = error_columns([str(n) for n in names])
