@@ -966,6 +966,9 @@ class MainWindow(QMainWindow):
         try:
             fit = find(self.document.project, fit_id)
             target = find(self.document.project, fit.target)
+            if why := dates_refuse_a_fit(target, self.document.data):
+                self.show_error("Cannot change the fit", why)
+                return
             dialog = FitDialog(
                 target,
                 self.document.data,

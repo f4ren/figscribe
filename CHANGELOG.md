@@ -5,6 +5,14 @@ release open in every later one.
 
 ## Unreleased
 
+- **Date and time axes.** Columns of ISO dates in text files, date cells of
+  spreadsheets and `datetime64` or ISO text in NumPy and HDF5 files give a date
+  axis, with numbers only (`2026-11-01`, `12:30`). Limits, ticks, a plot's range,
+  reference lines and notes are typed as dates; *x in* shows the time since the
+  start in s, min, h or days instead, which fits and the other tools need. A
+  time zone is read as written, not converted. The Python script reads and
+  plots the same dates (decision 0082).
+- Fixed: a NumPy file of `datetime64` was read as large integers.
 - Fixed (in 0.3.0 too): the assistant could write a fit's result itself, which
   was then drawn as if figscribe had computed it; and its check for too many
   ticks did not look at a new version of a data file.

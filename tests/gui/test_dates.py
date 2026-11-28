@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from matplotlib.dates import date2num
-from PySide6.QtWidgets import QDialogButtonBox
+from PySide6.QtWidgets import QDialogButtonBox, QMenu
 
 from figscribe.commands import InsertItem
 from figscribe.gui import Document, MainWindow
@@ -22,8 +22,11 @@ from figscribe.gui.sheetdialog import SheetDialog, guess_sheet
 from figscribe.model import (
     Annotation,
     Conversion,
+    FitCurve,
+    PredefinedFit,
     ReferenceLine,
     ShadedSpan,
+    validate_references,
 )
 from tests.hdf5files import write_h5
 from tests.sheetfiles import write_xlsx
@@ -277,3 +280,43 @@ def test_a_place_anywhere_is_shown_to_a_millisecond() -> None:
     assert date_label(_day("2026-11-01T20:15") + 1.234567 / 86400) == (
         "2026-11-01 20:15:01.235"
     )
+
+
+def test_a_fit_of_dates_is_told_before_it_is_changed(window, tmp_path) -> None:
+    plot = _plot(window, tmp_path)
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    window.document.push(InsertItem(_panel(window).id, "artists", fit))
+    told = []
+    window.show_error = lambda title, error: told.append(str(error))
+    window.run_dialog = lambda dialog: pytest.fail("no dialog")
+    window.edit_fit(fit.id)
+    assert "there is no fit to dates" in told[0]
+
+
+def test_a_line_placed_from_the_menu_is_at_a_round_time(window, tmp_path) -> None:
+    _plot(window, tmp_path)
+    window.add_marking("refline", "vertical")
+    at = _panel(window).artists[-1].at
+    assert date_label(at).startswith("2026-11-0")
+    assert len(date_label(at)) <= len("2026-11-01 12:30")
+
+
+def test_the_preview_menu_names_a_date(window, qtbot, tmp_path) -> None:
+    _plot(window, tmp_path)
+    window.show()
+    qtbot.waitExposed(window)
+    preview = window.preview
+    ax = next(a for a in preview._figure.axes if a.get_gid() == _panel(window).id)
+    menu = QMenu()
+    preview._marking_entries(menu, ax, preview.rect().center())
+    texts = [action.text() for action in menu.actions()]
+    assert any(t.startswith("Vertical line at x = 2026-11-0") for t in texts)
+
+
+def test_a_note_dragged_on_a_date_axis_stays_there(window, tmp_path) -> None:
+    note = Annotation(text="n", position=(_day("2026-11-02"), 20.5))
+    _plot(window, tmp_path, note)
+    window.document.select(note.id)
+    assert _panel(window).artists[-1].position[0] == _day("2026-11-02")
+    code = window.document.project
+    assert validate_references(code, window.document.data) == []
