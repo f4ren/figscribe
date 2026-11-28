@@ -62,6 +62,10 @@ class Hdf5Source(Identified):
     """Path inside the file of the data: a group, whose one-dimensional
     datasets are the columns, such as "/run3", or one dataset, such as
     "/run3/voltage"; "/" for what the file holds at the top."""
+    layout: Literal["group", "table", "column", "image"] = "group"
+    """What is at `dataset`: a group of datasets, a table of records, a dataset
+    of one dimension (a column) or of two (an image). Recorded on import, so
+    that the script can be written without the file."""
     columns: list[str] = Field(default_factory=list)
     """Column names discovered on import: the group's datasets, the fields of a
     table of records, or the dataset's own name. None for a two-dimensional

@@ -22,6 +22,7 @@ from figscribe.commands import add_panel
 from figscribe.fit import add_fit, refit
 from figscribe.io import load_data
 from figscribe.io.csvfile import csv_source
+from figscribe.io.hdf5file import hdf5_source
 from figscribe.io.numpyfile import numpy_source
 from figscribe.io.sheetfile import sheet_source
 from figscribe.model import (
@@ -52,6 +53,7 @@ from figscribe.model import (
     loads,
 )
 from figscribe.render import export, render
+from tests.hdf5files import write_h5, write_scan
 from tests.sheetfiles import Formula, write_ods, write_xlsx
 
 EXAMPLES = sorted((Path(__file__).parents[2] / "examples").glob("*/*.figscribe"))
@@ -2914,4 +2916,151 @@ def test_a_column_named_like_the_path_of_its_file(tmp_path: Path) -> None:
         for source, column in zip(sources, ("book_path", "book_rows"), strict=True)
     ]
     figure = Figure(dpi=100, axes=[Axes(artists=lines)])
+    _assert_same(Project(sources=sources, figures=[figure]), tmp_path)
+
+
+# --- HDF5 (decision 0081) -----------------------------------------------------
+
+
+def _lines(sources, pairs) -> Figure:
+    lines = [
+        LinePlot(
+            x=ColumnRef(source=sources[a].id, column=x),
+            y=ColumnRef(source=sources[b].id, column=y),
+        )
+        for (a, x), (b, y) in pairs
+    ]
+    return Figure(dpi=100, axes=[Axes(artists=lines, legend=Legend())])
+
+
+def test_a_group_a_table_a_dataset_and_an_image_of_hdf5(tmp_path: Path) -> None:
+    path = write_scan(tmp_path / "scan.h5")
+    run = hdf5_source(path, tmp_path, dataset="/run1")
+    table = hdf5_source(path, tmp_path, dataset="/table")
+    one = hdf5_source(path, tmp_path, dataset="/run1/counts")
+    image = hdf5_source(path, tmp_path, dataset="/image")
+    assert [s.layout for s in (run, table, one, image)] == [
+        "group",
+        "table",
+        "column",
+        "image",
+    ]
+    sources = [run, table, one, image]
+    figure = _lines(
+        sources,
+        [
+            ((0, "t"), (0, "U")),
+            ((1, "f"), (1, "n")),
+            ((0, "t"), (2, "counts")),
+            ((3, 0), (3, 2)),
+        ],
+    )
+    figure.layout = GridLayout(cols=2)
+    figure.axes.append(Axes(col=1, artists=[ImagePlot(data=ArrayRef(source=image.id))]))
+    script = _assert_same(Project(sources=sources, figures=[figure]), tmp_path)
+    assert "import h5py\n" in script
+    assert "needs NumPy, Matplotlib and h5py" in script
+    assert 't = h5["run1/t"][()].astype(float)' in script
+    assert 'scan_records = h5["table"][()]' in script
+    assert 'counts = h5["run1/counts"][()].astype(float)' in script
+    assert 'scan_image = h5["image"][()].astype(float)' in script
+
+
+def test_a_fit_to_hdf5_data(tmp_path: Path) -> None:
+    path = write_scan(tmp_path / "scan.h5")
+    source = hdf5_source(path, tmp_path, dataset="/run1")
+    ref = {c: ColumnRef(source=source.id, column=c) for c in source.columns}
+    plot = ScatterPlot(x=ref["t"], y=ref["U"])
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"), label="fit")
+    panel = Axes(artists=[plot], legend=Legend())
+    project = Project(sources=[source], figures=[Figure(dpi=100, axes=[panel])])
+    add_fit(project, fit).apply(project)
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    script = _assert_same(project, tmp_path)
+    assert "needs NumPy, Matplotlib, SciPy and h5py" in script
+
+
+@pytest.mark.parametrize("dataset", ["/run1", "/table"])
+def test_a_group_or_table_of_hdf5_as_an_image(tmp_path: Path, dataset: str) -> None:
+    path = write_scan(tmp_path / "scan.h5")
+    source = hdf5_source(path, tmp_path, dataset=dataset)
+    column = ColumnRef(source=source.id, column=source.columns[0])
+    image = Axes(artists=[ImagePlot(data=ArrayRef(source=source.id))])
+    line = Axes(col=1, artists=[LinePlot(x=column, y=column)])
+    figure = Figure(dpi=100, layout=GridLayout(cols=2), axes=[image, line])
+    _assert_same(Project(sources=[source], figures=[figure]), tmp_path)
+
+
+def test_names_in_hdf5_that_the_script_cannot_use_as_they_are(tmp_path: Path) -> None:
+    names = {
+        "h5": [1.0, 2, 3],
+        "h5py": [3.0, 1, 2],
+        "2026 run": [2.0, 3, 1],
+        "lambda": [1.0, 3, 2],
+        "U 'a' \"b\" µ": [2.0, 1, 3],
+        "scan_path": [3.0, 2, 1],
+    }
+    group = "2026-11-28 run #1"
+    path = write_h5(
+        tmp_path / "lambda.h5", {f"{group}/{k}": v for k, v in names.items()}
+    )
+    write_h5(tmp_path / "scan.h5", {"x": [1.0, 2]})
+    source = hdf5_source(path, tmp_path)
+    other = hdf5_source(tmp_path / "scan.h5", tmp_path)
+    sources = [source, other]
+    figure = _lines(
+        sources,
+        [((0, "h5"), (0, name)) for name in names] + [((1, "x"), (1, "x"))],
+    )
+    _assert_same(Project(sources=sources, figures=[figure]), tmp_path)
+
+
+def test_a_two_dimensional_dataset_by_column_only(tmp_path: Path) -> None:
+    path = write_h5(tmp_path / "m.h5", {"a/m": np.arange(12).reshape(4, 3)})
+    source = hdf5_source(path, tmp_path)
+    figure = _lines([source], [((0, 0), (0, 2))])
+    script = _assert_same(Project(sources=[source], figures=[figure]), tmp_path)
+    assert 'h5["a/m"][:, 2].astype(float)' in script
+
+
+def test_hdf5_beside_other_files(tmp_path: Path) -> None:
+    path = write_scan(tmp_path / "scan.h5")
+    (tmp_path / "scan.csv").write_text("t,U\n1,2\n2,3\n")
+    np.save(tmp_path / "h5.npy", np.arange(6.0).reshape(3, 2))
+    sources = [
+        hdf5_source(path, tmp_path, dataset="/run1"),
+        csv_source(tmp_path / "scan.csv", tmp_path),
+        numpy_source(tmp_path / "h5.npy", tmp_path),
+    ]
+    figure = _lines(
+        sources,
+        [((0, "t"), (0, "U")), ((1, "t"), (1, "U")), ((2, 0), (2, 1))],
+    )
+    _assert_same(Project(sources=sources, figures=[figure]), tmp_path)
+
+
+def test_one_file_read_twice_is_checked_once(tmp_path: Path) -> None:
+    path = write_scan(tmp_path / "scan.h5")
+    sources = [
+        hdf5_source(path, tmp_path, dataset=name) for name in ("/run1", "/table")
+    ]
+    figure = _lines(sources, [((0, "t"), (0, "U")), ((1, "f"), (1, "n"))])
+    script = _assert_same(Project(sources=sources, figures=[figure]), tmp_path)
+    assert script.count("hashlib.sha256(") == 1
+    assert script.count("    scan.h5\n") == 1
+
+
+def test_files_of_one_name_in_two_folders_are_each_read(tmp_path: Path) -> None:
+    for folder, y in (("a", [1.0, 2]), ("b", [5.0, 3])):
+        (tmp_path / folder).mkdir()
+        write_h5(tmp_path / folder / "scan.h5", {"x": [1.0, 2], "y": y, "g/z": y})
+    sources = [
+        hdf5_source(tmp_path / "a" / "scan.h5", tmp_path, dataset="/"),
+        hdf5_source(tmp_path / "b" / "scan.h5", tmp_path, dataset="/"),
+        hdf5_source(tmp_path / "a" / "scan.h5", tmp_path, dataset="/g/z"),
+    ]
+    figure = _lines(
+        sources,
+        [((0, "x"), (0, "y")), ((1, "x"), (1, "y")), ((0, "x"), (2, "z"))],
+    )
     _assert_same(Project(sources=sources, figures=[figure]), tmp_path)

@@ -69,6 +69,7 @@ def hdf5_source(
         path=stored_path(path, base_dir),
         sha256=sha256_of(path),
         dataset=entry.path,
+        layout=entry.kind,
         columns=entry.columns,
         row_count=entry.rows,
     )
@@ -144,14 +145,19 @@ class Hdf5Table:
             found = _resolved(file, source.dataset, self._name)
             if isinstance(found, h5py.Group):
                 self.kind, self.width = "group", len(source.columns)
-                return
-            entry = _checked(_dataset_entry(found, source.dataset), self._name)
-            self.kind = entry.kind
-            self.width = len(source.columns)
-            if entry.kind == "image":
-                self.width = entry.shape[1]
-            elif entry.kind == "column":
-                self.width = 1
+            else:
+                entry = _checked(_dataset_entry(found, source.dataset), self._name)
+                self.kind = entry.kind
+                self.width = len(source.columns)
+                if entry.kind == "image":
+                    self.width = entry.shape[1]
+                elif entry.kind == "column":
+                    self.width = 1
+        # The script reads what the source records, so the two must agree.
+        if self.kind != source.layout:
+            raise DataError(
+                f"{self._name}, {source.dataset}, is not what the project records"
+            )
 
     def column(self, index: int) -> np.ndarray:
         """The column `index` of the table (from 0) as floats."""
