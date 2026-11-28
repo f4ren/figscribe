@@ -1294,7 +1294,9 @@ In order of demand:
    a word; Matplotlib crowds date labels on narrow panels, so their number
    follows the axis length. *Open:* try files of real loggers and of a real
    Excel and Calc; date and time of day in two columns, and German dates, are
-   not read. *Follow-ups, only if asked:* fits, histograms, reduced points,
+   not read; durations (`timedelta64`) of a NumPy file are plotted as the raw
+   counts of their unit, as before 0082 (`[decide]`: refusing them would stop
+   a 0.3.0 project that plots them). *Follow-ups, only if asked:* fits, histograms, reduced points,
    broken axes and color meshes over dates; a date format setting.
 6. **Broken axes.** **Done** (2026-11-26, decision 0072; no schema bump):
    `AxisSpec.breaks`, one Matplotlib axis with a squeezed scale and clipping
