@@ -356,7 +356,7 @@ class _Writer:
                     if isinstance(source, CsvSource | SheetSource):
                         name = f"{stem}_table"
                     elif isinstance(source, Hdf5Source):
-                        if source.layout in ("group", "table"):
+                        if source.holds in ("group", "table"):
                             name = f"{stem}_table"
                         else:
                             leaf = source.dataset.rsplit("/", 1)[-1]
@@ -942,7 +942,7 @@ class _Writer:
 
         table = self.arrays.get((source.id, None))
         opened = f"with h5py.File({path}) as h5:"
-        if source.layout == "table":
+        if source.holds == "table":
             records = self._free(f"{stem}_records")
             self.emit(opened, f"    {records} = h5[{item()}][()]")
             if table is None:
@@ -958,7 +958,7 @@ class _Writer:
             )
         else:
             self.emit(opened)
-            if table is not None and source.layout == "group":
+            if table is not None and source.holds == "group":
                 names = ", ".join(item(column) for column in source.columns)
                 self.emit(
                     f"    {table} = np.column_stack(",
@@ -969,9 +969,9 @@ class _Writer:
                 self.emit(f"    {table} = h5[{item()}][()].astype(float)")
             else:
                 for (_, name), index in zip(refs, indices, strict=True):
-                    if source.layout == "group":
+                    if source.holds == "group":
                         read = f"h5[{item(source.columns[index])}][()]"
-                    elif source.layout == "column":
+                    elif source.holds == "column":
                         read = f"h5[{item()}][()]"
                     else:
                         read = f"h5[{item()}][:, {index}]"
@@ -979,7 +979,7 @@ class _Writer:
                 return
         # The whole table is plotted as an image; columns are slices of it.
         for (_, name), index in zip(refs, indices, strict=True):
-            one = source.layout == "column"
+            one = source.holds == "column"
             self.emit(f"{name} = {table}" if one else f"{name} = {table}[:, {index}]")
 
     def _numpy(self, source: NumpySource, path: str, refs, indices) -> None:

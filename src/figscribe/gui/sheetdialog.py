@@ -124,6 +124,9 @@ class SheetDialog(DataDialog):
             self._cells[name] = read_cells(self._raw, self.path.name, name)
         return self._cells[name]
 
+    def _sync_settings(self) -> None:
+        self.header_row.setEnabled(self.has_header.isChecked())
+
     def _choose_sheet(self) -> None:
         try:
             self.set_options(guess_sheet(self._sheet_cells()))

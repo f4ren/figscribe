@@ -51,7 +51,7 @@ def recorded(source: DataSource) -> tuple[str, ...]:
     """The fields another version of the source's file may set."""
     if isinstance(source, Hdf5Source):
         # Groups are renamed from run to run.
-        return (*RECORDED, "dataset", "layout")
+        return (*RECORDED, "dataset", "holds")
     if isinstance(source, SheetSource):
         # Another file may be of another format, start in another column, and
         # have only one sheet, of another name.
@@ -230,7 +230,7 @@ def read_differently(
         [SetField(source.id, (field,), getattr(new, field))]
         + [
             SetField(source.id, (part,), getattr(new, part))
-            for part in ("columns", "row_count", "first_column", "layout")
+            for part in ("columns", "row_count", "first_column", "holds")
             if part in type(new).model_fields
             and getattr(new, part) != getattr(source, part)
         ],

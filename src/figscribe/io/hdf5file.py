@@ -62,14 +62,14 @@ def hdf5_source(
     raw = path.read_bytes()
     with _opened(raw, path.name) as file:
         if dataset is None:
-            entry = _likely(list(_walk(file)), path.name)
+            entry = likely(list(_walk(file)), path.name)
         else:
             entry = _chosen(file, _normal(dataset), path.name)
     return Hdf5Source(
         path=stored_path(path, base_dir),
         sha256=sha256_of(path),
         dataset=entry.path,
-        layout=entry.kind,
+        holds=entry.kind,
         columns=entry.columns,
         row_count=entry.rows,
     )
@@ -81,7 +81,31 @@ def entries(raw: bytes, name: str) -> list[Entry]:
         return list(_walk(file))
 
 
-def holds(raw: bytes, name: str, path: str) -> bool:
+def head(
+    source: Hdf5Source, raw: bytes, rows: int, columns: int
+) -> tuple[list[np.ndarray], int]:
+    """The first `rows` values of the first `columns` columns, and how many
+    columns there are: what a preview shows of data that may be large."""
+    name = Path(source.path).name
+    with _opened(raw, name) as file:
+        found = _resolved(file, source.dataset, name)
+        if source.holds == "image":
+            values = found[:rows, :columns].astype(float)
+            return list(values.T), found.shape[1]
+        names = source.columns[:columns]
+        if source.holds == "group":
+            read = [
+                _resolved(file, _join(source.dataset, n), name)[:rows] for n in names
+            ]
+        elif source.holds == "table":
+            start = found[:rows]
+            read = [start[n] for n in names]
+        else:
+            read = [found[:rows]]
+        return [values.astype(float) for values in read], len(source.columns)
+
+
+def has(raw: bytes, name: str, path: str) -> bool:
     """Whether the file has something at `path`, readable or not."""
     with _opened(raw, name) as file:
         return path in file
@@ -102,7 +126,7 @@ def like(source: Hdf5Source, raw: bytes, name: str) -> list[str]:
 def only_like(source: Hdf5Source, raw: bytes, name: str) -> str | None:
     """The one entry of the file that has the source's columns, where nothing is
     at the source's own path: groups are often named after the run or the day."""
-    if holds(raw, name, source.dataset):
+    if has(raw, name, source.dataset):
         return None
     fitting = [
         e.path
@@ -154,7 +178,7 @@ class Hdf5Table:
                 elif entry.kind == "column":
                     self.width = 1
         # The script reads what the source records, so the two must agree.
-        if self.kind != source.layout:
+        if self.kind != source.holds:
             raise DataError(
                 f"{self._name}, {source.dataset}, is not what the project records"
             )
@@ -382,7 +406,7 @@ def _walk(file: h5py.File) -> Iterator[Entry]:
     yield from inside(file["/"], "/")
 
 
-def _likely(found: list[Entry], name: str) -> Entry:
+def likely(found: list[Entry], name: str) -> Entry:
     """The entry that looks most like the data meant: a group with two columns
     of one length, else a table of records, an image, a group of several
     columns, or a column."""

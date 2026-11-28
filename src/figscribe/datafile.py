@@ -20,7 +20,7 @@ from figscribe.commands import Command, CommandError, Macro, SetField, find
 from figscribe.io import DataError, load_data
 from figscribe.io.files import resolve_path
 from figscribe.io.hdf5file import SUFFIXES as HDF5_SUFFIXES
-from figscribe.io.hdf5file import holds, like
+from figscribe.io.hdf5file import has, like
 from figscribe.io.refresh import (
     check_plotted,
     part_field,
@@ -94,7 +94,7 @@ def parts_to_choose(
     asked = {}
     for name, source in used.items():
         if isinstance(source, Hdf5Source):
-            if holds(raw, target.name, name):
+            if has(raw, target.name, name):
                 continue
             choices = like(source, raw, target.name)
         else:

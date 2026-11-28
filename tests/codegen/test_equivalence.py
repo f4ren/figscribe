@@ -2939,7 +2939,7 @@ def test_a_group_a_table_a_dataset_and_an_image_of_hdf5(tmp_path: Path) -> None:
     table = hdf5_source(path, tmp_path, dataset="/table")
     one = hdf5_source(path, tmp_path, dataset="/run1/counts")
     image = hdf5_source(path, tmp_path, dataset="/image")
-    assert [s.layout for s in (run, table, one, image)] == [
+    assert [s.holds for s in (run, table, one, image)] == [
         "group",
         "table",
         "column",
