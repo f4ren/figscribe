@@ -53,7 +53,7 @@ def refit(project: Project, fit_id: str, data: DataProvider) -> Macro:
             f"the fit's target is a {target.kind!r}, which has no x and y data"
         )
 
-    if why := _dates(target, data):
+    if why := dates_refuse_a_fit(target, data):
         raise FitError(why)
     # In the units the plot shows, so that the parameters are read off its axes.
     shown = plot_data(target, data)
@@ -224,7 +224,7 @@ class Residuals:
     """Its data row, counted from 0."""
 
 
-def _dates(target, data: DataProvider) -> str | None:
+def dates_refuse_a_fit(target, data: DataProvider) -> str | None:
     """Why `target` cannot be fitted as it shows its data: dates, whose
     parameters would mean nothing (decision 0082)."""
     for name in ("x", "y"):
@@ -247,7 +247,7 @@ def residuals(project: Project, fit_id: str, data: DataProvider) -> Residuals | 
     if not set(parameter_names(fit.model)) <= set(fit.result.parameters):
         return None  # a result from a file that lacks some parameters
     target = _get(project, fit.target)
-    if _dates(target, data):
+    if dates_refuse_a_fit(target, data):
         return None
     shown = plot_data(target, data)
     x, y = shown.x, shown.y

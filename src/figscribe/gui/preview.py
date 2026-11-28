@@ -62,6 +62,7 @@ from figscribe.commands import (
 from figscribe.fit import FitError, set_left_out
 from figscribe.gui import theme
 from figscribe.gui.breaks import break_entries
+from figscribe.gui.dates import axis_on_dates, date_label
 from figscribe.gui.document import Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.inplace import Editable, open_editor
@@ -944,9 +945,20 @@ class Preview(QWidget):
         }
         for _, kind, orientation in ENTRIES:
             at, shown, scale, name = places[orientation]
-            made = marking(kind, orientation, *sorted(shown), log=scale == "log", at=at)
+            dates = axis_on_dates(
+                self.document.project, ax.get_gid().removesuffix("#right"), name
+            )
+            made = marking(
+                kind,
+                orientation,
+                *sorted(shown),
+                log=scale == "log",
+                at=at,
+                dates=dates,
+            )
             if kind == "refline":
-                text = f"{orientation.capitalize()} line at {name} = {made.at:g}"
+                where = date_label(made.at) if dates else f"{made.at:g}"
+                text = f"{orientation.capitalize()} line at {name} = {where}"
             else:
                 text = f"Shade {'an' if name == 'x' else 'a'} {name} range here"
             menu.addAction(text, lambda m=made: self._add_marking(ax.get_gid(), m))

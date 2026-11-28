@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from figscribe.gui.dates import axis_on_dates
 from figscribe.gui.document import Document
 from figscribe.model.breaks import breaks_blocked, own_breaks
 from figscribe.model.validate import axis_values as drawn_values
@@ -53,7 +54,8 @@ def break_entries(
     entries = []
     for field in fields:
         breaks = current_breaks(document, axes_id, field)
-        if breaks_blocked(document.figure, index, field) is None:
+        dated = axis_on_dates(document.project, axes_id, field)
+        if not dated and breaks_blocked(document.figure, index, field) is None:
             at = None if spot is None else float(spot["xy".index(field)])
             found = proposed_break(document, axes_id, field, at)
             if found is not None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 
 import numpy as np
 from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QSpinBox
@@ -24,6 +25,7 @@ from figscribe.io.sheetfile import (
 )
 from figscribe.model import SheetSource
 from figscribe.suggest import units_line
+from figscribe.times import is_time
 
 _COMMA_NUMBER = re.compile(r"\s*[-+]?\d+,\d+([eE][-+]?\d+)?\s*")
 
@@ -41,6 +43,8 @@ def guess_sheet(cells: list[list[object]]) -> dict:
         decimal = ","
 
     def number(cell: object) -> bool:
+        if isinstance(cell, date) or (isinstance(cell, str) and is_time(cell)):
+            return True  # a date is data too
         if isinstance(cell, str):
             try:
                 float(cell.strip().replace(decimal, "."))
@@ -200,7 +204,7 @@ class SheetDialog(DataDialog):
                     shown = f"{shown}: {found[3]}"
                 notes.append(f"{name} is not numbers ({shown}).")
                 continue
-            gaps = int(np.isnan(values).sum())
+            gaps = int((~np.isfinite(values)).sum())
             if gaps == len(values):
                 continue  # an empty column is nothing to plot
             self._numeric.append(name)
@@ -208,6 +212,7 @@ class SheetDialog(DataDialog):
                 what = "1 empty cell, which is a gap" if gaps == 1 else None
                 what = what or f"{gaps} empty cells, which are gaps"
                 notes.append(f"{name} has {what}.")
+        notes += self._dates_note(source)
         if not notes:
             notes.append(f"All {table.shape[0]} rows read as numbers.")
         return notes

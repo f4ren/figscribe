@@ -45,6 +45,7 @@ def marking(
     *,
     log: bool = False,
     at: float | None = None,
+    dates: bool = False,
 ) -> ReferenceLine | ShadedSpan:
     """A line at `at`, or a range around it, on an axis showing `low` to
     `high`; without `at`, in the middle. On a log axis the middle and the
@@ -54,18 +55,21 @@ def marking(
     centre = forward(at) if at is not None else (start + stop) / 2
     width = abs(stop - start)
     if kind == "refline":
-        return ReferenceLine(
-            orientation=orientation, at=_round(back(centre), width, log)
-        )
+        place = _round(back(centre), width, log, dates)
+        return ReferenceLine(orientation=orientation, at=place)
     half = width / SPAN_PART / 2
     ends = [back(centre - half), back(centre + half)]
-    rounded = [_round(v, width, log) for v in ends]
+    rounded = [_round(v, width, log, dates) for v in ends]
     if rounded[0] == rounded[1]:
         rounded = ends  # too narrow to round
     return ShadedSpan(orientation=orientation, start=rounded[0], end=rounded[1])
 
 
-def _round(value: float, width: float, log: bool) -> float:
+DATE_STEPS = (1 / 86400, 1 / 1440, 1 / 24, 1.0)
+"""A second, a minute, an hour and a day, in days."""
+
+
+def _round(value: float, width: float, log: bool, dates: bool = False) -> float:
     """`value` rounded to what the axis can tell apart: two significant
     digits on a log axis, else a hundredth of the width it shows."""
     if value == 0 or not math.isfinite(value):
@@ -74,6 +78,11 @@ def _round(value: float, width: float, log: bool) -> float:
         return float(f"{value:.2g}")
     if width <= 0:
         return value
+    if dates:  # a whole second, minute, hour or day, as the axis can tell apart
+        fits = [s for s in DATE_STEPS if s <= width / STEPS]
+        step = fits[-1] if fits else DATE_STEPS[0]
+        parts = round(1 / step)
+        return round(value * parts) / parts
     digits = -math.floor(math.log10(width / STEPS))
     return round(value, digits) + 0.0  # no -0.0
 

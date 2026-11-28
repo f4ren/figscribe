@@ -14,6 +14,7 @@ from figscribe.fit.expression import (
 from figscribe.fit.ops import (
     Residuals,
     add_fit,
+    dates_refuse_a_fit,
     keeps,
     refit,
     refit_in_edit,
@@ -41,6 +42,7 @@ __all__ = [
     "residuals",
     "ExpressionError",
     "add_fit",
+    "dates_refuse_a_fit",
     "FitError",
     "compile_expression",
     "evaluate",

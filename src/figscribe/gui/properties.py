@@ -55,6 +55,13 @@ from figscribe.function import names as formula_names
 from figscribe.function import set_expression
 from figscribe.gui import theme
 from figscribe.gui.axisform import AXIS_TITLES, AxisForm, axis_summary
+from figscribe.gui.dates import (
+    axis_on_dates,
+    date_label,
+    date_number,
+    date_pair,
+    places_on_dates,
+)
 from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
 from figscribe.gui.effect import without_effect
 from figscribe.gui.markers import LIKE_THE_PLOT, marker_icon
@@ -91,12 +98,14 @@ from figscribe.model import (
     FitCurve,
     FitResult,
     FunctionPlot,
+    Histogram,
     PanelLabels,
     PredefinedFit,
     Project,
     Reduction,
 )
 from figscribe.model.styles import style_problem
+from figscribe.model.timeaxes import time_columns_of
 from figscribe.render.figure import style_context
 from figscribe.render.ticks import PREFIXES
 from figscribe.units import (
@@ -919,6 +928,14 @@ UNITS = [
     ("ms (× 1000)", 1000.0, "ms"),
 ]
 """The units a plot's values are most often shown in: times measured in s."""
+TIME_UNITS = [
+    ("s since the start", 1.0, "s"),
+    ("min since the start", 1 / 60, "min"),
+    ("h since the start", 1 / 3600, "h"),
+    ("days since the start", 1 / 86400, "days"),
+    ("ms since the start", 1000.0, "ms"),
+]
+"""The units a column of dates is shown in: counted from its start."""
 OTHER_FACTOR = "another factor"
 FORMULA = "a formula"
 
@@ -1572,7 +1589,14 @@ class PropertyPanel(QScrollArea):
         oid = self.document.selected
         if len(self.document.selection) > 1:
             return ("several", tuple(self.document.selection))
-        return ("axis", oid) if split_axis(oid) else _shape(obj)
+        axis = split_axis(oid)
+        project = self.document.project
+        if axis:
+            return ("axis", oid, axis_on_dates(project, *axis))
+        # What is typed as dates and which units are offered follow the data.
+        dates = places_on_dates(project, obj) if hasattr(obj, "axis") else ()
+        times = tuple(_of_times(project, obj, name) for name in CONVERSIONS)
+        return (_shape(obj), dates, times)
 
     def _several(self) -> list[BaseModel]:
         """The plots selected together; empty while one object or none is."""
@@ -1683,7 +1707,8 @@ class PropertyPanel(QScrollArea):
         self._show_path()
         axis = split_axis(self.document.selected)
         if axis is not None:
-            kicker, title = AXIS_TITLES[axis[1]], axis_summary(obj)
+            dated = axis_on_dates(self.document.project, *axis)
+            kicker, title = AXIS_TITLES[axis[1]], axis_summary(obj, dated)
         else:
             kicker, title = _describe(obj, self.document)
         self._kicker.setText(kicker.upper())
@@ -1798,7 +1823,10 @@ class PropertyPanel(QScrollArea):
         spec = spec_for(name, type(obj).model_fields[name].annotation)
         if spec is None:
             return
-        editor = make_editor(spec, path, self)
+        if name in CONVERSIONS and _of_times(self.document.project, obj, name):
+            editor = ConversionEditor(spec, path, self, times=True)
+        else:
+            editor = make_editor(spec, path, self)
         editor.show(value)
         self.editors[path] = editor
         text = CAPTIONS.get((type(obj).__name__, name))
@@ -1813,10 +1841,12 @@ class PropertyPanel(QScrollArea):
             editor.widget.setToolTip(tip)
         form.addRow(caption, editor.widget)
         if name in CONVERSIONS and value is not None:
-            # τ of an Allan deviation starts at τ0 whatever: nothing to start.
-            if not isinstance(obj, AllanDeviationPlot):
+            times = _of_times(self.document.project, obj, name)
+            # τ of an Allan deviation starts at τ0 whatever, and dates always
+            # count from their start: nothing to start.
+            if not isinstance(obj, AllanDeviationPlot) and not times:
                 self._row(form, value, (*path, "from_start"))
-            kind = _kind_of_conversion(value)
+            kind = _kind_of_conversion(value, times)
             if kind == FORMULA:
                 self._row(form, value, (*path, "formula"))
                 self._row(form, value, (*path, "unit"))
@@ -1832,7 +1862,10 @@ class PropertyPanel(QScrollArea):
             spec = getattr(axes, field)
             if spec is None:
                 continue
-            text = f"{AXIS_TITLES[field].capitalize()}\n{axis_summary(spec)}  ›"
+            summary = axis_summary(
+                spec, axis_on_dates(self.document.project, axes.id, field)
+            )
+            text = f"{AXIS_TITLES[field].capitalize()}\n{summary}  ›"
             link = QPushButton(text)
             link.setObjectName("axisLink")
             link.setToolTip(f"Range, ticks and label of the {AXIS_TITLES[field]}")
@@ -2342,9 +2375,21 @@ class FieldsEditor(Editor):
     """Several numbers, each in a field of its own with a small label;
     `combine` turns what is typed (None for an empty field) into the value."""
 
-    def __init__(self, spec, path, panel, labels, placeholder, combine):
+    def __init__(
+        self,
+        spec,
+        path,
+        panel,
+        labels,
+        placeholder,
+        combine,
+        parse=None,
+        format_=None,
+    ):
         super().__init__(spec, path, panel)
         self.combine = combine
+        self.parse = parse or number
+        self.format = format_ or "{:g}".format
         self.widget = QWidget()
         row = QHBoxLayout(self.widget)
         row.setContentsMargins(0, 0, 0, 0)
@@ -2363,14 +2408,14 @@ class FieldsEditor(Editor):
         self.value = value
         values = list(value) if value is not None else []
         for i, line in enumerate(self.lines):
-            text = f"{values[i]:g}" if i < len(values) else ""
+            text = self.format(values[i]) if i < len(values) else ""
             # What the greyed-out placeholder already says is left empty.
             line.setText("" if text == line.placeholderText() else text)
 
     def _finish(self) -> None:
         texts = [line.text().strip() for line in self.lines]
         try:
-            value = self.combine([number(t) if t else None for t in texts])
+            value = self.combine([self.parse(t) if t else None for t in texts])
         except ValueError as exc:
             self.panel.report(f"{field_name(self.path[-1])}: {exc}")
             return  # left as typed, to be completed
@@ -2399,11 +2444,15 @@ class ConversionEditor(Editor):
     """The unit a plot's x or y is shown in: as in the file, one of the
     common units, another factor or a formula, which is then typed below."""
 
-    def __init__(self, spec, path, panel):
+    def __init__(self, spec, path, panel, times: bool = False):
         super().__init__(spec, path, panel)
+        self.times = times
+        """The column holds dates: they are shown as dates, or as the time
+        since their start."""
+        units = TIME_UNITS if times else UNITS
         self.choices: list[tuple[str, Any]] = [
-            (NONE_TEXT[path[-1]], None),
-            *((text, (factor, unit)) for text, factor, unit in UNITS),
+            ("as dates" if times else NONE_TEXT[path[-1]], None),
+            *((text, (factor, unit)) for text, factor, unit in units),
             (OTHER_FACTOR, OTHER_FACTOR),
         ]
         self.choices.append((FORMULA, FORMULA))
@@ -2418,7 +2467,7 @@ class ConversionEditor(Editor):
             index = 0
         else:
             texts = [text for text, _ in self.choices]
-            shown = _kind_of_conversion(value)
+            shown = _kind_of_conversion(value, self.times)
             index = texts.index(shown)
         self.widget.blockSignals(True)
         self.widget.setCurrentIndex(index)
@@ -2428,10 +2477,12 @@ class ConversionEditor(Editor):
         _, choice = self.choices[index]
         current = self.value
         start = current.from_start if current is not None else False
+        start = start or self.times
         if choice is None:
             self.commit(None)
         elif choice == OTHER_FACTOR:
-            if current is not None and _kind_of_conversion(current) == OTHER_FACTOR:
+            kind = None if current is None else _kind_of_conversion(current, self.times)
+            if kind == OTHER_FACTOR:
                 return  # already another factor
             factor = linear(current)[0]
             # The factor stays as it was (a formula's slope); the unit is typed
@@ -2450,23 +2501,31 @@ class ConversionEditor(Editor):
             self.commit(Conversion(factor=factor, from_start=start, unit=unit))
 
 
-def _unit_of_the_list(conversion: Conversion) -> str | None:
+def _of_times(project, obj: BaseModel, name: str) -> bool:
+    """Whether the conversion `name` of `obj` is of a column of dates."""
+    if name not in type(obj).model_fields or isinstance(obj, AllanDeviationPlot):
+        return False
+    column = "values" if isinstance(obj, Histogram) else name[0]
+    return time_columns_of(project)(getattr(obj, column))
+
+
+def _unit_of_the_list(conversion: Conversion, times: bool = False) -> str | None:
     """The entry of UNITS a conversion is, by factor and unit; None if none.
     A formula is never one, whatever its slope."""
     if conversion.formula is not None:
         return None
-    for text, factor, unit in UNITS:
+    for text, factor, unit in TIME_UNITS if times else UNITS:
         if conversion.unit == unit and math.isclose(conversion.factor, factor):
             return text
     return None
 
 
-def _kind_of_conversion(conversion: Conversion) -> str:
+def _kind_of_conversion(conversion: Conversion, times: bool = False) -> str:
     """The entry of the choice a conversion is: a unit of the list, a formula or
     another factor."""
     if conversion.formula is not None:
         return FORMULA
-    return _unit_of_the_list(conversion) or OTHER_FACTOR
+    return _unit_of_the_list(conversion, times) or OTHER_FACTOR
 
 
 def _range_ends(values: list[float | None]) -> tuple[float, float] | None:
@@ -2518,8 +2577,53 @@ class StyleEditor(ChoiceEditor):
             self.commit(str(chosen))
 
 
+def _date_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor | None:
+    """The editor of a place that lies on a date axis; None for any other."""
+    name = path[-1]
+    if len(path) != 1 or name not in DATE_PLACES:
+        return None
+    obj = _get(find(panel.document.project, panel.document.selected), ())
+    dated = places_on_dates(panel.document.project, obj)
+    if not any(dated):
+        return None
+    if name == "x_range":
+        return FieldsEditor(
+            spec,
+            path,
+            panel,
+            ["from", "to"],
+            PLACEHOLDERS[name],
+            _range_ends,
+            parse=date_number,
+            format_=date_label,
+        )
+    if name in ("position", "arrow_to"):
+
+        def parse(text: str):
+            return date_pair(text, dated, number)
+
+        def format_(value) -> str:
+            return ", ".join(
+                date_label(v) if on else repr(v)
+                for v, on in zip(value, dated, strict=True)
+            )
+
+        editor = TextEditor(spec, path, panel, parse, format_)
+    else:
+        editor = TextEditor(spec, path, panel, date_number, date_label)
+    if spec.optional:
+        editor.line.setPlaceholderText(PLACEHOLDERS.get(name) or "none")
+    return editor
+
+
+DATE_PLACES = ("at", "start", "end", "position", "arrow_to", "x_range")
+"""The fields that are places along an axis, and so dates on a date axis."""
+
+
 def make_editor(spec: Spec, path: Path, panel: PropertyPanel) -> Editor:
     name = path[-1]
+    if (editor := _date_editor(spec, path, panel)) is not None:
+        return editor
     if spec.kind == "bool":
         return CheckEditor(spec, path, panel)
     if spec.kind == "part":
@@ -2751,7 +2855,7 @@ def _read_only_text(name: str, value: Any, document: Document) -> str:
         return f"{value} (missing)"
     if name == "target":
         try:
-            return artist_name(find(document.project, value))
+            return artist_name(find(document.project, value), document.project)
         except CommandError:
             return f"{value} (missing)"
     return str(value)
@@ -2769,7 +2873,7 @@ def _describe(obj: BaseModel, document: Document) -> tuple[str, str]:
     if hasattr(obj, "format"):
         return "Data file", PurePath(obj.path).name
     kind = getattr(obj, "kind", "")
-    return KIND_NAMES.get(kind, type(obj).__name__), artist_name(obj)
+    return KIND_NAMES.get(kind, type(obj).__name__), artist_name(obj, document.project)
 
 
 def _marker_list(spec: Spec, path: Path, panel: PropertyPanel) -> ChoiceEditor:
