@@ -300,9 +300,13 @@ def _assign(owner: BaseModel, name: str, value: Any, where: str) -> None:
         raise CommandError(why)
     if isinstance(value, BaseModel):
         _refuse_styles(value)
+    before = getattr(owner, name)
     try:
         setattr(owner, name, value)
     except ValidationError as exc:
+        # A rule over several fields is checked after pydantic has assigned
+        # the value: take it back, past the check that refused it.
+        owner.__dict__[name] = before
         reason = "; ".join(e["msg"] for e in exc.errors())
         raise CommandError(f"cannot set {where}: {reason}") from exc
 
