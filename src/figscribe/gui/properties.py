@@ -116,6 +116,8 @@ SKIPPED = {
     "axes": "panels are added, moved and removed in the outline and the preview",
     "artists": "plots are added, moved and removed in the outline",
     "columns": "read from the file on import and listed in the outline",
+    "time_columns": "which columns are dates, found when the file is read",
+    "trim_times": "how the dates of a text file are written, found on import",
     "model": "chosen in the fit dialog",
     "initial_values": "set in the fit dialog",
     "fit_range": "set in the fit dialog, since the fit is run again",

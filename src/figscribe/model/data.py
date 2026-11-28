@@ -21,6 +21,10 @@ UTF-8 (with or without the byte order mark Excel puts in front), what Windows
 programs write, and Latin-1, which reads any bytes."""
 
 
+Times = list[Annotated[int, Field(ge=0)]]
+"""Numbers of columns, from 0."""
+
+
 class CsvSource(Identified):
     format: Literal["csv"] = "csv"
     path: str = Field(min_length=1)
@@ -43,6 +47,11 @@ class CsvSource(Identified):
     encoding: CsvEncoding = "utf-8-sig"
     """How the file's text is stored: UTF-8, or cp1252 and Latin-1 as older Windows
     programs write it."""
+    time_columns: Times = Field(default_factory=list)
+    """The columns (from 0) that are dates and times, found on import."""
+    trim_times: bool = False
+    """Time fields carry blanks or a time zone, which are taken off as they are
+    read."""
     columns: list[str] = Field(default_factory=list)
     """Column names discovered on import, cached for the GUI."""
     row_count: int | None = Field(None, ge=0)
@@ -70,6 +79,8 @@ class Hdf5Source(Identified):
     """Column names discovered on import: the group's datasets, the fields of a
     table of records, or the dataset's own name. None for a two-dimensional
     dataset."""
+    time_columns: Times = Field(default_factory=list)
+    """The columns (from 0) that are dates and times, found on import."""
     row_count: int | None = Field(None, ge=0)
     """Rows of data when the file was imported, to tell what changed; None in
     projects from before it was recorded."""
@@ -86,6 +97,8 @@ class NumpySource(Identified):
     """Array name inside an .npz archive; None for a plain .npy file."""
     columns: list[str] = Field(default_factory=list)
     """Column names, if known; a NumPy array has none of its own."""
+    time_columns: Times = Field(default_factory=list)
+    """The columns (from 0) that are dates and times, found on import."""
     row_count: int | None = Field(None, ge=0)
     """Rows of data when the file was imported, to tell what changed; None in
     projects from before it was recorded."""
@@ -113,6 +126,8 @@ class SheetSource(Identified):
     """The sheet's column (from 0, column A) the table starts at."""
     columns: list[str] = Field(default_factory=list)
     """Column names discovered on import, cached for the GUI."""
+    time_columns: Times = Field(default_factory=list)
+    """The columns (from 0) that are dates and times, found on import."""
     row_count: int | None = Field(None, ge=0)
     """Rows of data when the file was imported, to tell what changed."""
 

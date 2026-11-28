@@ -15,7 +15,7 @@ from typing import Literal
 from pydantic import ValidationError
 
 from figscribe.commands import Command, CommandError, Macro, SetField, find
-from figscribe.io.csvfile import csv_source
+from figscribe.io.csvfile import CsvTable, csv_source
 from figscribe.io.errors import DataError
 from figscribe.io.files import resolve_path, sha256_of
 from figscribe.io.hdf5file import hdf5_source, only_like
@@ -35,7 +35,7 @@ from figscribe.model import (
 )
 from figscribe.model.validate import file_refs
 
-RECORDED = ("path", "sha256", "columns", "row_count")
+RECORDED = ("path", "sha256", "columns", "time_columns", "row_count")
 """What importing a file records about it, as opposed to how it is read."""
 
 
@@ -56,6 +56,8 @@ def recorded(source: DataSource) -> tuple[str, ...]:
         # Another file may be of another format, start in another column, and
         # have only one sheet, of another name.
         return (*RECORDED, "format", "first_column", "sheet")
+    if isinstance(source, CsvSource):
+        return (*RECORDED, "trim_times")
     return RECORDED
 
 
@@ -95,7 +97,9 @@ def reread(
     # Parse all of it now: a version that cannot be plotted is refused here.
     # A sheet or an HDF5 file may hold anything beside what is plotted; see
     # `check_plotted`.
-    if not isinstance(new, BY_COLUMN_SOURCES):
+    if isinstance(new, CsvSource) and new.time_columns:
+        CsvTable(new, target.read_bytes(), target.name).check()  # no one table
+    elif not isinstance(new, BY_COLUMN_SOURCES):
         load_data(Project(sources=[new]), base_dir)(ArrayRef(source=new.id))
     return new
 
@@ -230,7 +234,14 @@ def read_differently(
         [SetField(source.id, (field,), getattr(new, field))]
         + [
             SetField(source.id, (part,), getattr(new, part))
-            for part in ("columns", "row_count", "first_column", "holds")
+            for part in (
+                "columns",
+                "time_columns",
+                "trim_times",
+                "row_count",
+                "first_column",
+                "holds",
+            )
             if part in type(new).model_fields
             and getattr(new, part) != getattr(source, part)
         ],

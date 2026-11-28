@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from figscribe.io.csvfile import read_csv
+from figscribe.io.csvfile import CsvTable, read_csv
 from figscribe.io.errors import DataChangedError, DataError
 from figscribe.io.files import resolve_path
 from figscribe.io.hdf5file import Hdf5Table
@@ -43,7 +43,7 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
     """
     sources = {s.id: s for s in project.sources}
     tables: dict[tuple[str, str | None], np.ndarray] = {}
-    opened: dict[str, SheetTable | Hdf5Table] = {}
+    opened: dict[str, CsvTable | SheetTable | Hdf5Table] = {}
     files: dict[tuple[str, str], bytes] = {}
     """{(path, hash): contents} of the HDF5 files, which several groups of one
     file share."""
@@ -56,9 +56,14 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
             tables[source.id, key] = loaded
         return tables[source.id, key]
 
-    def by_column(source: SheetSource | Hdf5Source) -> SheetTable | Hdf5Table:
+    def by_column(
+        source: CsvSource | SheetSource | Hdf5Source,
+    ) -> CsvTable | SheetTable | Hdf5Table:
         if source.id not in opened:
-            if isinstance(source, SheetSource):
+            if isinstance(source, CsvSource):
+                raw, name = _checked_bytes(source, base_dir)
+                opened[source.id] = CsvTable(source, raw, name)
+            elif isinstance(source, SheetSource):
                 raw, name = _checked_bytes(source, base_dir)
                 opened[source.id] = read_sheet(source, raw, name)
             else:
@@ -73,7 +78,9 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
         source = sources.get(ref.source)
         if source is None:
             raise DataError(f"unknown data source {ref.source!r}")
-        if isinstance(source, BY_COLUMN_SOURCES):
+        if isinstance(source, BY_COLUMN_SOURCES) or (
+            isinstance(source, CsvSource) and source.time_columns
+        ):
             # Column by column: only what is plotted has to be numbers.
             if isinstance(ref, ArrayRef):
                 values = by_column(source).array()
@@ -86,13 +93,24 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
             values.flags.writeable = False
             return values
         if isinstance(ref, ArrayRef):
-            return table(source, ref.key)
-        values = table(source)
+            return _as_recorded(source, table(source, ref.key))
+        values = _as_recorded(source, table(source))
         if values.ndim == 1:
             values = values[:, np.newaxis]  # a 1-D array is one column
         return values[:, _column_index(source, ref.column, values.shape[1])]
 
     return resolve
+
+
+def _as_recorded(source: DataSource, values: np.ndarray) -> np.ndarray:
+    """A NumPy array of times that the project does not record as such, imported
+    before figscribe read times, would give a figure the script cannot."""
+    if (values.dtype.kind == "M") != bool(source.time_columns):
+        raise DataError(
+            f"{source.path} holds dates and times that the project does not record; "
+            "import it again"
+        )
+    return values
 
 
 def _load(

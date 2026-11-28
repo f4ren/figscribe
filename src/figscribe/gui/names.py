@@ -155,6 +155,8 @@ FIELD_NAMES = {
     "path": "File",
     "sha256": "Fingerprint",
     "row_count": "Rows of data",
+    "time_columns": "Date columns",
+    "trim_times": "Dates to trim",
     "x_conversion": "x in",
     "y_conversion": "y in",
     "from_start": "Start at 0",
