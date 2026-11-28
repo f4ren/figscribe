@@ -257,6 +257,8 @@ QLabel#plotPreview {{
 QTableWidget#dataTable {{
     border: 1px solid {BORDER}; border-radius: 10px; gridline-color: #F0F0EB;
 }}
+QTreeWidget#dataTree {{ border: 1px solid {BORDER}; border-radius: 10px; }}
+QTreeWidget#dataTree::item {{ height: 24px; }}
 QHeaderView::section {{
     background: {GROUND}; border: 0; border-bottom: 1px solid {BORDER};
     padding: 6px 10px; font-weight: 600;

@@ -253,5 +253,12 @@ note the platform, the screen scaling and the theme in the pull request.
     values show, the notes column is named as not numbers. Change a value, save,
     come back: the bar offers the new version. Export the script and run it.
 
+38. **HDF5** (decision 0081): import a file a real instrument or program wrote
+    (and a NeXus file if there is one). The tree shows what is in it and why
+    some entries cannot be taken; the proposed group, its units and the first
+    plot make sense; another entry in the dialog and in the panel works. Export
+    the script and run it. With a large file (some 100 MB), note how long the
+    dialog takes to open and to change the entry.
+
 Anything wrong goes into the roadmap as a task with how to reproduce it, or,
 if it can be tested, first into a failing test.

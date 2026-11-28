@@ -362,3 +362,34 @@ def test_a_package_may_list_itself(site: Site) -> None:
     site.add("app", requires=("pillow", "scipy"), files={"LICENSE": "A."})
 
     assert notices.other_parts(notices.closure(["app"], find=site)) == []
+
+
+@pytest.mark.parametrize(
+    ("files", "named"),
+    [
+        # Linux: libaec, and its szip interface beside it.
+        (
+            ["h5py.libs/libaec-a27cf049.so.0.1.4", "h5py.libs/libsz-c6be.so.2"],
+            ["libaec (BSD-2-Clause)", "Mathis Rosenhauer"],
+        ),
+        # macOS and Windows: zlib.
+        (["h5py/.dylibs/libz.1.3.2.dylib"], ["libz (Zlib)", "Jean-loup Gailly"]),
+        (["h5py/z.dll"], ["z.dll (Zlib)", "Jean-loup Gailly"]),
+    ],
+)
+def test_the_libraries_h5py_brings_and_does_not_name(
+    site: Site, files: list[str], named: list[str]
+) -> None:
+    dist = site.add("h5py", files={"LICENSE": "H."})
+    info = dist._path
+    for name in files:
+        library = info.parent / name
+        library.parent.mkdir(parents=True, exist_ok=True)
+        library.write_bytes(b"")
+        with (info / "RECORD").open("a") as record:
+            record.write(f"{name},,\n")
+
+    text = notices.render({"h5py": metadata.PathDistribution(info)}, python_license="x")
+
+    for words in named:
+        assert text.count(words) == 1

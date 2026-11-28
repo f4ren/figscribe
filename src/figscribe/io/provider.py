@@ -11,13 +11,16 @@ import numpy as np
 from figscribe.io.csvfile import read_csv
 from figscribe.io.errors import DataChangedError, DataError
 from figscribe.io.files import resolve_path
+from figscribe.io.hdf5file import Hdf5Table
 from figscribe.io.numpyfile import read_numpy
 from figscribe.io.sheetfile import SheetTable, read_sheet
 from figscribe.model import (
+    BY_COLUMN_SOURCES,
     ArrayRef,
     ColumnRef,
     CsvSource,
     DataSource,
+    Hdf5Source,
     NumpySource,
     Project,
     SheetSource,
@@ -31,7 +34,7 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
     """Return a provider that reads each source on first use and caches it.
 
     A ColumnRef gives one column; an ArrayRef a whole table (CSV) or array
-    (NumPy) as 2-D data for images and colour meshes.
+    (NumPy, HDF5) as 2-D data for images and colour meshes.
 
     Every file is checked against its recorded hash before it is parsed, and
     the bytes that were hashed are the bytes that get parsed. A changed file
@@ -40,7 +43,10 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
     """
     sources = {s.id: s for s in project.sources}
     tables: dict[tuple[str, str | None], np.ndarray] = {}
-    sheets: dict[str, SheetTable] = {}
+    opened: dict[str, SheetTable | Hdf5Table] = {}
+    files: dict[tuple[str, str], bytes] = {}
+    """{(path, hash): contents} of the HDF5 files, which several groups of one
+    file share."""
     columns: dict[tuple[str, int], np.ndarray] = {}
 
     def table(source: DataSource, key: str | None = None) -> np.ndarray:
@@ -50,22 +56,29 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
             tables[source.id, key] = loaded
         return tables[source.id, key]
 
-    def sheet(source: SheetSource) -> SheetTable:
-        if source.id not in sheets:
-            raw, name = _checked_bytes(source, base_dir)
-            sheets[source.id] = read_sheet(source, raw, name)
-        return sheets[source.id]
+    def by_column(source: SheetSource | Hdf5Source) -> SheetTable | Hdf5Table:
+        if source.id not in opened:
+            if isinstance(source, SheetSource):
+                raw, name = _checked_bytes(source, base_dir)
+                opened[source.id] = read_sheet(source, raw, name)
+            else:
+                key = (source.path, source.sha256)
+                name = str(resolve_path(source.path, base_dir))
+                if key not in files:
+                    files[key], name = _checked_bytes(source, base_dir)
+                opened[source.id] = Hdf5Table(source, files[key], name)
+        return opened[source.id]
 
     def resolve(ref: ColumnRef | ArrayRef) -> np.ndarray:
         source = sources.get(ref.source)
         if source is None:
             raise DataError(f"unknown data source {ref.source!r}")
-        if isinstance(source, SheetSource):
+        if isinstance(source, BY_COLUMN_SOURCES):
             # Column by column: only what is plotted has to be numbers.
             if isinstance(ref, ArrayRef):
-                values = sheet(source).array()
+                values = by_column(source).array()
             else:
-                found = sheet(source)
+                found = by_column(source)
                 index = _column_index(source, ref.column, found.width)
                 if (source.id, index) not in columns:
                     columns[source.id, index] = found.column(index)
@@ -82,12 +95,9 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
     return resolve
 
 
-def _load(source: DataSource, base_dir: str | Path, key: str | None) -> np.ndarray:
-    if not isinstance(source, CsvSource | NumpySource):
-        raise NotImplementedError(
-            f"reading {source.format!r} sources is not implemented yet"
-        )
-
+def _load(
+    source: CsvSource | NumpySource, base_dir: str | Path, key: str | None
+) -> np.ndarray:
     raw, name = _checked_bytes(source, base_dir)
     if isinstance(source, NumpySource):
         return read_numpy(source, raw, name, key)

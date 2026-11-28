@@ -10,6 +10,7 @@ import numpy as np
 from figscribe.commands import History
 from figscribe.fit import add_fit, refit
 from figscribe.io import csv_source, load_data
+from figscribe.io.hdf5file import hdf5_source
 from figscribe.io.numpyfile import numpy_source
 from figscribe.io.sheetfile import sheet_source
 from figscribe.model import (
@@ -43,6 +44,7 @@ from figscribe.model import (
     ShadedSpan,
     dumps,
 )
+from tests.hdf5files import write_h5
 from tests.sheetfiles import write_ods
 
 
@@ -88,6 +90,10 @@ def build(folder: Path) -> Path:
     book = sheet_source(
         folder / "book.ods", folder, header_row=0, skip_rows=1, decimal=","
     )
+
+    # An HDF5 file, for the choice of its datasets.
+    write_h5(folder / "run.h5", {"run1/t": [1.0, 2, 3], "run2/t": [1.0, 2]})
+    run = hdf5_source(folder / "run.h5", folder, dataset="/run1")
 
     def col(name: str) -> ColumnRef:
         return ColumnRef(source=scan.id, column=name)
@@ -200,7 +206,7 @@ def build(folder: Path) -> Path:
         panel_labels=PanelLabels(),
         axes=[a, b, c, d, e],
     )
-    sources = [scan, grid, background, xs, ys, book]
+    sources = [scan, grid, background, xs, ys, book, run]
     project = Project(sources=sources, figures=[figure])
 
     history = History(project)

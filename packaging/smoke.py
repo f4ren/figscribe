@@ -60,6 +60,7 @@ def license_problem(system: str) -> str | None:
             "numpy",
             "matplotlib",
             "crates.io/crates/calamine/",  # the Rust code in the readers
+            "HDF5 (Hierarchical Data Format 5)",
         ):
             if word not in text:
                 return f"{notices} does not mention {word}"
@@ -87,6 +88,40 @@ def document_type_problem(system: str) -> str | None:
     if not any("figscribe" in t.get("CFBundleTypeExtensions", []) for t in types):
         return f"{plist} does not list .figscribe as a document type"
     return None
+
+
+def hdf5_project(folder: Path) -> Path:
+    """A figure of an HDF5 file whose script cannot be written without reading
+    it: a broken axis is drawn to place its ticks."""
+    import h5py
+    import numpy as np
+
+    from figscribe.io.hdf5file import hdf5_source
+    from figscribe.model import (
+        Axes,
+        AxisSpec,
+        ColumnRef,
+        Figure,
+        LinePlot,
+        Project,
+        dumps,
+    )
+
+    data = folder / "run.h5"
+    t = np.concatenate([np.linspace(0, 1, 50), np.linspace(9, 10, 50)])
+    with h5py.File(data, "w") as file:
+        file.create_dataset("run/t", data=t, compression="gzip")
+        file.create_dataset("run/U", data=t**2, compression="lzf")
+    source = hdf5_source(data, folder)
+    line = LinePlot(
+        x=ColumnRef(source=source.id, column="t"),
+        y=ColumnRef(source=source.id, column="U"),
+    )
+    panel = Axes(x=AxisSpec(breaks=[(2.0, 8.0)]), artists=[line])
+    project = folder / "run.figscribe"
+    figure = Figure(axes=[panel])
+    project.write_text(dumps(Project(sources=[source], figures=[figure])), "utf-8")
+    return project
 
 
 def main(argv: list[str]) -> int:
@@ -152,6 +187,17 @@ def main(argv: list[str]) -> int:
         )
         if read.returncode or "rows_of_sheet" not in sheet.read_text("utf-8"):
             return fail(f"the spreadsheet was not read: {read.stdout} {read.stderr}")
+        run = Path(folder) / "run.py"
+        read = subprocess.run(
+            [program, "script", hdf5_project(Path(folder)), "-o", run],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=300,
+        )
+        # Without the values the script would have no broken axis.
+        if read.returncode or "Broken axes" not in run.read_text("utf-8"):
+            return fail(f"the HDF5 file was not read: {read.stdout} {read.stderr}")
     print("script ok", flush=True)
 
     # A frozen program may not find the certificates of the system. A runner may

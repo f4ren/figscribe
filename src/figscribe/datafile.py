@@ -19,7 +19,15 @@ from pathlib import Path
 from figscribe.commands import Command, CommandError, Macro, SetField, find
 from figscribe.io import DataError, load_data
 from figscribe.io.files import resolve_path
-from figscribe.io.refresh import check_plotted, recorded, reread, sole_sheet
+from figscribe.io.hdf5file import SUFFIXES as HDF5_SUFFIXES
+from figscribe.io.hdf5file import has, like
+from figscribe.io.refresh import (
+    check_plotted,
+    part_field,
+    recorded,
+    reread,
+    sole_part,
+)
 from figscribe.io.sheetfile import FORMATS, sheet_names
 from figscribe.model import (
     FILE_SOURCES,
@@ -28,6 +36,7 @@ from figscribe.model import (
     CsvSource,
     DataSource,
     FitCurve,
+    Hdf5Source,
     NumpySource,
     Project,
     SheetSource,
@@ -58,27 +67,48 @@ class MissingColumn:
     """The column at the same place; None if there is none free to propose."""
 
 
-def sheets_to_choose(
+def parts_to_choose(
     project: Project, source_id: str, base_dir: str | Path, path: str | Path
 ) -> dict[str, list[str]]:
-    """{sheet in use: the sheets of the file at `path`} where the user has to
-    say which sheet takes its place: the file has none of that name, and it is
-    not the one sheet in use for a file that has one sheet."""
-    used = [
-        each.sheet
-        for each in _same_file(project, source_id, base_dir)
-        if isinstance(each, SheetSource)
-    ]
-    if not used or Path(path).suffix.lower() not in FORMATS:
-        return {}
+    """{sheet or dataset in use: those of the file at `path`} where the user has
+    to say which takes its place: the file has nothing of that name, and no
+    single one is plainly meant."""
+    used: dict[str, DataSource] = {}
+    for each in _same_file(project, source_id, base_dir):
+        if part := part_field(each):
+            used.setdefault(getattr(each, part), each)
+    target = Path(path)
+    suffixes = {
+        "sheet": tuple(FORMATS),
+        "dataset": HDF5_SUFFIXES,
+    }
+    if not used or any(
+        target.suffix.lower() not in suffixes[part_field(each)]
+        for each in used.values()
+    ):
+        return {}  # reading it says why
     try:
-        names = sheet_names(Path(path).read_bytes(), Path(path).name)
+        raw = target.read_bytes()
     except OSError as exc:
         raise DataError(f"cannot open {path}: {exc.strerror}") from exc
-    missing = [sheet for sheet in dict.fromkeys(used) if sheet not in names]
-    if len(names) == 1 and len(set(used)) == 1:
-        return {}
-    return {sheet: names for sheet in missing}
+    asked = {}
+    for name, source in used.items():
+        if isinstance(source, Hdf5Source):
+            if has(raw, target.name, name):
+                continue
+            choices = like(source, raw, target.name)
+        else:
+            choices = sheet_names(raw, target.name)
+            if name in choices:
+                continue
+        if len(used) == 1 and sole_part(source, target) is not None:
+            continue
+        if not choices:
+            raise DataError(
+                f"{target.name} holds nothing that can take the place of {name!r}"
+            )
+        asked[name] = choices
+    return asked
 
 
 def columns_to_choose(
@@ -86,7 +116,7 @@ def columns_to_choose(
     source_id: str,
     base_dir: str | Path,
     path: str | Path,
-    sheets: Mapping[str, str] | None = None,
+    parts: Mapping[str, str] | None = None,
 ) -> list[MissingColumn]:
     """The columns to find a place for in the file at `path`. None for a file
     without column names, whose columns go by number.
@@ -96,7 +126,7 @@ def columns_to_choose(
     found: list[MissingColumn] = []
     same_file = _same_file(project, source_id, base_dir)
     for each in same_file:
-        new = _read(each, base_dir, Path(path), _sheet(same_file, each, path, sheets))
+        new = _read(each, base_dir, Path(path), _part(same_file, each, path, parts))
         if not new.columns:
             continue
         choices = list(dict.fromkeys(new.columns))
@@ -145,14 +175,14 @@ def use_another_file(
     base_dir: str | Path,
     path: str | Path,
     columns: Mapping[tuple[str, str], str | None] | None = None,
-    sheets: Mapping[str, str] | None = None,
+    parts: Mapping[str, str] | None = None,
 ) -> Swap:
     """Take the file at `path` in the place of the source's, in every source
     read from that file (the arrays of an .npz file), as one command. `columns`
     says, by source id and old name, which column of the new file takes a place.
     The file already used may be given again to place a column left out before.
-    `sheets` says, by sheet in use, which sheet of the new file takes its place
-    (see `sheets_to_choose`).
+    `parts` says, by sheet or dataset in use, which one of the new file takes its
+    place (see `parts_to_choose`).
 
     A DataError, changing nothing, if the file cannot be read the way the old
     one was.
@@ -161,7 +191,7 @@ def use_another_file(
     old = Path(find(project, source_id).path).name
     steps: list[Command] = []
     for each in same_file:
-        new = _read(each, base_dir, Path(path), _sheet(same_file, each, path, sheets))
+        new = _read(each, base_dir, Path(path), _part(same_file, each, path, parts))
         steps += [
             SetField(each.id, (field,), getattr(new, field))
             for field in recorded(each)
@@ -235,20 +265,22 @@ def use_another_file(
     return Swap(Macro(f"Use another file for {old}", steps), notes)
 
 
-def _sheet(same_file: list, source: DataSource, path: str | Path, sheets) -> str | None:
-    """The sheet of the new file that the source is read from; None to keep
-    the one it has."""
-    if not isinstance(source, SheetSource):
+def _part(same_file: list, source: DataSource, path: str | Path, parts) -> str | None:
+    """The sheet or dataset of the new file that the source is read from; None to
+    keep the one it has."""
+    field = part_field(source)
+    if field is None:
         return None
-    if sheets and source.sheet in sheets:
-        return sheets[source.sheet]
-    used = {each.sheet for each in same_file if isinstance(each, SheetSource)}
-    return sole_sheet(source, Path(path)) if len(used) == 1 else None
+    name = getattr(source, field)
+    if parts and name in parts:
+        return parts[name]
+    used = {getattr(e, field) for e in same_file if part_field(e) == field}
+    return sole_part(source, Path(path)) if len(used) == 1 else None
 
 
 def _same_file(
     project: Project, source_id: str, base_dir: str | Path
-) -> list[CsvSource | NumpySource | SheetSource]:
+) -> list[CsvSource | Hdf5Source | NumpySource | SheetSource]:
     """Every source read from the file the source `source_id` is read from."""
     source = find(project, source_id)
     if not isinstance(source, FILE_SOURCES):
@@ -262,12 +294,16 @@ def _same_file(
 
 
 def _read(
-    source: DataSource, base_dir: str | Path, path: Path, sheet: str | None = None
+    source: DataSource, base_dir: str | Path, path: Path, part: str | None = None
 ) -> DataSource:
     """The file at `path`, read as `source` is."""
     if isinstance(source, SheetSource) and path.suffix.lower() not in FORMATS:
         raise DataError(
             f"{path.name} is not a spreadsheet, which {Path(source.path).name} is"
+        )
+    if isinstance(source, Hdf5Source) and path.suffix.lower() not in HDF5_SUFFIXES:
+        raise DataError(
+            f"{path.name} is not an HDF5 file, which {Path(source.path).name} is"
         )
     if isinstance(source, NumpySource) and path.suffix.lower() != f".{source.format}":
         raise DataError(
@@ -275,7 +311,7 @@ def _read(
             f"{Path(source.path).name} is read as"
         )
     try:
-        return reread(source, base_dir, path, sheet=sheet)
+        return reread(source, base_dir, path, part=part)
     except DataError as exc:
         raise DataError(
             f"{path.name} cannot be read the way {Path(source.path).name} is "
@@ -283,8 +319,10 @@ def _read(
         ) from exc
 
 
-def _how(source: CsvSource | NumpySource | SheetSource) -> str:
+def _how(source: CsvSource | Hdf5Source | NumpySource | SheetSource) -> str:
     """What decides whether a file can be read, as the panel shows it."""
+    if isinstance(source, Hdf5Source):
+        return f"dataset {source.dataset!r}"
     if isinstance(source, SheetSource):
         header = "no row of names"
         if source.header_row is not None:

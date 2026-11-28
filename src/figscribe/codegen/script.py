@@ -53,11 +53,13 @@ from figscribe.model import (
     ColumnRef,
     Conversion,
     CsvSource,
+    DataSource,
     ErrorbarPlot,
     ExpressionFit,
     Figure,
     FitCurve,
     FunctionPlot,
+    Hdf5Source,
     Histogram,
     ImagePlot,
     Legend,
@@ -234,15 +236,24 @@ class _Writer:
         self.base_dir = base_dir
         self.data = data
         self.lines: list[str] = []
+        self._paths: dict[str, tuple[Path, str]] = {}
+        """{path variable: (file, hash) it holds and has checked}."""
         self._mappables = 0
         self.artists = {a.id: a for axes in figure.axes for a in axes.artists}
         self.sources = {s.id: s for s in project.sources}
         self.reserved = RESERVED | {
             f"{_stem(s.path)}_path" for s in project.sources if hasattr(s, "path")
         }
+        self.reserved |= {
+            f"{_stem(s.path)}_bytes"
+            for s in project.sources
+            if isinstance(s, Hdf5Source)
+        }
         """Names the script uses itself, which no variable of its data takes."""
         if any(isinstance(s, SheetSource) for s in project.sources):
             self.reserved |= SHEET_NAMES
+        if any(isinstance(s, Hdf5Source) for s in project.sources):
+            self.reserved |= HDF5_NAMES
         self.columns = self._name_columns()
         self.arrays = self._name_arrays()
         self.unit_lines: list[tuple[str, str, str]] = []
@@ -349,6 +360,12 @@ class _Writer:
                     name = f"{stem}_{_slug(ref.key)}" if ref.key else stem
                     if isinstance(source, CsvSource | SheetSource):
                         name = f"{stem}_table"
+                    elif isinstance(source, Hdf5Source):
+                        if source.holds in ("group", "table"):
+                            name = f"{stem}_table"
+                        else:
+                            leaf = source.dataset.rsplit("/", 1)[-1]
+                            name = f"{stem}_{_slug(leaf)}"
                     if name[0].isdigit():
                         name = f"data_{name}"
                     while name in taken:
@@ -362,6 +379,7 @@ class _Writer:
         return {
             *self.reserved,
             *self.columns.values(),
+            *getattr(self, "arrays", {}).values(),
             *getattr(self, "units", {}).values(),
             *getattr(self, "used", {}).values(),
             *getattr(self, "_retired", ()),
@@ -615,6 +633,8 @@ class _Writer:
             packages.append("SciPy")
         if self._sheets():
             packages.append("python-calamine")
+        if self._hdf5_used():
+            packages.append("h5py")
         needs = f"{', '.join(packages[:-1])} and {packages[-1]}"
         self.emit(
             f'"""{figure.name}: {_num(figure.width_mm)} × {_num(figure.height_mm)} mm '
@@ -626,8 +646,8 @@ class _Writer:
         used = [s for s in self.project.sources if self._used(s.id)]
         if used:
             self.emit("", "Data:")
-            for source in used:
-                self.emit(f"    {source.path}", f"        sha256 {source.sha256}")
+            for path, sha256 in dict.fromkeys((s.path, s.sha256) for s in used):
+                self.emit(f"    {path}", f"        sha256 {sha256}")
         self.emit('"""')
 
     def _sheets(self) -> list[SheetSource]:
@@ -638,6 +658,11 @@ class _Writer:
             if isinstance(s, SheetSource) and self._used(s.id)
         ]
 
+    def _hdf5_used(self) -> bool:
+        return any(
+            isinstance(s, Hdf5Source) and self._used(s.id) for s in self.project.sources
+        )
+
     def _used(self, source_id: str) -> bool:
         return any(key[0] == source_id for key in [*self.columns, *self.arrays])
 
@@ -645,9 +670,11 @@ class _Writer:
         self.emit("")
         if self.columns or self.arrays:
             self.emit("import hashlib")
-        if self._sheets():
+        if self._sheets() or self._hdf5_used():
             self.emit("import io")
         self.emit("from pathlib import Path", "")
+        if self._hdf5_used():
+            self.emit("import h5py")
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
         locators = self._locators()
         if locators:
@@ -816,15 +843,28 @@ class _Writer:
         stem = _stem(source.path)
         path = f"{stem}_path"
         location = resolve_path(source.path, self.base_dir)
-        self.emit(f"{path} = HERE / {_str(_relative(location, script_dir))}")
-        self.emit(
-            "# The figure was made from exactly this file; delete the check to "
-            "plot a newer one.",
-            f"if hashlib.sha256({path}.read_bytes()).hexdigest() != (",
-            f'    "{source.sha256}"',
-            "):",
-            f'    raise SystemExit(f"{{{path}}} changed since the figure was made")',
-        )
+        # A file read twice, such as two sheets of one, is checked once.
+        if self._paths.get(path) != (location, source.sha256):
+            self._paths[path] = (location, source.sha256)
+            self.emit(f"{path} = HERE / {_str(_relative(location, script_dir))}")
+            contents = f"{path}.read_bytes()"
+            if isinstance(source, Hdf5Source):
+                contents = f"{stem}_bytes"
+                self.emit(
+                    "# Read once and from memory, as figscribe does: also while a "
+                    "program",
+                    "# that writes the file holds it open.",
+                    f"{contents} = {path}.read_bytes()",
+                )
+            self.emit(
+                "# The figure was made from exactly this file; delete the check to "
+                "plot a newer one.",
+                f"if hashlib.sha256({contents}).hexdigest() != (",
+                f'    "{source.sha256}"',
+                "):",
+                f'    raise SystemExit(f"{{{path}}} changed since the figure was '
+                'made")',
+            )
         refs = [(c, n) for (sid, c), n in self.columns.items() if sid == source.id]
         indices = [_index(source, column) for column, _ in refs]
         if isinstance(source, NumpySource):
@@ -832,6 +872,9 @@ class _Writer:
             return
         if isinstance(source, SheetSource):
             self._sheet(source, path, stem, refs, indices)
+            return
+        if isinstance(source, Hdf5Source):
+            self._hdf5(source, stem, refs, indices)
             return
         kwargs: dict[str, str] = {}
         if source.delimiter is not None:
@@ -904,6 +947,55 @@ class _Writer:
                 f"{name} = sheet_column({rows}, {at}{decimal})"
                 f"  # column {column_letters(at)}"
             )
+
+    def _hdf5(self, source: Hdf5Source, stem: str, refs, indices) -> None:
+        """The datasets used, as floats like figscribe reads them."""
+        inside = source.dataset.strip("/")
+
+        def item(*names: str) -> str:
+            return _str("/".join(part for part in (inside, *names) if part))
+
+        table = self.arrays.get((source.id, None))
+        opened = f"with h5py.File(io.BytesIO({stem}_bytes)) as h5:"
+        if source.holds == "table":
+            records = self._free(f"{stem}_records")
+            self.emit(opened, f"    {records} = h5[{item()}][()]")
+            if table is None:
+                for (_, name), index in zip(refs, indices, strict=True):
+                    field = _str(source.columns[index])
+                    self.emit(f"{name} = {records}[{field}].astype(float)")
+                return
+            fields = ", ".join(_str(field) for field in source.columns)
+            self.emit(
+                f"{table} = np.column_stack(",
+                f"    [{records}[name] for name in ({fields},)]",
+                ").astype(float)",
+            )
+        else:
+            self.emit(opened)
+            if table is not None and source.holds == "group":
+                names = ", ".join(item(column) for column in source.columns)
+                self.emit(
+                    f"    {table} = np.column_stack(",
+                    f"        [h5[name][()] for name in ({names},)]",
+                    "    ).astype(float)",
+                )
+            elif table is not None:
+                self.emit(f"    {table} = h5[{item()}][()].astype(float)")
+            else:
+                for (_, name), index in zip(refs, indices, strict=True):
+                    if source.holds == "group":
+                        read = f"h5[{item(source.columns[index])}][()]"
+                    elif source.holds == "column":
+                        read = f"h5[{item()}][()]"
+                    else:
+                        read = f"h5[{item()}][:, {index}]"
+                    self.emit(f"    {name} = {read}.astype(float)")
+                return
+        # The whole table is plotted as an image; columns are slices of it.
+        for (_, name), index in zip(refs, indices, strict=True):
+            one = source.holds == "column"
+            self.emit(f"{name} = {table}" if one else f"{name} = {table}[:, {index}]")
 
     def _numpy(self, source: NumpySource, path: str, refs, indices) -> None:
         """np.load the arrays used, as floats like figscribe reads them."""
@@ -2531,6 +2623,9 @@ def overlapping_adev(phase, tau0, m):
 does the same, step by step."""
 
 
+# What the script reads an HDF5 file with, as `io.hdf5file` does.
+HDF5_NAMES = {"h5", "h5py", "io"}
+
 # What the script reads a spreadsheet with, as `io.sheetfile` does.
 SHEET_NAMES = {"CalamineWorkbook", "io", "rows_of_sheet", "sheet_column"}
 
@@ -2879,7 +2974,7 @@ def _identifier(text: str) -> str:
     return name
 
 
-def _index(source: CsvSource | NumpySource | SheetSource, column: str | int) -> int:
+def _index(source: DataSource, column: str | int) -> int:
     return source.columns.index(column) if isinstance(column, str) else column
 
 

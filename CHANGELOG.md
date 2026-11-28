@@ -10,6 +10,13 @@ release open in every later one.
   ticks did not look at a new version of a data file.
 - The installers' license notices name the Rust libraries compiled into their
   packages, with the licenses' texts (decision 0080).
+- **HDF5 files** (`.h5`, `.hdf5`, `.he5`, `.nxs`). The import shows the tree of
+  the file: take a group, whose one-dimensional datasets are the columns, a
+  table of records, or a single dataset; two dimensions become an image. Units
+  come from the attributes. External links, virtual datasets and external
+  storage are refused, since the file's fingerprint does not cover their
+  values. The Python script reads the same datasets and needs `h5py`, a new
+  dependency (decision 0081).
 - **Excel and LibreOffice Calc files.** `.xlsx`, `.xls` and `.ods` are read as
   they are: pick the sheet, the row of names and rows to skip. Computed columns
   come with the results saved in the file; empty cells are gaps; columns of

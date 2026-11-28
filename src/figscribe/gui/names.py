@@ -168,6 +168,7 @@ FIELD_NAMES = {
     "comment": "Comment mark",
     "encoding": "Text encoding",
     "dataset": "Dataset",
+    "holds": "Holds",
     "sheet": "Sheet",
     "first_column": "Table starts at",
     "array": "Array",

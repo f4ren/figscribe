@@ -186,7 +186,8 @@ class DataDialog(QDialog):
         left.setContentsMargins(24, 16, 24, 16)
         left.setSpacing(12)
         chips = QHBoxLayout()
-        chips.addWidget(label("Detected", "caption"))
+        self.detected = label("Detected", "caption")
+        chips.addWidget(self.detected)
         chips.addLayout(self.chips)
         chips.addStretch(1)
         left.addLayout(chips)
@@ -269,7 +270,7 @@ class DataDialog(QDialog):
     # --- preview ------------------------------------------------------------
 
     def update_preview(self) -> None:
-        self.header_row.setEnabled(self.has_header.isChecked())
+        self._sync_settings()
         self._source = None
         self.units = None
         try:
@@ -283,10 +284,11 @@ class DataDialog(QDialog):
             self.status.setText("")
             self.settings.show()
         else:
-            if source.columns and len(source.columns) != table.shape[1]:
+            width = self._size(source, table)[1]
+            if source.columns and len(source.columns) != width:
                 self.error.setText(
                     f"The header names {len(source.columns)} columns, "
-                    f"the data has {table.shape[1]}."
+                    f"the data has {width}."
                 )
                 self.settings.show()
             else:
@@ -307,6 +309,9 @@ class DataDialog(QDialog):
         else:
             ok.setText("Add and plot")
             self.mode = "plot"
+
+    def _sync_settings(self) -> None:
+        """Enable the settings that apply to the others as they are now."""
 
     def _read(self) -> tuple[DataSource, np.ndarray]:
         """The source as the settings describe it, and its table (rows by
@@ -329,13 +334,21 @@ class DataDialog(QDialog):
         """What to say about the table's values, a sentence each."""
         return [f"All {table.shape[0]} rows read as numbers."]
 
+    def _size(self, source: DataSource, table: np.ndarray) -> tuple[int, int]:
+        """The rows and columns of the data, of which `table` may be the start."""
+        return table.shape
+
+    def _advice(self) -> str:
+        """What to do if the table is not the data meant."""
+        return "read as shown below. Wrong? Change any setting, the table follows."
+
     def _fill(self, source: DataSource, table: np.ndarray) -> None:
         rows, cols = min(table.shape[0], PREVIEW_ROWS), table.shape[1]
         self.table.setRowCount(rows)
         self.table.setColumnCount(cols)
         names = (
-            source.columns
-            if len(source.columns) == cols
+            source.columns[:cols]
+            if len(source.columns) == self._size(source, table)[1]
             else [str(i) for i in range(cols)]
         )
         self.errors = error_columns([str(n) for n in names])
@@ -351,11 +364,8 @@ class DataDialog(QDialog):
         for r in range(rows):
             for c in range(cols):
                 self.table.setItem(r, c, QTableWidgetItem(self._cell(table[r, c])))
-        count = table.shape[0]
-        self.summary.setText(
-            f"{count} rows · {cols} columns · read as shown below. "
-            "Wrong? Change any setting, the table follows."
-        )
+        count, width = self._size(source, table)
+        self.summary.setText(f"{count} rows · {width} columns · {self._advice()}")
         notes = self._numbers_note(source, table)
         notes += [
             f"{err} looks like the error of {value}."
@@ -384,9 +394,13 @@ class DataDialog(QDialog):
             return None
         return self._source.columns or list(range(self.table.columnCount()))
 
-    def _show_suggestions(self) -> None:
+    def _suggested(self) -> list[Suggestion]:
+        """The first plots to offer for the data."""
         columns = self._plottable()
-        found = suggest(columns) if columns else []
+        return suggest(columns) if columns else []
+
+    def _show_suggestions(self) -> None:
+        found = self._suggested()
         if found == self.suggestions:
             return
         wanted = self._wanted
@@ -462,6 +476,9 @@ class ImportDialog(DataDialog):
             "comment": self.comment.text() or None,
             "encoding": self.encoding.currentData(),
         }
+
+    def _sync_settings(self) -> None:
+        self.header_row.setEnabled(self.has_header.isChecked())
 
     def _set_encoding(self) -> None:
         # Undecodable bytes become � for the units line; the preview reports them.

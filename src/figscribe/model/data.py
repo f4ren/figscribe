@@ -51,15 +51,25 @@ class CsvSource(Identified):
 
 
 class Hdf5Source(Identified):
+    """One group or dataset of an HDF5 file (decision 0081)."""
+
     format: Literal["hdf5"] = "hdf5"
     path: str = Field(min_length=1)
     """Where the file is: relative to the project's folder when it lies below it."""
     sha256: Sha256
     """SHA-256 of the file when it was imported; a changed file is refused."""
     dataset: str = Field(min_length=1)
-    """Path of the dataset inside the file, e.g. "/run3/voltage"."""
+    """Path inside the file of the data: a group, whose one-dimensional
+    datasets are the columns, such as "/run3", or one dataset, such as
+    "/run3/voltage"; "/" for what the file holds at the top."""
+    holds: Literal["group", "table", "column", "image"] = "group"
+    """What is at `dataset`: a group of datasets, a table of records, a dataset
+    of one dimension (a column) or of two (an image). Recorded on import, so
+    that the script can be written without the file."""
     columns: list[str] = Field(default_factory=list)
-    """Column names discovered on import."""
+    """Column names discovered on import: the group's datasets, the fields of a
+    table of records, or the dataset's own name. None for a two-dimensional
+    dataset."""
     row_count: int | None = Field(None, ge=0)
     """Rows of data when the file was imported, to tell what changed; None in
     projects from before it was recorded."""
@@ -107,8 +117,12 @@ class SheetSource(Identified):
     """Rows of data when the file was imported, to tell what changed."""
 
 
-FILE_SOURCES = (CsvSource, NumpySource, SheetSource)
+FILE_SOURCES = (CsvSource, Hdf5Source, NumpySource, SheetSource)
 """The kinds of source that are read from a file."""
+
+BY_COLUMN_SOURCES = (Hdf5Source, SheetSource)
+"""The kinds of source whose columns are read one at a time: such a file may
+hold things beside what is plotted that are no numbers."""
 
 DataSource = Annotated[
     CsvSource | Hdf5Source | NumpySource | SheetSource,

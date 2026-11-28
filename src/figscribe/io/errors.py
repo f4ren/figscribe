@@ -10,4 +10,5 @@ class DataChangedError(DataError):
 
 
 class CellError(DataError):
-    """A cell of a spreadsheet that is plotted but holds no number."""
+    """What is plotted cannot be made into numbers: a cell of a spreadsheet
+    without one, or HDF5 datasets of different lengths taken as one table."""

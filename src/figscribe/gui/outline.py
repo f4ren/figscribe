@@ -225,7 +225,10 @@ class Outline(QTreeWidget):
             item = self._row(Path(source.path).name, source.id, icon="file")
             item.setToolTip(0, source.path)
             count = len(source.columns)
-            item.setText(1, f"{count} column{'s' if count != 1 else ''}")
+            if getattr(source, "holds", None) == "image":
+                item.setText(1, "2-D")  # its columns have numbers, not names
+            else:
+                item.setText(1, f"{count} column{'s' if count != 1 else ''}")
             item.setForeground(1, QBrush(QColor(theme.MUTED)))
             if source.columns:
                 self._chips([str(c) for c in source.columns])

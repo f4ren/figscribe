@@ -103,10 +103,11 @@ To add an extra later, install again with `--force`. To update:
 
 Start `figscribe`. The start page offers four ways in:
 
-- **Open a data file** (CSV, Excel, LibreOffice Calc, `.npy`, `.npz`). The
-  import dialog detects
+- **Open a data file** (CSV, Excel, LibreOffice Calc, HDF5, `.npy`, `.npz`).
+  The import dialog detects
   delimiter, decimal comma, header and unit rows, shows a preview and suggests
-  a first plot, e.g. *U against t with error bars dU*.
+  a first plot, e.g. *U against t with error bars dU*; for HDF5 it shows the
+  file's groups and datasets to choose from.
 - **Pick a layout**: single column (85 × 60 mm), double column
   (175 × 70 mm), data with fit and residuals, two panels side by side, or a
   16:9 slide.
@@ -129,6 +130,9 @@ script.
   file cannot run code).
 - Excel (`.xlsx`, `.xls`) and LibreOffice Calc (`.ods`) files as they are: one
   sheet per data file, computed columns with the results saved in the file.
+- HDF5 (`.h5`, `.hdf5`, `.he5`, `.nxs`) files: a group with its datasets as columns, a
+  table of records, or one dataset of one or two dimensions, with the units
+  from its attributes. Values kept in other files are not followed.
 - A data file is removed with the plots that draw from it, in one undo step;
   figscribe asks first and names them.
 - Each data file is recorded with its SHA-256. If it changes later,
@@ -227,7 +231,8 @@ script.
 
 *File > Export Python Script…* (or `figscribe script PROJECT.figscribe -o
 plot.py`) writes a script that needs only NumPy, Matplotlib, for fits and for
-fewer points drawn SciPy, and for spreadsheets python-calamine. It is written the way a person would write it:
+fewer points drawn SciPy, for spreadsheets python-calamine and for HDF5 files
+h5py. It is written the way a person would write it:
 no figscribe helpers, named variables, comments where they help. From the
 example project's script (shortened):
 

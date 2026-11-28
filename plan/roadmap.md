@@ -75,8 +75,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
   (4); date axes (5, `[decide]`); which side an axis is on (7, `[decide]`);
   ~~broken axes (6)~~ done; ~~minor grid lines of their own, thinner than the
   major ones (10)~~ done.
-- **F6** several files as one series (M). **F7** data formats: HDF5 (1), a
-  check of whitespace-separated text (2); ~~Excel and Calc (3)~~ done. **F9** a
+- **F6** several files as one series (M). **F7** data formats: ~~HDF5 (1)~~
+  done, a check of whitespace-separated text (2); ~~Excel and Calc (3)~~ done.
+  **F9** a
   data cursor (S). **F10** smoothing, peak finding, baseline and normalising
   (`[decide]`, judged by decision 0036).
 - **F14** fit an Allan deviation (M): built and accepted (0064); named
@@ -104,10 +105,9 @@ here is done; its follow-ups ("only if asked") stay in its text.
 **Phase 5** is later and optional.
 
 **Where to start** (rule 1; the user, 2026-11-27): new features of Phase 2.
-F15 is done (0078), and Excel and Calc files (F7.3, 0079, asked for by the
-user 2026-11-27); then F6 several files as one series, F1.5 a confidence
-band, and a legend entry for the part of a curve beyond the data. Before
-those, HDF5 (F7.1; the user, 2026-11-27).
+F15 is done (0078), Excel and Calc files (F7.3, 0079, asked for by the user
+2026-11-27) and HDF5 (F7.1, 0081). Next: F6 several files as one series, F1.5
+a confidence band, and a legend entry for the part of a curve beyond the data.
 **The release of 0.4 (R9) waits** until the user says so; no 0.3.1. B7 item 5,
 the GUI at small sizes, needs no answer. The lab user's
 requests of 2026-11-04 are all done.
@@ -1415,8 +1415,15 @@ measurement at ten temperatures". The script loads them in a loop.
 
 ### F7 Data formats — M each
 
-1. **HDF5** (in the brief's MVP, model class exists, reader missing): dataset
-   browser in the import dialog, `h5py` as an optional extra.
+1. ~~**HDF5**~~ **Done** (2026-11-28, decision 0081): a group, a table of
+   records or one dataset per data source, chosen in a tree; `h5py` built in.
+   *Learned:* read from bytes in memory, HDF5 resolves an external link within
+   the same bytes and fills a virtual dataset with zeros without a word.
+   *Open:* try files from real instruments (the tests write their own); the
+   whole file is held in memory, large files wait for E1; scale and offset
+   attributes (netCDF) are not applied; MATLAB 7.3 `.mat` files are not
+   offered. *Follow-ups, only if asked:* single datasets of several groups
+   imported at once.
 2. **Tab/whitespace `.txt` and `.dat`** are already readable; make sure the
    import dialog's detection finds them, including several blanks.
 3. ~~**Excel and LibreOffice Calc**~~ **Done** (2026-11-27, decision 0079):
@@ -2022,7 +2029,8 @@ Waits for the user's word (2026-11-27). It carries everything under
 1. Add what is new to the manual checklist (`docs/testing.md`): a broken axis,
    number format and decimal comma, minor grid lines, a curve beyond the data,
    *Use another file…* with other column names, a changed file with a fit,
-   *Check for Updates…*, a sheet from a real Excel and LibreOffice. Then go
+   *Check for Updates…*, a sheet from a real Excel and LibreOffice, an HDF5
+   file from a real instrument. Then go
    through the checklist (B7.5), on macOS at least. *Open:* the AppImage also
    takes system libraries from the Linux build machine (so did 0.3.0); no list
    names their licenses. Check what is in it before releasing.
@@ -2063,6 +2071,7 @@ answer in `docs/decisions.md` when the task is started.
 | F1.9 | answered 2026-11-26: a typed range, and "to the axis limits" where they are typed; dashed beyond the data (0074) |
 | E4 | answered 2026-11-26: another file for the same figure (0075) |
 | F5.7 | Axis side: left/right/both enough? An independent x axis on top as well as the converting one? Refuse a second y axis while the y axis is on the right, or move it back? |
+| F7.1 | answered 2026-11-28: `h5py` built in, not an extra (0081) |
 | F7.3 | answered 2026-11-27: Excel and Calc with `python-calamine` (0079) |
 | F10 | Smoothing, peak finding, baseline and normalising: in scope or not? (Judged by decision 0036; unit conversion decided in 0041.) |
 | R1 | Support `text.usetex` in addition to mathtext with Computer Modern? |

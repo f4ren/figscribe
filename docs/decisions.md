@@ -3881,3 +3881,56 @@ decided yet stops the build.
 the copyright lines: the build would depend on a second package index; the
 source address is given instead. If more is ever asked for, this is the next
 step. **cargo-about or similar**: needs the sources and a Rust toolchain.
+
+---
+
+## 0081 — HDF5 files (F7.1)
+
+2026-11-28. Accepted (the user: HDF5 next; `h5py` built in, "as recommended").
+
+### Context
+
+HDF5 is in the brief's first version and what many instruments and lab programs
+write. The model had a source kind for it without a reader. An HDF5 file is not
+a table but a tree of groups and datasets, so what a data source is had to be
+settled.
+
+### Decision
+
+- **A new dependency, `h5py` (>= 3.15.0, BSD-3-Clause)**, which needs only
+  NumPy and brings the HDF5 library, with wheels for every Python and system
+  figscribe supports. A fixed dependency, as for spreadsheets (0079), not the
+  optional extra the roadmap proposed. 3.15.0 is the first with wheels for
+  Python 3.14.
+- **A source is one entry of the file**: a group, whose one-dimensional
+  datasets of numbers are its columns; a table of records (compound dataset),
+  whose number fields are; a one-dimensional dataset, which is one column; or a
+  two-dimensional dataset, read by column number.
+- **The datasets of a group need not be of one length**: a spectrum often sits
+  beside a time series. Plotting two columns of different length says so, as
+  for any plot; such a group cannot be taken as one table for an image.
+- **Numbers are integers and floating-point values.** Text, true and false,
+  named values (enumerations), complex numbers and dates are no columns, and
+  the import says what was left out and why.
+- **Only what the file holds is read.** Refused: external links, virtual
+  datasets and external storage. The hash does not cover their values, and read
+  from the hashed bytes in memory HDF5 resolves an external link within the
+  same bytes and fills a virtual dataset with zeros, silently.
+- **The bytes hashed are the bytes read**, as for the other formats, so the
+  whole file is held in memory; only the plotted datasets are decompressed.
+  Very large files are left to E1.
+- Units come from a dataset's `units` or `unit` attribute. Scale and offset
+  attributes, as netCDF writes them, are not applied.
+- The script reads the same datasets with `h5py`, from the bytes it has hashed:
+  opened by its path, a file that a measuring program still holds open is
+  refused for its lock, though figscribe reads it.
+- Whether a dataset can be read is told from its filters, without reading it,
+  so that a large file lists quickly.
+
+### Alternatives considered
+
+**An optional extra `figscribe[hdf5]`**: a file that opens on one computer and
+not on the next. **Choosing single datasets one by one**, each a source: a run
+with ten channels would be ten imports. **Opening the file by its path** after
+hashing it: saves memory, but figure and hash could come from different
+versions of a file that a measurement is still writing.

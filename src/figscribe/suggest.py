@@ -11,7 +11,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from figscribe.model import ColumnRef, ErrorbarPlot, Histogram, LinePlot, ScatterPlot
+from figscribe.model import (
+    ArrayRef,
+    Colorbar,
+    ColumnRef,
+    ErrorbarPlot,
+    Histogram,
+    ImagePlot,
+    LinePlot,
+    ScatterPlot,
+)
 
 _PREFIXES = (
     "delta_",
@@ -81,13 +90,16 @@ class Suggestion:
     """A first plot of the data: what it is called, and how to build it."""
 
     kind: str
-    """"errorbar", "line", "scatter" or "histogram"."""
+    """"errorbar", "line", "scatter", "histogram", or "image" of data in two
+    dimensions, which `y` names."""
     x: str | int
     y: str | int
     yerr: str | int | None = None
 
     @property
     def title(self) -> str:
+        if self.kind == "image":
+            return f"Image of {self.y}"
         if self.kind == "histogram":
             return f"Distribution of {self.y}"
         if self.yerr is not None:
@@ -101,12 +113,15 @@ class Suggestion:
             "line": "Line",
             "scatter": "Points",
             "histogram": "Histogram",
+            "image": "Image with a color bar",
         }[self.kind]
 
     def build(self, source_id: str):
         def ref(column: str | int) -> ColumnRef:
             return ColumnRef(source=source_id, column=column)
 
+        if self.kind == "image":
+            return ImagePlot(data=ArrayRef(source=source_id), colorbar=Colorbar())
         if self.kind == "histogram":
             return Histogram(values=ref(self.y))
         if self.kind == "errorbar":

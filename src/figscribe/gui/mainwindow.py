@@ -68,7 +68,7 @@ from figscribe.commands import (
     same_range,
 )
 from figscribe.commands.core import noun, walk
-from figscribe.datafile import columns_to_choose, sheets_to_choose, use_another_file
+from figscribe.datafile import columns_to_choose, parts_to_choose, use_another_file
 from figscribe.examples import gallery
 from figscribe.fit import FitError, add_fit, set_left_out, update_fit
 from figscribe.function import new_function
@@ -83,6 +83,7 @@ from figscribe.gui.document import AXIS_FIELDS, Document, axis_id, split_axis
 from figscribe.gui.errors import explain
 from figscribe.gui.figures import FigureTabs, move_figure
 from figscribe.gui.fitdialog import FitDialog
+from figscribe.gui.hdf5dialog import Hdf5Dialog
 from figscribe.gui.importdialog import ImportDialog
 from figscribe.gui.names import artist_name, panel_name
 from figscribe.gui.outline import PANEL_SIDES, Outline
@@ -101,6 +102,7 @@ from figscribe.gui.start import DOCS_URL, GUIDE_URL, StartPage
 from figscribe.gui.widgets import AdaptiveToolBar
 from figscribe.io import DataError, numpy_source
 from figscribe.io.files import resolve_path
+from figscribe.io.hdf5file import SUFFIXES as HDF5_SUFFIXES
 from figscribe.io.numpyfile import array_names, read_numpy
 from figscribe.io.sheetfile import FORMATS as SHEET_FORMATS
 from figscribe.model import (
@@ -116,6 +118,7 @@ from figscribe.model import (
     DataSource,
     Figure,
     FitCurve,
+    Hdf5Source,
     Histogram,
     ImagePlot,
     ResidualPlot,
@@ -139,10 +142,12 @@ unless you also allow it to see the figure.</p>"""
 
 PROJECT_FILTER = "figscribe projects (*.figscribe)"
 SHEET_PATTERNS = " ".join(f"*{suffix}" for suffix in SHEET_FORMATS)
+HDF5_PATTERNS = " ".join(f"*{suffix}" for suffix in HDF5_SUFFIXES)
 DATA_FILTER = (
-    f"Data (*.csv *.tsv *.txt *.dat {SHEET_PATTERNS} *.npy *.npz);;"
+    f"Data (*.csv *.tsv *.txt *.dat {SHEET_PATTERNS} {HDF5_PATTERNS} *.npy *.npz);;"
     "Delimited text (*.csv *.tsv *.txt *.dat);;"
     f"Excel and LibreOffice Calc ({SHEET_PATTERNS});;"
+    f"HDF5 ({HDF5_PATTERNS});;"
     "NumPy (*.npy *.npz);;All files (*)"
 )
 EXPORT_FORMATS = {
@@ -167,11 +172,20 @@ EXPORT_ALL_FORMATS = {
     "Python scripts": ".py",
 }
 """What Export All Figures writes, each figure into a file of its own."""
-DATA_SUFFIXES = {".csv", ".tsv", ".txt", ".dat", ".npy", ".npz", *SHEET_FORMATS}
+DATA_SUFFIXES = {
+    ".csv",
+    ".tsv",
+    ".txt",
+    ".dat",
+    ".npy",
+    ".npz",
+    *SHEET_FORMATS,
+    *HDF5_SUFFIXES,
+}
 NUMPY_SUFFIXES = {".npy", ".npz"}
 START_FILTER = (
-    f"Data or project (*.csv *.tsv *.txt *.dat {SHEET_PATTERNS} *.npy *.npz "
-    "*.figscribe);;All files (*)"
+    f"Data or project (*.csv *.tsv *.txt *.dat {SHEET_PATTERNS} {HDF5_PATTERNS} "
+    "*.npy *.npz *.figscribe);;All files (*)"
 )
 MAX_RECENT = 6
 
@@ -205,6 +219,9 @@ class MainWindow(QMainWindow):
         )
         """Asks for the file to use instead of a source's; replaced in tests."""
         self.choose_sheet: Callable[[str, list[str]], str | None] = self._choose_sheet
+        self.choose_dataset: Callable[[str, list[str]], str | None] = (
+            self._choose_dataset
+        )
         """Asks which sheet of that file takes a sheet's place."""
         self.run_dialog: Callable[[QDialog], bool] = self._run_dialog
         self.ask_text: Callable[[str, str], str | None] = self._ask_text
@@ -726,7 +743,7 @@ class MainWindow(QMainWindow):
 
     def import_csv(self, path: str | Path | None = None) -> bool:
         """Add a data file as a data source, asking how to read a text file or
-        a spreadsheet.
+        a spreadsheet, or what to read of an HDF5 file.
 
         True if a source was added.
         """
@@ -736,9 +753,15 @@ class MainWindow(QMainWindow):
                 return False
         if Path(path).suffix.lower() in NUMPY_SUFFIXES:
             return self.import_numpy(path)
-        kind = SheetDialog if Path(path).suffix.lower() in SHEET_FORMATS else None
+        suffix = Path(path).suffix.lower()
+        if suffix in SHEET_FORMATS:
+            kind = SheetDialog
+        elif suffix in HDF5_SUFFIXES:
+            kind = Hdf5Dialog
+        else:
+            kind = ImportDialog
         try:
-            dialog = (kind or ImportDialog)(path, self.document.project_dir, self)
+            dialog = kind(path, self.document.project_dir, self)
         except (OSError, DataError) as exc:
             self.show_error(f"Cannot read {path}", exc)
             return False
@@ -1411,21 +1434,24 @@ class MainWindow(QMainWindow):
             return
         project, base_dir = self.document.project, self.document.base_dir
         try:
-            sheets = {}
-            asked = sheets_to_choose(project, oid, base_dir, path)
+            parts = {}
+            ask = self.choose_sheet
+            if isinstance(source, Hdf5Source):
+                ask = self.choose_dataset
+            asked = parts_to_choose(project, oid, base_dir, path)
             for old, names in asked.items():
-                chosen = self.choose_sheet(old, names)
+                chosen = ask(old, names)
                 if chosen is None:
                     return
-                sheets[old] = chosen
-            missing = columns_to_choose(project, oid, base_dir, path, sheets)
+                parts[old] = chosen
+            missing = columns_to_choose(project, oid, base_dir, path, parts)
             columns = None
             if missing:
                 dialog = ColumnDialog(path.name, missing, self)
                 if not self.run_dialog(dialog):
                     return
                 columns = dialog.chosen()
-            swap = use_another_file(project, oid, base_dir, path, columns, sheets)
+            swap = use_another_file(project, oid, base_dir, path, columns, parts)
         except DataError as exc:
             self.show_error("The file cannot be used", exc)
             return
@@ -1445,6 +1471,17 @@ class MainWindow(QMainWindow):
         )
         return chosen if ok else None
 
+    def _choose_dataset(self, old: str, paths: list[str]) -> str | None:
+        """Which dataset of the new file takes the place of `old`; None: cancel."""
+        chosen, ok = QInputDialog.getItem(
+            self,
+            "Which dataset?",
+            f"The file has nothing at “{old}”. What takes its place?",
+            paths,
+            editable=False,
+        )
+        return chosen if ok else None
+
     def _choose_data_file(self, source: DataSource) -> Path | None:
         name = Path(source.path).name
         kinds = {
@@ -1454,6 +1491,7 @@ class MainWindow(QMainWindow):
         }
         sheets = f"Excel and LibreOffice Calc ({SHEET_PATTERNS})"
         kinds |= dict.fromkeys(SHEET_FORMATS.values(), sheets)
+        kinds["hdf5"] = f"HDF5 ({HDF5_PATTERNS})"
         folder = resolve_path(source.path, self.document.base_dir).parent
         chosen, _ = QFileDialog.getOpenFileName(
             self,
@@ -1827,7 +1865,7 @@ class MainWindow(QMainWindow):
             self.import_action,
             "file",
             "Data",
-            "Import a data file (CSV, Excel, Calc, .npy, .npz)",
+            "Import a data file (CSV, Excel, Calc, HDF5, .npy, .npz)",
         )
         self._adding_button(
             self.add_figure_action,

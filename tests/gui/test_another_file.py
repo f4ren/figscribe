@@ -237,11 +237,11 @@ def test_the_wheel_does_not_change_a_choice(qtbot) -> None:
     assert combo.currentIndex() == before
 
 
-def test_another_file_is_not_offered_where_it_cannot_be_used(
+def test_another_file_is_offered_for_every_kind_of_data_file(
     window: MainWindow,
 ) -> None:
     source = Hdf5Source(path="run.h5", sha256="0" * 64, dataset="/a")
     window.document.project.sources.append(source)
     window.outline.rebuild()
     menu = window.outline.context_menu(source.id)
-    assert "Use another file…" not in [a.text() for a in menu.actions()]
+    assert "Use another file…" in [a.text() for a in menu.actions()]

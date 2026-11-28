@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from figscribe.commands import History
-from figscribe.datafile import columns_to_choose, sheets_to_choose, use_another_file
+from figscribe.datafile import columns_to_choose, parts_to_choose, use_another_file
 from figscribe.io import DataError, load_data
 from figscribe.io.refresh import read_differently, reading_options, use_new_version
 from figscribe.io.sheetfile import sheet_names, sheet_source
@@ -222,7 +222,7 @@ def test_another_file_of_another_format_with_one_sheet(tmp_path: Path) -> None:
     write_xlsx(tmp_path / "next.xlsx", {"2026-11-27": [["t", "U"], [1, 10], [2, 20]]})
     source = project.sources[0]
     path = tmp_path / "next.xlsx"
-    assert sheets_to_choose(project, source.id, tmp_path, path) == {}
+    assert parts_to_choose(project, source.id, tmp_path, path) == {}
     assert columns_to_choose(project, source.id, tmp_path, path) == []
     use_another_file(project, source.id, tmp_path, path).command.apply(project)
     new = project.sources[0]
@@ -238,12 +238,12 @@ def test_which_sheet_is_asked_where_it_cannot_be_told(tmp_path: Path) -> None:
     )
     source = project.sources[0]
     path = tmp_path / "two.ods"
-    assert sheets_to_choose(project, source.id, tmp_path, path) == {"run 1": ["a", "b"]}
+    assert parts_to_choose(project, source.id, tmp_path, path) == {"run 1": ["a", "b"]}
     with pytest.raises(DataError, match="no sheet 'run 1'"):
         use_another_file(project, source.id, tmp_path, path)
     chosen = {"run 1": "b"}
     assert columns_to_choose(project, source.id, tmp_path, path, chosen) == []
-    use_another_file(project, source.id, tmp_path, path, sheets=chosen).command.apply(
+    use_another_file(project, source.id, tmp_path, path, parts=chosen).command.apply(
         project
     )
     assert project.sources[0].sheet == "b"
