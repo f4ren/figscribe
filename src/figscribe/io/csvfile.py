@@ -107,13 +107,15 @@ class CsvTable:
         self.source = source
         self._name = Path(name).name
         self._text = decode(raw, source.encoding, name)
-        self._numbers: dict[int, np.ndarray] | None = None
+        self._table: np.ndarray | None = None
+        _check_marks(source, self._name)
         self.width = self._load(dtype=str, max_rows=1).shape[1]
         if not self.width:
             raise DataError(f"{self._name} has no rows of data")
 
     def column(self, index: int) -> np.ndarray:
         """The column `index` (from 0): times, or floats."""
+        numbers = self._all_numbers()  # which also checks every row's width
         if index in self.source.time_columns:
             values = parse_times(self._load(dtype=str, usecols=index)[:, 0])
             if values is None:
@@ -121,11 +123,15 @@ class CsvTable:
                     f"cannot read {self._name}: column {index + 1} is not all times"
                 )
             return values
-        if self._numbers is None:
-            wanted = [i for i in range(self.width) if i not in self.source.time_columns]
-            table = _numbers(self.source, self._text, self._name, usecols=wanted)
-            self._numbers = dict(zip(wanted, table.T, strict=True))
-        return self._numbers[index].copy()
+        return numbers[:, index].copy()
+
+    def _all_numbers(self) -> np.ndarray:
+        """Every column read in one go, those of dates as zeros: rows of
+        different widths are refused, which reading some columns would not."""
+        if self._table is None:
+            skip = dict.fromkeys(self.source.time_columns, _nothing)
+            self._table = _numbers(self.source, self._text, self._name, skip=skip)
+        return self._table
 
     def check(self) -> None:
         """A DataError if any column cannot be read."""
@@ -178,12 +184,7 @@ def read_csv(source: CsvSource, raw: bytes, name: str) -> np.ndarray:
 
     `name` only appears in error messages.
     """
-    # loadtxt would split "1,5" into two fields and read wrong numbers silently.
-    if source.decimal == source.delimiter:
-        raise DataError(
-            f"cannot read {name}: decimal separator {source.decimal!r} "
-            "is also the delimiter"
-        )
+    _check_marks(source, name)
     table = _numbers(source, decode(raw, source.encoding, name), name)
     if table.size == 0:  # NumPy then gives one column of nothing
         raise DataError(f"{Path(name).name} has no rows of data")
@@ -195,11 +196,43 @@ def _first_data_line(source: CsvSource) -> int:
     return first + source.skip_rows
 
 
-def _numbers(source: CsvSource, text: str, name: str, **more) -> np.ndarray:
+def _check_marks(source: CsvSource, name: str) -> None:
+    # loadtxt would split "1,5" into two fields and read wrong numbers silently.
+    if source.decimal == source.delimiter:
+        raise DataError(
+            f"cannot read {name}: decimal separator {source.decimal!r} "
+            "is also the delimiter"
+        )
+
+
+def _nothing(field: str) -> float:
+    return 0.0
+
+
+def _numbers(
+    source: CsvSource, text: str, name: str, skip: dict | None = None
+) -> np.ndarray:
+    """The table of numbers; `skip` gives the converter of columns that are
+    not numbers."""
     converters = None
     if source.decimal != ".":
         decimal = source.decimal
         converters = lambda field: float(field.replace(decimal, "."))  # noqa: E731
+    if skip:
+        width = len(
+            np.loadtxt(
+                io.StringIO(text),
+                delimiter=source.delimiter,
+                skiprows=_first_data_line(source),
+                comments=source.comment,
+                dtype=str,
+                max_rows=1,
+                ndmin=2,
+            )[0]
+        )
+        usual = converters
+        converters = dict.fromkeys(range(width), usual) if usual else {}
+        converters.update(skip)
     try:
         return np.loadtxt(
             io.StringIO(text),
@@ -208,7 +241,6 @@ def _numbers(source: CsvSource, text: str, name: str, **more) -> np.ndarray:
             comments=source.comment,
             converters=converters,
             ndmin=2,
-            **more,
         )
     except ValueError as exc:
         raise DataError(f"cannot read {name}: {exc}") from exc

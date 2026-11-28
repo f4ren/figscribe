@@ -222,7 +222,7 @@ class Hdf5Table:
                 column = source.columns[index]
                 if column not in (found.dtype.names or ()):
                     raise DataError(f"{self._name}, {path}, has no field {column!r}")
-                why = _no_values(found.dtype[column], lambda: found[0][column])
+                why = _no_values(found.dtype[column], lambda: found[:LOOKED_AT][column])
                 values = None if why else found[()][column]
             else:
                 why = _no_column(found)
@@ -332,15 +332,21 @@ def _no_numbers(dtype: np.dtype) -> str:
     return ""
 
 
-def _no_values(dtype: np.dtype, first) -> str:
+LOOKED_AT = 100
+"""How far into a column of text a first date is looked for."""
+
+
+def _no_values(dtype: np.dtype, start) -> str:
     """Why values of `dtype` are no column to plot; "" if they are numbers or
-    times. `first` gives the first one: text is a column of times if it begins
-    with one."""
+    times. `start` gives the first of them: text is a column of times if the
+    first filled one is a date."""
     if dtype.kind == "M":
         return ""
     why = _no_numbers(dtype)
-    if why == "it holds text" and is_time(_text(first())):
-        return ""
+    if why == "it holds text":
+        filled = (text for value in start() if (text := _text(value)).strip())
+        if is_time(next(filled, "")):
+            return ""
     return why
 
 
@@ -401,7 +407,7 @@ def _no_column(dataset) -> str:
         return _no_numbers(dataset.dtype) or "it is empty"
     if why := _unreadable(dataset):
         return _no_numbers(dataset.dtype) or why
-    return _no_values(dataset.dtype, lambda: dataset[0])
+    return _no_values(dataset.dtype, lambda: dataset[:LOOKED_AT])
 
 
 def _dataset_entry(dataset: h5py.Dataset, path: str) -> Entry:
@@ -428,7 +434,7 @@ def _described(dataset: h5py.Dataset, path: str) -> Entry:
         for name in dataset.dtype.names:
             dtype = dataset.dtype[name]
             if usable:
-                why = _no_values(dtype, lambda name=name: dataset[0][name])
+                why = _no_values(dtype, lambda name=name: dataset[:LOOKED_AT][name])
             else:
                 why = _no_numbers(dtype)
             if why:

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from figscribe.io.csvfile import CsvTable, read_csv
-from figscribe.io.errors import DataChangedError, DataError
+from figscribe.io.errors import CellError, DataChangedError, DataError
 from figscribe.io.files import resolve_path
 from figscribe.io.hdf5file import Hdf5Table
 from figscribe.io.numpyfile import read_numpy
@@ -93,7 +93,16 @@ def load_data(project: Project, base_dir: str | Path) -> DataProvider:
             values.flags.writeable = False
             return values
         if isinstance(ref, ArrayRef):
-            return _as_recorded(source, table(source, ref.key))
+            values = table(source, ref.key)
+            own = ref.key is None or ref.key == getattr(source, "array", None)
+            if own:
+                return _as_recorded(source, values)
+            if values.dtype.kind == "M":
+                raise CellError(
+                    f"{source.path}: {ref.key} holds dates; import that array as "
+                    "a data file of its own"
+                )
+            return values
         values = _as_recorded(source, table(source))
         if values.ndim == 1:
             values = values[:, np.newaxis]  # a 1-D array is one column

@@ -340,13 +340,18 @@ class AxisForm:
         if not self.dated:
             direction = QBoxLayout.Direction.LeftToRight
         self._range_layout.setDirection(direction)
-        for widget in (self.prefix, self.scale, self.number_format):
+        for widget in (self.prefix, self.number_format):
             self._visible(widget, not self.dated)
-        self._visible(self.breaks_holder, self.field != "y_right" and not self.dated)
+        # A scale or breaks left from before the dates stay, to be taken off.
+        self._visible(self.scale, not self.dated or spec.scale != "linear")
+        cut = self.field != "y_right" and (not self.dated or bool(spec.breaks))
+        self._visible(self.breaks_holder, cut)
         if self.dated:
             self._visible(self.decimals, False)
 
         mode = major_mode(spec)
+        if self.dated and mode == "step":
+            mode = "auto"
         self.major.setCurrentIndex(self.major.findData(mode))
         self._visible(self.major_value, mode != "auto")
         self._visible(self.tick_labels, mode == "values")

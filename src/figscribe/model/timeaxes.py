@@ -110,7 +110,21 @@ def not_on_dates(figure: Figure, index: int, artist, is_time: IsTime) -> str | N
         if target is not None and not isinstance(target, AllanDeviationPlot):
             if any(as_dates(target, n, is_time) for n in ("x", "y")):
                 return f"there is no fit to dates; {SINCE_START}"
+        about = _about(figure, artist.target)
+        if about is not None and not_on_dates(figure, *about, is_time):
+            what = "its fit" if isinstance(artist, ResidualPlot) else "the plot it fits"
+            return f"{what} is not drawn"
         return "it cannot be drawn on a date axis" if on_dates else None
+    return None
+
+
+def _about(figure: Figure, oid: str):
+    """(panel index, artist) of what a fit or residuals are about, if it is in
+    the figure."""
+    for i, axes in enumerate(figure.axes):
+        for artist in axes.artists:
+            if artist.id == oid and isinstance(artist, (*_POINTS, FitCurve)):
+                return i, artist
     return None
 
 

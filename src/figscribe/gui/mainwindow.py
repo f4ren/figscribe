@@ -923,7 +923,10 @@ class MainWindow(QMainWindow):
         if target is None:
             self.show_error("Nothing to fit", "Select the plot to fit, then try again.")
             return
-        why = dates_refuse_a_fit(target, self.document.data)
+        try:
+            why = dates_refuse_a_fit(target, self.document.data)
+        except DataError as exc:
+            why = exc
         if why is not None:
             self.show_error("Cannot fit", why)
             return

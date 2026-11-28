@@ -254,3 +254,39 @@ def test_a_newer_version_of_a_file_with_times(tmp_path: Path) -> None:
     path.write_text("time,T\nlater,1\n")
     with pytest.raises(DataError, match="later"):
         reread(source, tmp_path)
+
+
+def test_a_csv_with_dates_is_checked_as_any_other(tmp_path: Path) -> None:
+    source = _csv(tmp_path, "time,T\n2026-11-01,1,5\n", decimal=".")
+    with pytest.raises(DataError):  # three fields under two names
+        wrong = source.model_copy(update={"decimal": ","})
+        _read(wrong, tmp_path, "T")
+    rows = "".join(f"2026-11-01,{i}\n" for i in range(120))
+    source = _csv(tmp_path, "time,T\n" + rows + "2026-11-02,1,2\n")
+    assert source.time_columns == [0]
+    for column in ("time", "T"):
+        with pytest.raises(DataError, match="columns|row"):
+            _read(source, tmp_path, column)
+
+
+def test_hdf5_text_of_dates_may_begin_with_a_gap(tmp_path: Path) -> None:
+    stamps = np.array([b"", b"2026-11-01T12:10", b""])
+    path = write_h5(tmp_path / "g.h5", {"run/time": stamps, "run/T": np.arange(3.0)})
+    source = hdf5_source(path, tmp_path)
+    assert (source.columns, source.time_columns) == (["T", "time"], [1])
+    _same(_read(source, tmp_path, "time"), _times("NaT", "2026-11-01T12:10", "NaT"))
+    records = np.zeros(3, dtype=[("time", stamps.dtype), ("T", "f8")])
+    records["time"] = stamps
+    path = write_h5(tmp_path / "r.h5", {"run": records})
+    assert hdf5_source(path, tmp_path).columns == ["time", "T"]
+
+
+def test_another_array_of_an_npz_file_with_dates(tmp_path: Path) -> None:
+    path = tmp_path / "t.npz"
+    other = np.array(["2026-11-03"], dtype="datetime64[D]")
+    np.savez(path, t=NOON, z=np.arange(6.0).reshape(2, 3), u=other)
+    source = numpy_source(path, tmp_path, array="t")
+    data = load_data(Project(sources=[source]), tmp_path)
+    assert data(ArrayRef(source=source.id, key="z")).shape == (2, 3)
+    with pytest.raises(DataError, match="dates"):
+        data(ArrayRef(source=source.id, key="u"))

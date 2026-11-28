@@ -10,7 +10,7 @@ import pytest
 from matplotlib.dates import date2num
 from PySide6.QtWidgets import QDialogButtonBox, QMenu
 
-from figscribe.commands import InsertItem
+from figscribe.commands import InsertItem, SetField
 from figscribe.gui import Document, MainWindow
 from figscribe.gui.breaks import break_entries
 from figscribe.gui.dates import date_label
@@ -320,3 +320,44 @@ def test_a_note_dragged_on_a_date_axis_stays_there(window, tmp_path) -> None:
     assert _panel(window).artists[-1].position[0] == _day("2026-11-02")
     code = window.document.project
     assert validate_references(code, window.document.data) == []
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "row"),
+    [("scale", "log", "scale"), ("breaks", [(1.0, 2.0)], "breaks_holder")],
+)
+def test_what_is_left_on_a_date_axis_can_be_taken_off(
+    window, tmp_path, name: str, value, row: str
+) -> None:
+    _plot(window, tmp_path)
+    panel = _panel(window)
+    window.document.push(SetField(panel.id, ("x", name), value))
+    window.document.select(axis_id(panel.id, "x"))
+    assert not getattr(window.properties.axis_form, row).isHidden()
+    window.add_marking("refline", "vertical")
+    assert date_label(_panel(window).artists[-1].at).startswith("2026-11-0")
+
+
+def test_a_tick_distance_is_nothing_on_a_date_axis(window, tmp_path) -> None:
+    _plot(window, tmp_path)
+    panel = _panel(window)
+    window.document.push(SetField(panel.id, ("x", "major_step"), 0.04))
+    window.document.select(axis_id(panel.id, "x"))
+    form = window.properties.axis_form
+    assert form.major.currentData() == "auto"
+    assert form.major_value.isHidden()
+
+
+@pytest.mark.parametrize("act", ["add_fit", "edit_fit"])
+def test_a_fit_of_a_changed_file_is_told(window, tmp_path, act: str) -> None:
+    plot = _plot(window, tmp_path)
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    window.document.push(InsertItem(_panel(window).id, "artists", fit))
+    log_file(tmp_path, count=3)
+    window.document._data = None  # read again, as after a change on disk
+    told = []
+    window.show_error = lambda title, error: told.append(title)
+    window.run_dialog = lambda dialog: pytest.fail("no dialog")
+    window.document.select(plot.id)
+    window.add_fit() if act == "add_fit" else window.edit_fit(fit.id)
+    assert told

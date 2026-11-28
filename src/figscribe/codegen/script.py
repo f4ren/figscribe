@@ -719,7 +719,7 @@ class _Writer:
         self.emit("from pathlib import Path", "")
         if self._hdf5_used():
             self.emit("import h5py")
-        if self._date_formats():
+        if self._date_formats() or self._gaps_in_dates():
             self.emit("import matplotlib.dates as mdates")
         self.emit("import matplotlib.pyplot as plt", "import numpy as np")
         locators = self._locators()
@@ -804,7 +804,8 @@ class _Writer:
         # A broken axis places each of its ticks itself.
         placed = [s for key, s in numbers.items() if key not in self.break_ticks]
         needed = []
-        if any(minor_ticks(s)[0] == "parts" for s in self.axis_specs.values()):
+        dated = [self.axis_specs[key] for key in self._date_keys()]
+        if any(minor_ticks(s)[0] == "parts" for s in [*placed, *dated]):
             needed.append("AutoMinorLocator")
         if any(scaling(s) is not None for s in specs):
             needed.append("FuncFormatter")
@@ -904,6 +905,21 @@ class _Writer:
             specs[self.figure.axes[i].id, field].tick_labels is None
             for i, field in self.dated
         )
+
+    def _gaps_in_dates(self) -> bool:
+        """Whether a plot of dates may need them as day numbers (`_blank`)."""
+        for axes in self.figure.axes:
+            for plot in axes.artists:
+                if not isinstance(plot, LinePlot | ScatterPlot | ErrorbarPlot):
+                    continue
+                if plot.id in self.skipped or plot.id in self.reduced:
+                    continue
+                if not any(as_dates(plot, n, self.is_time) for n in ("x", "y")):
+                    continue
+                broken = any((axes.id, n) in self.broken for n in ("x", "y"))
+                if broken or plot.id in self.kept or plot.id in self.used:
+                    return True
+        return False
 
     def _time_helpers(self) -> None:
         helpers = []
@@ -1177,7 +1193,8 @@ class _Writer:
                 self.arrays[(source.id, key)] = name
             wanted = key or source.array
             item = f"[{_str(wanted)}]" if source.format == "npz" else ""
-            kind = _TIME_TYPE if source.time_columns else "float"
+            own = key is None or key == source.array
+            kind = _TIME_TYPE if source.time_columns and own else "float"
             self.emit(f"{name} = np.load({path}){item}.astype({kind})")
         base = self.arrays.get((source.id, None))
         for (_, name), index in zip(refs, indices, strict=True):

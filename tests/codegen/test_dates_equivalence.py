@@ -19,6 +19,7 @@ from figscribe.io.sheetfile import sheet_source
 from figscribe.model import (
     AllanDeviationPlot,
     Annotation,
+    ArrayRef,
     Axes,
     AxisSpec,
     ColumnRef,
@@ -29,6 +30,7 @@ from figscribe.model import (
     FitCurve,
     GridLayout,
     Histogram,
+    ImagePlot,
     Legend,
     LinePlot,
     PredefinedFit,
@@ -36,6 +38,7 @@ from figscribe.model import (
     ReferenceLine,
     ScatterPlot,
     ShadedSpan,
+    validate_references,
 )
 from figscribe.units import set_conversion
 from tests.codegen.test_equivalence import _assert_same
@@ -414,3 +417,48 @@ def test_columns_named_like_what_the_script_uses(tmp_path: Path) -> None:
         for name in ("re", "mdates", "date_ticks")
     ]
     _assert_same(_project(source, Axes(artists=artists)), tmp_path)
+
+
+@pytest.mark.parametrize("why", ["left out", "range"])
+def test_typed_tick_labels_and_gaps_in_a_plot_of_dates(tmp_path: Path, why) -> None:
+    source, ref = _log(tmp_path)
+    keep = {"left_out": [3]} if why == "left out" else {}
+    if why == "range":
+        keep = {"x_range": (_day("2026-11-01T23:00"), _day("2026-11-02"))}
+    line = LinePlot(x=ref("time"), y=ref("T"), **keep)
+    ticks = AxisSpec(ticks=[_day("2026-11-02")], tick_labels=["midnight"])
+    _assert_same(_project(source, Axes(artists=[line], x=ticks)), tmp_path)
+
+
+def test_residuals_of_a_fit_that_is_not_drawn(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    plot = LinePlot(x=ref("time"), y=ref("T"), x_conversion=HOUR)
+    project = _project(source, Axes(artists=[plot]))
+    fit = FitCurve(target=plot.id, model=PredefinedFit(name="linear"))
+    add_fit(project, fit, residuals=True).apply(project)
+    project.figures[0].layout = GridLayout(rows=2, cols=1)  # x not shared
+    refit(project, fit.id, load_data(project, tmp_path)).apply(project)
+    project.figures[0].axes[0].artists.insert(0, LinePlot(x=ref("time"), y=ref("T")))
+    script = _assert_same(project, tmp_path)
+    assert "not run yet" not in script
+    problems = [i.message for i in validate_references(project)]
+    assert sum("is not drawn" in p for p in problems) == 3  # plot, fit, residuals
+
+
+def test_broken_axes_without_dates_import_what_they_did(tmp_path: Path) -> None:
+    source, ref = _log(tmp_path)
+    line = LinePlot(x=ref("p"), y=ref("T"))
+    panel = Axes(
+        artists=[line],
+        x=AxisSpec(breaks=[(1004.0, 1015.0)], minor_divisions=2),
+    )
+    script = _assert_same(_project(source, panel), tmp_path)
+    assert "AutoMinorLocator" not in script
+
+
+def test_numpy_arrays_beside_an_array_of_dates(tmp_path: Path) -> None:
+    stamps = np.array(_stamps(), dtype="datetime64[s]")
+    np.savez(tmp_path / "t.npz", t=stamps, z=np.arange(12.0).reshape(3, 4))
+    source = numpy_source(tmp_path / "t.npz", tmp_path, array="t")
+    image = ImagePlot(data=ArrayRef(source=source.id, key="z"))
+    _assert_same(_project(source, Axes(artists=[image])), tmp_path)

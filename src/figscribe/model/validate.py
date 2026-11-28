@@ -748,10 +748,10 @@ def _nothing_in_range(artist, data) -> list[str]:
     except DataError:
         return []
     if values.size and not within(values, artist.x_range).any():
-        low, high = artist.x_range
-        return [
-            f"no {what} lies within the range {low:g} to {high:g}, so none is drawn"
-        ]
+        column = artist.values if isinstance(artist, Histogram) else artist.x
+        dates = artist.x_conversion is None and data(column).dtype.kind == "M"
+        low, high = (date_text(end) if dates else f"{end:g}" for end in artist.x_range)
+        return [f"no {what} lies within the range {low} to {high}, so none is drawn"]
     return []
 
 

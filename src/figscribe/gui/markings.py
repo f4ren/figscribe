@@ -50,6 +50,7 @@ def marking(
     """A line at `at`, or a range around it, on an axis showing `low` to
     `high`; without `at`, in the middle. On a log axis the middle and the
     width are taken in decades."""
+    log = log and not dates  # a date axis has no logarithm
     forward, back = (math.log10, lambda v: 10.0**v) if log else (float, float)
     start, stop = forward(low), forward(high)
     centre = forward(at) if at is not None else (start + stop) / 2
